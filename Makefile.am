@@ -14,7 +14,8 @@ memcached_SOURCES = memcached.c memcached.h \
                     thread.c daemon.c \
                     stats.c stats.h \
                     util.c util.h \
-                    trace.h cache.h
+                    trace.h cache.h \
+                    cproxy.c cproxy.h
 
 if BUILD_CACHE
 memcached_SOURCES += cache.c

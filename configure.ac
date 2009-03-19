@@ -209,7 +209,9 @@ AC_CACHE_CHECK([for libevent directory], ac_cv_libevent_dir, [
 ])
   fi
 ])
+
 LIBS="$LIBS -levent"
+
 if test $ac_cv_libevent_dir != "(system)"; then
   if test -d "$ac_cv_libevent_dir/lib" ; then
     LDFLAGS="-L$ac_cv_libevent_dir/lib $LDFLAGS"
@@ -230,6 +232,11 @@ dnl ----------------------------------------------------------------------------
 AC_SEARCH_LIBS(socket, socket)
 AC_SEARCH_LIBS(gethostbyname, nsl)
 AC_SEARCH_LIBS(umem_cache_create, umem)
+
+LIBS="$LIBS -lmemcached"
+
+AC_SEARCH_LIBS(memcached_create, memcached)
+
 AC_HEADER_STDBOOL
 AC_C_CONST
 
@@ -371,5 +378,7 @@ then
   CFLAGS="$CFLAGS -errfmt=error -errwarn -errshort=tags"
 fi
 
+
 AC_CONFIG_FILES(Makefile doc/Makefile)
 AC_OUTPUT
+

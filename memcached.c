@@ -46,14 +46,14 @@
 #include <limits.h>
 #include <sysexits.h>
 
+#include "cproxy.h"
+
 /* FreeBSD 4.x doesn't have IOV_MAX exposed. */
 #ifndef IOV_MAX
 #if defined(__FreeBSD__) || defined(__APPLE__)
 # define IOV_MAX 1024
 #endif
 #endif
-
-#include <libmemcached/memcached.h>
 
 /*
  * forward declarations
@@ -4035,6 +4035,8 @@ int main (int argc, char **argv) {
             return 1;
         }
     }
+
+    cproxy_init();
 
     if (maxcore != 0) {
         struct rlimit rlim_new;
