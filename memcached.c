@@ -53,6 +53,8 @@
 #endif
 #endif
 
+#include <libmemcached/memcached.h>
+
 /*
  * forward declarations
  */
