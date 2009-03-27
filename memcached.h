@@ -384,6 +384,16 @@ struct conn {
     int keylen;
     conn   *next;     /* Used for generating a list of conn structures */
     LIBEVENT_THREAD *thread; /* Pointer to the thread object serving this connection */
+
+    /* Function pointers so that drive_machine loop is reusable. */
+    void (*conn_add_bytes_read)(conn *c, int bytes_read);
+    void (*conn_out_string)(conn *c, const char *str);
+    int  (*conn_try_read_command)(conn *c);
+    void (*conn_reset_cmd_handler)(conn *c);
+    void (*conn_complete_nread)(conn *c);
+    void (*conn_item_remove)(conn *c, item *);
+    void (*conn_items_remove)(conn *c);
+    void (*conn_suffixes_free)(conn *c);
 };
 
 

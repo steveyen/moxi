@@ -57,6 +57,8 @@ foreach my $key (qw(curr_items total_items bytes cmd_get cmd_set get_hits evicti
 }
 is($stats->{accepting_conns}, 1, "initial accepting_conns is one");
 
+is($stats->{'bytes_read'}, 7);
+
 # Do some operations
 
 print $sock "set foo 0 0 6\r\nfooval\r\n";
