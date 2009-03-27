@@ -269,6 +269,8 @@ enum protocol {
     ascii_prot = 3, /* arbitrary value. */
     ascii_udp_prot,
     binary_prot,
+    proxy_ascii_prot,
+    proxy_binary_prot,
     negotiating_prot /* Discovering the protocol */
 };
 
