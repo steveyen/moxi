@@ -73,6 +73,7 @@ enum try_read_result {
 static enum try_read_result try_read_network(conn *c);
 static enum try_read_result try_read_udp(conn *c);
 
+static void reset_cmd_handler(conn *c);
 static void conn_set_state(conn *c, enum conn_states state);
 
 /* stats */
@@ -421,6 +422,8 @@ conn *conn_new(const int sfd, enum conn_states init_state,
     c->conn_add_bytes_read = add_bytes_read;
     c->conn_out_string = out_string;
     c->conn_try_read_command = try_read_command;
+    c->conn_reset_cmd_handler = reset_cmd_handler;
+    c->conn_complete_nread = complete_nread;
 
     event_set(&c->event, sfd, event_flags, event_handler, (void *)c);
     event_base_set(base, &c->event);
@@ -3193,12 +3196,12 @@ static void drive_machine(conn *c) {
             break;
 
         case conn_new_cmd:
-            reset_cmd_handler(c);
+            c->conn_reset_cmd_handler(c);
             break;
 
         case conn_nread:
             if (c->rlbytes == 0) {
-                complete_nread(c);
+                c->conn_complete_nread(c);
                 break;
             }
             /* first check if we have leftovers in the conn_read buffer */
