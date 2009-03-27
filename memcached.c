@@ -396,9 +396,8 @@ conn *conn_new(const int sfd, enum conn_states init_state,
             fprintf(stderr, "<%d new auto-negotiating client connection\n",
                     sfd);
         } else {
-            fprintf(stderr, "<%d new unknown (%d) client connection\n",
-                sfd, prot);
-            abort();
+            fprintf(stderr, "<%d new %s client connection\n",
+                sfd, prot_text(prot));
         }
     }
 
