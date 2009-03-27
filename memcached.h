@@ -409,6 +409,7 @@ enum store_item_type do_store_item(item *item, int comm, conn* c);
 conn *conn_new(const int sfd, const enum conn_states init_state, const int event_flags, const int read_buffer_size, enum protocol prot, struct event_base *base);
 extern int daemonize(int nochdir, int noclose);
 
+int server_socket(const int port, enum protocol prot);
 
 #include "stats.h"
 #include "slabs.h"

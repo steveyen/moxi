@@ -2,6 +2,8 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <errno.h>
+#include <sysexits.h>
 #include <libmemcached/memcached.h>
 #include "memcached.h"
 #include "cproxy.h"
@@ -45,6 +47,13 @@ int cproxy_init(const char *cfg) {
         }
 
         memcached_server_push(mst, mservers);
+
+        if (server_socket(proxy_port, ascii_prot) != 0) {
+            fprintf(stderr, "failed to listen as proxy on TCP port %d\n", proxy_port);
+            if (errno != 0)
+                perror("tcp listen");
+            exit(EX_OSERR);
+        }
     }
     free(buff);
 
