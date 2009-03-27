@@ -420,6 +420,7 @@ conn *conn_new(const int sfd, enum conn_states init_state,
 
     c->conn_add_bytes_read = add_bytes_read;
     c->conn_out_string = out_string;
+    c->conn_try_read_command = try_read_command;
 
     event_set(&c->event, sfd, event_flags, event_handler, (void *)c);
     event_base_set(base, &c->event);
@@ -3184,7 +3185,7 @@ static void drive_machine(conn *c) {
             break;
 
         case conn_parse_cmd :
-            if (try_read_command(c) == 0) {
+            if (c->conn_try_read_command(c) == 0) {
                 /* wee need more data! */
                 conn_set_state(c, conn_waiting);
             }
