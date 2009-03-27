@@ -1,9 +1,11 @@
+/* -*- Mode: C; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
+
 #include <stdio.h>
 #include <libmemcached/memcached.h>
 #include "memcached.h"
 #include "cproxy.h"
 
-int cproxy_init(void) {
+int cproxy_init(const char *cfg) {
     memcached_st *mst;
 
     mst = memcached_create(NULL);

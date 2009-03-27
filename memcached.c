@@ -4054,8 +4054,6 @@ int main (int argc, char **argv) {
         }
     }
 
-    cproxy_init();
-
     if (maxcore != 0) {
         struct rlimit rlim_new;
         /*
@@ -4215,6 +4213,8 @@ int main (int argc, char **argv) {
             exit(EX_OSERR);
         }
     }
+
+    cproxy_init("11222=localhost:11211");
 
     /* Drop privileges no longer needed */
     drop_privileges();
