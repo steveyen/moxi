@@ -317,6 +317,12 @@ static const char *prot_text(enum protocol prot) {
         case ascii_udp_prot:
             rv = "ascii-udp";
             break;
+        case proxy_ascii_prot:
+            rv = "proxy-ascii";
+            break;
+        case proxy_binary_prot:
+            rv = "proxy-binary";
+            break;
         case negotiating_prot:
             rv = "auto-negotiate";
             break;
