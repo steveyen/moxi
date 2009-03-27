@@ -316,11 +316,11 @@ static const char *prot_text(enum protocol prot) {
         case ascii_udp_prot:
             rv = "ascii-udp";
             break;
-        case proxy_ascii_prot:
-            rv = "proxy-ascii";
+        case proxy_upstream_ascii_prot:
+            rv = "proxy-upstream-ascii";
             break;
-        case proxy_binary_prot:
-            rv = "proxy-binary";
+        case proxy_downstream_ascii_prot:
+            rv = "proxy-downstream-ascii";
             break;
         case negotiating_prot:
             rv = "auto-negotiate";
@@ -1813,9 +1813,9 @@ static void complete_nread(conn *c) {
            || c->protocol == ascii_prot
            || c->protocol == binary_prot);
 
-    if (c->protocol == ascii_prot || c->protocol == ascii_udp_prot) {
+    if (IS_ASCII(c->protocol)) {
         complete_nread_ascii(c);
-    } else if (c->protocol == binary_prot) {
+    } else if (IS_BINARY(c->protocol)) {
         complete_nread_binary(c);
     }
 }
@@ -2813,7 +2813,7 @@ static int try_read_command(conn *c) {
         }
     }
 
-    if (c->protocol == binary_prot) {
+    if (IS_BINARY(c->protocol)) {
         /* Do we have the complete packet header? */
         if (c->rbytes < sizeof(c->binary_header)) {
             /* need more data! */

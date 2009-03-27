@@ -2,3 +2,5 @@
 
 extern int cproxy_init(const char *cfg);
 
+#define IS_PROXY(x) (x == proxy_upstream_ascii_prot || x == proxy_downstream_ascii_prot)
+

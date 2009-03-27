@@ -269,12 +269,16 @@ enum protocol {
     ascii_prot = 3, /* arbitrary value. */
     ascii_udp_prot,
     binary_prot,
-    proxy_ascii_prot,
-    proxy_binary_prot,
+    proxy_upstream_ascii_prot,
+    proxy_downstream_ascii_prot,
     negotiating_prot /* Discovering the protocol */
 };
 
 #define IS_UDP(x) (x == ascii_udp_prot)
+#define IS_ASCII(x) (x == ascii_prot || x == ascii_udp_prot || \
+                     x == proxy_upstream_ascii_prot || \
+                     x == proxy_downstream_ascii_prot)
+#define IS_BINARY(x) (x == binary_prot)
 
 #define NREAD_ADD 1
 #define NREAD_SET 2

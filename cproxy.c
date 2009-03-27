@@ -48,7 +48,7 @@ int cproxy_init(const char *cfg) {
 
         memcached_server_push(mst, mservers);
 
-        if (server_socket(proxy_port, ascii_prot) != 0) {
+        if (false && server_socket(proxy_port, proxy_upstream_ascii_prot) != 0) {
             fprintf(stderr, "failed to listen as proxy on TCP port %d\n", proxy_port);
             if (errno != 0)
                 perror("tcp listen");
