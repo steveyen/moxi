@@ -428,6 +428,9 @@ extern int daemonize(int nochdir, int noclose);
 void thread_init(int nthreads, struct event_base *main_base);
 int  dispatch_event_add(int thread, conn *c);
 void dispatch_conn_new(int sfd, enum conn_states init_state, int event_flags, int read_buffer_size, enum protocol prot);
+void dispatch_conn_new_to_thread(int tid, int sfd, enum conn_states init_state,
+                                 int event_flags, int read_buffer_size,
+                                 enum protocol prot);
 
 /* Lock wrappers for cache functions that are called from main loop. */
 char *add_delta(conn *c, item *item, const int incr, const int64_t delta,

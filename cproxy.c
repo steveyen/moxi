@@ -6,15 +6,11 @@
 #include "memcached.h"
 #include "cproxy.h"
 
-#define DBG(x) fprintf(stderr, "%s\n", x)
-
 /**
  * cfg_in looks ike "local_port=host:port,host:port;local_port=host:port"
  * like "11222=memcached1.foo.net:11211"
  */
 int cproxy_init(const char *cfg) {
-    DBG(cfg);
-
     char *buff;
     char *next;
     char *proxy_sect;
@@ -37,16 +33,18 @@ int cproxy_init(const char *cfg) {
             exit(EXIT_FAILURE);
         }
 
-        memcached_server_st *servers;
+        memcached_server_st *mservers;
         memcached_st *mst;
 
-        servers = memcached_servers_parse(proxy_sect);
+        mservers = memcached_servers_parse(proxy_sect);
 
         mst = memcached_create(NULL);
         if (!mst) {
             fprintf(stderr, "failed memcached_create.\n");
             exit(EXIT_FAILURE);
         }
+
+        memcached_server_push(mst, mservers);
     }
     free(buff);
 

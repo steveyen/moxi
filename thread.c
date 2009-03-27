@@ -293,14 +293,26 @@ static int last_thread = 0;
  */
 void dispatch_conn_new(int sfd, enum conn_states init_state, int event_flags,
                        int read_buffer_size, enum protocol prot) {
-    CQ_ITEM *item = cqi_new();
     int tid = last_thread % (settings.num_threads - 1);
 
     /* Skip the dispatch thread (0) */
     tid++;
-    LIBEVENT_THREAD *thread = threads + tid;
 
     last_thread = tid;
+
+    dispatch_conn_new_to_thread(tid, sfd, init_state, event_flags,
+                                read_buffer_size, prot);
+}
+
+void dispatch_conn_new_to_thread(int tid, int sfd, enum conn_states init_state,
+                                 int event_flags, int read_buffer_size,
+                                 enum protocol prot) {
+    assert(tid > 0);
+    assert(tid < settings.num_threads);
+
+    LIBEVENT_THREAD *thread = threads + tid;
+
+    CQ_ITEM *item = cqi_new();
 
     item->sfd = sfd;
     item->init_state = init_state;
