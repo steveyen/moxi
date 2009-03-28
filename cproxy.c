@@ -11,15 +11,6 @@
 
 #define DOWNSTREAM_MAX 10
 
-conn_funcs cproxy_listen_funcs = {
-    NULL,
-    add_bytes_read,
-    out_string,
-    try_read_command,
-    reset_cmd_handler,
-    complete_nread
-};
-
 typedef struct proxy      MC_PROXY;
 typedef struct downstream MC_DOWNSTREAM;
 
@@ -47,6 +38,34 @@ MC_DOWNSTREAM *cproxy_add_downstream(MC_PROXY *p);
 MC_DOWNSTREAM *cproxy_create_downstream(char *proxy_sect);
 int            cproxy_connect_downstream(MC_DOWNSTREAM *d);
 void           cproxy_init_conn(conn *c);
+
+conn_funcs cproxy_listen_funcs = {
+    cproxy_init_conn,
+    add_bytes_read,
+    out_string,
+    try_read_command,
+    reset_cmd_handler,
+    complete_nread
+};
+
+conn_funcs cproxy_upstream_funcs = {
+    cproxy_init_conn,
+    add_bytes_read,
+    out_string,
+    try_read_command,
+    reset_cmd_handler,
+    complete_nread
+};
+
+conn_funcs cproxy_downstream_funcs = {
+    cproxy_init_conn,
+    add_bytes_read,
+    out_string,
+    try_read_command,
+    reset_cmd_handler,
+    complete_nread
+};
+
 
 /** From libmemcached. */
 memcached_return memcached_version(memcached_st *ptr);
@@ -194,5 +213,5 @@ int cproxy_connect_downstream(MC_DOWNSTREAM *d) {
 }
 
 void cproxy_init_conn(conn *c) {
-    fprintf(stderr, "cproxy_init_conn\n");
+    fprintf(stderr, "cproxy_init_conn %d\n", c->sfd);
 }
