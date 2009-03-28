@@ -242,6 +242,12 @@ int cproxy_connect_downstream(MC_DOWNSTREAM *d) {
 }
 
 void cproxy_init_conn(conn *c) {
-    if (settings.verbose > 1)
-        fprintf(stderr, "<%d cproxy_init_conn\n", c->sfd);
+    assert(c->extra != NULL);
+
+    MC_PROXY *p = c->extra;
+    if (p != NULL) {
+        if (settings.verbose > 1)
+            fprintf(stderr, "<%d cproxy_init_conn for %d, downstream %s\n",
+                    c->sfd, p->port, p->config);
+    }
 }
