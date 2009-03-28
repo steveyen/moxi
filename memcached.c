@@ -125,6 +125,14 @@ enum transmit_result {
 
 static enum transmit_result transmit(conn *c);
 
+conn_funcs conn_funcs_default = {
+    add_bytes_read,
+    out_string,
+    try_read_command,
+    reset_cmd_handler,
+    complete_nread
+};
+
 #define REALTIME_MAXDELTA 60*60*24*30
 
 /*
@@ -424,12 +432,7 @@ conn *conn_new(const int sfd, enum conn_states init_state,
 
     c->noreply = false;
 
-    c->conn_add_bytes_read = add_bytes_read;
-    c->conn_out_string = out_string;
-    c->conn_try_read_command = try_read_command;
-    c->conn_reset_cmd_handler = reset_cmd_handler;
-    c->conn_complete_nread = complete_nread;
-
+    c->funcs = &conn_funcs_default;
     c->extra = extra;
 
     if (IS_PROXY(c->protocol))
@@ -807,7 +810,7 @@ static void complete_nread_ascii(conn *c) {
     pthread_mutex_unlock(&c->thread->stats.mutex);
 
     if (strncmp(ITEM_data(it) + it->nbytes - 2, "\r\n", 2) != 0) {
-        c->conn_out_string(c, "CLIENT_ERROR bad data chunk");
+        c->funcs->conn_out_string(c, "CLIENT_ERROR bad data chunk");
     } else {
       ret = store_item(it, comm, c);
 
@@ -843,19 +846,19 @@ static void complete_nread_ascii(conn *c) {
 
       switch (ret) {
       case STORED:
-          c->conn_out_string(c, "STORED");
+          c->funcs->conn_out_string(c, "STORED");
           break;
       case EXISTS:
-          c->conn_out_string(c, "EXISTS");
+          c->funcs->conn_out_string(c, "EXISTS");
           break;
       case NOT_FOUND:
-          c->conn_out_string(c, "NOT_FOUND");
+          c->funcs->conn_out_string(c, "NOT_FOUND");
           break;
       case NOT_STORED:
-          c->conn_out_string(c, "NOT_STORED");
+          c->funcs->conn_out_string(c, "NOT_STORED");
           break;
       default:
-          c->conn_out_string(c, "SERVER_ERROR Unhandled storage type.");
+          c->funcs->conn_out_string(c, "SERVER_ERROR Unhandled storage type.");
       }
 
     }
@@ -893,7 +896,7 @@ static void add_bin_header(conn *c, uint16_t err, uint8_t hdr_len, uint16_t key_
     c->iovused = 0;
     if (add_msghdr(c) != 0) {
         /* XXX:  out_string is inappropriate here */
-        c->conn_out_string(c, "SERVER_ERROR out of memory");
+        c->funcs->conn_out_string(c, "SERVER_ERROR out of memory");
         return;
     }
 
@@ -2020,7 +2023,7 @@ static void write_and_free(conn *c, char *buf, int bytes) {
         conn_set_state(c, conn_write);
         c->write_and_go = conn_new_cmd;
     } else {
-        c->conn_out_string(c, "SERVER_ERROR out of memory writing stats");
+        c->funcs->conn_out_string(c, "SERVER_ERROR out of memory writing stats");
     }
 }
 
@@ -2064,11 +2067,11 @@ inline static void process_stats_detail(conn *c, const char *command) {
 
     if (strcmp(command, "on") == 0) {
         settings.detail_enabled = 1;
-        c->conn_out_string(c, "OK");
+        c->funcs->conn_out_string(c, "OK");
     }
     else if (strcmp(command, "off") == 0) {
         settings.detail_enabled = 0;
-        c->conn_out_string(c, "OK");
+        c->funcs->conn_out_string(c, "OK");
     }
     else if (strcmp(command, "dump") == 0) {
         int len;
@@ -2076,7 +2079,7 @@ inline static void process_stats_detail(conn *c, const char *command) {
         write_and_free(c, stats, len);
     }
     else {
-        c->conn_out_string(c, "CLIENT_ERROR usage: stats detail on|off|dump");
+        c->funcs->conn_out_string(c, "CLIENT_ERROR usage: stats detail on|off|dump");
     }
 }
 
@@ -2193,7 +2196,7 @@ static void process_stat(conn *c, token_t *tokens, const size_t ntokens) {
         unsigned int bytes, id, limit = 0;
 
         if (ntokens < 5) {
-            c->conn_out_string(c, "CLIENT_ERROR bad command line");
+            c->funcs->conn_out_string(c, "CLIENT_ERROR bad command line");
             return;
         }
 
@@ -2262,7 +2265,7 @@ static inline void process_get_command(conn *c, token_t *tokens, size_t ntokens,
                     c->thread->stats.slab_stats[sid].get_hits += stats_get_hits[sid];
                 }
                 pthread_mutex_unlock(&c->thread->stats.mutex);
-                c->conn_out_string(c, "CLIENT_ERROR bad command line format");
+                c->funcs->conn_out_string(c, "CLIENT_ERROR bad command line format");
                 return;
             }
 
@@ -2317,7 +2320,7 @@ static inline void process_get_command(conn *c, token_t *tokens, size_t ntokens,
                         c->thread->stats.slab_stats[sid].get_hits += stats_get_hits[sid];
                     }
                     pthread_mutex_unlock(&c->thread->stats.mutex);
-                    c->conn_out_string(c, "SERVER_ERROR out of memory making CAS suffix");
+                    c->funcs->conn_out_string(c, "SERVER_ERROR out of memory making CAS suffix");
                     item_remove(it);
                     return;
                   }
@@ -2392,7 +2395,7 @@ static inline void process_get_command(conn *c, token_t *tokens, size_t ntokens,
     */
     if (key_token->value != NULL || add_iov(c, "END\r\n", 5) != 0
         || (IS_UDP(c->protocol) && build_udp_headers(c) != 0)) {
-        c->conn_out_string(c, "SERVER_ERROR out of memory writing get response");
+        c->funcs->conn_out_string(c, "SERVER_ERROR out of memory writing get response");
     }
     else {
         conn_set_state(c, conn_mwrite);
@@ -2425,7 +2428,7 @@ static void process_update_command(conn *c, token_t *tokens, const size_t ntoken
     set_noreply_maybe(c, tokens, ntokens);
 
     if (tokens[KEY_TOKEN].length > KEY_MAX_LENGTH) {
-        c->conn_out_string(c, "CLIENT_ERROR bad command line format");
+        c->funcs->conn_out_string(c, "CLIENT_ERROR bad command line format");
         return;
     }
 
@@ -2435,7 +2438,7 @@ static void process_update_command(conn *c, token_t *tokens, const size_t ntoken
     if (! (safe_strtoul(tokens[2].value, (uint32_t *)&flags)
            && safe_strtol(tokens[3].value, &exptime_int)
            && safe_strtol(tokens[4].value, (int32_t *)&vlen))) {
-        c->conn_out_string(c, "CLIENT_ERROR bad command line format");
+        c->funcs->conn_out_string(c, "CLIENT_ERROR bad command line format");
         return;
     }
 
@@ -2459,9 +2462,9 @@ static void process_update_command(conn *c, token_t *tokens, const size_t ntoken
 
     if (it == 0) {
         if (! item_size_ok(nkey, flags, vlen + 2))
-            c->conn_out_string(c, "SERVER_ERROR object too large for cache");
+            c->funcs->conn_out_string(c, "SERVER_ERROR object too large for cache");
         else
-            c->conn_out_string(c, "SERVER_ERROR out of memory storing object");
+            c->funcs->conn_out_string(c, "SERVER_ERROR out of memory storing object");
         /* swallow the data line */
         c->write_and_go = conn_swallow;
         c->sbytes = vlen + 2;
@@ -2499,7 +2502,7 @@ static void process_arithmetic_command(conn *c, token_t *tokens, const size_t nt
     set_noreply_maybe(c, tokens, ntokens);
 
     if (tokens[KEY_TOKEN].length > KEY_MAX_LENGTH) {
-        c->conn_out_string(c, "CLIENT_ERROR bad command line format");
+        c->funcs->conn_out_string(c, "CLIENT_ERROR bad command line format");
         return;
     }
 
@@ -2507,7 +2510,7 @@ static void process_arithmetic_command(conn *c, token_t *tokens, const size_t nt
     nkey = tokens[KEY_TOKEN].length;
 
     if (!safe_strtoull(tokens[2].value, &delta)) {
-        c->conn_out_string(c, "CLIENT_ERROR bad command line format");
+        c->funcs->conn_out_string(c, "CLIENT_ERROR bad command line format");
         return;
     }
 
@@ -2521,11 +2524,11 @@ static void process_arithmetic_command(conn *c, token_t *tokens, const size_t nt
         }
         pthread_mutex_unlock(&c->thread->stats.mutex);
 
-        c->conn_out_string(c, "NOT_FOUND");
+        c->funcs->conn_out_string(c, "NOT_FOUND");
         return;
     }
 
-    c->conn_out_string(c, add_delta(c, it, incr, delta, temp));
+    c->funcs->conn_out_string(c, add_delta(c, it, incr, delta, temp));
     item_remove(it);         /* release our reference */
 }
 
@@ -2608,7 +2611,7 @@ static void process_delete_command(conn *c, token_t *tokens, const size_t ntoken
     nkey = tokens[KEY_TOKEN].length;
 
     if(nkey > KEY_MAX_LENGTH) {
-        c->conn_out_string(c, "CLIENT_ERROR bad command line format");
+        c->funcs->conn_out_string(c, "CLIENT_ERROR bad command line format");
         return;
     }
 
@@ -2626,13 +2629,13 @@ static void process_delete_command(conn *c, token_t *tokens, const size_t ntoken
 
         item_unlink(it);
         item_remove(it);      /* release our reference */
-        c->conn_out_string(c, "DELETED");
+        c->funcs->conn_out_string(c, "DELETED");
     } else {
         pthread_mutex_lock(&c->thread->stats.mutex);
         c->thread->stats.delete_misses++;
         pthread_mutex_unlock(&c->thread->stats.mutex);
 
-        c->conn_out_string(c, "NOT_FOUND");
+        c->funcs->conn_out_string(c, "NOT_FOUND");
     }
 }
 
@@ -2645,7 +2648,7 @@ static void process_verbosity_command(conn *c, token_t *tokens, const size_t nto
 
     level = strtoul(tokens[1].value, NULL, 10);
     settings.verbose = level > MAX_VERBOSITY_LEVEL ? MAX_VERBOSITY_LEVEL : level;
-    c->conn_out_string(c, "OK");
+    c->funcs->conn_out_string(c, "OK");
     return;
 }
 
@@ -2671,7 +2674,7 @@ static void process_command(conn *c, char *command) {
     c->msgused = 0;
     c->iovused = 0;
     if (add_msghdr(c) != 0) {
-        c->conn_out_string(c, "SERVER_ERROR out of memory preparing response");
+        c->funcs->conn_out_string(c, "SERVER_ERROR out of memory preparing response");
         return;
     }
 
@@ -2728,13 +2731,13 @@ static void process_command(conn *c, char *command) {
         if(ntokens == (c->noreply ? 3 : 2)) {
             settings.oldest_live = current_time - 1;
             item_flush_expired();
-            c->conn_out_string(c, "OK");
+            c->funcs->conn_out_string(c, "OK");
             return;
         }
 
         exptime = strtol(tokens[1].value, NULL, 10);
         if(errno == ERANGE) {
-            c->conn_out_string(c, "CLIENT_ERROR bad command line format");
+            c->funcs->conn_out_string(c, "CLIENT_ERROR bad command line format");
             return;
         }
 
@@ -2749,12 +2752,12 @@ static void process_command(conn *c, char *command) {
         else /* exptime == 0 */
             settings.oldest_live = current_time - 1;
         item_flush_expired();
-        c->conn_out_string(c, "OK");
+        c->funcs->conn_out_string(c, "OK");
         return;
 
     } else if (ntokens == 2 && (strcmp(tokens[COMMAND_TOKEN].value, "version") == 0)) {
 
-        c->conn_out_string(c, "VERSION " VERSION);
+        c->funcs->conn_out_string(c, "VERSION " VERSION);
 
     } else if (ntokens == 2 && (strcmp(tokens[COMMAND_TOKEN].value, "quit") == 0)) {
 
@@ -2770,30 +2773,30 @@ static void process_command(conn *c, char *command) {
         dst  = strtol(tokens[3].value, NULL, 10);
 
         if(errno == ERANGE) {
-            c->conn_out_string(c, "CLIENT_ERROR bad command line format");
+            c->funcs->conn_out_string(c, "CLIENT_ERROR bad command line format");
             return;
         }
 
         rv = slabs_reassign(src, dst);
         if (rv == 1) {
-            c->conn_out_string(c, "DONE");
+            c->funcs->conn_out_string(c, "DONE");
             return;
         }
         if (rv == 0) {
-            c->conn_out_string(c, "CANT");
+            c->funcs->conn_out_string(c, "CANT");
             return;
         }
         if (rv == -1) {
-            c->conn_out_string(c, "BUSY");
+            c->funcs->conn_out_string(c, "BUSY");
             return;
         }
 #else
-        c->conn_out_string(c, "CLIENT_ERROR Slab reassignment not supported");
+        c->funcs->conn_out_string(c, "CLIENT_ERROR Slab reassignment not supported");
 #endif
     } else if ((ntokens == 3 || ntokens == 4) && (strcmp(tokens[COMMAND_TOKEN].value, "verbosity") == 0)) {
         process_verbosity_command(c, tokens, ntokens);
     } else {
-        c->conn_out_string(c, "ERROR");
+        c->funcs->conn_out_string(c, "ERROR");
     }
     return;
 }
@@ -2869,7 +2872,7 @@ static int try_read_command(conn *c) {
             c->msgused = 0;
             c->iovused = 0;
             if (add_msghdr(c) != 0) {
-                c->conn_out_string(c, "SERVER_ERROR out of memory");
+                c->funcs->conn_out_string(c, "SERVER_ERROR out of memory");
                 return 0;
             }
 
@@ -2925,14 +2928,14 @@ static enum try_read_result try_read_udp(conn *c) {
     if (res > 8) {
         unsigned char *buf = (unsigned char *)c->rbuf;
 
-        c->conn_add_bytes_read(c, res);
+        c->funcs->conn_add_bytes_read(c, res);
 
         /* Beginning of UDP packet is the request ID; save it. */
         c->request_id = buf[0] * 256 + buf[1];
 
         /* If this is a multi-packet request, drop it. */
         if (buf[4] != 0 || buf[5] != 1) {
-            c->conn_out_string(c, "SERVER_ERROR multi-packet request not supported");
+            c->funcs->conn_out_string(c, "SERVER_ERROR multi-packet request not supported");
             return READ_NO_DATA_RECEIVED;
         }
 
@@ -2973,7 +2976,7 @@ static enum try_read_result try_read_network(conn *c) {
                 if (settings.verbose > 0)
                     fprintf(stderr, "Couldn't realloc input buffer\n");
                 c->rbytes = 0; /* ignore what we read */
-                c->conn_out_string(c, "SERVER_ERROR out of memory reading request");
+                c->funcs->conn_out_string(c, "SERVER_ERROR out of memory reading request");
                 c->write_and_go = conn_closing;
                 return READ_MEMORY_ERROR;
             }
@@ -2984,7 +2987,7 @@ static enum try_read_result try_read_network(conn *c) {
         int avail = c->rsize - c->rbytes;
         res = read(c->sfd, c->rbuf + c->rbytes, avail);
         if (res > 0) {
-            c->conn_add_bytes_read(c, res);
+            c->funcs->conn_add_bytes_read(c, res);
 
             gotdata = READ_DATA_RECEIVED;
             c->rbytes += res;
@@ -3198,7 +3201,7 @@ static void drive_machine(conn *c) {
             break;
 
         case conn_parse_cmd :
-            if (c->conn_try_read_command(c) == 0) {
+            if (c->funcs->conn_try_read_command(c) == 0) {
                 /* wee need more data! */
                 conn_set_state(c, conn_waiting);
             }
@@ -3206,12 +3209,12 @@ static void drive_machine(conn *c) {
             break;
 
         case conn_new_cmd:
-            c->conn_reset_cmd_handler(c);
+            c->funcs->conn_reset_cmd_handler(c);
             break;
 
         case conn_nread:
             if (c->rlbytes == 0) {
-                c->conn_complete_nread(c);
+                c->funcs->conn_complete_nread(c);
                 break;
             }
             /* first check if we have leftovers in the conn_read buffer */
@@ -3232,7 +3235,7 @@ static void drive_machine(conn *c) {
             /*  now try reading from the socket */
             res = read(c->sfd, c->ritem, c->rlbytes);
             if (res > 0) {
-                c->conn_add_bytes_read(c, res);
+                c->funcs->conn_add_bytes_read(c, res);
 
                 if (c->rcurr == c->ritem) {
                     c->rcurr += res;
@@ -3280,7 +3283,7 @@ static void drive_machine(conn *c) {
             /*  now try reading from the socket */
             res = read(c->sfd, c->rbuf, c->rsize > c->sbytes ? c->sbytes : c->rsize);
             if (res > 0) {
-                c->conn_add_bytes_read(c, res);
+                c->funcs->conn_add_bytes_read(c, res);
                 c->sbytes -= res;
                 break;
             }
