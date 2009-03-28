@@ -19,7 +19,7 @@ struct proxy {
     char *config;
     conn *wait_head;
     conn *wait_tail;
-    conn *listen_conn;
+    int   listening;
     MC_DOWNSTREAM *downstream_busy;
     MC_DOWNSTREAM *downstream_free;
     int            downstream_num;
@@ -33,7 +33,7 @@ struct downstream {
 };
 
 MC_PROXY      *cproxy_create(int proxy_port, char *proxy_sect);
-conn          *cproxy_listen(MC_PROXY *p);
+int            cproxy_listen(MC_PROXY *p);
 MC_DOWNSTREAM *cproxy_add_downstream(MC_PROXY *p);
 MC_DOWNSTREAM *cproxy_create_downstream(char *proxy_sect);
 int            cproxy_connect_downstream(MC_DOWNSTREAM *d);
@@ -65,7 +65,6 @@ conn_funcs cproxy_downstream_funcs = {
     reset_cmd_handler,
     complete_nread
 };
-
 
 /** From libmemcached. */
 memcached_return memcached_version(memcached_st *ptr);
@@ -106,7 +105,11 @@ int cproxy_init(const char *cfg) {
         if (p != NULL) {
             if (cproxy_add_downstream(p) != NULL) {
                 if (cproxy_connect_downstream(p->downstream_free) == 0) {
-                    cproxy_listen(p);
+                    int n = cproxy_listen(p);
+                    if (n > 0) {
+                        if (settings.verbose > 1)
+                            fprintf(stderr, "cproxy listening on %d conns\n", n);
+                    }
                 }
             }
         } else {
@@ -117,7 +120,7 @@ int cproxy_init(const char *cfg) {
     free(buff);
 
     if (settings.verbose > 1)
-        fprintf(stderr, "cproxy initted\n");
+        fprintf(stderr, "cproxy_init done\n");
 
     return 0;
 }
@@ -126,13 +129,17 @@ MC_PROXY *cproxy_create(int port, char *config) {
     assert(port > 0);
     assert(config != NULL);
 
+    if (settings.verbose > 1)
+        fprintf(stderr, "cproxy_create on port %d, downstream %s\n",
+                port, config);
+
     MC_PROXY *p = (MC_PROXY *) calloc(1, sizeof(MC_PROXY));
     if (p != NULL) {
         p->port   = port;
         p->config = strdup(config);
         p->wait_head = NULL;
         p->wait_tail = NULL;
-        p->listen_conn = NULL;
+        p->listening = 0;
         p->downstream_busy = NULL;
         p->downstream_free = NULL;
         p->downstream_num  = 0;
@@ -141,21 +148,43 @@ MC_PROXY *cproxy_create(int port, char *config) {
     return p;
 }
 
-conn *cproxy_listen(MC_PROXY *p) {
+int cproxy_listen(MC_PROXY *p) {
     assert(p != NULL);
 
-    if (p->listen_conn == NULL &&
+    if (settings.verbose > 1)
+        fprintf(stderr, "cproxy_listen on port %d, downstream %s\n",
+                p->port, p->config);
+
+    conn *listen_conn_orig = listen_conn;
+
+    if (p->listening <= 0 &&
         server_socket(p->port, proxy_upstream_ascii_prot) == 0) {
+        assert(listen_conn != NULL);
 
-        if (settings.verbose > 1)
-            fprintf(stderr, "cproxy listening on %d to %s\n", p->port, p->config);
+        // The listen_conn global list is changed by server_socket(),
+        // which adds a new listening conn on p->port for each bindable
+        // host address.
+        //
+        // For example, there might be two new listening conn's --
+        // one for localhost, another for 127.0.0.1.
+        //
+        conn *c = listen_conn;
+        while (c != NULL &&
+               c != listen_conn_orig) {
+            // TODO: Memory leak, need to clean up listen_conn->extra.
+            c->extra = p;
+            c->funcs = &cproxy_listen_funcs;
+            c = c->next;
 
-        // TODO: Memory leak, need to clean up listen_conn->extra.
-        p->listen_conn = listen_conn; // The listen_conn global is set by server_socket().
-        p->listen_conn->extra = p;
-        p->listen_conn->funcs = &cproxy_listen_funcs;
+            p->listening++;
+
+            if (settings.verbose > 1)
+                fprintf(stderr, "<%d cproxy listening on port %d, downstream %s\n",
+                        c->sfd, p->port, p->config);
+        }
     }
-    return p->listen_conn;
+
+    return p->listening;
 }
 
 MC_DOWNSTREAM *cproxy_add_downstream(MC_PROXY *p) {
@@ -213,5 +242,6 @@ int cproxy_connect_downstream(MC_DOWNSTREAM *d) {
 }
 
 void cproxy_init_conn(conn *c) {
-    fprintf(stderr, "cproxy_init_conn %d\n", c->sfd);
+    if (settings.verbose > 1)
+        fprintf(stderr, "<%d cproxy_init_conn\n", c->sfd);
 }

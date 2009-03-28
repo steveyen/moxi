@@ -392,7 +392,7 @@ conn *conn_new(const int sfd, enum conn_states init_state,
     if (settings.verbose > 1) {
         if (init_state == conn_listening) {
             fprintf(stderr, "<%d server listening (%s)\n", sfd,
-                prot_text(prot));
+                    prot_text(prot));
         } else if (IS_UDP(prot)) {
             fprintf(stderr, "<%d server listening (udp)\n", sfd);
         } else if (prot == negotiating_prot) {
@@ -400,7 +400,7 @@ conn *conn_new(const int sfd, enum conn_states init_state,
                     sfd);
         } else {
             fprintf(stderr, "<%d new %s client connection\n",
-                sfd, prot_text(prot));
+                    sfd, prot_text(prot));
         }
     }
 
@@ -428,8 +428,11 @@ conn *conn_new(const int sfd, enum conn_states init_state,
     c->noreply = false;
 
     c->funcs = funcs;
-    if (c->funcs == NULL)
+    if (c->funcs == NULL) {
         c->funcs = &conn_funcs_default;
+        if (settings.verbose > 1)
+            fprintf(stderr, "<%d initialized conn_funcs to default\n", sfd);
+    }
 
     c->extra = extra;
 
