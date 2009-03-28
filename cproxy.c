@@ -169,3 +169,8 @@ MC_DOWNSTREAM *cproxy_create_downstream(char *config) {
     }
     return NULL;
 }
+
+int cproxy_init_conn(conn *c) {
+    fprintf(stderr, "cproxy_init_conn\n");
+    return 0;
+}
