@@ -126,6 +126,7 @@ enum transmit_result {
 static enum transmit_result transmit(conn *c);
 
 conn_funcs conn_funcs_default = {
+    NULL,
     add_bytes_read,
     out_string,
     try_read_command,
@@ -452,6 +453,9 @@ conn *conn_new(const int sfd, enum conn_states init_state,
         perror("event_add");
         return NULL;
     }
+
+    if (c->funcs->conn_init != NULL)
+        c->funcs->conn_init(c);
 
     STATS_LOCK();
     stats.curr_conns++;
