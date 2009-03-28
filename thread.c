@@ -21,6 +21,7 @@ struct conn_queue_item {
     int               event_flags;
     int               read_buffer_size;
     enum protocol     protocol;
+    void             *extra;
     CQ_ITEM          *next;
 };
 
@@ -264,7 +265,8 @@ static void thread_libevent_process(int fd, short which, void *arg) {
 
     if (NULL != item) {
         conn *c = conn_new(item->sfd, item->init_state, item->event_flags,
-                           item->read_buffer_size, item->protocol, me->base);
+                           item->read_buffer_size, item->protocol, me->base,
+                           item->extra);
         if (c == NULL) {
             if (IS_UDP(item->protocol)) {
                 fprintf(stderr, "Can't listen for events on UDP socket\n");
@@ -292,7 +294,7 @@ static int last_thread = 0;
  * of an incoming connection.
  */
 void dispatch_conn_new(int sfd, enum conn_states init_state, int event_flags,
-                       int read_buffer_size, enum protocol prot) {
+                       int read_buffer_size, enum protocol prot, void *extra) {
     int tid = last_thread % (settings.num_threads - 1);
 
     /* Skip the dispatch thread (0) */
@@ -301,12 +303,12 @@ void dispatch_conn_new(int sfd, enum conn_states init_state, int event_flags,
     last_thread = tid;
 
     dispatch_conn_new_to_thread(tid, sfd, init_state, event_flags,
-                                read_buffer_size, prot);
+                                read_buffer_size, prot, extra);
 }
 
 void dispatch_conn_new_to_thread(int tid, int sfd, enum conn_states init_state,
                                  int event_flags, int read_buffer_size,
-                                 enum protocol prot) {
+                                 enum protocol prot, void *extra) {
     assert(tid > 0);
     assert(tid < settings.num_threads);
 
@@ -319,6 +321,7 @@ void dispatch_conn_new_to_thread(int tid, int sfd, enum conn_states init_state,
     item->event_flags = event_flags;
     item->read_buffer_size = read_buffer_size;
     item->protocol = prot;
+    item->extra = extra;
 
     cq_push(thread->new_conn_queue, item);
 

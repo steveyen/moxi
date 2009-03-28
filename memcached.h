@@ -413,7 +413,14 @@ void do_accept_new_conns(const bool do_accept);
 char *do_add_delta(conn *c, item *item, const bool incr, const int64_t delta,
                    char *buf);
 enum store_item_type do_store_item(item *item, int comm, conn* c);
-conn *conn_new(const int sfd, const enum conn_states init_state, const int event_flags, const int read_buffer_size, enum protocol prot, struct event_base *base);
+conn *conn_new(const int sfd, const enum conn_states init_state,
+               const int event_flags, const int read_buffer_size,
+               enum protocol prot, struct event_base *base,
+               void *extra);
+uint32_t append_bin_stats(char *buf, const char *key, const uint16_t klen,
+                          const char *val, const uint32_t vlen, void *cookie);
+uint32_t append_ascii_stats(char *buf, const char *key, const uint16_t klen,
+                            const char *val, const uint32_t vlen, void *cookie);
 extern int daemonize(int nochdir, int noclose);
 
 int server_socket(const int port, enum protocol prot);
@@ -435,10 +442,12 @@ int server_socket(const int port, enum protocol prot);
 
 void thread_init(int nthreads, struct event_base *main_base);
 int  dispatch_event_add(int thread, conn *c);
-void dispatch_conn_new(int sfd, enum conn_states init_state, int event_flags, int read_buffer_size, enum protocol prot);
+void dispatch_conn_new(int sfd, enum conn_states init_state, int event_flags,
+                       int read_buffer_size, enum protocol prot,
+                       void *extra);
 void dispatch_conn_new_to_thread(int tid, int sfd, enum conn_states init_state,
                                  int event_flags, int read_buffer_size,
-                                 enum protocol prot);
+                                 enum protocol prot, void *extra);
 
 /* Lock wrappers for cache functions that are called from main loop. */
 char *add_delta(conn *c, item *item, const int incr, const int64_t delta,

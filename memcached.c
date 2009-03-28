@@ -330,9 +330,10 @@ static const char *prot_text(enum protocol prot) {
 }
 
 conn *conn_new(const int sfd, enum conn_states init_state,
-                const int event_flags,
-                const int read_buffer_size, enum protocol prot,
-                struct event_base *base) {
+               const int event_flags,
+               const int read_buffer_size, enum protocol prot,
+               struct event_base *base,
+               void *extra) {
     conn *c = conn_from_freelist();
 
     if (NULL == c) {
@@ -428,6 +429,8 @@ conn *conn_new(const int sfd, enum conn_states init_state,
     c->conn_try_read_command = try_read_command;
     c->conn_reset_cmd_handler = reset_cmd_handler;
     c->conn_complete_nread = complete_nread;
+
+    c->extra = extra;
 
     event_set(&c->event, sfd, event_flags, event_handler, (void *)c);
     event_base_set(base, &c->event);
@@ -3153,7 +3156,7 @@ static void drive_machine(conn *c) {
             }
 
             dispatch_conn_new(sfd, conn_new_cmd, EV_READ | EV_PERSIST,
-                                     DATA_BUFFER_SIZE, c->protocol);
+                              DATA_BUFFER_SIZE, c->protocol, c->extra);
             stop = true;
             break;
 
@@ -3554,12 +3557,12 @@ int server_socket(const int port, enum protocol prot) {
             for (c = 1; c < settings.num_threads; c++) {
                 /* this is guaranteed to hit all threads because we round-robin */
                 dispatch_conn_new(sfd, conn_read, EV_READ | EV_PERSIST,
-                                  UDP_READ_BUFFER_SIZE, ascii_udp_prot);
+                                  UDP_READ_BUFFER_SIZE, ascii_udp_prot, NULL);
             }
         } else {
             if (!(listen_conn_add = conn_new(sfd, conn_listening,
                                              EV_READ | EV_PERSIST, 1,
-                                             prot, main_base))) {
+                                             prot, main_base, NULL))) {
                 fprintf(stderr, "failed to create listening connection\n");
                 exit(EXIT_FAILURE);
             }
@@ -3643,7 +3646,7 @@ static int server_socket_unix(const char *path, int access_mask) {
     }
     if (!(listen_conn = conn_new(sfd, conn_listening,
                                  EV_READ | EV_PERSIST, 1,
-                                 negotiating_prot, main_base))) {
+                                 negotiating_prot, main_base, NULL))) {
         fprintf(stderr, "failed to create listening connection\n");
         exit(EXIT_FAILURE);
     }
