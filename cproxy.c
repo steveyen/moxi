@@ -8,6 +8,21 @@
 #include "memcached.h"
 #include "cproxy.h"
 
+typedef struct downstream MC_DOWNSTREAM;
+struct downstream {
+    memcached_st *mst;
+    MC_DOWNSTREAM *next;
+    conn *conns;
+};
+
+typedef struct proxy MC_PROXY;
+struct proxy {
+    MC_DOWNSTREAM *downstream_free;
+    MC_DOWNSTREAM *downstream_busy;
+    conn *wait_tail;
+    conn *wait_head;
+};
+
 /**
  * cfg_in looks ike "local_port=host:port,host:port;local_port=host:port"
  * like "11222=memcached1.foo.net:11211"
