@@ -423,7 +423,7 @@ enum store_item_type do_store_item(item *item, int comm, conn* c);
 conn *conn_new(const int sfd, const enum conn_states init_state,
                const int event_flags, const int read_buffer_size,
                enum protocol prot, struct event_base *base,
-               void *extra);
+               conn_funcs *funcs, void *extra);
 uint32_t append_bin_stats(char *buf, const char *key, const uint16_t klen,
                           const char *val, const uint32_t vlen, void *cookie);
 uint32_t append_ascii_stats(char *buf, const char *key, const uint16_t klen,
@@ -451,10 +451,11 @@ void thread_init(int nthreads, struct event_base *main_base);
 int  dispatch_event_add(int thread, conn *c);
 void dispatch_conn_new(int sfd, enum conn_states init_state, int event_flags,
                        int read_buffer_size, enum protocol prot,
-                       void *extra);
+                       conn_funcs *funcs, void *extra);
 void dispatch_conn_new_to_thread(int tid, int sfd, enum conn_states init_state,
                                  int event_flags, int read_buffer_size,
-                                 enum protocol prot, void *extra);
+                                 enum protocol prot,
+                                 conn_funcs *funcs, void *extra);
 
 /* Lock wrappers for cache functions that are called from main loop. */
 char *add_delta(conn *c, item *item, const int incr, const int64_t delta,

@@ -341,7 +341,7 @@ conn *conn_new(const int sfd, enum conn_states init_state,
                const int event_flags,
                const int read_buffer_size, enum protocol prot,
                struct event_base *base,
-               void *extra) {
+               conn_funcs *funcs, void *extra) {
     conn *c = conn_from_freelist();
 
     if (NULL == c) {
@@ -432,7 +432,10 @@ conn *conn_new(const int sfd, enum conn_states init_state,
 
     c->noreply = false;
 
-    c->funcs = &conn_funcs_default;
+    c->funcs = funcs;
+    if (c->funcs == NULL)
+        c->funcs = &conn_funcs_default;
+
     c->extra = extra;
 
     if (IS_PROXY(c->protocol))
@@ -3162,7 +3165,8 @@ static void drive_machine(conn *c) {
             }
 
             dispatch_conn_new(sfd, conn_new_cmd, EV_READ | EV_PERSIST,
-                              DATA_BUFFER_SIZE, c->protocol, c->extra);
+                              DATA_BUFFER_SIZE, c->protocol,
+                              c->funcs, c->extra);
             stop = true;
             break;
 
@@ -3563,12 +3567,13 @@ int server_socket(const int port, enum protocol prot) {
             for (c = 1; c < settings.num_threads; c++) {
                 /* this is guaranteed to hit all threads because we round-robin */
                 dispatch_conn_new(sfd, conn_read, EV_READ | EV_PERSIST,
-                                  UDP_READ_BUFFER_SIZE, ascii_udp_prot, NULL);
+                                  UDP_READ_BUFFER_SIZE, ascii_udp_prot,
+                                  NULL, NULL);
             }
         } else {
             if (!(listen_conn_add = conn_new(sfd, conn_listening,
                                              EV_READ | EV_PERSIST, 1,
-                                             prot, main_base, NULL))) {
+                                             prot, main_base, NULL, NULL))) {
                 fprintf(stderr, "failed to create listening connection\n");
                 exit(EXIT_FAILURE);
             }
@@ -3652,7 +3657,8 @@ static int server_socket_unix(const char *path, int access_mask) {
     }
     if (!(listen_conn = conn_new(sfd, conn_listening,
                                  EV_READ | EV_PERSIST, 1,
-                                 negotiating_prot, main_base, NULL))) {
+                                 negotiating_prot, main_base,
+                                 NULL, NULL))) {
         fprintf(stderr, "failed to create listening connection\n");
         exit(EXIT_FAILURE);
     }
