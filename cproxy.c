@@ -33,6 +33,9 @@ MC_DOWNSTREAM *cproxy_create_downstream(char *proxy_sect);
  * host memcached1.foo.net on port 11211.
  */
 int cproxy_init(const char *cfg) {
+    if (cfg == NULL)
+        return 0;
+
     char *buff;
     char *next;
     char *proxy_sect;
@@ -55,7 +58,7 @@ int cproxy_init(const char *cfg) {
             exit(EXIT_FAILURE);
         }
 
-        // cproxy_create(proxy_port, proxy_sect);
+        cproxy_create(proxy_port, proxy_sect);
     }
     free(buff);
 

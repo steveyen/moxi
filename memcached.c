@@ -3903,6 +3903,7 @@ int main (int argc, char **argv) {
     int maxcore = 0;
     char *username = NULL;
     char *pid_file = NULL;
+    char *cproxy_cfg = NULL;
     struct passwd *pw;
     struct rlimit rlim;
     /* listening sockets */
@@ -3945,6 +3946,7 @@ int main (int argc, char **argv) {
           "R:"  /* max requests per event */
           "C"   /* Disable use of CAS */
           "b:"  /* backlog queue limit */
+          "W:"  /* cproxy configuration */
         ))) {
         switch (c) {
         case 'a':
@@ -4045,6 +4047,9 @@ int main (int argc, char **argv) {
             break;
         case 'b' :
             settings.backlog = atoi(optarg);
+            break;
+        case 'W' :
+            cproxy_cfg = strdup(optarg);
             break;
         default:
             fprintf(stderr, "Illegal argument \"%c\"\n", c);
@@ -4215,7 +4220,10 @@ int main (int argc, char **argv) {
     /* Do cproxy_init after we create normal memcached sockets, because
      * we can be a proxy to ourselves for testing.
      */
-    cproxy_init("11333=localhost:11211");
+    if (cproxy_cfg) {
+        cproxy_init(cproxy_cfg);
+        free(cproxy_cfg);
+    }
 
     /* Drop privileges no longer needed */
     drop_privileges();
