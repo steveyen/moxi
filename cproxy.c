@@ -10,22 +10,27 @@
 
 typedef struct downstream MC_DOWNSTREAM;
 struct downstream {
-    memcached_st *mst;
-    MC_DOWNSTREAM *next;
-    conn *conns;
+    memcached_st    mst;
+    MC_DOWNSTREAM  *next;
+    conn          **conns;
 };
 
 typedef struct proxy MC_PROXY;
 struct proxy {
-    MC_DOWNSTREAM *downstream_free;
     MC_DOWNSTREAM *downstream_busy;
-    conn *wait_tail;
+    MC_DOWNSTREAM *downstream_free;
     conn *wait_head;
+    conn *wait_tail;
 };
 
+MC_PROXY      *cproxy_create(int proxy_port, char *proxy_sect);
+MC_DOWNSTREAM *cproxy_create_downstream(char *proxy_sect);
+
 /**
- * cfg_in looks ike "local_port=host:port,host:port;local_port=host:port"
- * like "11222=memcached1.foo.net:11211"
+ * cfg should look like "local_port=host:port,host:port;local_port=host:port"
+ * like "11222=memcached1.foo.net:11211"  This means local port 11222
+ * will be a proxy to downstream memcached server running at
+ * host memcached1.foo.net on port 11211.
  */
 int cproxy_init(const char *cfg) {
     char *buff;
@@ -50,25 +55,7 @@ int cproxy_init(const char *cfg) {
             exit(EXIT_FAILURE);
         }
 
-        memcached_server_st *mservers;
-        memcached_st *mst;
-
-        mservers = memcached_servers_parse(proxy_sect);
-
-        mst = memcached_create(NULL);
-        if (!mst) {
-            fprintf(stderr, "failed memcached_create.\n");
-            exit(EXIT_FAILURE);
-        }
-
-        memcached_server_push(mst, mservers);
-
-        if (false && server_socket(proxy_port, proxy_upstream_ascii_prot) != 0) {
-            fprintf(stderr, "failed to listen as proxy on TCP port %d\n", proxy_port);
-            if (errno != 0)
-                perror("tcp listen");
-            exit(EX_OSERR);
-        }
+        // cproxy_create(proxy_port, proxy_sect);
     }
     free(buff);
 
@@ -77,3 +64,56 @@ int cproxy_init(const char *cfg) {
 
     return 0;
 }
+
+MC_PROXY *cproxy_create(int proxy_port, char *proxy_cfg) {
+    MC_PROXY *p = (MC_PROXY *) calloc(1, sizeof(MC_PROXY));
+    if (proxy_cfg == NULL) {
+        fprintf(stderr, "could not alloc MC_PROXY\n");
+        exit(EXIT_FAILURE);
+    }
+    p->wait_head = NULL;
+    p->wait_tail = NULL;
+    p->downstream_busy = NULL;
+    p->downstream_free = NULL;
+
+    p->downstream_free = cproxy_create_downstream(proxy_cfg);
+    if (p->downstream_free != NULL) {
+        if (server_socket(proxy_port, proxy_upstream_ascii_prot) == 0) {
+            // TODO: Memory leak, need to clean up conn->extra.
+            listen_conn->extra = p; // The listen_conn global is set by server_socket().
+            return p;
+        } else {
+            fprintf(stderr, "failed to listen as proxy on TCP port %d\n", proxy_port);
+            if (errno != 0)
+                perror("tcp listen");
+            exit(EX_OSERR);
+        }
+    }
+    return NULL;
+}
+
+MC_DOWNSTREAM *cproxy_create_downstream(char *proxy_cfg) {
+    MC_DOWNSTREAM *d = (MC_DOWNSTREAM *) calloc(1, sizeof(MC_DOWNSTREAM));
+    if (d != NULL) {
+        if (memcached_create(&d->mst) != NULL) {
+            memcached_server_st *mservers;
+
+            mservers = memcached_servers_parse(proxy_cfg);
+            if (mservers != NULL) {
+                memcached_server_push(&d->mst, mservers);
+                memcached_server_list_free(mservers);
+                mservers = NULL;
+
+                d->conns = (conn **) calloc(memcached_server_count(&d->mst), sizeof(conn *));
+                if (d->conns != NULL)
+                    return d;
+            }
+            if (mservers != NULL)
+                memcached_server_list_free(mservers);
+        }
+        free(d);
+    }
+    return NULL;
+}
+
+

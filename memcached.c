@@ -111,9 +111,9 @@ static void out_string(conn *c, const char *str);
 struct stats stats;
 struct settings settings;
 time_t process_started;     /* when the process was started */
+conn *listen_conn = NULL;
 
 /** file scope variables **/
-static conn *listen_conn = NULL;
 static struct event_base *main_base;
 
 enum transmit_result {
@@ -4215,7 +4215,7 @@ int main (int argc, char **argv) {
     /* Do cproxy_init after we create normal memcached sockets, because
      * we can be a proxy to ourselves for testing.
      */
-    cproxy_init("11222=localhost:11211");
+    cproxy_init("11333=localhost:11211");
 
     /* Drop privileges no longer needed */
     drop_privileges();

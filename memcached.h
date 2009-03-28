@@ -397,8 +397,11 @@ struct conn {
     int  (*conn_try_read_command)(conn *c);
     void (*conn_reset_cmd_handler)(conn *c);
     void (*conn_complete_nread)(conn *c);
+
+    void *extra;
 };
 
+extern conn *listen_conn;
 
 /* current time of day (updated periodically) */
 extern volatile rel_time_t current_time;
