@@ -133,6 +133,7 @@ MC_DOWNSTREAM *cproxy_add_downstream(MC_PROXY *p) {
         if (d != NULL) {
             d->next = p->downstream_free;
             p->downstream_free = d;
+            p->downstream_num++;
             return d;
         }
     }
