@@ -36,6 +36,8 @@ MC_PROXY      *cproxy_create(int proxy_port, char *proxy_sect);
 conn          *cproxy_listen(MC_PROXY *p);
 MC_DOWNSTREAM *cproxy_add_downstream(MC_PROXY *p);
 MC_DOWNSTREAM *cproxy_create_downstream(char *proxy_sect);
+int            cproxy_connect_downstream(MC_DOWNSTREAM *d);
+void           cproxy_init_conn(conn *c);
 
 /** From libmemcached. */
 memcached_return memcached_version(memcached_st *ptr);
@@ -75,7 +77,9 @@ int cproxy_init(const char *cfg) {
         MC_PROXY *p = cproxy_create(proxy_port, proxy_sect);
         if (p != NULL) {
             if (cproxy_add_downstream(p) != NULL) {
-                cproxy_listen(p);
+                if (cproxy_connect_downstream(p->downstream_free) == 0) {
+                    cproxy_listen(p);
+                }
             }
         } else {
             fprintf(stderr, "could not alloc proxy\n");
@@ -145,7 +149,6 @@ MC_DOWNSTREAM *cproxy_create_downstream(char *config) {
     if (d != NULL) {
         if (memcached_create(&d->mst) != NULL) {
             memcached_server_st *mservers;
-            memcached_return rc;
 
             mservers = memcached_servers_parse(config);
             if (mservers != NULL) {
@@ -153,12 +156,9 @@ MC_DOWNSTREAM *cproxy_create_downstream(char *config) {
                 memcached_server_list_free(mservers);
                 mservers = NULL;
 
-                rc = memcached_version(&d->mst); // Connects to downstream servers.
-                if (rc == MEMCACHED_SUCCESS) {
-                    d->conns = (conn **) calloc(memcached_server_count(&d->mst), sizeof(conn *));
-                    if (d->conns != NULL)
-                        return d;
-                }
+                d->conns = (conn **) calloc(memcached_server_count(&d->mst), sizeof(conn *));
+                if (d->conns != NULL)
+                    return d;
             }
             if (mservers != NULL)
                 memcached_server_list_free(mservers);
@@ -170,7 +170,19 @@ MC_DOWNSTREAM *cproxy_create_downstream(char *config) {
     return NULL;
 }
 
-int cproxy_init_conn(conn *c) {
+int cproxy_connect_downstream(MC_DOWNSTREAM *d) {
+    assert(d != NULL);
+
+    memcached_return rc = memcached_version(&d->mst); // Connects to downstream servers.
+    if (rc == MEMCACHED_SUCCESS) {
+        d->conns = (conn **) calloc(memcached_server_count(&d->mst), sizeof(conn *));
+        if (d->conns != NULL)
+            return 0;
+    }
+
+    return 1;
+}
+
+void cproxy_init_conn(conn *c) {
     fprintf(stderr, "cproxy_init_conn\n");
-    return 0;
 }

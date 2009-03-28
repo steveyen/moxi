@@ -439,9 +439,6 @@ conn *conn_new(const int sfd, enum conn_states init_state,
 
     c->extra = extra;
 
-    if (IS_PROXY(c->protocol))
-        cproxy_init_conn(c);
-
     event_set(&c->event, sfd, event_flags, event_handler, (void *)c);
     event_base_set(base, &c->event);
     c->ev_flags = event_flags;
