@@ -598,7 +598,7 @@ static void conn_shrink(conn *c) {
 /**
  * Convert a state name to a human readable form.
  */
-static const char *state_text(enum conn_states state) {
+const char *state_text(enum conn_states state) {
     const char* const statenames[] = { "conn_listening",
                                        "conn_new_cmd",
                                        "conn_waiting",

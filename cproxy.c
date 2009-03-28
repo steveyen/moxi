@@ -247,7 +247,7 @@ void cproxy_init_conn(conn *c) {
     MC_PROXY *p = c->extra;
     if (p != NULL) {
         if (settings.verbose > 1)
-            fprintf(stderr, "<%d cproxy_init_conn for %d, downstream %s\n",
-                    c->sfd, p->port, p->config);
+            fprintf(stderr, "<%d cproxy_init_conn (%s) for %d, downstream %s\n",
+                    c->sfd, state_text(c->state), p->port, p->config);
     }
 }

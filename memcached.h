@@ -434,6 +434,7 @@ void out_string(conn *c, const char *str);
 int try_read_command(conn *c);
 void reset_cmd_handler(conn *c);
 void complete_nread(conn *c);
+const char *state_text(enum conn_states state);
 
 extern int daemonize(int nochdir, int noclose);
 
