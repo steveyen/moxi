@@ -29,9 +29,12 @@ struct downstream {
 };
 
 MC_PROXY      *cproxy_create(int proxy_port, char *proxy_sect);
-conn          *cproxy_start(MC_PROXY *p);
+conn          *cproxy_listen(MC_PROXY *p);
 MC_DOWNSTREAM *cproxy_add_downstream(MC_PROXY *p);
 MC_DOWNSTREAM *cproxy_create_downstream(char *proxy_sect);
+
+/** From libmemcached. */
+memcached_return memcached_version(memcached_st *ptr);
 
 /**
  * cfg should look like "local_port=host:port,host:port;local_port=host:port"
@@ -68,7 +71,7 @@ int cproxy_init(const char *cfg) {
         MC_PROXY *p = cproxy_create(proxy_port, proxy_sect);
         if (p != NULL) {
             cproxy_add_downstream(p);
-            cproxy_start(p);
+            cproxy_listen(p);
         } else {
             fprintf(stderr, "could not alloc proxy\n");
             exit(EXIT_FAILURE);
@@ -99,7 +102,7 @@ MC_PROXY *cproxy_create(int port, char *config) {
     return p;
 }
 
-conn *cproxy_start(MC_PROXY *p) {
+conn *cproxy_listen(MC_PROXY *p) {
     assert(p != NULL);
 
     if (p->listen_conn == NULL &&
@@ -128,6 +131,7 @@ MC_DOWNSTREAM *cproxy_create_downstream(char *config) {
     if (d != NULL) {
         if (memcached_create(&d->mst) != NULL) {
             memcached_server_st *mservers;
+            memcached_return rc;
 
             mservers = memcached_servers_parse(config);
             if (mservers != NULL) {
@@ -135,9 +139,12 @@ MC_DOWNSTREAM *cproxy_create_downstream(char *config) {
                 memcached_server_list_free(mservers);
                 mservers = NULL;
 
-                d->conns = (conn **) calloc(memcached_server_count(&d->mst), sizeof(conn *));
-                if (d->conns != NULL)
-                    return d;
+                rc = memcached_version(&d->mst); // Connects to downstream servers.
+                if (rc == MEMCACHED_SUCCESS) {
+                    d->conns = (conn **) calloc(memcached_server_count(&d->mst), sizeof(conn *));
+                    if (d->conns != NULL)
+                        return d;
+                }
             }
             if (mservers != NULL)
                 memcached_server_list_free(mservers);
