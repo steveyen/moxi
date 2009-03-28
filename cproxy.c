@@ -9,17 +9,21 @@
 #include "memcached.h"
 #include "cproxy.h"
 
+#define DOWNSTREAM_MAX 10
+
 typedef struct proxy      MC_PROXY;
 typedef struct downstream MC_DOWNSTREAM;
 
 struct proxy {
     int   port;
     char *config;
-    MC_DOWNSTREAM *downstream_busy;
-    MC_DOWNSTREAM *downstream_free;
     conn *wait_head;
     conn *wait_tail;
     conn *listen_conn;
+    MC_DOWNSTREAM *downstream_busy;
+    MC_DOWNSTREAM *downstream_free;
+    int            downstream_num;
+    int            downstream_max;
 };
 
 struct downstream {
@@ -99,6 +103,8 @@ MC_PROXY *cproxy_create(int port, char *config) {
         p->listen_conn = NULL;
         p->downstream_busy = NULL;
         p->downstream_free = NULL;
+        p->downstream_num  = 0;
+        p->downstream_max  = DOWNSTREAM_MAX;
     }
     return p;
 }
@@ -122,11 +128,13 @@ conn *cproxy_listen(MC_PROXY *p) {
 MC_DOWNSTREAM *cproxy_add_downstream(MC_PROXY *p) {
     assert(p != NULL);
 
-    MC_DOWNSTREAM *d = cproxy_create_downstream(p->config);
-    if (d != NULL) {
-        d->next = p->downstream_free;
-        p->downstream_free = d;
-        return d;
+    if (p->downstream_num < p->downstream_max) {
+        MC_DOWNSTREAM *d = cproxy_create_downstream(p->config);
+        if (d != NULL) {
+            d->next = p->downstream_free;
+            p->downstream_free = d;
+            return d;
+        }
     }
     return NULL;
 }
