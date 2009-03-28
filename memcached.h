@@ -429,6 +429,12 @@ uint32_t append_bin_stats(char *buf, const char *key, const uint16_t klen,
                           const char *val, const uint32_t vlen, void *cookie);
 uint32_t append_ascii_stats(char *buf, const char *key, const uint16_t klen,
                             const char *val, const uint32_t vlen, void *cookie);
+void add_bytes_read(conn *c, int bytes_read);
+void out_string(conn *c, const char *str);
+int try_read_command(conn *c);
+void reset_cmd_handler(conn *c);
+void complete_nread(conn *c);
+
 extern int daemonize(int nochdir, int noclose);
 
 int server_socket(const int port, enum protocol prot);

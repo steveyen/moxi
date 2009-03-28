@@ -11,6 +11,15 @@
 
 #define DOWNSTREAM_MAX 10
 
+conn_funcs cproxy_listen_funcs = {
+    NULL,
+    add_bytes_read,
+    out_string,
+    try_read_command,
+    reset_cmd_handler,
+    complete_nread
+};
+
 typedef struct proxy      MC_PROXY;
 typedef struct downstream MC_DOWNSTREAM;
 
@@ -125,6 +134,7 @@ conn *cproxy_listen(MC_PROXY *p) {
         // TODO: Memory leak, need to clean up listen_conn->extra.
         p->listen_conn = listen_conn; // The listen_conn global is set by server_socket().
         p->listen_conn->extra = p;
+        p->listen_conn->funcs = &cproxy_listen_funcs;
     }
     return p->listen_conn;
 }

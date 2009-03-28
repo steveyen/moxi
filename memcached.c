@@ -60,7 +60,6 @@
  */
 static void drive_machine(conn *c);
 static int new_socket(struct addrinfo *ai);
-static int try_read_command(conn *c);
 
 enum try_read_result {
     READ_DATA_RECEIVED,
@@ -72,7 +71,6 @@ enum try_read_result {
 static enum try_read_result try_read_network(conn *c);
 static enum try_read_result try_read_udp(conn *c);
 
-static void reset_cmd_handler(conn *c);
 static void conn_set_state(conn *c, enum conn_states state);
 
 /* stats */
@@ -89,7 +87,6 @@ static void event_handler(const int fd, const short which, void *arg);
 static void conn_close(conn *c);
 static void conn_init(void);
 static bool update_event(conn *c, const int new_flags);
-static void complete_nread(conn *c);
 static void process_command(conn *c, char *command);
 static void write_and_free(conn *c, char *buf, int bytes);
 static int ensure_iov_space(conn *c);
@@ -103,9 +100,6 @@ static void set_current_time(void);  /* update the global variable holding
                               (to avoid 64 bit time_t) */
 
 static void conn_free(conn *c);
-
-static void add_bytes_read(conn *c, int bytes_read);
-static void out_string(conn *c, const char *str);
 
 /** exported globals **/
 struct stats stats;
@@ -765,7 +759,7 @@ static int build_udp_headers(conn *c) {
 }
 
 
-static void out_string(conn *c, const char *str) {
+void out_string(conn *c, const char *str) {
     size_t len;
 
     assert(c != NULL);
@@ -1805,7 +1799,7 @@ static void complete_nread_binary(conn *c) {
     }
 }
 
-static void reset_cmd_handler(conn *c) {
+void reset_cmd_handler(conn *c) {
     c->cmd = -1;
     c->substate = bin_no_state;
     if(c->item != NULL) {
@@ -1820,7 +1814,7 @@ static void reset_cmd_handler(conn *c) {
     }
 }
 
-static void complete_nread(conn *c) {
+void complete_nread(conn *c) {
     assert(c != NULL);
     assert(c->protocol == ascii_udp_prot
            || c->protocol == ascii_prot
@@ -2808,7 +2802,7 @@ static void process_command(conn *c, char *command) {
 /*
  * if we have a complete line in the buffer, process it.
  */
-static int try_read_command(conn *c) {
+int try_read_command(conn *c) {
     assert(c != NULL);
     assert(c->rcurr <= (c->rbuf + c->rsize));
     assert(c->rbytes > 0);
@@ -3393,7 +3387,7 @@ static void drive_machine(conn *c) {
     return;
 }
 
-static void add_bytes_read(conn *c, int bytes_read) {
+void add_bytes_read(conn *c, int bytes_read) {
     assert(c != NULL);
     pthread_mutex_lock(&c->thread->stats.mutex);
     c->thread->stats.bytes_read += bytes_read;
