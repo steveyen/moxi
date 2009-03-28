@@ -70,8 +70,9 @@ int cproxy_init(const char *cfg) {
 
         MC_PROXY *p = cproxy_create(proxy_port, proxy_sect);
         if (p != NULL) {
-            cproxy_add_downstream(p);
-            cproxy_listen(p);
+            if (cproxy_add_downstream(p) != NULL) {
+                cproxy_listen(p);
+            }
         } else {
             fprintf(stderr, "could not alloc proxy\n");
             exit(EXIT_FAILURE);
@@ -107,6 +108,10 @@ conn *cproxy_listen(MC_PROXY *p) {
 
     if (p->listen_conn == NULL &&
         server_socket(p->port, proxy_upstream_ascii_prot) == 0) {
+
+        if (settings.verbose > 1)
+            fprintf(stderr, "cproxy listening on %d to %s\n", p->port, p->config);
+
         // TODO: Memory leak, need to clean up listen_conn->extra.
         p->listen_conn = listen_conn; // The listen_conn global is set by server_socket().
         p->listen_conn->extra = p;
