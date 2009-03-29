@@ -9,35 +9,49 @@
 #include "memcached.h"
 #include "cproxy.h"
 
+// TODO: Move into configurable settings one day.
+//
 #define DOWNSTREAM_MAX 10
 
-typedef struct proxy      MC_PROXY;
-typedef struct downstream MC_DOWNSTREAM;
+typedef struct proxy      proxy;
+typedef struct proxy_td   proxy_td;
+typedef struct downstream downstream;
 
 struct proxy {
-    int   port;
-    char *config;
-    conn *wait_head;
-    conn *wait_tail;
-    int   listening;
-    MC_DOWNSTREAM *downstream_busy;
-    MC_DOWNSTREAM *downstream_free;
-    int            downstream_num;
-    int            downstream_max;
+    int   port;   // Immutable.
+    char *config; // Immutable.
+
+    // Number of listening conn's acting as a proxy,
+    // where ((proxy *) conn->extra == this).
+    //
+    int listening;
+
+    proxy_td *thread_data;     // Immutable.
+    int       thread_data_num; // Immutable.
+};
+
+struct proxy_td { // Per server-thread, per proxy.
+    proxy *proxy; // Immutable.
+    conn  *wait_head;
+    conn  *wait_tail;
+    downstream *downstream_busy;
+    downstream *downstream_free;
+    int         downstream_num;
+    int         downstream_max;
 };
 
 struct downstream {
-    memcached_st    mst;
-    MC_DOWNSTREAM  *next; // For busy and free lists.
-    conn          **conns;
+    memcached_st   mst;   // Immutable.
+    downstream    *next;  // To track busy and free lists.
+    conn         **conns; // Immutable.
 };
 
-MC_PROXY      *cproxy_create(int proxy_port, char *proxy_sect);
-int            cproxy_listen(MC_PROXY *p);
-MC_DOWNSTREAM *cproxy_add_downstream(MC_PROXY *p);
-MC_DOWNSTREAM *cproxy_create_downstream(char *proxy_sect);
-int            cproxy_connect_downstream(MC_DOWNSTREAM *d);
-void           cproxy_init_conn(conn *c);
+proxy      *cproxy_create(int proxy_port, char *proxy_sect, int nthreads);
+int         cproxy_listen(proxy *p);
+downstream *cproxy_add_downstream(proxy_td *ptd);
+downstream *cproxy_create_downstream(char *proxy_sect);
+int         cproxy_connect_downstream(downstream *d);
+void        cproxy_init_conn(conn *c);
 
 conn_funcs cproxy_listen_funcs = {
     cproxy_init_conn,
@@ -75,7 +89,7 @@ memcached_return memcached_version(memcached_st *ptr);
  * will be a proxy to downstream memcached server running at
  * host memcached1.foo.net on port 11211.
  */
-int cproxy_init(const char *cfg) {
+int cproxy_init(const char *cfg, int nthreads) {
     if (cfg == NULL)
         return 0;
 
@@ -101,16 +115,12 @@ int cproxy_init(const char *cfg) {
             exit(EXIT_FAILURE);
         }
 
-        MC_PROXY *p = cproxy_create(proxy_port, proxy_sect);
+        proxy *p = cproxy_create(proxy_port, proxy_sect, nthreads);
         if (p != NULL) {
-            if (cproxy_add_downstream(p) != NULL) {
-                if (cproxy_connect_downstream(p->downstream_free) == 0) {
-                    int n = cproxy_listen(p);
-                    if (n > 0) {
-                        if (settings.verbose > 1)
-                            fprintf(stderr, "cproxy listening on %d conns\n", n);
-                    }
-                }
+            int n = cproxy_listen(p);
+            if (n > 0) {
+                if (settings.verbose > 1)
+                    fprintf(stderr, "cproxy listening on %d conns\n", n);
             }
         } else {
             fprintf(stderr, "could not alloc proxy\n");
@@ -125,7 +135,7 @@ int cproxy_init(const char *cfg) {
     return 0;
 }
 
-MC_PROXY *cproxy_create(int port, char *config) {
+proxy *cproxy_create(int port, char *config, int nthreads) {
     assert(port > 0);
     assert(config != NULL);
 
@@ -133,22 +143,36 @@ MC_PROXY *cproxy_create(int port, char *config) {
         fprintf(stderr, "cproxy_create on port %d, downstream %s\n",
                 port, config);
 
-    MC_PROXY *p = (MC_PROXY *) calloc(1, sizeof(MC_PROXY));
+    proxy *p = (proxy *) calloc(1, sizeof(proxy));
     if (p != NULL) {
         p->port   = port;
         p->config = strdup(config);
-        p->wait_head = NULL;
-        p->wait_tail = NULL;
         p->listening = 0;
-        p->downstream_busy = NULL;
-        p->downstream_free = NULL;
-        p->downstream_num  = 0;
-        p->downstream_max  = DOWNSTREAM_MAX;
+
+        p->thread_data_num = nthreads;
+        p->thread_data = (proxy_td *) calloc(p->thread_data_num,
+                                             sizeof(proxy_td));
+        if (p->thread_data != NULL) {
+            for (int i = 0; i < p->thread_data_num; i++) {
+                proxy_td *ptd = &p->thread_data[i];
+                ptd->proxy = p;
+                ptd->wait_head = NULL;
+                ptd->wait_tail = NULL;
+                ptd->downstream_busy = NULL;
+                ptd->downstream_free = NULL;
+                ptd->downstream_num  = 0;
+                ptd->downstream_max  = DOWNSTREAM_MAX;
+            }
+            return p;
+        }
+        free(p->config);
     }
-    return p;
+    free(p);
+
+    return NULL;
 }
 
-int cproxy_listen(MC_PROXY *p) {
+int cproxy_listen(proxy *p) {
     assert(p != NULL);
 
     if (settings.verbose > 1)
@@ -157,7 +181,7 @@ int cproxy_listen(MC_PROXY *p) {
 
     conn *listen_conn_orig = listen_conn;
 
-    if (p->listening <= 0 &&
+    if (p->listening == 0 &&
         server_socket(p->port, proxy_upstream_ascii_prot) == 0) {
         assert(listen_conn != NULL);
 
@@ -172,6 +196,7 @@ int cproxy_listen(MC_PROXY *p) {
         while (c != NULL &&
                c != listen_conn_orig) {
             // TODO: Memory leak, need to clean up listen_conn->extra.
+            //
             c->extra = p;
             c->funcs = &cproxy_listen_funcs;
             c = c->next;
@@ -187,23 +212,23 @@ int cproxy_listen(MC_PROXY *p) {
     return p->listening;
 }
 
-MC_DOWNSTREAM *cproxy_add_downstream(MC_PROXY *p) {
-    assert(p != NULL);
+downstream *cproxy_add_downstream(proxy_td *ptd) {
+    assert(ptd != NULL);
 
-    if (p->downstream_num < p->downstream_max) {
-        MC_DOWNSTREAM *d = cproxy_create_downstream(p->config);
+    if (ptd->downstream_num < ptd->downstream_max) {
+        downstream *d = cproxy_create_downstream(ptd->proxy->config);
         if (d != NULL) {
-            d->next = p->downstream_free;
-            p->downstream_free = d;
-            p->downstream_num++;
+            d->next = ptd->downstream_free;
+            ptd->downstream_free = d;
+            ptd->downstream_num++;
             return d;
         }
     }
     return NULL;
 }
 
-MC_DOWNSTREAM *cproxy_create_downstream(char *config) {
-    MC_DOWNSTREAM *d = (MC_DOWNSTREAM *) calloc(1, sizeof(MC_DOWNSTREAM));
+downstream *cproxy_create_downstream(char *config) {
+    downstream *d = (downstream *) calloc(1, sizeof(downstream));
     if (d != NULL) {
         if (memcached_create(&d->mst) != NULL) {
             memcached_server_st *mservers;
@@ -228,7 +253,7 @@ MC_DOWNSTREAM *cproxy_create_downstream(char *config) {
     return NULL;
 }
 
-int cproxy_connect_downstream(MC_DOWNSTREAM *d) {
+int cproxy_connect_downstream(downstream *d) {
     assert(d != NULL);
 
     memcached_return rc = memcached_version(&d->mst); // Connects to downstream servers.
@@ -244,7 +269,7 @@ int cproxy_connect_downstream(MC_DOWNSTREAM *d) {
 void cproxy_init_conn(conn *c) {
     assert(c->extra != NULL);
 
-    MC_PROXY *p = c->extra;
+    proxy *p = c->extra;
     if (p != NULL) {
         if (settings.verbose > 1)
             fprintf(stderr, "<%d cproxy_init_conn (%s) for %d, downstream %s\n",
