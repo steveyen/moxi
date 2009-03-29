@@ -11,6 +11,7 @@
 
 /** From libmemcached. */
 memcached_return memcached_version(memcached_st *ptr);
+uint32_t memcached_generate_hash(memcached_st *ptr, const char *key, size_t key_length);
 
 // TODO: Move into configurable settings one day.
 //
@@ -48,19 +49,20 @@ struct downstream {
     conn         **conns; // Immutable.
 };
 
-proxy      *cproxy_create(int proxy_port, char *proxy_sect, int nthreads);
-int         cproxy_listen(proxy *p);
-proxy_td   *cproxy_find_thread_data(proxy *p, pthread_t thread_id);
-void        cproxy_init_upstream_conn(conn *c);
-void        cproxy_init_downstream_conn(conn *c);
-void        cproxy_close_upstream_conn(conn *c);
-void        cproxy_close_downstream_conn(conn *c);
-void        cproxy_add_downstream(proxy_td *ptd);
-downstream *cproxy_reserve_downstream(proxy_td *ptd);
-void        cproxy_release_downstream(proxy_td *ptd, downstream *d);
-downstream *cproxy_create_downstream(char *proxy_sect);
-int         cproxy_connect_downstream(downstream *d);
-void        cproxy_process_ascii_command(conn *c, char *command);
+proxy       *cproxy_create(int proxy_port, char *proxy_sect, int nthreads);
+int          cproxy_listen(proxy *p);
+proxy_td    *cproxy_find_thread_data(proxy *p, pthread_t thread_id);
+void         cproxy_init_upstream_conn(conn *c);
+void         cproxy_init_downstream_conn(conn *c);
+void         cproxy_close_upstream_conn(conn *c);
+void         cproxy_close_downstream_conn(conn *c);
+void         cproxy_add_downstream(proxy_td *ptd);
+downstream  *cproxy_reserve_downstream(proxy_td *ptd);
+void         cproxy_release_downstream(proxy_td *ptd, downstream *d);
+downstream  *cproxy_create_downstream(char *proxy_sect);
+int          cproxy_connect_downstream(downstream *d);
+void         cproxy_process_ascii_command(conn *c, char *command);
+int          cproxy_server_index(downstream *d, char *key, size_t key_length);
 
 size_t scan_tokens(char *command, token_t *tokens, const size_t max_tokens);
 
@@ -404,6 +406,26 @@ void cproxy_process_ascii_command(conn *c, char *command) {
     if (ntokens >= 3 &&
         (strncmp(cmd, "get", 3) == 0)) {
 
+        downstream *d = cproxy_reserve_downstream(ptd);
+        if (d != NULL) {
+            char *key        = tokens[KEY_TOKEN].value;
+            int   key_length = tokens[KEY_TOKEN].length;
+
+            int svr = cproxy_server_index(d, key, key_length);
+            if (svr >= 0) {
+            }
+        } else {
+            assert(c->next == NULL);
+            assert(ptd->wait_tail && !ptd->wait_tail->next);
+
+            c->next = NULL;
+            c->prev = ptd->wait_tail;
+            ptd->wait_tail->next = c;
+            ptd->wait_tail = c;
+            if (ptd->wait_head == NULL)
+                ptd->wait_head = c;
+        }
+
         conn_set_state(c, conn_pause);
 
         // c->funcs->conn_out_string(c, "ERROR");
@@ -555,3 +577,18 @@ size_t scan_tokens(char *command, token_t *tokens, const size_t max_tokens) {
     return ntokens;
 }
 
+int cproxy_server_index(downstream *d, char *key, size_t key_length) {
+    // memcached_return rc;
+    //
+    // rc = memcached_validate_key_length(key_length, d->mst.flags & MEM_BINARY_PROTOCOL);
+    // unlikely (rc != MEMCACHED_SUCCESS)
+    //    return -1;
+
+    if (memcached_server_count(&d->mst) <= 0)
+        return -1;
+
+    // if (memcached_key_test((char **) &key, &key_length, 1) == MEMCACHED_BAD_KEY_PROVIDED)
+    //     return -1;
+
+    return (int) memcached_generate_hash(&d->mst, key, key_length);
+}
