@@ -57,12 +57,13 @@ void        cproxy_init_downstream_conn(conn *c);
 downstream *cproxy_add_downstream(proxy_td *ptd);
 downstream *cproxy_create_downstream(char *proxy_sect);
 int         cproxy_connect_downstream(downstream *d);
+void        cproxy_process_ascii_command(conn *c, char *command);
 
 conn_funcs cproxy_upstream_funcs = {
     cproxy_init_upstream_conn,
     add_bytes_read,
     out_string,
-    process_command,
+    cproxy_process_ascii_command,
     dispatch_bin_command,
     reset_cmd_handler,
     complete_nread
@@ -308,5 +309,158 @@ int cproxy_connect_downstream(downstream *d) {
     }
 
     return 1;
+}
+
+#define COMMAND_TOKEN 0
+#define SUBCOMMAND_TOKEN 1
+#define KEY_TOKEN 1
+
+#define MAX_TOKENS 8
+
+void cproxy_process_ascii_command(conn *c, char *command) {
+    assert(c != NULL);
+    assert(command != NULL);
+    assert(IS_PROXY(c->protocol));
+
+    c->funcs->conn_out_string(c, "ERROR");
+
+#if NO_WAY
+    token_t tokens[MAX_TOKENS];
+    size_t ntokens;
+    int comm;
+
+    if (settings.verbose > 1)
+        fprintf(stderr, "<%d %s\n", c->sfd, command);
+
+    /*
+     * for commands set/add/replace, we build an item and read the data
+     * directly into it, then continue in nread_complete().
+     */
+
+    c->msgcurr = 0;
+    c->msgused = 0;
+    c->iovused = 0;
+    if (add_msghdr(c) != 0) {
+        c->funcs->conn_out_string(c, "SERVER_ERROR out of memory preparing response");
+        return;
+    }
+
+    ntokens = tokenize_command(command, tokens, MAX_TOKENS);
+    if (ntokens >= 3 &&
+        ((strcmp(tokens[COMMAND_TOKEN].value, "get") == 0) ||
+         (strcmp(tokens[COMMAND_TOKEN].value, "bget") == 0))) {
+
+        process_get_command(c, tokens, ntokens, false);
+
+    } else if ((ntokens == 6 || ntokens == 7) &&
+               ((strcmp(tokens[COMMAND_TOKEN].value, "add") == 0 && (comm = NREAD_ADD)) ||
+                (strcmp(tokens[COMMAND_TOKEN].value, "set") == 0 && (comm = NREAD_SET)) ||
+                (strcmp(tokens[COMMAND_TOKEN].value, "replace") == 0 && (comm = NREAD_REPLACE)) ||
+                (strcmp(tokens[COMMAND_TOKEN].value, "prepend") == 0 && (comm = NREAD_PREPEND)) ||
+                (strcmp(tokens[COMMAND_TOKEN].value, "append") == 0 && (comm = NREAD_APPEND)) )) {
+
+        process_update_command(c, tokens, ntokens, comm, false);
+
+    } else if ((ntokens == 7 || ntokens == 8) && (strcmp(tokens[COMMAND_TOKEN].value, "cas") == 0 && (comm = NREAD_CAS))) {
+
+        process_update_command(c, tokens, ntokens, comm, true);
+
+    } else if ((ntokens == 4 || ntokens == 5) && (strcmp(tokens[COMMAND_TOKEN].value, "incr") == 0)) {
+
+        process_arithmetic_command(c, tokens, ntokens, 1);
+
+    } else if (ntokens >= 3 && (strcmp(tokens[COMMAND_TOKEN].value, "gets") == 0)) {
+
+        process_get_command(c, tokens, ntokens, true);
+
+    } else if ((ntokens == 4 || ntokens == 5) && (strcmp(tokens[COMMAND_TOKEN].value, "decr") == 0)) {
+
+        process_arithmetic_command(c, tokens, ntokens, 0);
+
+    } else if (ntokens >= 3 && ntokens <= 4 && (strcmp(tokens[COMMAND_TOKEN].value, "delete") == 0)) {
+
+        process_delete_command(c, tokens, ntokens);
+
+    } else if (ntokens >= 2 && (strcmp(tokens[COMMAND_TOKEN].value, "stats") == 0)) {
+
+        process_stat(c, tokens, ntokens);
+
+    } else if (ntokens >= 2 && ntokens <= 4 && (strcmp(tokens[COMMAND_TOKEN].value, "flush_all") == 0)) {
+        time_t exptime = 0;
+        set_current_time();
+
+        set_noreply_maybe(c, tokens, ntokens);
+
+        if(ntokens == (c->noreply ? 3 : 2)) {
+            settings.oldest_live = current_time - 1;
+            item_flush_expired();
+            c->funcs->conn_out_string(c, "OK");
+            return;
+        }
+
+        exptime = strtol(tokens[1].value, NULL, 10);
+        if(errno == ERANGE) {
+            c->funcs->conn_out_string(c, "CLIENT_ERROR bad command line format");
+            return;
+        }
+
+        /*
+          If exptime is zero realtime() would return zero too, and
+          realtime(exptime) - 1 would overflow to the max unsigned
+          value.  So we process exptime == 0 the same way we do when
+          no delay is given at all.
+        */
+        if (exptime > 0)
+            settings.oldest_live = realtime(exptime) - 1;
+        else /* exptime == 0 */
+            settings.oldest_live = current_time - 1;
+        item_flush_expired();
+        c->funcs->conn_out_string(c, "OK");
+        return;
+
+    } else if (ntokens == 2 && (strcmp(tokens[COMMAND_TOKEN].value, "version") == 0)) {
+
+        c->funcs->conn_out_string(c, "VERSION " VERSION);
+
+    } else if (ntokens == 2 && (strcmp(tokens[COMMAND_TOKEN].value, "quit") == 0)) {
+
+        conn_set_state(c, conn_closing);
+
+    } else if (ntokens == 5 && (strcmp(tokens[COMMAND_TOKEN].value, "slabs") == 0 &&
+                                strcmp(tokens[COMMAND_TOKEN + 1].value, "reassign") == 0)) {
+#ifdef ALLOW_SLABS_REASSIGN
+
+        int src, dst, rv;
+
+        src = strtol(tokens[2].value, NULL, 10);
+        dst  = strtol(tokens[3].value, NULL, 10);
+
+        if(errno == ERANGE) {
+            c->funcs->conn_out_string(c, "CLIENT_ERROR bad command line format");
+            return;
+        }
+
+        rv = slabs_reassign(src, dst);
+        if (rv == 1) {
+            c->funcs->conn_out_string(c, "DONE");
+            return;
+        }
+        if (rv == 0) {
+            c->funcs->conn_out_string(c, "CANT");
+            return;
+        }
+        if (rv == -1) {
+            c->funcs->conn_out_string(c, "BUSY");
+            return;
+        }
+#else
+        c->funcs->conn_out_string(c, "CLIENT_ERROR Slab reassignment not supported");
+#endif
+    } else if ((ntokens == 3 || ntokens == 4) && (strcmp(tokens[COMMAND_TOKEN].value, "verbosity") == 0)) {
+        process_verbosity_command(c, tokens, ntokens);
+    } else {
+        c->funcs->conn_out_string(c, "ERROR");
+    }
+#endif
 }
 

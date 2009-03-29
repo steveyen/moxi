@@ -412,6 +412,11 @@ struct conn {
 
 extern conn *listen_conn;
 
+typedef struct token_s {
+    char *value;
+    size_t length;
+} token_t;
+
 /* current time of day (updated periodically) */
 extern volatile rel_time_t current_time;
 

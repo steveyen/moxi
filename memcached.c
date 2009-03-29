@@ -1949,11 +1949,6 @@ enum store_item_type do_store_item(item *it, int comm, conn *c) {
     return stored;
 }
 
-typedef struct token_s {
-    char *value;
-    size_t length;
-} token_t;
-
 #define COMMAND_TOKEN 0
 #define SUBCOMMAND_TOKEN 1
 #define KEY_TOKEN 1
