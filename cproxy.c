@@ -368,53 +368,59 @@ void cproxy_process_ascii_command(conn *c, char *command) {
 
     ntokens = scan_tokens(command, tokens, MAX_TOKENS);
     if (ntokens >= 3 &&
-        ((strcmp(tokens[COMMAND_TOKEN].value, "get") == 0) ||
-         (strcmp(tokens[COMMAND_TOKEN].value, "bget") == 0))) {
+        (strncmp(tokens[COMMAND_TOKEN].value, "get", 3) == 0)) {
 
         c->funcs->conn_out_string(c, "ERROR");
         // process_get_command(c, tokens, ntokens, false);
 
     } else if ((ntokens == 6 || ntokens == 7) &&
-               ((strcmp(tokens[COMMAND_TOKEN].value, "add") == 0 && (comm = NREAD_ADD)) ||
-                (strcmp(tokens[COMMAND_TOKEN].value, "set") == 0 && (comm = NREAD_SET)) ||
-                (strcmp(tokens[COMMAND_TOKEN].value, "replace") == 0 && (comm = NREAD_REPLACE)) ||
-                (strcmp(tokens[COMMAND_TOKEN].value, "prepend") == 0 && (comm = NREAD_PREPEND)) ||
-                (strcmp(tokens[COMMAND_TOKEN].value, "append") == 0 && (comm = NREAD_APPEND)) )) {
+               ((strncmp(tokens[COMMAND_TOKEN].value, "add", 3) == 0 && (comm = NREAD_ADD)) ||
+                (strncmp(tokens[COMMAND_TOKEN].value, "set", 3) == 0 && (comm = NREAD_SET)) ||
+                (strncmp(tokens[COMMAND_TOKEN].value, "replace", 7) == 0 && (comm = NREAD_REPLACE)) ||
+                (strncmp(tokens[COMMAND_TOKEN].value, "prepend", 7) == 0 && (comm = NREAD_PREPEND)) ||
+                (strncmp(tokens[COMMAND_TOKEN].value, "append", 6) == 0 && (comm = NREAD_APPEND)) )) {
 
         c->funcs->conn_out_string(c, "ERROR");
         // process_update_command(c, tokens, ntokens, comm, false);
 
-    } else if ((ntokens == 7 || ntokens == 8) && (strcmp(tokens[COMMAND_TOKEN].value, "cas") == 0 && (comm = NREAD_CAS))) {
+    } else if ((ntokens == 7 || ntokens == 8) &&
+               (strncmp(tokens[COMMAND_TOKEN].value, "cas", 3) == 0 && (comm = NREAD_CAS))) {
 
         c->funcs->conn_out_string(c, "ERROR");
         // process_update_command(c, tokens, ntokens, comm, true);
 
-    } else if ((ntokens == 4 || ntokens == 5) && (strcmp(tokens[COMMAND_TOKEN].value, "incr") == 0)) {
+    } else if ((ntokens == 4 || ntokens == 5) &&
+               (strncmp(tokens[COMMAND_TOKEN].value, "incr", 4) == 0)) {
 
         c->funcs->conn_out_string(c, "ERROR");
         // process_arithmetic_command(c, tokens, ntokens, 1);
 
-    } else if (ntokens >= 3 && (strcmp(tokens[COMMAND_TOKEN].value, "gets") == 0)) {
+    } else if (ntokens >= 3 &&
+               (strncmp(tokens[COMMAND_TOKEN].value, "gets", 4) == 0)) {
 
         c->funcs->conn_out_string(c, "ERROR");
         // process_get_command(c, tokens, ntokens, true);
 
-    } else if ((ntokens == 4 || ntokens == 5) && (strcmp(tokens[COMMAND_TOKEN].value, "decr") == 0)) {
+    } else if ((ntokens == 4 || ntokens == 5) &&
+               (strncmp(tokens[COMMAND_TOKEN].value, "decr", 4) == 0)) {
 
         c->funcs->conn_out_string(c, "ERROR");
         // process_arithmetic_command(c, tokens, ntokens, 0);
 
-    } else if (ntokens >= 3 && ntokens <= 4 && (strcmp(tokens[COMMAND_TOKEN].value, "delete") == 0)) {
+    } else if (ntokens >= 3 && ntokens <= 4 &&
+               (strncmp(tokens[COMMAND_TOKEN].value, "delete", 6) == 0)) {
 
         c->funcs->conn_out_string(c, "ERROR");
         // process_delete_command(c, tokens, ntokens);
 
-    } else if (ntokens >= 2 && (strcmp(tokens[COMMAND_TOKEN].value, "stats") == 0)) {
+    } else if (ntokens >= 2 &&
+               (strncmp(tokens[COMMAND_TOKEN].value, "stats", 5) == 0)) {
 
         c->funcs->conn_out_string(c, "ERROR");
         // process_stat(c, tokens, ntokens);
 
-    } else if (ntokens >= 2 && ntokens <= 4 && (strcmp(tokens[COMMAND_TOKEN].value, "flush_all") == 0)) {
+    } else if (ntokens >= 2 && ntokens <= 4 &&
+               (strncmp(tokens[COMMAND_TOKEN].value, "flush_all", 9) == 0)) {
 
         c->funcs->conn_out_string(c, "ERROR");
 
@@ -452,46 +458,16 @@ void cproxy_process_ascii_command(conn *c, char *command) {
         return;
 #endif
 
-    } else if (ntokens == 2 && (strcmp(tokens[COMMAND_TOKEN].value, "version") == 0)) {
+    } else if (ntokens == 2 &&
+               (strncmp(tokens[COMMAND_TOKEN].value, "version", 7) == 0)) {
 
         c->funcs->conn_out_string(c, "VERSION " VERSION);
 
-    } else if (ntokens == 2 && (strcmp(tokens[COMMAND_TOKEN].value, "quit") == 0)) {
+    } else if (ntokens == 2 &&
+               (strncmp(tokens[COMMAND_TOKEN].value, "quit", 4) == 0)) {
 
         conn_set_state(c, conn_closing);
 
-    } else if (ntokens == 5 && (strcmp(tokens[COMMAND_TOKEN].value, "slabs") == 0 &&
-                                strcmp(tokens[COMMAND_TOKEN + 1].value, "reassign") == 0)) {
-#ifdef ALLOW_SLABS_REASSIGN
-        int src, dst, rv;
-
-        src = strtol(tokens[2].value, NULL, 10);
-        dst  = strtol(tokens[3].value, NULL, 10);
-
-        if(errno == ERANGE) {
-            c->funcs->conn_out_string(c, "CLIENT_ERROR bad command line format");
-            return;
-        }
-
-        rv = slabs_reassign(src, dst);
-        if (rv == 1) {
-            c->funcs->conn_out_string(c, "DONE");
-            return;
-        }
-        if (rv == 0) {
-            c->funcs->conn_out_string(c, "CANT");
-            return;
-        }
-        if (rv == -1) {
-            c->funcs->conn_out_string(c, "BUSY");
-            return;
-        }
-#else
-        c->funcs->conn_out_string(c, "CLIENT_ERROR Slab reassignment not supported");
-#endif
-    } else if ((ntokens == 3 || ntokens == 4) && (strcmp(tokens[COMMAND_TOKEN].value, "verbosity") == 0)) {
-        c->funcs->conn_out_string(c, "ERROR");
-        // process_verbosity_command(c, tokens, ntokens);
     } else {
         c->funcs->conn_out_string(c, "ERROR");
     }
