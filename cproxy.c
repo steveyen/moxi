@@ -37,7 +37,6 @@ struct proxy_td {      // Per proxy, per worker-thread struct.
     proxy      *proxy; // Immutable parent pointer.
     conn       *wait_head;
     conn       *wait_tail;
-    downstream *downstream_busy;
     downstream *downstream_free;
     int         downstream_num;
     int         downstream_max;
@@ -45,7 +44,7 @@ struct proxy_td {      // Per proxy, per worker-thread struct.
 
 struct downstream {
     memcached_st   mst;   // Immutable.
-    downstream    *next;  // To track busy and free lists.
+    downstream    *next;  // To track free list.
     conn         **conns; // Immutable.
 };
 
@@ -56,7 +55,9 @@ void        cproxy_init_upstream_conn(conn *c);
 void        cproxy_init_downstream_conn(conn *c);
 void        cproxy_close_upstream_conn(conn *c);
 void        cproxy_close_downstream_conn(conn *c);
-downstream *cproxy_add_downstream(proxy_td *ptd);
+void        cproxy_add_downstream(proxy_td *ptd);
+downstream *cproxy_reserve_downstream(proxy_td *ptd);
+void        cproxy_release_downstream(proxy_td *ptd, downstream *d);
 downstream *cproxy_create_downstream(char *proxy_sect);
 int         cproxy_connect_downstream(downstream *d);
 void        cproxy_process_ascii_command(conn *c, char *command);
@@ -163,7 +164,6 @@ proxy *cproxy_create(int port, char *config, int nthreads) {
                 ptd->proxy = p;
                 ptd->wait_head = NULL;
                 ptd->wait_tail = NULL;
-                ptd->downstream_busy = NULL;
                 ptd->downstream_free = NULL;
                 ptd->downstream_num  = 0;
                 ptd->downstream_max  = DOWNSTREAM_MAX;
@@ -283,19 +283,43 @@ void cproxy_close_downstream_conn(conn *c) {
     c->extra = NULL;
 }
 
-downstream *cproxy_add_downstream(proxy_td *ptd) {
+void cproxy_add_downstream(proxy_td *ptd) {
     assert(ptd != NULL);
 
     if (ptd->downstream_num < ptd->downstream_max) {
         downstream *d = cproxy_create_downstream(ptd->proxy->config);
         if (d != NULL) {
-            d->next = ptd->downstream_free;
-            ptd->downstream_free = d;
             ptd->downstream_num++;
-            return d;
+            cproxy_release_downstream(ptd, d);
         }
     }
-    return NULL;
+}
+
+downstream *cproxy_reserve_downstream(proxy_td *ptd) {
+    assert(ptd != NULL);
+
+    downstream *d;
+
+    d = ptd->downstream_free;
+    if (d == NULL)
+        cproxy_add_downstream(ptd);
+
+    d = ptd->downstream_free;
+    if (d != NULL) {
+        ptd->downstream_free = d->next;
+        d->next = NULL;
+    }
+
+    return d;
+}
+
+void cproxy_release_downstream(proxy_td *ptd, downstream *d) {
+    assert(ptd != NULL);
+    assert(d != NULL);
+    assert(d->next == NULL);
+
+    d->next = ptd->downstream_free;
+    ptd->downstream_free = d;
 }
 
 downstream *cproxy_create_downstream(char *config) {
@@ -345,6 +369,7 @@ int cproxy_connect_downstream(downstream *d) {
 void cproxy_process_ascii_command(conn *c, char *command) {
     assert(c != NULL);
     assert(command != NULL);
+    assert(c->extra != NULL);
     assert(IS_PROXY(c->protocol));
 
     if (settings.verbose > 1)
@@ -359,6 +384,12 @@ void cproxy_process_ascii_command(conn *c, char *command) {
 
     if (add_msghdr(c) != 0) {
         c->funcs->conn_out_string(c, "SERVER_ERROR out of memory preparing response");
+        return;
+    }
+
+    proxy_td *ptd = c->extra;
+    if (ptd == NULL) {
+        c->funcs->conn_out_string(c, "SERVER_ERROR expected proxy_td");
         return;
     }
 
