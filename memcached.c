@@ -87,7 +87,6 @@ static void event_handler(const int fd, const short which, void *arg);
 static void conn_close(conn *c);
 static void conn_init(void);
 static bool update_event(conn *c, const int new_flags);
-static void process_command(conn *c, char *command);
 static void write_and_free(conn *c, char *buf, int bytes);
 static int ensure_iov_space(conn *c);
 static int add_iov(conn *c, const void *buf, int len);
@@ -123,7 +122,8 @@ conn_funcs conn_funcs_default = {
     NULL,
     add_bytes_read,
     out_string,
-    try_read_command,
+    process_command,
+    dispatch_bin_command,
     reset_cmd_handler,
     complete_nread
 };
@@ -1425,7 +1425,7 @@ static void bin_read_key(conn *c, enum bin_substates next_substate, int extra) {
     conn_set_state(c, conn_nread);
 }
 
-static void dispatch_bin_command(conn *c) {
+void dispatch_bin_command(conn *c) {
     int protocol_error = 0;
 
     int extlen = c->binary_header.request.extlen;
@@ -2653,7 +2653,7 @@ static void process_verbosity_command(conn *c, token_t *tokens, const size_t nto
     return;
 }
 
-static void process_command(conn *c, char *command) {
+void process_command(conn *c, char *command) {
 
     token_t tokens[MAX_TOKENS];
     size_t ntokens;
@@ -2883,7 +2883,7 @@ int try_read_command(conn *c) {
             /* clear the returned cas value */
             c->cas = 0;
 
-            dispatch_bin_command(c);
+            c->funcs->conn_process_binary_command(c);
 
             c->rbytes -= sizeof(c->binary_header);
             c->rcurr += sizeof(c->binary_header);
@@ -2904,7 +2904,7 @@ int try_read_command(conn *c) {
 
         assert(cont <= (c->rcurr + c->rbytes));
 
-        process_command(c, c->rcurr);
+        c->funcs->conn_process_ascii_command(c, c->rcurr);
 
         c->rbytes -= (cont - c->rcurr);
         c->rcurr = cont;
@@ -3203,7 +3203,7 @@ static void drive_machine(conn *c) {
             break;
 
         case conn_parse_cmd :
-            if (c->funcs->conn_try_read_command(c) == 0) {
+            if (try_read_command(c) == 0) {
                 /* wee need more data! */
                 conn_set_state(c, conn_waiting);
             }

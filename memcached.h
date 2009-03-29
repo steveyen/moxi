@@ -313,7 +313,8 @@ struct conn_funcs {
     void (*conn_init)(conn *c);
     void (*conn_add_bytes_read)(conn *c, int bytes_read);
     void (*conn_out_string)(conn *c, const char *str);
-    int  (*conn_try_read_command)(conn *c);
+    void (*conn_process_ascii_command)(conn *c, char *command);
+    void (*conn_process_binary_command)(conn *c);
     void (*conn_reset_cmd_handler)(conn *c);
     void (*conn_complete_nread)(conn *c);
 };
@@ -432,6 +433,8 @@ uint32_t append_ascii_stats(char *buf, const char *key, const uint16_t klen,
 void add_bytes_read(conn *c, int bytes_read);
 void out_string(conn *c, const char *str);
 int try_read_command(conn *c);
+void process_command(conn *c, char *command);
+void dispatch_bin_command(conn *c);
 void reset_cmd_handler(conn *c);
 void complete_nread(conn *c);
 const char *state_text(enum conn_states state);

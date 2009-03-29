@@ -62,7 +62,8 @@ conn_funcs cproxy_upstream_funcs = {
     cproxy_init_upstream_conn,
     add_bytes_read,
     out_string,
-    try_read_command,
+    process_command,
+    dispatch_bin_command,
     reset_cmd_handler,
     complete_nread
 };
@@ -71,7 +72,8 @@ conn_funcs cproxy_downstream_funcs = {
     cproxy_init_downstream_conn,
     add_bytes_read,
     out_string,
-    try_read_command,
+    process_command,
+    dispatch_bin_command,
     reset_cmd_handler,
     complete_nread
 };
