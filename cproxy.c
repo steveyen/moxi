@@ -11,6 +11,7 @@
 
 /** From libmemcached. */
 memcached_return memcached_version(memcached_st *ptr);
+memcached_return memcached_connect(memcached_server_st *ptr);
 uint32_t memcached_generate_hash(memcached_st *ptr, const char *key, size_t key_length);
 
 // TODO: Move into configurable settings one day.
@@ -65,7 +66,7 @@ void         cproxy_add_downstream(proxy_td *ptd);
 downstream  *cproxy_reserve_downstream(proxy_td *ptd);
 void         cproxy_release_downstream(proxy_td *ptd, downstream *d);
 downstream  *cproxy_create_downstream(char *proxy_sect);
-int          cproxy_connect_downstream(downstream *d);
+int          cproxy_connect_downstream(downstream *d, struct event_base *base);
 void         cproxy_process_ascii_command(conn *c, char *command);
 int          cproxy_server_index(downstream *d, char *key, size_t key_length);
 
@@ -256,7 +257,7 @@ void cproxy_init_upstream_conn(conn *c) {
         proxy_td *ptd = cproxy_find_thread_data(p, pthread_self());
         if (ptd != NULL) {
             c->extra = ptd;
-            return;
+            return; // Success.
         }
     }
 
@@ -297,7 +298,8 @@ void cproxy_close_downstream_conn(conn *c) {
 void cproxy_add_downstream(proxy_td *ptd) {
     assert(ptd != NULL);
 
-    if (ptd->downstream_num < ptd->downstream_max) {
+    if (ptd != NULL &&
+        ptd->downstream_num < ptd->downstream_max) {
         downstream *d = cproxy_create_downstream(ptd->proxy->config);
         if (d != NULL) {
             d->ptd = ptd;
@@ -322,6 +324,16 @@ downstream *cproxy_reserve_downstream(proxy_td *ptd) {
         d->next = NULL;
     }
 
+    assert(d->inflight == 0);
+    assert(d->upstream_conn == NULL);
+    assert(d->reply_item_head == NULL);
+    assert(d->reply_item_tail == NULL);
+
+    d->inflight = 0;
+    d->upstream_conn = NULL;
+    d->reply_item_head = NULL;
+    d->reply_item_tail = NULL;
+
     return d;
 }
 
@@ -332,6 +344,16 @@ void cproxy_release_downstream(proxy_td *ptd, downstream *d) {
 
     d->next = ptd->downstream_free;
     ptd->downstream_free = d;
+
+    assert(d->inflight == 0);
+    assert(d->upstream_conn == NULL);
+    assert(d->reply_item_head == NULL);
+    assert(d->reply_item_tail == NULL);
+
+    d->inflight = 0;
+    d->upstream_conn = NULL;
+    d->reply_item_head = NULL;
+    d->reply_item_tail = NULL;
 }
 
 downstream *cproxy_create_downstream(char *config) {
@@ -346,9 +368,12 @@ downstream *cproxy_create_downstream(char *config) {
                 memcached_server_list_free(mservers);
                 mservers = NULL;
 
-                d->downstream_conns = (conn **) calloc(memcached_server_count(&d->mst), sizeof(conn *));
-                if (d->downstream_conns != NULL)
+                int nconns = memcached_server_count(&d->mst);
+
+                d->downstream_conns = (conn **) calloc(nconns, sizeof(conn *));
+                if (d->downstream_conns != NULL) {
                     return d;
+                }
             }
             if (mservers != NULL)
                 memcached_server_list_free(mservers);
@@ -360,14 +385,30 @@ downstream *cproxy_create_downstream(char *config) {
     return NULL;
 }
 
-int cproxy_connect_downstream(downstream *d) {
+int cproxy_connect_downstream(downstream *d, struct event_base *base) {
     assert(d != NULL);
+    assert(d->ptd != NULL);
+    assert(d->ptd->downstream_free != d); // Should not be in free list if we're connecting.
+    assert(d->next == NULL);
+    assert(d->downstream_conns != NULL);
+    assert(memcached_server_count(&d->mst) > 0);
 
-    memcached_return rc = memcached_version(&d->mst); // Connects to downstream servers.
-    if (rc == MEMCACHED_SUCCESS) {
-        d->downstream_conns = (conn **) calloc(memcached_server_count(&d->mst), sizeof(conn *));
-        if (d->downstream_conns != NULL)
-            return 0;
+    memcached_return rc;
+
+    int nconns = memcached_server_count(&d->mst);
+
+    for (int i = 0; i < nconns; i++) {
+        if (d->downstream_conns[i] == NULL) {
+            rc = memcached_connect(&d->mst.hosts[i]);
+            if (rc == MEMCACHED_SUCCESS) {
+                int fd = d->mst.hosts[i].fd;
+                if (fd >= 0) {
+                    d->downstream_conns[i] =
+                        conn_new(fd, conn_pause, 0, 1, proxy_downstream_ascii_prot,
+                                 base, &cproxy_downstream_funcs, d);
+                }
+            }
+        }
     }
 
     return 1;
