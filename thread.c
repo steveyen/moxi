@@ -238,6 +238,9 @@ static void *worker_libevent(void *arg) {
     /* Any per-thread setup can happen here; thread_init() will block until
      * all threads have finished initializing.
      */
+    me->thread_id = pthread_self();
+    if (settings.verbose > 1)
+        fprintf(stderr, "worker_libevent thread_id %x\n", (unsigned int) me->thread_id);
 
     pthread_mutex_lock(&init_lock);
     init_count++;
