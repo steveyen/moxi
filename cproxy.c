@@ -404,7 +404,9 @@ void cproxy_process_ascii_command(conn *c, char *command) {
     if (ntokens >= 3 &&
         (strncmp(cmd, "get", 3) == 0)) {
 
-        c->funcs->conn_out_string(c, "ERROR");
+        conn_set_state(c, conn_pause);
+
+        // c->funcs->conn_out_string(c, "ERROR");
         // process_get_command(c, tokens, ntokens, false);
 
     } else if ((ntokens == 6 || ntokens == 7) &&

@@ -250,6 +250,7 @@ enum conn_states {
     conn_swallow,    /**< swallowing unnecessary bytes w/o storing */
     conn_closing,    /**< closing this connection */
     conn_mwrite,     /**< writing out many items sequentially */
+    conn_pause,      /**< waiting for asynchronous event */
     conn_max_state   /**< Max state value (used for assertion) */
 };
 

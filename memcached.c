@@ -603,7 +603,8 @@ const char *state_text(enum conn_states state) {
                                        "conn_nread",
                                        "conn_swallow",
                                        "conn_closing",
-                                       "conn_mwrite" };
+                                       "conn_mwrite",
+                                       "conn_pause"};
     return statenames[state];
 }
 
@@ -3360,6 +3361,10 @@ static void drive_machine(conn *c) {
                 stop = true;
                 break;
             }
+            break;
+
+        case conn_pause:
+            stop = true;
             break;
 
         case conn_closing:
