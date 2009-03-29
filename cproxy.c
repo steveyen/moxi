@@ -395,23 +395,27 @@ int cproxy_connect_downstream(downstream *d, struct event_base *base) {
 
     memcached_return rc;
 
-    int nconns = memcached_server_count(&d->mst);
+    int s = 0; // Number connected.
+    int n = memcached_server_count(&d->mst);
 
-    for (int i = 0; i < nconns; i++) {
+    for (int i = 0; i < n; i++) {
         if (d->downstream_conns[i] == NULL) {
             rc = memcached_connect(&d->mst.hosts[i]);
             if (rc == MEMCACHED_SUCCESS) {
                 int fd = d->mst.hosts[i].fd;
                 if (fd >= 0) {
                     d->downstream_conns[i] =
-                        conn_new(fd, conn_pause, 0, 1, proxy_downstream_ascii_prot,
+                        conn_new(fd, conn_pause, 0, DATA_BUFFER_SIZE, 
+                                 proxy_downstream_ascii_prot,
                                  base, &cproxy_downstream_funcs, d);
                 }
             }
         }
+        if (d->downstream_conns[i] != NULL)
+            s++;
     }
 
-    return 1;
+    return n - s; // Returns number of down connections.
 }
 
 #define COMMAND_TOKEN    0
