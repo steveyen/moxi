@@ -23,7 +23,7 @@ typedef struct downstream downstream;
 
 struct proxy {
     int   port;   // Immutable.
-    char *config; // Immutable.
+    char *config; // Immutable, alloc'ed by proxy.
 
     // Number of listening conn's acting as a proxy,
     // where ((proxy *) conn->extra == this).
@@ -34,13 +34,13 @@ struct proxy {
     int       thread_data_num; // Immutable.
 };
 
-struct proxy_td {      // Per proxy, per worker-thread struct.
-    proxy      *proxy; // Immutable parent pointer.
-    conn       *wait_head;
+struct proxy_td {          // Per proxy, per worker-thread struct.
+    proxy      *proxy;     // Immutable parent pointer.
+    conn       *wait_head; // Upstream conns paused, waiting for a free downstream.
     conn       *wait_tail;
-    downstream *downstream_free;
-    int         downstream_num;
-    int         downstream_max;
+    downstream *downstream_free; // Downstreams not servicing an upstream conn.
+    int         downstream_num;  // Number of downstreams created (free + busy).
+    int         downstream_max;  // Max number of downstreams created, for concurrency.
 };
 
 struct downstream {
