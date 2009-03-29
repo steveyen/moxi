@@ -456,6 +456,8 @@ int server_socket(const int port, enum protocol prot);
  */
 
 void thread_init(int nthreads, struct event_base *main_base);
+int  thread_index(pthread_t thread_id);
+
 int  dispatch_event_add(int thread, conn *c);
 void dispatch_conn_new(int sfd, enum conn_states init_state, int event_flags,
                        int read_buffer_size, enum protocol prot,

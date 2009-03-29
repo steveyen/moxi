@@ -345,6 +345,13 @@ int is_listen_thread() {
     return pthread_self() == threads[0].thread_id;
 }
 
+int thread_index(pthread_t thread_id) {
+    for (int i = 0; i < settings.num_threads; i++)
+        if (threads[i].thread_id == thread_id)
+            return i;
+    return -1;
+}
+
 /********************************* ITEM ACCESS *******************************/
 
 /*

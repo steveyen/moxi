@@ -33,10 +33,10 @@ struct proxy {
     int       thread_data_num; // Immutable.
 };
 
-struct proxy_td { // Per proxy, per server-thread struct.
-    proxy *proxy; // Immutable parent pointer.
-    conn  *wait_head;
-    conn  *wait_tail;
+struct proxy_td {      // Per proxy, per worker-thread struct.
+    proxy      *proxy; // Immutable parent pointer.
+    conn       *wait_head;
+    conn       *wait_tail;
     downstream *downstream_busy;
     downstream *downstream_free;
     int         downstream_num;
@@ -51,6 +51,7 @@ struct downstream {
 
 proxy      *cproxy_create(int proxy_port, char *proxy_sect, int nthreads);
 int         cproxy_listen(proxy *p);
+proxy_td   *cproxy_find_thread_data(proxy *p, pthread_t thread_id);
 void        cproxy_init_upstream_conn(conn *c);
 void        cproxy_init_downstream_conn(conn *c);
 downstream *cproxy_add_downstream(proxy_td *ptd);
@@ -145,7 +146,10 @@ proxy *cproxy_create(int port, char *config, int nthreads) {
         p->thread_data = (proxy_td *) calloc(p->thread_data_num,
                                              sizeof(proxy_td));
         if (p->thread_data != NULL) {
-            for (int i = 0; i < p->thread_data_num; i++) {
+            // We start at 1, because thread[0] is the main listen/accept
+            // thread, and not a true worker thread.
+            //
+            for (int i = 1; i < p->thread_data_num; i++) {
                 proxy_td *ptd = &p->thread_data[i];
                 ptd->proxy = p;
                 ptd->wait_head = NULL;
@@ -204,6 +208,19 @@ int cproxy_listen(proxy *p) {
     return p->listening;
 }
 
+proxy_td *cproxy_find_thread_data(proxy *p, pthread_t thread_id) {
+    int i = thread_index(thread_id);
+
+    // 0 is the main listen thread, not a worker thread.
+    assert(i > 0);
+    assert(i < p->thread_data_num);
+
+    if (i > 0 && i < p->thread_data_num)
+        return &p->thread_data[i];
+
+    return NULL;
+}
+
 void cproxy_init_upstream_conn(conn *c) {
     assert(c->extra != NULL);
 
@@ -212,7 +229,14 @@ void cproxy_init_upstream_conn(conn *c) {
         if (settings.verbose > 1)
             fprintf(stderr, "<%d cproxy_init_upstream_conn (%s) for %d, downstream %s\n",
                     c->sfd, state_text(c->state), p->port, p->config);
+
+        proxy_td *ptd = cproxy_find_thread_data(p, pthread_self());
+        if (ptd != NULL) {
+            return;
+        }
     }
+
+    // TODO: Error, so close the conn?
 }
 
 void cproxy_init_downstream_conn(conn *c) {
