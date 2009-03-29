@@ -224,6 +224,9 @@ proxy_td *cproxy_find_thread_data(proxy *p, pthread_t thread_id) {
 void cproxy_init_upstream_conn(conn *c) {
     assert(c->extra != NULL);
 
+    // We're called once per client/upstream conn early in its
+    // lifecycle, so it's a good place to remember the proxy_td.
+    //
     proxy *p = c->extra;
     if (p != NULL) {
         if (settings.verbose > 1)
@@ -232,6 +235,7 @@ void cproxy_init_upstream_conn(conn *c) {
 
         proxy_td *ptd = cproxy_find_thread_data(p, pthread_self());
         if (ptd != NULL) {
+            c->extra = ptd;
             return;
         }
     }
