@@ -9,6 +9,9 @@
 #include "memcached.h"
 #include "cproxy.h"
 
+/** From libmemcached. */
+memcached_return memcached_version(memcached_st *ptr);
+
 // TODO: Move into configurable settings one day.
 //
 #define DOWNSTREAM_MAX 10
@@ -30,8 +33,8 @@ struct proxy {
     int       thread_data_num; // Immutable.
 };
 
-struct proxy_td { // Per server-thread, per proxy.
-    proxy *proxy; // Immutable.
+struct proxy_td { // Per proxy, per server-thread struct.
+    proxy *proxy; // Immutable parent pointer.
     conn  *wait_head;
     conn  *wait_tail;
     downstream *downstream_busy;
@@ -48,22 +51,14 @@ struct downstream {
 
 proxy      *cproxy_create(int proxy_port, char *proxy_sect, int nthreads);
 int         cproxy_listen(proxy *p);
+void        cproxy_init_upstream_conn(conn *c);
+void        cproxy_init_downstream_conn(conn *c);
 downstream *cproxy_add_downstream(proxy_td *ptd);
 downstream *cproxy_create_downstream(char *proxy_sect);
 int         cproxy_connect_downstream(downstream *d);
-void        cproxy_init_conn(conn *c);
-
-conn_funcs cproxy_listen_funcs = {
-    cproxy_init_conn,
-    add_bytes_read,
-    out_string,
-    try_read_command,
-    reset_cmd_handler,
-    complete_nread
-};
 
 conn_funcs cproxy_upstream_funcs = {
-    cproxy_init_conn,
+    cproxy_init_upstream_conn,
     add_bytes_read,
     out_string,
     try_read_command,
@@ -72,16 +67,13 @@ conn_funcs cproxy_upstream_funcs = {
 };
 
 conn_funcs cproxy_downstream_funcs = {
-    cproxy_init_conn,
+    cproxy_init_downstream_conn,
     add_bytes_read,
     out_string,
     try_read_command,
     reset_cmd_handler,
     complete_nread
 };
-
-/** From libmemcached. */
-memcached_return memcached_version(memcached_st *ptr);
 
 /**
  * cfg should look like "local_port=host:port,host:port;local_port=host:port"
@@ -195,21 +187,43 @@ int cproxy_listen(proxy *p) {
         conn *c = listen_conn;
         while (c != NULL &&
                c != listen_conn_orig) {
-            // TODO: Memory leak, need to clean up listen_conn->extra.
-            //
-            c->extra = p;
-            c->funcs = &cproxy_listen_funcs;
-            c = c->next;
-
-            p->listening++;
-
             if (settings.verbose > 1)
                 fprintf(stderr, "<%d cproxy listening on port %d, downstream %s\n",
                         c->sfd, p->port, p->config);
+
+            p->listening++;
+
+            // TODO: Memory leak, need to clean up listen_conn->extra.
+            //
+            c->extra = p;
+            c->funcs = &cproxy_upstream_funcs;
+            c = c->next;
         }
     }
 
     return p->listening;
+}
+
+void cproxy_init_upstream_conn(conn *c) {
+    assert(c->extra != NULL);
+
+    proxy *p = c->extra;
+    if (p != NULL) {
+        if (settings.verbose > 1)
+            fprintf(stderr, "<%d cproxy_init_upstream_conn (%s) for %d, downstream %s\n",
+                    c->sfd, state_text(c->state), p->port, p->config);
+    }
+}
+
+void cproxy_init_downstream_conn(conn *c) {
+    assert(c->extra != NULL);
+
+    proxy *p = c->extra;
+    if (p != NULL) {
+        if (settings.verbose > 1)
+            fprintf(stderr, "<%d cproxy_init_downstream_conn (%s) for %d, downstream %s\n",
+                    c->sfd, state_text(c->state), p->port, p->config);
+    }
 }
 
 downstream *cproxy_add_downstream(proxy_td *ptd) {
@@ -266,13 +280,3 @@ int cproxy_connect_downstream(downstream *d) {
     return 1;
 }
 
-void cproxy_init_conn(conn *c) {
-    assert(c->extra != NULL);
-
-    proxy *p = c->extra;
-    if (p != NULL) {
-        if (settings.verbose > 1)
-            fprintf(stderr, "<%d cproxy_init_conn (%s) for %d, downstream %s\n",
-                    c->sfd, state_text(c->state), p->port, p->config);
-    }
-}
