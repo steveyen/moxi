@@ -44,9 +44,14 @@ struct proxy_td {      // Per proxy, per worker-thread struct.
 };
 
 struct downstream {
-    memcached_st   mst;   // Immutable.
-    downstream    *next;  // To track free list.
-    conn         **conns; // Immutable.
+    proxy_td      *ptd;                 // Immutable parent pointer.
+    memcached_st   mst;                 // Immutable.
+    downstream    *next;                // To track free list.
+    int            inflight;            // Number of downstream_conns in use.
+    conn         **downstream_conns;    // To downstream servers, wraps mst's file descriptors.
+    conn          *upstream_conn;       // For current upstream client, when downstream !free.
+    item          *reply_item_head;     // To serialize multi-get/scatter-gather response.
+    item          *reply_item_tail;
 };
 
 proxy       *cproxy_create(int proxy_port, char *proxy_sect, int nthreads);
@@ -291,6 +296,7 @@ void cproxy_add_downstream(proxy_td *ptd) {
     if (ptd->downstream_num < ptd->downstream_max) {
         downstream *d = cproxy_create_downstream(ptd->proxy->config);
         if (d != NULL) {
+            d->ptd = ptd;
             ptd->downstream_num++;
             cproxy_release_downstream(ptd, d);
         }
@@ -336,8 +342,8 @@ downstream *cproxy_create_downstream(char *config) {
                 memcached_server_list_free(mservers);
                 mservers = NULL;
 
-                d->conns = (conn **) calloc(memcached_server_count(&d->mst), sizeof(conn *));
-                if (d->conns != NULL)
+                d->downstream_conns = (conn **) calloc(memcached_server_count(&d->mst), sizeof(conn *));
+                if (d->downstream_conns != NULL)
                     return d;
             }
             if (mservers != NULL)
@@ -355,8 +361,8 @@ int cproxy_connect_downstream(downstream *d) {
 
     memcached_return rc = memcached_version(&d->mst); // Connects to downstream servers.
     if (rc == MEMCACHED_SUCCESS) {
-        d->conns = (conn **) calloc(memcached_server_count(&d->mst), sizeof(conn *));
-        if (d->conns != NULL)
+        d->downstream_conns = (conn **) calloc(memcached_server_count(&d->mst), sizeof(conn *));
+        if (d->downstream_conns != NULL)
             return 0;
     }
 
