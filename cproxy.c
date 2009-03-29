@@ -164,7 +164,8 @@ proxy *cproxy_create(int port, char *config, int nthreads) {
                                              sizeof(proxy_td));
         if (p->thread_data != NULL) {
             // We start at 1, because thread[0] is the main listen/accept
-            // thread, and not a true worker thread.
+            // thread, and not a true worker thread.  Too lazy to save
+            // the wasted thread[0] slot memory.
             //
             for (int i = 1; i < p->thread_data_num; i++) {
                 proxy_td *ptd = &p->thread_data[i];
@@ -193,6 +194,8 @@ int cproxy_listen(proxy *p) {
 
     conn *listen_conn_orig = listen_conn;
 
+    // Idempotent, remembers if it already created listening socket(s).
+    //
     if (p->listening == 0 &&
         server_socket(p->port, proxy_upstream_ascii_prot) == 0) {
         assert(listen_conn != NULL);
@@ -201,8 +204,9 @@ int cproxy_listen(proxy *p) {
         // which adds a new listening conn on p->port for each bindable
         // host address.
         //
-        // For example, there might be two new listening conn's --
-        // one for localhost, another for 127.0.0.1.
+        // For example, after the call to server_socket(), there
+        // might be two new listening conn's -- one for localhost,
+        // another for 127.0.0.1.
         //
         conn *c = listen_conn;
         while (c != NULL &&
