@@ -322,28 +322,27 @@ void cproxy_process_ascii_command(conn *c, char *command) {
     assert(command != NULL);
     assert(IS_PROXY(c->protocol));
 
-    c->funcs->conn_out_string(c, "ERROR");
-
-#if NO_WAY
-    token_t tokens[MAX_TOKENS];
-    size_t ntokens;
-    int comm;
-
     if (settings.verbose > 1)
         fprintf(stderr, "<%d %s\n", c->sfd, command);
 
-    /*
-     * for commands set/add/replace, we build an item and read the data
+    /* for commands set/add/replace, we build an item and read the data
      * directly into it, then continue in nread_complete().
      */
-
     c->msgcurr = 0;
     c->msgused = 0;
     c->iovused = 0;
+
     if (add_msghdr(c) != 0) {
         c->funcs->conn_out_string(c, "SERVER_ERROR out of memory preparing response");
         return;
     }
+
+    c->funcs->conn_out_string(c, "ERROR");
+
+#ifdef NO_WAY
+    token_t tokens[MAX_TOKENS];
+    size_t ntokens;
+    int comm;
 
     ntokens = tokenize_command(command, tokens, MAX_TOKENS);
     if (ntokens >= 3 &&

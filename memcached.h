@@ -442,6 +442,9 @@ void process_command(conn *c, char *command);
 void dispatch_bin_command(conn *c);
 void reset_cmd_handler(conn *c);
 void complete_nread(conn *c);
+int ensure_iov_space(conn *c);
+int add_iov(conn *c, const void *buf, int len);
+int add_msghdr(conn *c);
 const char *state_text(enum conn_states state);
 
 extern int daemonize(int nochdir, int noclose);

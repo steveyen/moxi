@@ -88,9 +88,6 @@ static void conn_close(conn *c);
 static void conn_init(void);
 static bool update_event(conn *c, const int new_flags);
 static void write_and_free(conn *c, char *buf, int bytes);
-static int ensure_iov_space(conn *c);
-static int add_iov(conn *c, const void *buf, int len);
-static int add_msghdr(conn *c);
 static uint64_t swap64(uint64_t in);
 
 /* time handling */
@@ -207,8 +204,7 @@ static void settings_init(void) {
  *
  * Returns 0 on success, -1 on out-of-memory.
  */
-static int add_msghdr(conn *c)
-{
+int add_msghdr(conn *c) {
     struct msghdr *msg;
 
     assert(c != NULL);
@@ -642,7 +638,7 @@ static void conn_set_state(conn *c, enum conn_states state) {
  *
  * Returns 0 on success, -1 on out-of-memory.
  */
-static int ensure_iov_space(conn *c) {
+int ensure_iov_space(conn *c) {
     assert(c != NULL);
 
     if (c->iovused >= c->iovsize) {
@@ -671,8 +667,7 @@ static int ensure_iov_space(conn *c) {
  *
  * Returns 0 on success, -1 on out-of-memory.
  */
-
-static int add_iov(conn *c, const void *buf, int len) {
+int add_iov(conn *c, const void *buf, int len) {
     struct msghdr *m;
     int leftover;
     bool limit_to_mtu;
