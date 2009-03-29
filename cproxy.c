@@ -59,6 +59,8 @@ downstream *cproxy_create_downstream(char *proxy_sect);
 int         cproxy_connect_downstream(downstream *d);
 void        cproxy_process_ascii_command(conn *c, char *command);
 
+size_t scan_tokens(char *command, token_t *tokens, const size_t max_tokens);
+
 conn_funcs cproxy_upstream_funcs = {
     cproxy_init_upstream_conn,
     add_bytes_read,
@@ -311,11 +313,10 @@ int cproxy_connect_downstream(downstream *d) {
     return 1;
 }
 
-#define COMMAND_TOKEN 0
+#define COMMAND_TOKEN    0
 #define SUBCOMMAND_TOKEN 1
-#define KEY_TOKEN 1
-
-#define MAX_TOKENS 8
+#define KEY_TOKEN        1
+#define MAX_TOKENS       8
 
 void cproxy_process_ascii_command(conn *c, char *command) {
     assert(c != NULL);
@@ -337,19 +338,17 @@ void cproxy_process_ascii_command(conn *c, char *command) {
         return;
     }
 
-    c->funcs->conn_out_string(c, "ERROR");
-
-#ifdef NO_WAY
     token_t tokens[MAX_TOKENS];
     size_t ntokens;
     int comm;
 
-    ntokens = tokenize_command(command, tokens, MAX_TOKENS);
+    ntokens = scan_tokens(command, tokens, MAX_TOKENS);
     if (ntokens >= 3 &&
         ((strcmp(tokens[COMMAND_TOKEN].value, "get") == 0) ||
          (strcmp(tokens[COMMAND_TOKEN].value, "bget") == 0))) {
 
-        process_get_command(c, tokens, ntokens, false);
+        c->funcs->conn_out_string(c, "ERROR");
+        // process_get_command(c, tokens, ntokens, false);
 
     } else if ((ntokens == 6 || ntokens == 7) &&
                ((strcmp(tokens[COMMAND_TOKEN].value, "add") == 0 && (comm = NREAD_ADD)) ||
@@ -358,33 +357,44 @@ void cproxy_process_ascii_command(conn *c, char *command) {
                 (strcmp(tokens[COMMAND_TOKEN].value, "prepend") == 0 && (comm = NREAD_PREPEND)) ||
                 (strcmp(tokens[COMMAND_TOKEN].value, "append") == 0 && (comm = NREAD_APPEND)) )) {
 
-        process_update_command(c, tokens, ntokens, comm, false);
+        c->funcs->conn_out_string(c, "ERROR");
+        // process_update_command(c, tokens, ntokens, comm, false);
 
     } else if ((ntokens == 7 || ntokens == 8) && (strcmp(tokens[COMMAND_TOKEN].value, "cas") == 0 && (comm = NREAD_CAS))) {
 
-        process_update_command(c, tokens, ntokens, comm, true);
+        c->funcs->conn_out_string(c, "ERROR");
+        // process_update_command(c, tokens, ntokens, comm, true);
 
     } else if ((ntokens == 4 || ntokens == 5) && (strcmp(tokens[COMMAND_TOKEN].value, "incr") == 0)) {
 
-        process_arithmetic_command(c, tokens, ntokens, 1);
+        c->funcs->conn_out_string(c, "ERROR");
+        // process_arithmetic_command(c, tokens, ntokens, 1);
 
     } else if (ntokens >= 3 && (strcmp(tokens[COMMAND_TOKEN].value, "gets") == 0)) {
 
-        process_get_command(c, tokens, ntokens, true);
+        c->funcs->conn_out_string(c, "ERROR");
+        // process_get_command(c, tokens, ntokens, true);
 
     } else if ((ntokens == 4 || ntokens == 5) && (strcmp(tokens[COMMAND_TOKEN].value, "decr") == 0)) {
 
-        process_arithmetic_command(c, tokens, ntokens, 0);
+        c->funcs->conn_out_string(c, "ERROR");
+        // process_arithmetic_command(c, tokens, ntokens, 0);
 
     } else if (ntokens >= 3 && ntokens <= 4 && (strcmp(tokens[COMMAND_TOKEN].value, "delete") == 0)) {
 
-        process_delete_command(c, tokens, ntokens);
+        c->funcs->conn_out_string(c, "ERROR");
+        // process_delete_command(c, tokens, ntokens);
 
     } else if (ntokens >= 2 && (strcmp(tokens[COMMAND_TOKEN].value, "stats") == 0)) {
 
-        process_stat(c, tokens, ntokens);
+        c->funcs->conn_out_string(c, "ERROR");
+        // process_stat(c, tokens, ntokens);
 
     } else if (ntokens >= 2 && ntokens <= 4 && (strcmp(tokens[COMMAND_TOKEN].value, "flush_all") == 0)) {
+
+        c->funcs->conn_out_string(c, "ERROR");
+
+#ifdef SKIP_THIS
         time_t exptime = 0;
         set_current_time();
 
@@ -416,6 +426,7 @@ void cproxy_process_ascii_command(conn *c, char *command) {
         item_flush_expired();
         c->funcs->conn_out_string(c, "OK");
         return;
+#endif
 
     } else if (ntokens == 2 && (strcmp(tokens[COMMAND_TOKEN].value, "version") == 0)) {
 
@@ -428,7 +439,6 @@ void cproxy_process_ascii_command(conn *c, char *command) {
     } else if (ntokens == 5 && (strcmp(tokens[COMMAND_TOKEN].value, "slabs") == 0 &&
                                 strcmp(tokens[COMMAND_TOKEN + 1].value, "reassign") == 0)) {
 #ifdef ALLOW_SLABS_REASSIGN
-
         int src, dst, rv;
 
         src = strtol(tokens[2].value, NULL, 10);
@@ -456,10 +466,56 @@ void cproxy_process_ascii_command(conn *c, char *command) {
         c->funcs->conn_out_string(c, "CLIENT_ERROR Slab reassignment not supported");
 #endif
     } else if ((ntokens == 3 || ntokens == 4) && (strcmp(tokens[COMMAND_TOKEN].value, "verbosity") == 0)) {
-        process_verbosity_command(c, tokens, ntokens);
+        c->funcs->conn_out_string(c, "ERROR");
+        // process_verbosity_command(c, tokens, ntokens);
     } else {
         c->funcs->conn_out_string(c, "ERROR");
     }
-#endif
+}
+
+/* Tokenize the command string by updating the token array
+ * with pointers to start of each token and length.
+ * Does not modify the input command string.
+ *
+ * Returns total number of tokens.  The last valid token is the terminal
+ * token (value points to the first unprocessed character of the string and
+ * length zero).
+ *
+ * Usage example:
+ *
+ *  while (scan_tokens(command, tokens, max_tokens) > 0) {
+ *      for(int ix = 0; tokens[ix].length != 0; ix++) {
+ *          ...
+ *      }
+ *      command = tokens[ix].value;
+ *  }
+ */
+size_t scan_tokens(char *command, token_t *tokens, const size_t max_tokens) {
+    char *s, *e;
+    size_t ntokens = 0;
+
+    assert(command != NULL && tokens != NULL && max_tokens > 1);
+
+    for (s = e = command; ntokens < max_tokens - 1; ++e) {
+        if (*e == '\0' || *e == ' ') {
+            if (s != e) {
+                tokens[ntokens].value = s;
+                tokens[ntokens].length = e - s;
+                ntokens++;
+            }
+            if (*e == '\0')
+                break; /* string end */
+            s = e + 1;
+        }
+    }
+
+    /* If we scanned the whole string, the terminal value pointer is null,
+     * otherwise it is the first unprocessed character.
+     */
+    tokens[ntokens].value = (*e == '\0' ? NULL : e);
+    tokens[ntokens].length = 0;
+    ntokens++;
+
+    return ntokens;
 }
 

@@ -431,6 +431,7 @@ conn *conn_new(const int sfd, const enum conn_states init_state,
                const int event_flags, const int read_buffer_size,
                enum protocol prot, struct event_base *base,
                conn_funcs *funcs, void *extra);
+void conn_set_state(conn *c, enum conn_states state);
 uint32_t append_bin_stats(char *buf, const char *key, const uint16_t klen,
                           const char *val, const uint32_t vlen, void *cookie);
 uint32_t append_ascii_stats(char *buf, const char *key, const uint16_t klen,

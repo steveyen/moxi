@@ -71,8 +71,6 @@ enum try_read_result {
 static enum try_read_result try_read_network(conn *c);
 static enum try_read_result try_read_udp(conn *c);
 
-static void conn_set_state(conn *c, enum conn_states state);
-
 /* stats */
 static void stats_init(void);
 static void server_stats(ADD_STAT add_stats, conn *c);
@@ -613,7 +611,7 @@ const char *state_text(enum conn_states state) {
  * processing that needs to happen on certain state transitions can
  * happen here.
  */
-static void conn_set_state(conn *c, enum conn_states state) {
+void conn_set_state(conn *c, enum conn_states state) {
     assert(c != NULL);
     assert(state >= conn_listening && state < conn_max_state);
 
