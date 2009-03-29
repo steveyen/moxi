@@ -115,6 +115,7 @@ static enum transmit_result transmit(conn *c);
 
 conn_funcs conn_funcs_default = {
     NULL,
+    NULL,
     add_bytes_read,
     out_string,
     process_command,
@@ -3362,6 +3363,9 @@ static void drive_machine(conn *c) {
             break;
 
         case conn_closing:
+            if (c->funcs->conn_close != NULL)
+                c->funcs->conn_close(c);
+
             if (IS_UDP(c->protocol))
                 conn_cleanup(c);
             else

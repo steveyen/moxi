@@ -54,6 +54,8 @@ int         cproxy_listen(proxy *p);
 proxy_td   *cproxy_find_thread_data(proxy *p, pthread_t thread_id);
 void        cproxy_init_upstream_conn(conn *c);
 void        cproxy_init_downstream_conn(conn *c);
+void        cproxy_close_upstream_conn(conn *c);
+void        cproxy_close_downstream_conn(conn *c);
 downstream *cproxy_add_downstream(proxy_td *ptd);
 downstream *cproxy_create_downstream(char *proxy_sect);
 int         cproxy_connect_downstream(downstream *d);
@@ -63,6 +65,7 @@ size_t scan_tokens(char *command, token_t *tokens, const size_t max_tokens);
 
 conn_funcs cproxy_upstream_funcs = {
     cproxy_init_upstream_conn,
+    cproxy_close_upstream_conn,
     add_bytes_read,
     out_string,
     cproxy_process_ascii_command,
@@ -73,6 +76,7 @@ conn_funcs cproxy_upstream_funcs = {
 
 conn_funcs cproxy_downstream_funcs = {
     cproxy_init_downstream_conn,
+    cproxy_close_downstream_conn,
     add_bytes_read,
     out_string,
     process_command,
@@ -257,6 +261,26 @@ void cproxy_init_downstream_conn(conn *c) {
             fprintf(stderr, "<%d cproxy_init_downstream_conn (%s) for %d, downstream %s\n",
                     c->sfd, state_text(c->state), p->port, p->config);
     }
+}
+
+void cproxy_close_upstream_conn(conn *c) {
+    assert(c != NULL);
+    assert(c->extra != NULL);
+
+    if (settings.verbose > 1)
+        fprintf(stderr, "<%d cproxy_close_upstream_conn\n", c->sfd);
+
+    c->extra = NULL;
+}
+
+void cproxy_close_downstream_conn(conn *c) {
+    assert(c != NULL);
+    assert(c->extra != NULL);
+
+    if (settings.verbose > 1)
+        fprintf(stderr, "<%d cproxy_close_downstream_conn\n", c->sfd);
+
+    c->extra = NULL;
 }
 
 downstream *cproxy_add_downstream(proxy_td *ptd) {
