@@ -51,7 +51,8 @@ struct downstream {
     memcached_st   mst;                 // Immutable.
     downstream    *next;                // To track free list.
     conn         **downstream_conns;    // To downstream servers, wraps mst's file descriptors.
-    conn          *upstream_conn;       // For current upstream client, when downstream !free.
+    conn          *upstream_conn;       // Current upstream client, when downstream assigned/reserved.
+    char          *upstream_suffix;     // Suffix to write when no more replies (reply_expect == 0).
     item          *reply_item_head;     // To serialize multi-get/scatter-gather response.
     item          *reply_item_tail;
     int            reply_expect;        // Number of replies to expect, >1 during scatter/gather broadcast.
@@ -68,12 +69,14 @@ void         cproxy_on_close_downstream_conn(conn *c);
 void         cproxy_add_downstream(proxy_td *ptd);
 downstream  *cproxy_reserve_downstream(proxy_td *ptd);
 void         cproxy_release_downstream(proxy_td *ptd, downstream *d);
+void         cproxy_release_downstream_conn(downstream *d, conn *c);
 downstream  *cproxy_create_downstream(char *proxy_sect);
 int          cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread);
 void         cproxy_wait_for_downstream(proxy_td *ptd, conn *c);
 void         cproxy_assign_downstream(proxy_td *ptd);
 
-void         cproxy_process_ascii_command(conn *c, char *command);
+void         cproxy_process_upstream_ascii(conn *c, char *line);
+void         cproxy_process_downstream_ascii(conn *c, char *line);
 int          cproxy_server_index(downstream *d, char *key, size_t key_length);
 
 size_t scan_tokens(char *command, token_t *tokens, const size_t max_tokens);
@@ -83,7 +86,7 @@ conn_funcs cproxy_upstream_funcs = {
     cproxy_on_close_upstream_conn,
     add_bytes_read,
     out_string,
-    cproxy_process_ascii_command,
+    cproxy_process_upstream_ascii,
     dispatch_bin_command,
     reset_cmd_handler,
     complete_nread
@@ -94,7 +97,7 @@ conn_funcs cproxy_downstream_funcs = {
     cproxy_on_close_downstream_conn,
     add_bytes_read,
     out_string,
-    process_command,
+    cproxy_process_downstream_ascii,
     dispatch_bin_command,
     reset_cmd_handler,
     complete_nread
@@ -332,11 +335,13 @@ downstream *cproxy_reserve_downstream(proxy_td *ptd) {
     }
 
     assert(d->upstream_conn == NULL);
+    assert(d->upstream_suffix == NULL);
     assert(d->reply_item_head == NULL);
     assert(d->reply_item_tail == NULL);
     assert(d->reply_expect == 0);
 
     d->upstream_conn = NULL;
+    d->upstream_suffix = NULL;
     d->reply_item_head = NULL;
     d->reply_item_tail = NULL;
     d->reply_expect = 0;
@@ -352,14 +357,16 @@ void cproxy_release_downstream(proxy_td *ptd, downstream *d) {
     d->next = ptd->downstream_free;
     ptd->downstream_free = d;
 
-    // TODO: Should cleanup here rather than just assert.
+    // TODO: Should cleanup here rather than just assert?
     //
     assert(d->upstream_conn == NULL);
+    assert(d->upstream_suffix == NULL);
     assert(d->reply_item_head == NULL);
     assert(d->reply_item_tail == NULL);
     assert(d->reply_expect == 0);
 
     d->upstream_conn = NULL;
+    d->upstream_suffix = NULL;
     d->reply_item_head = NULL;
     d->reply_item_tail = NULL;
     d->reply_expect = 0;
@@ -433,16 +440,16 @@ int cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread) {
 #define KEY_TOKEN        1
 #define MAX_TOKENS       8
 
-void cproxy_process_ascii_command(conn *c, char *command) {
+void cproxy_process_upstream_ascii(conn *c, char *line) {
     assert(c != NULL);
     assert(c->next == NULL);
     assert(c->extra != NULL);
-    assert(command != NULL);
-    assert(command == c->rcurr);
+    assert(line != NULL);
+    assert(line == c->rcurr);
     assert(IS_PROXY(c->protocol));
 
     if (settings.verbose > 1)
-        fprintf(stderr, "<%d %s\n", c->sfd, command);
+        fprintf(stderr, "<%d %s\n", c->sfd, line);
 
     /* for commands set/add/replace, we build an item and read the data
      * directly into it, then continue in nread_complete().
@@ -467,7 +474,7 @@ void cproxy_process_ascii_command(conn *c, char *command) {
     char *cmd;
     int comm;
 
-    ntokens = scan_tokens(command, tokens, MAX_TOKENS);
+    ntokens = scan_tokens(line, tokens, MAX_TOKENS);
     cmd = tokens[COMMAND_TOKEN].value;
 
     if (ntokens >= 3 &&
@@ -577,6 +584,58 @@ void cproxy_process_ascii_command(conn *c, char *command) {
     }
 }
 
+void cproxy_process_downstream_ascii(conn *c, char *line) {
+    assert(c != NULL);
+    assert(c->next == NULL);
+    assert(c->extra != NULL);
+    assert(line != NULL);
+    assert(line == c->rcurr);
+    assert(IS_PROXY(c->protocol));
+
+    if (settings.verbose > 1)
+        fprintf(stderr, "<%d %s\n", c->sfd, line);
+
+    downstream *d = c->extra;
+
+    assert(d != NULL);
+    assert(d->ptd != NULL);
+    assert(d->next == NULL);
+    assert(d->upstream_conn != NULL);
+    assert(d->upstream_conn->funcs != NULL);
+
+    token_t tokens[MAX_TOKENS];
+    size_t ntokens;
+    char *cmd;
+
+    ntokens = scan_tokens(line, tokens, MAX_TOKENS);
+    cmd = tokens[COMMAND_TOKEN].value;
+    conn *uc = d->upstream_conn;
+
+    if (ntokens >= 2 &&
+        (strncmp(cmd, "END", 3) == 0)) {
+        cproxy_release_downstream_conn(d, c);
+
+        uc->funcs->conn_out_string(uc, "END");
+        if (!update_event(uc, EV_WRITE | EV_PERSIST)) {
+            if (settings.verbose > 0)
+                fprintf(stderr, "Couldn't update cproxy write event\n");
+            conn_set_state(uc, conn_closing);
+        }
+    } else {
+        // TODO: Should count errors and recycle the conn if too many?
+        //
+        cproxy_release_downstream_conn(d, c);
+
+        uc->funcs->conn_out_string(uc, "ERROR");
+        if (!update_event(uc, EV_WRITE | EV_PERSIST)) {
+            if (settings.verbose > 0)
+                fprintf(stderr, "Couldn't update cproxy write event\n");
+            conn_set_state(uc, conn_closing);
+        }
+        d->upstream_conn = NULL;
+    }
+}
+
 /* Tokenize the command string by updating the token array
  * with pointers to start of each token and length.
  * Does not modify the input command string.
@@ -661,7 +720,12 @@ void cproxy_assign_downstream(proxy_td *ptd) {
         if (d == NULL)
             break; // If no downstreams are available, stop loop.
 
+        assert(d->next == NULL);
         assert(d->upstream_conn == NULL);
+        assert(d->upstream_suffix == NULL);
+        assert(d->reply_expect == 0);
+        assert(d->reply_item_head == NULL);
+        assert(d->reply_item_tail == NULL);
 
         d->upstream_conn = ptd->waiting_for_downstream_head;
         ptd->waiting_for_downstream_head = ptd->waiting_for_downstream_head->next;
@@ -681,6 +745,8 @@ void cproxy_assign_downstream(proxy_td *ptd) {
             char    *key     = tokens[KEY_TOKEN].value;
             int      key_len = tokens[KEY_TOKEN].length;
 
+            assert(d->downstream_conns != NULL);
+
             if (ntokens > 1) {
                 int s = cproxy_server_index(d, key, key_len);
                 if (s >= 0 &&
@@ -694,8 +760,10 @@ void cproxy_assign_downstream(proxy_td *ptd) {
                         c->iovused = 0;
 
                         if (add_msghdr(c) == 0) {
-                            out_string(c, command);
+                            c->funcs->conn_out_string(c, command);
                             if (update_event(c, EV_WRITE | EV_PERSIST)) {
+                                d->reply_expect = 1;
+                                d->upstream_suffix = NULL;
                                 continue;
                             }
 
@@ -737,4 +805,25 @@ void cproxy_wait_for_downstream(proxy_td *ptd, conn *c) {
         ptd->waiting_for_downstream_head = c;
 }
 
+void cproxy_release_downstream_conn(downstream *d, conn *c) {
+    assert(d != NULL);
+    assert(d->ptd != NULL);
+    assert(d->reply_expect > 0);
+    assert(d->upstream_conn != NULL);
+    assert(c != NULL);
 
+    conn_set_state(c, conn_pause);
+
+    d->reply_expect--;
+    if (d->reply_expect <= 0) {
+        if (d->upstream_suffix != NULL) {
+            add_iov(d->upstream_conn, d->upstream_suffix, strlen(d->upstream_suffix));
+            d->upstream_suffix = NULL; // Assuming static string, like "END\r\n", no free() needed.
+        }
+
+        d->upstream_conn = NULL;
+
+        cproxy_release_downstream(d->ptd, d);
+        cproxy_assign_downstream(d->ptd);
+    }
+}
