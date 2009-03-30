@@ -35,10 +35,12 @@ struct proxy {
     int       thread_data_num; // Immutable.
 };
 
-struct proxy_td {          // Per proxy, per worker-thread struct.
-    proxy      *proxy;     // Immutable parent pointer.
-    conn       *wait_head; // Upstream conns paused, waiting for a free downstream.
-    conn       *wait_tail;
+struct proxy_td { // Per proxy, per worker-thread data struct.
+    proxy *proxy; // Immutable parent pointer.
+
+    conn *waiting_for_downstream_head; // Upstream conns paused, waiting for a free downstream.
+    conn *waiting_for_downstream_tail;
+
     downstream *downstream_free; // Downstreams not servicing an upstream conn.
     int         downstream_num;  // Number of downstreams created (free + busy).
     int         downstream_max;  // Max number of downstreams created, for concurrency.
@@ -62,14 +64,17 @@ void         cproxy_init_upstream_conn(conn *c);
 void         cproxy_init_downstream_conn(conn *c);
 void         cproxy_close_upstream_conn(conn *c);
 void         cproxy_close_downstream_conn(conn *c);
+
 void         cproxy_add_downstream(proxy_td *ptd);
 downstream  *cproxy_reserve_downstream(proxy_td *ptd);
 void         cproxy_release_downstream(proxy_td *ptd, downstream *d);
 downstream  *cproxy_create_downstream(char *proxy_sect);
 int          cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread);
+void         cproxy_wait_for_downstream(proxy_td *ptd, conn *c);
+void         cproxy_assign_downstream(proxy_td *ptd);
+
 void         cproxy_process_ascii_command(conn *c, char *command);
 int          cproxy_server_index(downstream *d, char *key, size_t key_length);
-void         cproxy_assign_free_downstream(proxy_td *ptd);
 
 size_t scan_tokens(char *command, token_t *tokens, const size_t max_tokens);
 
@@ -172,8 +177,8 @@ proxy *cproxy_create(int port, char *config, int nthreads) {
             for (int i = 1; i < p->thread_data_num; i++) {
                 proxy_td *ptd = &p->thread_data[i];
                 ptd->proxy = p;
-                ptd->wait_head = NULL;
-                ptd->wait_tail = NULL;
+                ptd->waiting_for_downstream_head = NULL;
+                ptd->waiting_for_downstream_tail = NULL;
                 ptd->downstream_free = NULL;
                 ptd->downstream_num  = 0;
                 ptd->downstream_max  = DOWNSTREAM_MAX;
@@ -467,18 +472,9 @@ void cproxy_process_ascii_command(conn *c, char *command) {
     if (ntokens >= 3 &&
         (strncmp(cmd, "get", 3) == 0)) {
 
-        assert(!ptd->wait_tail || !ptd->wait_tail->next);
-
-        c->next = NULL;
-        if (ptd->wait_tail != NULL)
-            ptd->wait_tail->next = c;
-        ptd->wait_tail = c;
-        if (ptd->wait_head == NULL)
-            ptd->wait_head = c;
-
         conn_set_state(c, conn_pause);
-
-        cproxy_assign_free_downstream(ptd);
+        cproxy_wait_for_downstream(ptd, c);
+        cproxy_assign_downstream(ptd);
 
     } else if ((ntokens == 6 || ntokens == 7) &&
                ((strncmp(cmd, "add", 3) == 0     && (comm = NREAD_ADD)) ||
@@ -642,19 +638,22 @@ int cproxy_server_index(downstream *d, char *key, size_t key_length) {
     return (int) memcached_generate_hash(&d->mst, key, key_length);
 }
 
-void cproxy_assign_free_downstream(proxy_td *ptd) {
+void cproxy_assign_downstream(proxy_td *ptd) {
     assert(ptd != NULL);
 
+    // Key loop that tries to reserve any free downstream
+    // resources to waiting conns.
+    //
     // Remember the tail when we start, in case more conns are
     // tacked onto the wait list while we're processing.
     // This helps avoid infinite loop where conn's just
     // keep on moving to the tail.
     //
-    conn *tail = ptd->wait_tail;
+    conn *tail = ptd->waiting_for_downstream_tail;
     int   stop = 0;
 
-    while (ptd->wait_head != NULL && !stop) {
-        if (ptd->wait_head == tail)
+    while (ptd->waiting_for_downstream_head != NULL && !stop) {
+        if (ptd->waiting_for_downstream_head == tail)
             stop = 1;
 
         downstream *d = cproxy_reserve_downstream(ptd);
@@ -666,12 +665,13 @@ void cproxy_assign_free_downstream(proxy_td *ptd) {
         if (d->upstream_conn != NULL)
             break; // TODO: Should not get this state.
 
-        d->upstream_conn = ptd->wait_head;
-        ptd->wait_head = ptd->wait_head->next;
-        if (ptd->wait_head == NULL)
-            ptd->wait_tail = NULL;
+        d->upstream_conn = ptd->waiting_for_downstream_head;
+        ptd->waiting_for_downstream_head = ptd->waiting_for_downstream_head->next;
+        if (ptd->waiting_for_downstream_head == NULL)
+            ptd->waiting_for_downstream_tail = NULL;
         d->upstream_conn->next = NULL;
 
+        assert(d->upstream_conn->state == conn_pause);
         assert(d->upstream_conn->rcurr != NULL);
         assert(d->upstream_conn->thread != NULL);
         assert(d->upstream_conn->thread->base != NULL);
@@ -691,41 +691,52 @@ void cproxy_assign_free_downstream(proxy_td *ptd) {
                     if (c != NULL) {
                         assert(c->state == conn_pause);
 
-                        c->msgcurr = 0;
+                        c->msgcurr = 0; // TODO: Mem leak just by blowing these to 0?
                         c->msgused = 0;
                         c->iovused = 0;
 
                         if (add_msghdr(c) == 0) {
                             out_string(c, command);
-                            if (!update_event(c, EV_WRITE | EV_PERSIST)) {
-                                if (settings.verbose > 0)
-                                    fprintf(stderr, "Couldn't update cproxy write event\n");
-                                conn_set_state(c, conn_closing);
-                                // TODO: More error handling.
+                            if (update_event(c, EV_WRITE | EV_PERSIST)) {
+                                continue;
                             }
-                            continue;
-                        }
 
-                        c->funcs->conn_out_string(c, "SERVER_ERROR out of memory preparing response");
+                            if (settings.verbose > 0)
+                                fprintf(stderr, "Couldn't update cproxy write event\n");
+                            conn_set_state(c, conn_closing);
+                        } else
+                            c->funcs->conn_out_string(c, "SERVER_ERROR out of memory preparing response");
                     }
                 }
             }
         }
 
-        // We reach here on error.  Put upstream conn
-        // back on the wait list to retry.
+        // We reach here on error, so put upstream conn back on the wait
+        // list to retry.
         //
         // TOOD: Count this to eventually give up & error, rather than retry.
         //
-        if (ptd->wait_tail != NULL)
-            ptd->wait_tail->next = d->upstream_conn;
-        ptd->wait_tail = d->upstream_conn;
-        if (ptd->wait_head == NULL)
-            ptd->wait_head = ptd->wait_tail;
-        d->upstream_conn->next = NULL;
+        cproxy_wait_for_downstream(ptd, d->upstream_conn);
+
         d->upstream_conn = NULL;
 
         cproxy_release_downstream(ptd, d);
     }
 }
+
+void cproxy_wait_for_downstream(proxy_td *ptd, conn *c) {
+    assert(c != NULL);
+    assert(ptd != NULL);
+    assert(!ptd->waiting_for_downstream_tail || !ptd->waiting_for_downstream_tail->next);
+
+    // Add the conn to the wait list.
+    //
+    c->next = NULL;
+    if (ptd->waiting_for_downstream_tail != NULL)
+        ptd->waiting_for_downstream_tail->next = c;
+    ptd->waiting_for_downstream_tail = c;
+    if (ptd->waiting_for_downstream_head == NULL)
+        ptd->waiting_for_downstream_head = c;
+}
+
 
