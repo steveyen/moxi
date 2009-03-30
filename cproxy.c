@@ -66,7 +66,7 @@ void         cproxy_add_downstream(proxy_td *ptd);
 downstream  *cproxy_reserve_downstream(proxy_td *ptd);
 void         cproxy_release_downstream(proxy_td *ptd, downstream *d);
 downstream  *cproxy_create_downstream(char *proxy_sect);
-int          cproxy_connect_downstream(downstream *d, struct event_base *base);
+int          cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread);
 void         cproxy_process_ascii_command(conn *c, char *command);
 int          cproxy_server_index(downstream *d, char *key, size_t key_length);
 void         cproxy_assign_free_downstream(proxy_td *ptd);
@@ -388,7 +388,7 @@ downstream *cproxy_create_downstream(char *config) {
     return NULL;
 }
 
-int cproxy_connect_downstream(downstream *d, struct event_base *base) {
+int cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread) {
     assert(d != NULL);
     assert(d->ptd != NULL);
     assert(d->ptd->downstream_free != d); // Should not be in free list if we're connecting.
@@ -410,7 +410,8 @@ int cproxy_connect_downstream(downstream *d, struct event_base *base) {
                     d->downstream_conns[i] =
                         conn_new(fd, conn_pause, 0, DATA_BUFFER_SIZE,
                                  proxy_downstream_ascii_prot,
-                                 base, &cproxy_downstream_funcs, d);
+                                 thread->base, &cproxy_downstream_funcs, d);
+                    d->downstream_conns[i]->thread = thread;
                 }
             }
         }
@@ -675,7 +676,7 @@ void cproxy_assign_free_downstream(proxy_td *ptd) {
         assert(d->upstream_conn->thread != NULL);
         assert(d->upstream_conn->thread->base != NULL);
 
-        if (cproxy_connect_downstream(d, d->upstream_conn->thread->base) > 0) {
+        if (cproxy_connect_downstream(d, d->upstream_conn->thread) > 0) {
             char    *command = d->upstream_conn->rcurr;
             token_t  tokens[MAX_TOKENS];
             size_t   ntokens = scan_tokens(command, tokens, MAX_TOKENS);
@@ -688,8 +689,24 @@ void cproxy_assign_free_downstream(proxy_td *ptd) {
                     s < memcached_server_count(&d->mst)) {
                     conn *c = d->downstream_conns[s];
                     if (c != NULL) {
-                        out_string(c, command);
-                        continue;
+                        assert(c->state == conn_pause);
+
+                        c->msgcurr = 0;
+                        c->msgused = 0;
+                        c->iovused = 0;
+
+                        if (add_msghdr(c) == 0) {
+                            out_string(c, command);
+                            if (!update_event(c, EV_WRITE | EV_PERSIST)) {
+                                if (settings.verbose > 0)
+                                    fprintf(stderr, "Couldn't update cproxy write event\n");
+                                conn_set_state(c, conn_closing);
+                                // TODO: More error handling.
+                            }
+                            continue;
+                        }
+
+                        c->funcs->conn_out_string(c, "SERVER_ERROR out of memory preparing response");
                     }
                 }
             }

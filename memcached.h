@@ -440,6 +440,7 @@ uint32_t append_ascii_stats(char *buf, const char *key, const uint16_t klen,
                             const char *val, const uint32_t vlen, void *cookie);
 void add_bytes_read(conn *c, int bytes_read);
 void out_string(conn *c, const char *str);
+bool update_event(conn *c, const int new_flags);
 int try_read_command(conn *c);
 void process_command(conn *c, char *command);
 void dispatch_bin_command(conn *c);

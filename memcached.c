@@ -84,7 +84,6 @@ static void settings_init(void);
 static void event_handler(const int fd, const short which, void *arg);
 static void conn_close(conn *c);
 static void conn_init(void);
-static bool update_event(conn *c, const int new_flags);
 static void write_and_free(conn *c, char *buf, int bytes);
 static uint64_t swap64(uint64_t in);
 
@@ -673,6 +672,7 @@ int add_iov(conn *c, const void *buf, int len) {
     bool limit_to_mtu;
 
     assert(c != NULL);
+    assert(c->msgused > 0);
 
     do {
         m = &c->msglist[c->msgused - 1];
@@ -3001,7 +3001,7 @@ static enum try_read_result try_read_network(conn *c) {
     return gotdata;
 }
 
-static bool update_event(conn *c, const int new_flags) {
+bool update_event(conn *c, const int new_flags) {
     assert(c != NULL);
 
     struct event_base *base = c->event.ev_base;
