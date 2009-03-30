@@ -48,11 +48,11 @@ struct downstream {
     proxy_td      *ptd;                 // Immutable parent pointer.
     memcached_st   mst;                 // Immutable.
     downstream    *next;                // To track free list.
-    int            inflight;            // Number of downstream_conns in use.
     conn         **downstream_conns;    // To downstream servers, wraps mst's file descriptors.
     conn          *upstream_conn;       // For current upstream client, when downstream !free.
     item          *reply_item_head;     // To serialize multi-get/scatter-gather response.
     item          *reply_item_tail;
+    int            reply_expect;        // Number of replies to expect, >1 during scatter/gather broadcast.
 };
 
 proxy       *cproxy_create(int proxy_port, char *proxy_sect, int nthreads);
@@ -69,7 +69,7 @@ downstream  *cproxy_create_downstream(char *proxy_sect);
 int          cproxy_connect_downstream(downstream *d, struct event_base *base);
 void         cproxy_process_ascii_command(conn *c, char *command);
 int          cproxy_server_index(downstream *d, char *key, size_t key_length);
-int          cproxy_assign_free_downstream(proxy_td *ptd);
+void         cproxy_assign_free_downstream(proxy_td *ptd);
 
 size_t scan_tokens(char *command, token_t *tokens, const size_t max_tokens);
 
@@ -325,15 +325,15 @@ downstream *cproxy_reserve_downstream(proxy_td *ptd) {
         d->next = NULL;
     }
 
-    assert(d->inflight == 0);
     assert(d->upstream_conn == NULL);
     assert(d->reply_item_head == NULL);
     assert(d->reply_item_tail == NULL);
+    assert(d->reply_expect == 0);
 
-    d->inflight = 0;
     d->upstream_conn = NULL;
     d->reply_item_head = NULL;
     d->reply_item_tail = NULL;
+    d->reply_expect = 0;
 
     return d;
 }
@@ -346,15 +346,17 @@ void cproxy_release_downstream(proxy_td *ptd, downstream *d) {
     d->next = ptd->downstream_free;
     ptd->downstream_free = d;
 
-    assert(d->inflight == 0);
+    // TODO: Should cleanup here rather than just assert.
+    //
     assert(d->upstream_conn == NULL);
     assert(d->reply_item_head == NULL);
     assert(d->reply_item_tail == NULL);
+    assert(d->reply_expect == 0);
 
-    d->inflight = 0;
     d->upstream_conn = NULL;
     d->reply_item_head = NULL;
     d->reply_item_tail = NULL;
+    d->reply_expect = 0;
 }
 
 downstream *cproxy_create_downstream(char *config) {
@@ -416,7 +418,7 @@ int cproxy_connect_downstream(downstream *d, struct event_base *base) {
             s++;
     }
 
-    return n - s; // Returns number of down connections.
+    return s;
 }
 
 #define COMMAND_TOKEN    0
@@ -639,17 +641,29 @@ int cproxy_server_index(downstream *d, char *key, size_t key_length) {
     return (int) memcached_generate_hash(&d->mst, key, key_length);
 }
 
-int cproxy_assign_free_downstream(proxy_td *ptd) {
+void cproxy_assign_free_downstream(proxy_td *ptd) {
     assert(ptd != NULL);
 
-    conn *last = ptd->wait_tail;
+    // Remember the tail when we start, in case more conns are
+    // tacked onto the wait list while we're processing.
+    // This helps avoid infinite loop where conn's just
+    // keep on moving to the tail.
+    //
+    conn *tail = ptd->wait_tail;
+    int   stop = 0;
 
-    while (ptd->wait_head != NULL) {
+    while (ptd->wait_head != NULL && !stop) {
+        if (ptd->wait_head == tail)
+            stop = 1;
+
         downstream *d = cproxy_reserve_downstream(ptd);
         if (d == NULL)
-            break;
+            break; // If no downstreams are available, stop loop.
 
         assert(d->upstream_conn == NULL);
+
+        if (d->upstream_conn != NULL)
+            break; // TODO: Should not get this state.
 
         d->upstream_conn = ptd->wait_head;
         ptd->wait_head = ptd->wait_head->next;
@@ -658,33 +672,42 @@ int cproxy_assign_free_downstream(proxy_td *ptd) {
         d->upstream_conn->next = NULL;
 
         assert(d->upstream_conn->rcurr != NULL);
+        assert(d->upstream_conn->thread != NULL);
+        assert(d->upstream_conn->thread->base != NULL);
 
-        char *command = d->upstream_conn->rcurr;
-        token_t tokens[MAX_TOKENS];
-        size_t ntokens;
-        char *cmd;
+        if (cproxy_connect_downstream(d, d->upstream_conn->thread->base) > 0) {
+            char    *command = d->upstream_conn->rcurr;
+            token_t  tokens[MAX_TOKENS];
+            size_t   ntokens = scan_tokens(command, tokens, MAX_TOKENS);
+            char    *key     = tokens[KEY_TOKEN].value;
+            int      key_len = tokens[KEY_TOKEN].length;
 
-        ntokens = scan_tokens(command, tokens, MAX_TOKENS);
-        cmd = tokens[COMMAND_TOKEN].value;
-
-        char *key        = tokens[KEY_TOKEN].value;
-        int   key_length = tokens[KEY_TOKEN].length;
-
-        int s = cproxy_server_index(d, key, key_length);
-        if (s >= 0) {
-            assert(s >= 0);
-            assert(s < memcached_server_count(&d->mst));
-
-            conn *c_downstream = d->downstream_conns[s];
-            if (c_downstream != NULL) {
+            if (ntokens > 1) {
+                int s = cproxy_server_index(d, key, key_len);
+                if (s >= 0 &&
+                    s < memcached_server_count(&d->mst)) {
+                    conn *c = d->downstream_conns[s];
+                    if (c != NULL) {
+                        continue;
+                    }
+                }
             }
-        } else {
-            cproxy_release_downstream(ptd, d);
         }
 
-        if (ptd->wait_head == last)
-            break;
+        // We reach here on error.  Put upstream conn
+        // back on the wait list to retry.
+        //
+        // TOOD: Count this to eventually give up & error, rather than retry.
+        //
+        if (ptd->wait_tail != NULL)
+            ptd->wait_tail->next = d->upstream_conn;
+        ptd->wait_tail = d->upstream_conn;
+        if (ptd->wait_head == NULL)
+            ptd->wait_head = ptd->wait_tail;
+        d->upstream_conn->next = NULL;
+        d->upstream_conn = NULL;
+
+        cproxy_release_downstream(ptd, d);
     }
-    return 0;
 }
 
