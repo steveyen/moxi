@@ -224,7 +224,8 @@ int cproxy_listen(proxy *p) {
 
             p->listening++;
 
-            // TODO: Memory leak, need to clean up listen_conn->extra.
+            // TODO: Memory leak, need to clean up listen_conn->extra,
+            //       or, perhaps listening conn's never close?
             //
             c->extra = p;
             c->funcs = &cproxy_upstream_funcs;
@@ -661,9 +662,6 @@ void cproxy_assign_downstream(proxy_td *ptd) {
             break; // If no downstreams are available, stop loop.
 
         assert(d->upstream_conn == NULL);
-
-        if (d->upstream_conn != NULL)
-            break; // TODO: Should not get this state.
 
         d->upstream_conn = ptd->waiting_for_downstream_head;
         ptd->waiting_for_downstream_head = ptd->waiting_for_downstream_head->next;
