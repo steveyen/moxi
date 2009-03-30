@@ -268,11 +268,11 @@ void cproxy_init_upstream_conn(conn *c) {
 void cproxy_init_downstream_conn(conn *c) {
     assert(c->extra != NULL);
 
-    proxy *p = c->extra;
-    if (p != NULL) {
+    downstream *d = c->extra;
+    if (d != NULL) {
         if (settings.verbose > 1)
-            fprintf(stderr, "<%d cproxy_init_downstream_conn (%s) for %d, downstream %s\n",
-                    c->sfd, state_text(c->state), p->port, p->config);
+            fprintf(stderr, "<%d cproxy_init_downstream_conn (%s) to downstream %s\n",
+                    c->sfd, state_text(c->state), d->ptd->proxy->config);
     }
 }
 
@@ -688,6 +688,7 @@ void cproxy_assign_free_downstream(proxy_td *ptd) {
                     s < memcached_server_count(&d->mst)) {
                     conn *c = d->downstream_conns[s];
                     if (c != NULL) {
+                        out_string(c, command);
                         continue;
                     }
                 }
