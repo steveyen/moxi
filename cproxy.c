@@ -69,6 +69,7 @@ downstream  *cproxy_create_downstream(char *proxy_sect);
 int          cproxy_connect_downstream(downstream *d, struct event_base *base);
 void         cproxy_process_ascii_command(conn *c, char *command);
 int          cproxy_server_index(downstream *d, char *key, size_t key_length);
+int          cproxy_assign_free_downstream(proxy_td *ptd);
 
 size_t scan_tokens(char *command, token_t *tokens, const size_t max_tokens);
 
@@ -405,7 +406,7 @@ int cproxy_connect_downstream(downstream *d, struct event_base *base) {
                 int fd = d->mst.hosts[i].fd;
                 if (fd >= 0) {
                     d->downstream_conns[i] =
-                        conn_new(fd, conn_pause, 0, DATA_BUFFER_SIZE, 
+                        conn_new(fd, conn_pause, 0, DATA_BUFFER_SIZE,
                                  proxy_downstream_ascii_prot,
                                  base, &cproxy_downstream_funcs, d);
                 }
@@ -425,8 +426,10 @@ int cproxy_connect_downstream(downstream *d, struct event_base *base) {
 
 void cproxy_process_ascii_command(conn *c, char *command) {
     assert(c != NULL);
-    assert(command != NULL);
+    assert(c->next == NULL);
     assert(c->extra != NULL);
+    assert(command != NULL);
+    assert(command == c->rcurr);
     assert(IS_PROXY(c->protocol));
 
     if (settings.verbose > 1)
@@ -461,30 +464,18 @@ void cproxy_process_ascii_command(conn *c, char *command) {
     if (ntokens >= 3 &&
         (strncmp(cmd, "get", 3) == 0)) {
 
-        downstream *d = cproxy_reserve_downstream(ptd);
-        if (d != NULL) {
-            char *key        = tokens[KEY_TOKEN].value;
-            int   key_length = tokens[KEY_TOKEN].length;
+        assert(!ptd->wait_tail || !ptd->wait_tail->next);
 
-            int svr = cproxy_server_index(d, key, key_length);
-            if (svr >= 0) {
-            }
-        } else {
-            assert(c->next == NULL);
-            assert(ptd->wait_tail && !ptd->wait_tail->next);
-
-            c->next = NULL;
-            c->prev = ptd->wait_tail;
+        c->next = NULL;
+        if (ptd->wait_tail != NULL)
             ptd->wait_tail->next = c;
-            ptd->wait_tail = c;
-            if (ptd->wait_head == NULL)
-                ptd->wait_head = c;
-        }
+        ptd->wait_tail = c;
+        if (ptd->wait_head == NULL)
+            ptd->wait_head = c;
 
         conn_set_state(c, conn_pause);
 
-        // c->funcs->conn_out_string(c, "ERROR");
-        // process_get_command(c, tokens, ntokens, false);
+        cproxy_assign_free_downstream(ptd);
 
     } else if ((ntokens == 6 || ntokens == 7) &&
                ((strncmp(cmd, "add", 3) == 0     && (comm = NREAD_ADD)) ||
@@ -647,3 +638,53 @@ int cproxy_server_index(downstream *d, char *key, size_t key_length) {
 
     return (int) memcached_generate_hash(&d->mst, key, key_length);
 }
+
+int cproxy_assign_free_downstream(proxy_td *ptd) {
+    assert(ptd != NULL);
+
+    conn *last = ptd->wait_tail;
+
+    while (ptd->wait_head != NULL) {
+        downstream *d = cproxy_reserve_downstream(ptd);
+        if (d == NULL)
+            break;
+
+        assert(d->upstream_conn == NULL);
+
+        d->upstream_conn = ptd->wait_head;
+        ptd->wait_head = ptd->wait_head->next;
+        if (ptd->wait_head == NULL)
+            ptd->wait_tail = NULL;
+        d->upstream_conn->next = NULL;
+
+        assert(d->upstream_conn->rcurr != NULL);
+
+        char *command = d->upstream_conn->rcurr;
+        token_t tokens[MAX_TOKENS];
+        size_t ntokens;
+        char *cmd;
+
+        ntokens = scan_tokens(command, tokens, MAX_TOKENS);
+        cmd = tokens[COMMAND_TOKEN].value;
+
+        char *key        = tokens[KEY_TOKEN].value;
+        int   key_length = tokens[KEY_TOKEN].length;
+
+        int s = cproxy_server_index(d, key, key_length);
+        if (s >= 0) {
+            assert(s >= 0);
+            assert(s < memcached_server_count(&d->mst));
+
+            conn *c_downstream = d->downstream_conns[s];
+            if (c_downstream != NULL) {
+            }
+        } else {
+            cproxy_release_downstream(ptd, d);
+        }
+
+        if (ptd->wait_head == last)
+            break;
+    }
+    return 0;
+}
+
