@@ -74,6 +74,7 @@ downstream  *cproxy_create_downstream(char *proxy_sect);
 int          cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread);
 void         cproxy_wait_for_downstream(proxy_td *ptd, conn *c);
 void         cproxy_assign_downstream(proxy_td *ptd);
+bool         cproxy_forward_downstream(downstream *d);
 void         cproxy_pause_upstream_for_downstream(proxy_td *ptd, conn *upstream);
 conn        *cproxy_find_downstream_conn(downstream *d, char *key, int key_length);
 int          cproxy_server_index(downstream *d, char *key, size_t key_length);
@@ -779,96 +780,110 @@ void cproxy_assign_downstream(proxy_td *ptd) {
             ptd->waiting_for_downstream_tail = NULL;
         d->upstream_conn->next = NULL;
 
-        conn *uc = d->upstream_conn;
+        if (!cproxy_forward_downstream(d)) {
+            // We reach here on error, so put upstream conn back on the wait
+            // list to retry, and release the downstream.
+            //
+            // TOOD: Count this to eventually give up & error, rather than retry.
+            //
+            conn *uc = d->upstream_conn;
 
-        assert(uc->state == conn_pause);
-        assert(uc->rcurr != NULL);
-        assert(uc->thread != NULL);
-        assert(uc->thread->base != NULL);
-        assert(IS_ASCII(uc->protocol));
-        assert(IS_PROXY(uc->protocol));
+            assert(uc != NULL);
 
-        if (cproxy_connect_downstream(d, uc->thread) > 0) {
-            assert(d->downstream_conns != NULL);
+            cproxy_release_downstream(ptd, d);
+            cproxy_wait_for_downstream(ptd, uc);
+        }
+    }
+}
 
-            if (uc->cmd == -1) {
-                // Simple, one-liner command.
-                //
-                assert(uc->item == NULL);
+/* Do the actual work of forwarding the command from an
+ * upstream conn to its assigned downstream.
+ */
+bool cproxy_forward_downstream(downstream *d) {
+    assert(d != NULL);
 
-                char    *command = uc->rcurr;
-                token_t  tokens[MAX_TOKENS];
-                size_t   ntokens = scan_tokens(command, tokens, MAX_TOKENS);
-                char    *key     = tokens[KEY_TOKEN].value;
-                int      key_len = tokens[KEY_TOKEN].length;
+    conn *uc = d->upstream_conn;
 
-                if (ntokens > 1) {
-                    conn *c = cproxy_find_downstream_conn(d, key, key_len);
-                    if (c != NULL) {
-                        assert(IS_ASCII(c->protocol));
-                        assert(IS_PROXY(c->protocol));
+    assert(uc != NULL);
+    assert(uc->state == conn_pause);
+    assert(uc->rcurr != NULL);
+    assert(uc->thread != NULL);
+    assert(uc->thread->base != NULL);
+    assert(IS_ASCII(uc->protocol));
+    assert(IS_PROXY(uc->protocol));
 
-                        c->funcs->conn_out_string(c, command);
+    if (cproxy_connect_downstream(d, uc->thread) > 0) {
+        assert(d->downstream_conns != NULL);
 
-                        if (update_event(c, EV_WRITE | EV_PERSIST)) {
-                            d->reply_expect = 1;
-                            continue;
-                        }
+        if (uc->cmd == -1) {
+            // Simple, one-liner command.
+            //
+            assert(uc->item == NULL);
 
-                        if (settings.verbose > 0)
-                            fprintf(stderr, "Couldn't update cproxy write event\n");
+            char    *command = uc->rcurr;
+            token_t  tokens[MAX_TOKENS];
+            size_t   ntokens = scan_tokens(command, tokens, MAX_TOKENS);
+            char    *key     = tokens[KEY_TOKEN].value;
+            int      key_len = tokens[KEY_TOKEN].length;
 
-                        conn_set_state(c, conn_closing);
-                    }
-                }
-            } else {
-                // Command that came with item data, like set/add/replace/etc.
-                //
-                item *it = uc->item;
-
-                assert(it != NULL);
-
-                conn *c = cproxy_find_downstream_conn(d, ITEM_key(it), it->nkey);
+            // TODO: Handle multi-get.
+            //
+            if (ntokens > 1) {
+                conn *c = cproxy_find_downstream_conn(d, key, key_len);
                 if (c != NULL) {
-                    assert(c->item == NULL);
+                    assert(IS_ASCII(c->protocol));
+                    assert(IS_PROXY(c->protocol));
 
-                    if (add_iov(c, "set ", 4) == 0 &&
-                        add_iov(c, ITEM_key(it), it->nkey) == 0 &&
-                        add_iov(c, " 0 ", 3) == 0 &&
-                        add_iov(c, ITEM_suffix(it), it->nsuffix + it->nbytes) == 0) {
-                        conn_set_state(c, conn_mwrite);
+                    c->funcs->conn_out_string(c, command);
 
-                        if (update_event(c, EV_WRITE | EV_PERSIST)) {
-                            d->reply_expect = 1;
-
-                            if (settings.verbose > 1)
-                                fprintf(stderr, ">%d sending key %s\n", c->sfd, ITEM_key(it));
-
-                            continue;
-                        }
-
-                        if (settings.verbose > 0)
-                            fprintf(stderr, "Couldn't update cproxy write event\n");
-
-                        conn_set_state(c, conn_closing);
-                    } else {
-                        // TODO: Need better out-of-memory behavior.
-                        //
-                        if (settings.verbose > 0)
-                            fprintf(stderr, "Couldn't alloc cproxy iov memory\n");
+                    if (update_event(c, EV_WRITE | EV_PERSIST)) {
+                        d->reply_expect = 1;
+                        return true;
                     }
+
+                    if (settings.verbose > 0)
+                        fprintf(stderr, "Couldn't update cproxy write event\n");
+
+                    conn_set_state(c, conn_closing);
+                }
+            }
+        } else {
+            // Command that came with item data, like set/add/replace/etc.
+            //
+            item *it = uc->item;
+
+            assert(it != NULL);
+
+            conn *c = cproxy_find_downstream_conn(d, ITEM_key(it), it->nkey);
+            if (c != NULL) {
+                assert(c->item == NULL);
+
+                if (add_iov(c, "set ", 4) == 0 &&
+                    add_iov(c, ITEM_key(it), it->nkey) == 0 &&
+                    add_iov(c, " 0 ", 3) == 0 &&
+                    add_iov(c, ITEM_suffix(it), it->nsuffix + it->nbytes) == 0) {
+                    conn_set_state(c, conn_mwrite);
+
+                    if (update_event(c, EV_WRITE | EV_PERSIST)) {
+                        d->reply_expect = 1;
+                        return true;
+                    }
+
+                    if (settings.verbose > 0)
+                        fprintf(stderr, "Couldn't update cproxy write event\n");
+
+                    conn_set_state(c, conn_closing);
+                } else {
+                    // TODO: Need better out-of-memory behavior.
+                    //
+                    if (settings.verbose > 0)
+                        fprintf(stderr, "Couldn't alloc cproxy iov memory\n");
                 }
             }
         }
-
-        // We reach here on error, so put upstream conn back on the wait
-        // list to retry, and release the downstream.
-        //
-        // TOOD: Count this to eventually give up & error, rather than retry.
-        //
-        cproxy_release_downstream(ptd, d);
-        cproxy_wait_for_downstream(ptd, uc);
     }
+
+    return false;
 }
 
 void cproxy_wait_for_downstream(proxy_td *ptd, conn *c) {
