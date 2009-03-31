@@ -12,7 +12,8 @@
 /** From libmemcached. */
 memcached_return memcached_version(memcached_st *ptr);
 memcached_return memcached_connect(memcached_server_st *ptr);
-uint32_t memcached_generate_hash(memcached_st *ptr, const char *key, size_t key_length);
+uint32_t memcached_generate_hash(memcached_st *ptr, const char *key,
+                                 size_t key_length);
 
 // TODO: Move into configurable settings one day.
 //
@@ -38,24 +39,30 @@ struct proxy {
 struct proxy_td { // Per proxy, per worker-thread data struct.
     proxy *proxy; // Immutable parent pointer.
 
-    conn *waiting_for_downstream_head; // Upstream conns paused, waiting for a free downstream.
+    // Upstream conns that are paused, waiting for a free downstream.
+    //
+    conn *waiting_for_downstream_head;
     conn *waiting_for_downstream_tail;
 
-    downstream *downstream_free; // Downstreams not servicing an upstream conn.
-    int         downstream_num;  // Number of downstreams created (free + busy).
-    int         downstream_max;  // Max number of downstreams created, for concurrency.
+    downstream *downstream_free; // Downstreams not assigned to upstreams.
+    int         downstream_num;  // Number downstreams created.
+    int         downstream_max;  // Max downstream concurrency number.
 };
 
 struct downstream {
     proxy_td      *ptd;                 // Immutable parent pointer.
     memcached_st   mst;                 // Immutable.
     downstream    *next;                // To track free list.
-    conn         **downstream_conns;    // To downstream servers, wraps mst's file descriptors.
-    conn          *upstream_conn;       // Current upstream client, when downstream assigned/reserved.
-    char          *upstream_suffix;     // Suffix to write when no more replies (reply_expect == 0).
-    item          *reply_item_head;     // To serialize multi-get/scatter-gather response.
-    item          *reply_item_tail;
-    int            reply_expect;        // Number of replies to expect, >1 during scatter/gather broadcast.
+
+    conn **downstream_conns; // Wraps the fd's of mst with conns.
+    conn  *upstream_conn;    // Non-NULL when downstream is reserved.
+    char  *upstream_suffix;  // Suffix to write when no more replies,
+                             // when reply_expect goes down to 0.
+
+    item  *reply_item_head;  // To serialize scatter-gather response,
+    item  *reply_item_tail;  // such as during multi-get.
+    int    reply_expect;     // Number of replies to expect, might
+                             // be >1 during scatter/gather broadcast.
 };
 
 proxy       *cproxy_create(int proxy_port, char *proxy_sect, int nthreads);
@@ -234,7 +241,8 @@ int cproxy_listen(proxy *p) {
         while (c != NULL &&
                c != listen_conn_orig) {
             if (settings.verbose > 1)
-                fprintf(stderr, "<%d cproxy listening on port %d, downstream %s\n",
+                fprintf(stderr,
+                        "<%d cproxy listening on port %d, downstream %s\n",
                         c->sfd, p->port, p->config);
 
             p->listening++;
@@ -273,7 +281,9 @@ void cproxy_init_upstream_conn(conn *c) {
     proxy *p = c->extra;
     if (p != NULL) {
         if (settings.verbose > 1)
-            fprintf(stderr, "<%d cproxy_init_upstream_conn (%s) for %d, downstream %s\n",
+            fprintf(stderr,
+                    "<%d cproxy_init_upstream_conn (%s)"
+                    " for %d, downstream %s\n",
                     c->sfd, state_text(c->state), p->port, p->config);
 
         proxy_td *ptd = cproxy_find_thread_data(p, pthread_self());
@@ -292,7 +302,9 @@ void cproxy_init_downstream_conn(conn *c) {
     downstream *d = c->extra;
     if (d != NULL) {
         if (settings.verbose > 1)
-            fprintf(stderr, "<%d cproxy_init_downstream_conn (%s) to downstream %s\n",
+            fprintf(stderr,
+                    "<%d cproxy_init_downstream_conn (%s)"
+                    " to downstream %s\n",
                     c->sfd, state_text(c->state), d->ptd->proxy->config);
     }
 }
@@ -315,21 +327,6 @@ void cproxy_on_close_downstream_conn(conn *c) {
         fprintf(stderr, "<%d cproxy_on_close_downstream_conn\n", c->sfd);
 
     c->extra = NULL;
-}
-
-void cproxy_on_pause_downstream_conn(conn *c) {
-    assert(c != NULL);
-    assert(c->extra != NULL);
-
-    if (settings.verbose > 1)
-        fprintf(stderr, "<%d cproxy_on_pause_downstream_conn\n", c->sfd);
-
-    downstream *d = c->extra;
-
-    cproxy_release_downstream_conn(d, c);
-
-    if (!update_event(c, 0))
-        conn_set_state(c, conn_closing);
 }
 
 void cproxy_add_downstream(proxy_td *ptd) {
@@ -417,7 +414,8 @@ downstream *cproxy_create_downstream(char *config) {
 
                 int nconns = memcached_server_count(&d->mst);
 
-                d->downstream_conns = (conn **) calloc(nconns, sizeof(conn *));
+                d->downstream_conns = (conn **)
+                    calloc(nconns, sizeof(conn *));
                 if (d->downstream_conns != NULL) {
                     return d;
                 }
@@ -435,7 +433,7 @@ downstream *cproxy_create_downstream(char *config) {
 int cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread) {
     assert(d != NULL);
     assert(d->ptd != NULL);
-    assert(d->ptd->downstream_free != d); // Should not be in free list if we're connecting.
+    assert(d->ptd->downstream_free != d); // Should not be in free list.
     assert(d->next == NULL);
     assert(d->downstream_conns != NULL);
     assert(memcached_server_count(&d->mst) > 0);
@@ -542,52 +540,16 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
                (strncmp(cmd, "gets", 4) == 0)) {
 
         c->funcs->conn_out_string(c, "ERROR");
-        // process_get_command(c, tokens, ntokens, true);
 
     } else if (ntokens >= 2 &&
                (strncmp(cmd, "stats", 5) == 0)) {
 
         c->funcs->conn_out_string(c, "ERROR");
-        // process_stat(c, tokens, ntokens);
 
     } else if (ntokens >= 2 && ntokens <= 4 &&
                (strncmp(cmd, "flush_all", 9) == 0)) {
 
         c->funcs->conn_out_string(c, "ERROR");
-
-#ifdef SKIP_THIS
-        time_t exptime = 0;
-        set_current_time();
-
-        set_noreply_maybe(c, tokens, ntokens);
-
-        if(ntokens == (c->noreply ? 3 : 2)) {
-            settings.oldest_live = current_time - 1;
-            item_flush_expired();
-            c->funcs->conn_out_string(c, "OK");
-            return;
-        }
-
-        exptime = strtol(tokens[1].value, NULL, 10);
-        if(errno == ERANGE) {
-            c->funcs->conn_out_string(c, "CLIENT_ERROR bad command line format");
-            return;
-        }
-
-        /*
-          If exptime is zero realtime() would return zero too, and
-          realtime(exptime) - 1 would overflow to the max unsigned
-          value.  So we process exptime == 0 the same way we do when
-          no delay is given at all.
-        */
-        if (exptime > 0)
-            settings.oldest_live = realtime(exptime) - 1;
-        else /* exptime == 0 */
-            settings.oldest_live = current_time - 1;
-        item_flush_expired();
-        c->funcs->conn_out_string(c, "OK");
-        return;
-#endif
 
     } else if (ntokens == 2 &&
                (strncmp(cmd, "version", 7) == 0)) {
@@ -665,13 +627,13 @@ void cproxy_process_downstream_ascii(conn *c, char *line) {
     } else {
         uc->funcs->conn_out_string(uc, line);
 
-        if (!update_event(uc, EV_WRITE | EV_PERSIST)) {
+        if (update_event(uc, EV_WRITE | EV_PERSIST)) {
+            conn_set_state(c, conn_pause);
+        } else {
             if (settings.verbose > 0)
                 fprintf(stderr, "Couldn't update upstream write event\n");
             conn_set_state(uc, conn_closing);
         }
-
-        conn_set_state(c, conn_pause);
     }
 }
 
@@ -953,6 +915,25 @@ void cproxy_release_downstream_conn(downstream *d, conn *c) {
         cproxy_release_downstream(d);
         cproxy_assign_downstream(d->ptd);
     }
+}
+
+void cproxy_on_pause_downstream_conn(conn *c) {
+    assert(c != NULL);
+    assert(c->extra != NULL);
+
+    if (settings.verbose > 1)
+        fprintf(stderr, "<%d cproxy_on_pause_downstream_conn\n", c->sfd);
+
+    downstream *d = c->extra;
+
+    // Must update_event() before releasing the downstream conn,
+    // because the release might call udpate_event(), too,
+    // and we don't want to override its work.
+    //
+    if (update_event(c, 0))
+        cproxy_release_downstream_conn(d, c);
+    else
+        conn_set_state(c, conn_closing);
 }
 
 void cproxy_pause_upstream_for_downstream(proxy_td *ptd, conn *upstream) {
