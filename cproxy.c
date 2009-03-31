@@ -832,10 +832,14 @@ void cproxy_assign_downstream(proxy_td *ptd) {
 
                 conn *c = cproxy_find_downstream_conn(d, ITEM_key(it), it->nkey);
                 if (c != NULL) {
+                    assert(c->item == NULL);
+
                     if (add_iov(c, "set ", 4) == 0 &&
                         add_iov(c, ITEM_key(it), it->nkey) == 0 &&
                         add_iov(c, " 0 ", 3) == 0 &&
                         add_iov(c, ITEM_suffix(it), it->nsuffix + it->nbytes) == 0) {
+                        conn_set_state(c, conn_mwrite);
+
                         if (update_event(c, EV_WRITE | EV_PERSIST)) {
                             d->reply_expect = 1;
 
