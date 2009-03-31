@@ -18,6 +18,7 @@ uint32_t memcached_generate_hash(memcached_st *ptr, const char *key,
 // TODO: Move into configurable settings one day.
 //
 #define DOWNSTREAM_MAX 10
+#define NOT_CAS        -1
 
 typedef struct proxy      proxy;
 typedef struct proxy_td   proxy_td;
@@ -94,6 +95,7 @@ void cproxy_process_upstream_ascii(conn *c, char *line);
 void cproxy_process_upstream_ascii_nread(conn *c);
 
 void cproxy_process_downstream_ascii(conn *c, char *line);
+void cproxy_process_downstream_ascii_nread(conn *c);
 
 size_t scan_tokens(char *command, token_t *tokens, const size_t max_tokens);
 
@@ -119,7 +121,7 @@ conn_funcs cproxy_downstream_funcs = {
     cproxy_process_downstream_ascii,
     dispatch_bin_command,
     reset_cmd_handler,
-    complete_nread,
+    cproxy_process_downstream_ascii_nread,
     cproxy_on_pause_downstream_conn
 };
 
@@ -482,7 +484,7 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
     assert(IS_PROXY(c->protocol));
 
     if (settings.verbose > 1)
-        fprintf(stderr, "<%d %s\n", c->sfd, line);
+        fprintf(stderr, "<%d cproxy_process_upstream_ascii %s\n", c->sfd, line);
 
     /* For commands set/add/replace, we build an item and read the data
      * directly into it, then continue in nread_complete().
@@ -573,10 +575,10 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
  */
 void cproxy_process_upstream_ascii_nread(conn *c) {
     assert(c != NULL);
-    assert(c->item != NULL);
-    assert(c->extra != NULL);
 
     item *it = c->item;
+
+    assert(it != NULL);
 
     // pthread_mutex_lock(&c->thread->stats.mutex);
     // c->thread->stats.slab_stats[it->slabs_clsid].set_cmds++;
@@ -584,12 +586,14 @@ void cproxy_process_upstream_ascii_nread(conn *c) {
 
     if (strncmp(ITEM_data(it) + it->nbytes - 2, "\r\n", 2) == 0) {
         proxy_td *ptd = c->extra;
-        if (ptd != NULL) {
-            cproxy_pause_upstream_for_downstream(ptd, c);
-        } else
-            c->funcs->conn_out_string(c, "SERVER_ERROR expected proxy_td");
+
+        assert(ptd != NULL);
+
+        cproxy_pause_upstream_for_downstream(ptd, c);
     } else
         c->funcs->conn_out_string(c, "CLIENT_ERROR bad data chunk");
+
+    // TODO: Need to EV_WRITE the upstream conn?
 }
 
 void cproxy_process_downstream_ascii(conn *c, char *line) {
@@ -604,7 +608,7 @@ void cproxy_process_downstream_ascii(conn *c, char *line) {
     assert(IS_PROXY(c->protocol));
 
     if (settings.verbose > 1)
-        fprintf(stderr, "<%d %s\n", c->sfd, line);
+        fprintf(stderr, "<%d cproxy_process_downstream_ascii %s\n", c->sfd, line);
 
     downstream *d = c->extra;
 
@@ -612,19 +616,17 @@ void cproxy_process_downstream_ascii(conn *c, char *line) {
     assert(d->ptd != NULL);
     assert(d->next == NULL);
 
+    // The upstream conn might be NULL when closed already or
+    // during noreply.
+    //
     conn *uc = d->upstream_conn;
-
-    assert(uc != NULL);
-    assert(uc->funcs != NULL);
-    assert(IS_ASCII(uc->protocol));
-    assert(IS_PROXY(uc->protocol));
 
     if (strncmp(line, "VALUE ", 6) == 0) {
         token_t      tokens[MAX_TOKENS];
         size_t       ntokens;
         unsigned int flags;
         int          vlen;
-        uint64_t     cas = 0;
+        uint64_t     cas = NOT_CAS;
 
         ntokens = scan_tokens(line, tokens, MAX_TOKENS);
         if (ntokens >= 5 && // Accounts for extra termimation token.
@@ -653,38 +655,137 @@ void cproxy_process_downstream_ascii(conn *c, char *line) {
                     // TODO: Could not parse cas from line.
                 }
             } else {
+                // TODO: Could not item_alloc().
+                //
                 // if (item_size_ok(nkey, flags, vlen + 2)) {
                 // }
-
-                c->sbytes = vlen + 2;
-                conn_set_state(c, conn_swallow);
             }
 
             if (it != NULL)
                 item_remove(it);
+
+            c->sbytes = vlen + 2;
+
+            conn_set_state(c, conn_swallow);
+        } else {
+            // TODO: Don't know how much to swallow?  Close the upstream?
         }
 
-        uc->funcs->conn_out_string(c, "SERVER_ERROR bad proxy connection");
+        if (uc != NULL) {
+            uc->funcs->conn_out_string(c, "SERVER_ERROR bad proxy connection");
 
-        // TODO: Need to swallow on c.
+            // TODO: Need to swallow on c.
 
-        if (!update_event(uc, EV_WRITE | EV_PERSIST)) {
-            if (settings.verbose > 0)
-                fprintf(stderr, "Couldn't update upstream write event\n");
-            conn_set_state(uc, conn_closing);
+            if (!update_event(uc, EV_WRITE | EV_PERSIST)) {
+                if (settings.verbose > 0)
+                    fprintf(stderr, "Can't update upstream write event\n");
+                conn_set_state(uc, conn_closing);
+            }
         }
     } else if (strncmp(line, "END", 3) == 0) {
-    } else {
-        uc->funcs->conn_out_string(uc, line);
+        conn_set_state(c, conn_pause);
 
-        if (update_event(uc, EV_WRITE | EV_PERSIST)) {
-            conn_set_state(c, conn_pause);
-        } else {
-            if (settings.verbose > 0)
-                fprintf(stderr, "Couldn't update upstream write event\n");
-            conn_set_state(uc, conn_closing);
+        if (uc != NULL) {
+            if (add_iov(uc, "END\r\n", 5) == 0 &&
+                update_event(uc, EV_WRITE | EV_PERSIST)) {
+                conn_set_state(uc, conn_mwrite);
+            } else {
+                if (settings.verbose > 0)
+                    fprintf(stderr, "Could not update upstream write event\n");
+                conn_set_state(uc, conn_closing);
+            }
+        }
+    } else {
+        conn_set_state(c, conn_pause);
+
+        if (uc != NULL) {
+            uc->funcs->conn_out_string(uc, line);
+
+            if (!update_event(uc, EV_WRITE | EV_PERSIST)) {
+                if (settings.verbose > 0)
+                    fprintf(stderr, "Couldn't update upstream write event\n");
+                conn_set_state(uc, conn_closing);
+            }
         }
     }
+}
+
+/* We get here after reading the value in a VALUE reply.
+ * The item is ready in c->item.
+ */
+void cproxy_process_downstream_ascii_nread(conn *c) {
+    assert(c != NULL);
+
+    if (settings.verbose > 1)
+        fprintf(stderr, "<%d cproxy_process_downstream_ascii_nread %d %d\n",
+                c->sfd, c->ileft, c->isize);
+
+    downstream *d = c->extra;
+    assert(d != NULL);
+
+    item *it = c->item;
+    assert(it != NULL);
+
+    // Clear c->item because we either move it to the upstream or
+    // item_remove() it on error.
+    //
+    c->item = NULL;
+
+    conn_set_state(c, conn_new_cmd);
+
+    // pthread_mutex_lock(&c->thread->stats.mutex);
+    // c->thread->stats.slab_stats[it->slabs_clsid].set_cmds++;
+    // pthread_mutex_unlock(&c->thread->stats.mutex);
+
+    conn *uc = d->upstream_conn;
+    if (uc != NULL) {
+        assert(uc->funcs != NULL);
+        assert(IS_ASCII(uc->protocol));
+        assert(IS_PROXY(uc->protocol));
+
+        if (strncmp(ITEM_data(it) + it->nbytes - 2, "\r\n", 2) == 0) {
+            if (add_iov(uc, "VALUE ", 6) == 0 &&
+                add_iov(uc, ITEM_key(it), it->nkey) == 0 &&
+                add_iov(uc, ITEM_suffix(it), it->nsuffix + it->nbytes) == 0) {
+                if (uc->ileft >= uc->isize) {
+                    item **new_list = realloc(c->ilist, sizeof(item *) * uc->isize * 2);
+                    if (new_list) {
+                        uc->isize *= 2;
+                        uc->ilist = new_list;
+                    }
+                }
+
+                if (uc->ileft < uc->isize) {
+                    uc->icurr = uc->ilist;
+                    uc->ilist[uc->ileft] = it;
+                    uc->ileft++;
+
+                    if (settings.verbose > 1)
+                        fprintf(stderr, "<%d cproxy_process_downstream_ascii success\n",
+                                c->sfd);
+
+                    return; // Success.
+                } else {
+                    if (settings.verbose > 1)
+                        fprintf(stderr, "proxy out of response ilist memory");
+                }
+            } else {
+                if (settings.verbose > 1)
+                    fprintf(stderr, "proxy out of response iov memory");
+            }
+        } else {
+            if (settings.verbose > 1)
+                fprintf(stderr, "unexpected item data block in proxy");
+        }
+    } else {
+        if (settings.verbose > 1)
+            fprintf(stderr, "proxy upstream seems closed already");
+    }
+
+    item_remove(it);
+
+    // TODO: Need to tell the upstream_conn and EV_WRITE on it?
+    // TODO: Put downstream conn into conn_pause?
 }
 
 conn *cproxy_find_downstream_conn(downstream *d, char *key, int key_length) {
@@ -834,8 +935,15 @@ bool cproxy_forward_downstream(downstream *d) {
             if (ntokens > 1) {
                 conn *c = cproxy_find_downstream_conn(d, key, key_len);
                 if (c != NULL) {
+                    assert(c->item == NULL);
+                    assert(c->state == conn_pause);
                     assert(IS_ASCII(c->protocol));
                     assert(IS_PROXY(c->protocol));
+                    assert(c->ilist != NULL);
+                    assert(c->isize > 0);
+
+                    c->icurr = c->ilist;
+                    c->ileft = 0;
 
                     // Cannot use the c->funcs->conn_out_string here.
                     // See the cproxy_out_string_downstream() comments.
@@ -843,13 +951,16 @@ bool cproxy_forward_downstream(downstream *d) {
                     out_string(c, command);
 
                     if (settings.verbose > 0)
-                        fprintf(stderr, "forwarding from %d to %d, noreply %d\n", uc->sfd, c->sfd, uc->noreply);
+                        fprintf(stderr,
+                                "forwarding from %d to %d, noreply %d\n",
+                                uc->sfd, c->sfd, uc->noreply);
 
                     if (update_event(c, EV_WRITE | EV_PERSIST)) {
                         if (uc->noreply == false) {
                             d->reply_expect = 1; // TODO: Need timeout?
                         } else {
                             uc->noreply      = false;
+                            d->reply_expect  = 0;
                             d->upstream_conn = NULL;
                             c->write_and_go  = conn_pause;
 
@@ -859,7 +970,8 @@ bool cproxy_forward_downstream(downstream *d) {
                     }
 
                     if (settings.verbose > 0)
-                        fprintf(stderr, "Couldn't update cproxy write event\n");
+                        fprintf(stderr,
+                                "Couldn't update cproxy write event\n");
 
                     conn_set_state(c, conn_closing);
                 }
@@ -874,6 +986,14 @@ bool cproxy_forward_downstream(downstream *d) {
             conn *c = cproxy_find_downstream_conn(d, ITEM_key(it), it->nkey);
             if (c != NULL) {
                 assert(c->item == NULL);
+                assert(c->state == conn_pause);
+                assert(IS_ASCII(c->protocol));
+                assert(IS_PROXY(c->protocol));
+                assert(c->ilist != NULL);
+                assert(c->isize > 0);
+
+                c->icurr = c->ilist;
+                c->ileft = 0;
 
                 char *verb = nread_text(uc->cmd);
 
