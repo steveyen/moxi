@@ -453,6 +453,7 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
     assert(c->item == NULL);
     assert(line != NULL);
     assert(line == c->rcurr);
+    assert(IS_ASCII(c->protocol));
     assert(IS_PROXY(c->protocol));
 
     if (settings.verbose > 1)
@@ -471,18 +472,13 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
     }
 
     proxy_td *ptd = c->extra;
-    if (ptd == NULL) {
-        c->funcs->conn_out_string(c, "SERVER_ERROR expected proxy_td");
-        return;
-    }
+
+    assert(ptd != NULL);
 
     token_t tokens[MAX_TOKENS];
-    size_t ntokens;
-    char *cmd;
-    int comm;
-
-    ntokens = scan_tokens(line, tokens, MAX_TOKENS);
-    cmd = tokens[COMMAND_TOKEN].value;
+    size_t  ntokens = scan_tokens(line, tokens, MAX_TOKENS);
+    char   *cmd     = tokens[COMMAND_TOKEN].value;
+    int     comm;
 
     if (ntokens >= 3 &&
         (strncmp(cmd, "get", 3) == 0)) {
@@ -611,6 +607,8 @@ void cproxy_process_downstream_ascii(conn *c, char *line) {
     assert(c != NULL);
     assert(c->next == NULL);
     assert(c->extra != NULL);
+    assert(c->cmd == -1);
+    assert(c->item == NULL);
     assert(line != NULL);
     assert(line == c->rcurr);
     assert(IS_ASCII(c->protocol));
@@ -633,8 +631,8 @@ void cproxy_process_downstream_ascii(conn *c, char *line) {
     assert(IS_PROXY(uc->protocol));
 
     if (strncmp(line, "VALUE ", 6) == 0) {
-        token_t  tokens[MAX_TOKENS];
-        size_t   ntokens = scan_tokens(line, tokens, MAX_TOKENS);
+        token_t tokens[MAX_TOKENS];
+        size_t  ntokens = scan_tokens(line, tokens, MAX_TOKENS);
 
         if (ntokens > 1) {
         }
@@ -787,6 +785,8 @@ void cproxy_assign_downstream(proxy_td *ptd) {
         assert(uc->rcurr != NULL);
         assert(uc->thread != NULL);
         assert(uc->thread->base != NULL);
+        assert(IS_ASCII(uc->protocol));
+        assert(IS_PROXY(uc->protocol));
 
         if (cproxy_connect_downstream(d, uc->thread) > 0) {
             assert(d->downstream_conns != NULL);
@@ -805,6 +805,9 @@ void cproxy_assign_downstream(proxy_td *ptd) {
                 if (ntokens > 1) {
                     conn *c = cproxy_find_downstream_conn(d, key, key_len);
                     if (c != NULL) {
+                        assert(IS_ASCII(c->protocol));
+                        assert(IS_PROXY(c->protocol));
+
                         c->funcs->conn_out_string(c, command);
 
                         if (update_event(c, EV_WRITE | EV_PERSIST)) {
