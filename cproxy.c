@@ -604,15 +604,12 @@ void cproxy_process_upstream_ascii_nread(conn *c) {
 
     if (strncmp(ITEM_data(it) + it->nbytes - 2, "\r\n", 2) == 0) {
         proxy_td *ptd = c->extra;
-        if (ptd == NULL) {
+        if (ptd != NULL) {
+            cproxy_pause_upstream_for_downstream(ptd, c);
+        } else
             c->funcs->conn_out_string(c, "SERVER_ERROR expected proxy_td");
-            return;
-        }
-
-        cproxy_pause_upstream_for_downstream(ptd, c);
-    } else {
+    } else
         c->funcs->conn_out_string(c, "CLIENT_ERROR bad data chunk");
-    }
 }
 
 void cproxy_process_downstream_ascii(conn *c, char *line) {
@@ -621,6 +618,7 @@ void cproxy_process_downstream_ascii(conn *c, char *line) {
     assert(c->extra != NULL);
     assert(line != NULL);
     assert(line == c->rcurr);
+    assert(IS_ASCII(c->protocol));
     assert(IS_PROXY(c->protocol));
 
     if (settings.verbose > 1)
@@ -631,39 +629,30 @@ void cproxy_process_downstream_ascii(conn *c, char *line) {
     assert(d != NULL);
     assert(d->ptd != NULL);
     assert(d->next == NULL);
-    assert(d->upstream_conn != NULL);
-    assert(d->upstream_conn->funcs != NULL);
 
-    token_t tokens[MAX_TOKENS];
-    size_t ntokens;
-    char *cmd;
-
-    ntokens = scan_tokens(line, tokens, MAX_TOKENS);
-    cmd = tokens[COMMAND_TOKEN].value;
     conn *uc = d->upstream_conn;
 
-    if (ntokens >= 2 &&
-        (strncmp(cmd, "END", 3) == 0)) {
-        cproxy_release_downstream_conn(d, c);
+    assert(uc != NULL);
+    assert(uc->funcs != NULL);
+    assert(IS_ASCII(uc->protocol));
+    assert(IS_PROXY(uc->protocol));
 
-        uc->funcs->conn_out_string(uc, "END");
-        if (!update_event(uc, EV_WRITE | EV_PERSIST)) {
-            if (settings.verbose > 0)
-                fprintf(stderr, "Couldn't update cproxy write event\n");
-            conn_set_state(uc, conn_closing);
+    if (strncmp(line, "VALUE ", 6) == 0) {
+        token_t  tokens[MAX_TOKENS];
+        size_t   ntokens = scan_tokens(line, tokens, MAX_TOKENS);
+
+        if (ntokens > 1) {
         }
     } else {
-        // TODO: Should count errors and recycle the conn if too many?
-        //
-        cproxy_release_downstream_conn(d, c);
+        uc->funcs->conn_out_string(uc, line);
 
-        uc->funcs->conn_out_string(uc, "ERROR");
         if (!update_event(uc, EV_WRITE | EV_PERSIST)) {
             if (settings.verbose > 0)
-                fprintf(stderr, "Couldn't update cproxy write event\n");
+                fprintf(stderr, "Couldn't update upstream write event\n");
             conn_set_state(uc, conn_closing);
         }
-        d->upstream_conn = NULL;
+
+        cproxy_release_downstream_conn(d, c);
     }
 }
 
@@ -821,13 +810,10 @@ void cproxy_assign_downstream(proxy_td *ptd) {
                 if (ntokens > 1) {
                     conn *c = cproxy_find_downstream_conn(d, key, key_len);
                     if (c != NULL) {
-                        char *upstream_suffix = NULL;
-
                         c->funcs->conn_out_string(c, command);
 
                         if (update_event(c, EV_WRITE | EV_PERSIST)) {
                             d->reply_expect = 1;
-                            d->upstream_suffix = upstream_suffix;
                             continue;
                         }
 
@@ -846,20 +832,29 @@ void cproxy_assign_downstream(proxy_td *ptd) {
 
                 conn *c = cproxy_find_downstream_conn(d, ITEM_key(it), it->nkey);
                 if (c != NULL) {
-                    char *upstream_suffix = NULL;
+                    if (add_iov(c, "set ", 4) == 0 &&
+                        add_iov(c, ITEM_key(it), it->nkey) == 0 &&
+                        add_iov(c, " 0 ", 3) == 0 &&
+                        add_iov(c, ITEM_suffix(it), it->nsuffix + it->nbytes) == 0) {
+                        if (update_event(c, EV_WRITE | EV_PERSIST)) {
+                            d->reply_expect = 1;
 
-                    // c->funcs->conn_out_string(c, command);
+                            if (settings.verbose > 1)
+                                fprintf(stderr, ">%d sending key %s\n", c->sfd, ITEM_key(it));
 
-                    if (update_event(c, EV_WRITE | EV_PERSIST)) {
-                        d->reply_expect = 1;
-                        d->upstream_suffix = upstream_suffix;
-                        continue;
+                            continue;
+                        }
+
+                        if (settings.verbose > 0)
+                            fprintf(stderr, "Couldn't update cproxy write event\n");
+
+                        conn_set_state(c, conn_closing);
+                    } else {
+                        // TODO: Need better out-of-memory behavior.
+                        //
+                        if (settings.verbose > 0)
+                            fprintf(stderr, "Couldn't alloc cproxy iov memory\n");
                     }
-
-                    if (settings.verbose > 0)
-                        fprintf(stderr, "Couldn't update cproxy write event\n");
-
-                    conn_set_state(c, conn_closing);
                 }
             }
         }
