@@ -57,11 +57,8 @@ struct downstream {
 
     conn **downstream_conns; // Wraps the fd's of mst with conns.
     conn  *upstream_conn;    // Non-NULL when downstream is reserved.
-
-    item  *reply_item_head;  // To serialize scatter-gather response,
-    item  *reply_item_tail;  // such as during multi-get.
     int    reply_expect;     // Number of replies to expect, might
-                             // be >1 during scatter/gather broadcast.
+                             // be >1 during scatter-gather commands.
 };
 
 proxy       *cproxy_create(int proxy_port, char *proxy_sect, int nthreads);
@@ -364,13 +361,9 @@ downstream *cproxy_reserve_downstream(proxy_td *ptd) {
     }
 
     assert(d->upstream_conn == NULL);
-    assert(d->reply_item_head == NULL);
-    assert(d->reply_item_tail == NULL);
     assert(d->reply_expect == 0);
 
     d->upstream_conn = NULL;
-    d->reply_item_head = NULL;
-    d->reply_item_tail = NULL;
     d->reply_expect = 0;
 
     return d;
@@ -385,21 +378,14 @@ void cproxy_release_downstream(downstream *d) {
     assert(d->next == NULL);
 
     d->upstream_conn = NULL;
+    d->reply_expect = 0;
 
     // Back onto the free/available downstream list.
     //
     d->next = d->ptd->downstream_free;
     d->ptd->downstream_free = d;
 
-    d->reply_expect = 0;
-
-    // TODO: Should cleanup here rather than just assert?
-    //
-    assert(d->reply_item_head == NULL);
-    assert(d->reply_item_tail == NULL);
-
-    d->reply_item_head = NULL;
-    d->reply_item_tail = NULL;
+    // TODO: Cleanup the downstream conns?
 }
 
 downstream *cproxy_create_downstream(char *config) {
@@ -861,8 +847,6 @@ void cproxy_assign_downstream(proxy_td *ptd) {
         assert(d->next == NULL);
         assert(d->upstream_conn == NULL);
         assert(d->reply_expect == 0);
-        assert(d->reply_item_head == NULL);
-        assert(d->reply_item_tail == NULL);
 
         // We have a downstream reserved, so assign the first
         // waiting upstream conn to it.
