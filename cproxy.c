@@ -357,19 +357,20 @@ void cproxy_release_downstream(proxy_td *ptd, downstream *d) {
     assert(d != NULL);
     assert(d->next == NULL);
 
+    d->upstream_conn = NULL;
+    d->upstream_suffix = NULL;
+
+    // Back onto the free/available downstream list.
+    //
     d->next = ptd->downstream_free;
     ptd->downstream_free = d;
 
     // TODO: Should cleanup here rather than just assert?
     //
-    assert(d->upstream_conn == NULL);
-    assert(d->upstream_suffix == NULL);
     assert(d->reply_item_head == NULL);
     assert(d->reply_item_tail == NULL);
     assert(d->reply_expect == 0);
 
-    d->upstream_conn = NULL;
-    d->upstream_suffix = NULL;
     d->reply_item_head = NULL;
     d->reply_item_tail = NULL;
     d->reply_expect = 0;
@@ -731,12 +732,12 @@ void cproxy_assign_downstream(proxy_td *ptd) {
     assert(ptd != NULL);
 
     // Key loop that tries to reserve any free downstream
-    // resources to waiting conns.
+    // resources to waiting upstream conns.
     //
-    // Remember the tail when we start, in case more conns are
-    // tacked onto the wait list while we're processing.
-    // This helps avoid infinite loop where conn's just
-    // keep on moving to the tail.
+    // Remember the wait list tail when we start, in case more
+    // upstream conns tacked onto the wait list while we're
+    // processing.  This helps avoid infinite loop where conn's
+    // just keep on moving to the tail.
     //
     conn *tail = ptd->waiting_for_downstream_tail;
     int   stop = 0;
@@ -756,66 +757,88 @@ void cproxy_assign_downstream(proxy_td *ptd) {
         assert(d->reply_item_head == NULL);
         assert(d->reply_item_tail == NULL);
 
+        // We have a downstream reserved, so assign the first
+        // waiting upstream conn to it.
+        //
         d->upstream_conn = ptd->waiting_for_downstream_head;
         ptd->waiting_for_downstream_head = ptd->waiting_for_downstream_head->next;
         if (ptd->waiting_for_downstream_head == NULL)
             ptd->waiting_for_downstream_tail = NULL;
         d->upstream_conn->next = NULL;
 
-        assert(d->upstream_conn->state == conn_pause);
-        assert(d->upstream_conn->rcurr != NULL);
-        assert(d->upstream_conn->thread != NULL);
-        assert(d->upstream_conn->thread->base != NULL);
+        conn *uc = d->upstream_conn;
 
-        if (cproxy_connect_downstream(d, d->upstream_conn->thread) > 0) {
-            char    *command = d->upstream_conn->rcurr;
-            token_t  tokens[MAX_TOKENS];
-            size_t   ntokens = scan_tokens(command, tokens, MAX_TOKENS);
-            char    *key     = tokens[KEY_TOKEN].value;
-            int      key_len = tokens[KEY_TOKEN].length;
+        assert(uc->state == conn_pause);
+        assert(uc->rcurr != NULL);
+        assert(uc->thread != NULL);
+        assert(uc->thread->base != NULL);
 
+        if (cproxy_connect_downstream(d, uc->thread) > 0) {
             assert(d->downstream_conns != NULL);
 
-            if (ntokens > 1) {
-                int s = cproxy_server_index(d, key, key_len);
-                if (s >= 0 &&
-                    s < memcached_server_count(&d->mst)) {
-                    conn *c = d->downstream_conns[s];
-                    if (c != NULL) {
-                        assert(c->state == conn_pause);
+            if (uc->cmd == -1) {
+                // Simple, one-liner command.
+                //
+                assert(uc->item == NULL);
 
-                        c->msgcurr = 0; // TODO: Mem leak just by blowing these to 0?
-                        c->msgused = 0;
-                        c->iovused = 0;
+                char    *command = uc->rcurr;
+                token_t  tokens[MAX_TOKENS];
+                size_t   ntokens = scan_tokens(command, tokens, MAX_TOKENS);
+                char    *key     = tokens[KEY_TOKEN].value;
+                int      key_len = tokens[KEY_TOKEN].length;
 
-                        if (add_msghdr(c) == 0) {
-                            c->funcs->conn_out_string(c, command);
-                            if (update_event(c, EV_WRITE | EV_PERSIST)) {
-                                d->reply_expect = 1;
-                                d->upstream_suffix = NULL;
-                                continue;
-                            }
+                if (ntokens > 1) {
+                    int s = cproxy_server_index(d, key, key_len);
+                    if (s >= 0 &&
+                        s < memcached_server_count(&d->mst)) {
+                        conn *c = d->downstream_conns[s];
+                        if (c != NULL) {
+                            assert(c->state == conn_pause);
 
-                            if (settings.verbose > 0)
-                                fprintf(stderr, "Couldn't update cproxy write event\n");
-                            conn_set_state(c, conn_closing);
-                        } else
-                            c->funcs->conn_out_string(c, "SERVER_ERROR out of memory preparing response");
+                            c->msgcurr = 0; // TODO: Mem leak just by blowing these to 0?
+                            c->msgused = 0;
+                            c->iovused = 0;
+
+                            if (add_msghdr(c) == 0) {
+                                char *upstream_suffix = NULL;
+
+                                c->funcs->conn_out_string(c, command);
+
+                                if (update_event(c, EV_WRITE | EV_PERSIST)) {
+                                    d->reply_expect = 1;
+                                    d->upstream_suffix = upstream_suffix;
+                                    continue;
+                                }
+
+                                if (settings.verbose > 0)
+                                    fprintf(stderr, "Couldn't update cproxy write event\n");
+
+                                conn_set_state(c, conn_closing);
+                            } else
+                                c->funcs->conn_out_string(c, "SERVER_ERROR out of memory preparing response");
+                        }
                     }
+                }
+            } else {
+                // Command that came with item data, like set/add/replace/etc.
+                //
+                item *it = uc->item;
+
+                assert(it != NULL);
+
+                int s = cproxy_server_index(d, ITEM_key(it), it->nkey);
+                if (s >= 0) {
                 }
             }
         }
 
         // We reach here on error, so put upstream conn back on the wait
-        // list to retry.
+        // list to retry, and release the downstream.
         //
         // TOOD: Count this to eventually give up & error, rather than retry.
         //
-        cproxy_wait_for_downstream(ptd, d->upstream_conn);
-
-        d->upstream_conn = NULL;
-
         cproxy_release_downstream(ptd, d);
+        cproxy_wait_for_downstream(ptd, uc);
     }
 }
 
@@ -849,8 +872,6 @@ void cproxy_release_downstream_conn(downstream *d, conn *c) {
             add_iov(d->upstream_conn, d->upstream_suffix, strlen(d->upstream_suffix));
             d->upstream_suffix = NULL; // Assuming static string, like "END\r\n", no free() needed.
         }
-
-        d->upstream_conn = NULL;
 
         cproxy_release_downstream(d->ptd, d);
         cproxy_assign_downstream(d->ptd);
