@@ -65,10 +65,11 @@ void         cproxy_init_upstream_conn(conn *c);
 void         cproxy_init_downstream_conn(conn *c);
 void         cproxy_on_close_upstream_conn(conn *c);
 void         cproxy_on_close_downstream_conn(conn *c);
+void         cproxy_on_pause_downstream_conn(conn *c);
 
 void         cproxy_add_downstream(proxy_td *ptd);
 downstream  *cproxy_reserve_downstream(proxy_td *ptd);
-void         cproxy_release_downstream(proxy_td *ptd, downstream *d);
+void         cproxy_release_downstream(downstream *d);
 void         cproxy_release_downstream_conn(downstream *d, conn *c);
 downstream  *cproxy_create_downstream(char *proxy_sect);
 int          cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread);
@@ -78,6 +79,8 @@ bool         cproxy_forward_downstream(downstream *d);
 void         cproxy_pause_upstream_for_downstream(proxy_td *ptd, conn *upstream);
 conn        *cproxy_find_downstream_conn(downstream *d, char *key, int key_length);
 int          cproxy_server_index(downstream *d, char *key, size_t key_length);
+
+void cproxy_reset_upstream(conn *uc);
 
 void cproxy_process_upstream_ascii(conn *c, char *line);
 void cproxy_process_upstream_ascii_nread(conn *c);
@@ -96,7 +99,8 @@ conn_funcs cproxy_upstream_funcs = {
     cproxy_process_upstream_ascii,
     dispatch_bin_command,
     reset_cmd_handler,
-    cproxy_process_upstream_ascii_nread
+    cproxy_process_upstream_ascii_nread,
+    NULL
 };
 
 conn_funcs cproxy_downstream_funcs = {
@@ -107,7 +111,8 @@ conn_funcs cproxy_downstream_funcs = {
     cproxy_process_downstream_ascii,
     dispatch_bin_command,
     reset_cmd_handler,
-    complete_nread
+    complete_nread,
+    cproxy_on_pause_downstream_conn
 };
 
 /**
@@ -312,6 +317,21 @@ void cproxy_on_close_downstream_conn(conn *c) {
     c->extra = NULL;
 }
 
+void cproxy_on_pause_downstream_conn(conn *c) {
+    assert(c != NULL);
+    assert(c->extra != NULL);
+
+    if (settings.verbose > 1)
+        fprintf(stderr, "<%d cproxy_on_pause_downstream_conn\n", c->sfd);
+
+    downstream *d = c->extra;
+
+    cproxy_release_downstream_conn(d, c);
+
+    if (!update_event(c, 0))
+        conn_set_state(c, conn_closing);
+}
+
 void cproxy_add_downstream(proxy_td *ptd) {
     assert(ptd != NULL);
 
@@ -321,7 +341,7 @@ void cproxy_add_downstream(proxy_td *ptd) {
         if (d != NULL) {
             d->ptd = ptd;
             ptd->downstream_num++;
-            cproxy_release_downstream(ptd, d);
+            cproxy_release_downstream(d);
         }
     }
 }
@@ -356,9 +376,12 @@ downstream *cproxy_reserve_downstream(proxy_td *ptd) {
     return d;
 }
 
-void cproxy_release_downstream(proxy_td *ptd, downstream *d) {
-    assert(ptd != NULL);
+void cproxy_release_downstream(downstream *d) {
+    if (settings.verbose > 1)
+        fprintf(stderr, "release_downstream\n");
+
     assert(d != NULL);
+    assert(d->ptd != NULL);
     assert(d->next == NULL);
 
     d->upstream_conn = NULL;
@@ -366,8 +389,8 @@ void cproxy_release_downstream(proxy_td *ptd, downstream *d) {
 
     // Back onto the free/available downstream list.
     //
-    d->next = ptd->downstream_free;
-    ptd->downstream_free = d;
+    d->next = d->ptd->downstream_free;
+    d->ptd->downstream_free = d;
 
     // TODO: Should cleanup here rather than just assert?
     //
@@ -648,7 +671,7 @@ void cproxy_process_downstream_ascii(conn *c, char *line) {
             conn_set_state(uc, conn_closing);
         }
 
-        cproxy_release_downstream_conn(d, c);
+        conn_set_state(c, conn_pause);
     }
 }
 
@@ -701,6 +724,9 @@ int cproxy_server_index(downstream *d, char *key, size_t key_length) {
 void cproxy_assign_downstream(proxy_td *ptd) {
     assert(ptd != NULL);
 
+    if (settings.verbose > 1)
+        fprintf(stderr, "assign_downstream\n");
+
     // Key loop that tries to reserve any free downstream
     // resources to waiting upstream conns.
     //
@@ -736,6 +762,9 @@ void cproxy_assign_downstream(proxy_td *ptd) {
             ptd->waiting_for_downstream_tail = NULL;
         d->upstream_conn->next = NULL;
 
+        if (settings.verbose > 1)
+            fprintf(stderr, "assign_downstream, matched\n");
+
         if (!cproxy_forward_downstream(d)) {
             // We reach here on error, so put upstream conn back on the wait
             // list to retry, and release the downstream.
@@ -746,10 +775,16 @@ void cproxy_assign_downstream(proxy_td *ptd) {
 
             assert(uc != NULL);
 
-            cproxy_release_downstream(ptd, d);
+            if (settings.verbose > 1)
+                fprintf(stderr, "%d could not forward upstream to downstream\n", uc->sfd);
+
+            cproxy_release_downstream(d);
             cproxy_wait_for_downstream(ptd, uc);
         }
     }
+
+    if (settings.verbose > 1)
+        fprintf(stderr, "assign_downstream, done\n");
 }
 
 /* Do the actual work of forwarding the command from an
@@ -792,8 +827,19 @@ bool cproxy_forward_downstream(downstream *d) {
 
                     c->funcs->conn_out_string(c, command);
 
+                    if (settings.verbose > 0)
+                        fprintf(stderr, "forwarding from %d to %d, noreply %d\n", uc->sfd, c->sfd, uc->noreply);
+
                     if (update_event(c, EV_WRITE | EV_PERSIST)) {
-                        d->reply_expect = 1;
+                        if (uc->noreply == false) {
+                            d->reply_expect = 1; // TODO: Need timeout?
+                        } else {
+                            uc->noreply      = false;
+                            d->upstream_conn = NULL;
+                            c->write_and_go  = conn_pause;
+
+                            cproxy_reset_upstream(uc);
+                        }
                         return true;
                     }
 
@@ -823,6 +869,7 @@ bool cproxy_forward_downstream(downstream *d) {
                     add_iov(c, " 0 ", 3) == 0 &&
                     add_iov(c, ITEM_suffix(it), it->nsuffix + it->nbytes) == 0) {
                     conn_set_state(c, conn_mwrite);
+                    c->write_and_go = conn_new_cmd;
 
                     if (update_event(c, EV_WRITE | EV_PERSIST)) {
                         d->reply_expect = 1;
@@ -846,6 +893,29 @@ bool cproxy_forward_downstream(downstream *d) {
     return false;
 }
 
+void cproxy_reset_upstream(conn *uc) {
+    conn_set_state(uc, conn_new_cmd);
+
+    if (uc->rbytes <= 0) {
+        if (update_event(uc, EV_READ | EV_PERSIST))
+            return;
+
+        if (settings.verbose > 0)
+            fprintf(stderr, "Couldn't update uc READ event\n");
+
+        conn_set_state(uc, conn_closing);
+    }
+
+    // TODO: Subtle potential bug, where we may have already
+    // read incoming bytes into the uc's buffer, so that
+    // libevent never sees any EV_READ events, leaving the
+    // uc seemingly stuck, never hitting drive_machine() loop.
+    //
+    // This depends on what libevent does here.
+    //
+    // May need to use the pipe to get drive_machine onto the uc?
+}
+
 void cproxy_wait_for_downstream(proxy_td *ptd, conn *c) {
     assert(c != NULL);
     assert(ptd != NULL);
@@ -864,20 +934,23 @@ void cproxy_wait_for_downstream(proxy_td *ptd, conn *c) {
 void cproxy_release_downstream_conn(downstream *d, conn *c) {
     assert(d != NULL);
     assert(d->ptd != NULL);
-    assert(d->reply_expect > 0);
-    assert(d->upstream_conn != NULL);
     assert(c != NULL);
 
-    conn_set_state(c, conn_pause);
+    if (settings.verbose > 1)
+        fprintf(stderr, "%d release_downstream_conn, reply_expect %d\n",
+                c->sfd, d->reply_expect);
 
     d->reply_expect--;
     if (d->reply_expect <= 0) {
-        if (d->upstream_suffix != NULL) {
+        d->reply_expect = 0; // Can go < 0 when noreply.
+
+        if (d->upstream_conn != NULL && // No upstream_conn when noreply.
+            d->upstream_suffix != NULL) {
             add_iov(d->upstream_conn, d->upstream_suffix, strlen(d->upstream_suffix));
             d->upstream_suffix = NULL; // Assuming static string, like "END\r\n", no free() needed.
         }
 
-        cproxy_release_downstream(d->ptd, d);
+        cproxy_release_downstream(d);
         cproxy_assign_downstream(d->ptd);
     }
 }
@@ -885,6 +958,9 @@ void cproxy_release_downstream_conn(downstream *d, conn *c) {
 void cproxy_pause_upstream_for_downstream(proxy_td *ptd, conn *upstream) {
     assert(ptd != NULL);
     assert(upstream != NULL);
+
+    if (settings.verbose > 1)
+        fprintf(stderr, "%d pause_upstream_for_downstream\n", upstream->sfd);
 
     conn_set_state(upstream, conn_pause);
     cproxy_wait_for_downstream(ptd, upstream);

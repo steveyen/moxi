@@ -319,6 +319,7 @@ struct conn_funcs {
     void (*conn_process_binary_command)(conn *c);
     void (*conn_reset_cmd_handler)(conn *c);
     void (*conn_complete_nread)(conn *c);
+    void (*conn_pause)(conn *c);
 };
 
 struct conn {

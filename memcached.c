@@ -120,7 +120,8 @@ conn_funcs conn_funcs_default = {
     process_command,
     dispatch_bin_command,
     reset_cmd_handler,
-    complete_nread
+    complete_nread,
+    NULL
 };
 
 #define REALTIME_MAXDELTA 60*60*24*30
@@ -3361,6 +3362,9 @@ static void drive_machine(conn *c) {
             break;
 
         case conn_pause:
+            if (c->funcs->conn_pause != NULL)
+                c->funcs->conn_pause(c);
+
             stop = true;
             break;
 
