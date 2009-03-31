@@ -88,6 +88,7 @@ static void write_and_free(conn *c, char *buf, int bytes);
 static uint64_t swap64(uint64_t in);
 
 /* time handling */
+static rel_time_t realtime(const time_t exptime);
 static void set_current_time(void);  /* update the global variable holding
                               global 32-bit seconds-since-start time
                               (to avoid 64 bit time_t) */
@@ -121,7 +122,8 @@ conn_funcs conn_funcs_default = {
     dispatch_bin_command,
     reset_cmd_handler,
     complete_nread,
-    NULL
+    NULL,
+    realtime
 };
 
 #define REALTIME_MAXDELTA 60*60*24*30
@@ -1056,7 +1058,7 @@ static void complete_incr_bin(conn *c) {
     } else if (!it && req->message.body.expiration != 0xffffffff) {
         /* Save some room for the response */
         rsp->message.body.value = swap64(req->message.body.initial);
-        it = item_alloc(key, nkey, 0, realtime(req->message.body.expiration),
+        it = item_alloc(key, nkey, 0, c->funcs->conn_realtime(req->message.body.expiration),
                         INCR_MAX_STORAGE_LEN);
 
         if (it != NULL) {
@@ -1603,7 +1605,7 @@ static void process_bin_update(conn *c) {
     }
 
     it = item_alloc(key, nkey, req->message.body.flags,
-            realtime(req->message.body.expiration), vlen+2);
+            c->funcs->conn_realtime(req->message.body.expiration), vlen+2);
 
     if (it == 0) {
         if (! item_size_ok(nkey, req->message.body.flags, vlen + 2)) {
@@ -1718,7 +1720,7 @@ static void process_bin_flush(conn *c) {
     set_current_time();
 
     if (exptime > 0) {
-        settings.oldest_live = realtime(exptime) - 1;
+        settings.oldest_live = c->funcs->conn_realtime(exptime) - 1;
     } else {
         settings.oldest_live = current_time - 1;
     }
@@ -2452,7 +2454,7 @@ void process_update_command(conn *c, token_t *tokens, const size_t ntokens, int 
         stats_prefix_record_set(key, nkey);
     }
 
-    it = item_alloc(key, nkey, flags, realtime(exptime), vlen+2);
+    it = item_alloc(key, nkey, flags, c->funcs->conn_realtime(exptime), vlen+2);
 
     if (it == 0) {
         if (! item_size_ok(nkey, flags, vlen + 2))
@@ -2742,7 +2744,7 @@ void process_command(conn *c, char *command) {
           no delay is given at all.
         */
         if (exptime > 0)
-            settings.oldest_live = realtime(exptime) - 1;
+            settings.oldest_live = c->funcs->conn_realtime(exptime) - 1;
         else /* exptime == 0 */
             settings.oldest_live = current_time - 1;
         item_flush_expired();

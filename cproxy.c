@@ -95,6 +95,8 @@ void cproxy_process_upstream_ascii_nread(conn *c);
 void cproxy_process_downstream_ascii(conn *c, char *line);
 void cproxy_process_downstream_ascii_nread(conn *c);
 
+rel_time_t cproxy_realtime(const time_t exptime);
+
 size_t scan_tokens(char *command, token_t *tokens, const size_t max_tokens);
 
 char *nread_text(short x);
@@ -108,7 +110,8 @@ conn_funcs cproxy_upstream_funcs = {
     dispatch_bin_command,
     reset_cmd_handler,
     cproxy_process_upstream_ascii_nread,
-    NULL
+    NULL,
+    cproxy_realtime
 };
 
 conn_funcs cproxy_downstream_funcs = {
@@ -120,7 +123,8 @@ conn_funcs cproxy_downstream_funcs = {
     dispatch_bin_command,
     reset_cmd_handler,
     cproxy_process_downstream_ascii_nread,
-    cproxy_on_pause_downstream_conn
+    cproxy_on_pause_downstream_conn,
+    cproxy_realtime
 };
 
 /**
@@ -1116,6 +1120,13 @@ void cproxy_out_string_downstream(conn *c, const char *str) {
     assert(false);
 
     // TODO: Handle case when we're not in debug/assert mode.
+}
+
+rel_time_t cproxy_realtime(const time_t exptime) {
+    // The cproxy version of realtime doesn't do any
+    // time math munging, just pass through.
+    //
+    return (rel_time_t) exptime;
 }
 
 char *nread_text(short x) {

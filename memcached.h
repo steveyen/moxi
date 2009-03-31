@@ -320,6 +320,7 @@ struct conn_funcs {
     void (*conn_reset_cmd_handler)(conn *c);
     void (*conn_complete_nread)(conn *c);
     void (*conn_pause)(conn *c);
+    rel_time_t (*conn_realtime)(const time_t exptime);
 };
 
 struct conn {
