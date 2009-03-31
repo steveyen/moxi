@@ -2018,9 +2018,10 @@ static void write_and_free(conn *c, char *buf, int bytes) {
     }
 }
 
-static inline void set_noreply_maybe(conn *c, token_t *tokens, size_t ntokens)
-{
+void set_noreply_maybe(conn *c, token_t *tokens, size_t ntokens) {
     int noreply_index = ntokens - 2;
+
+    assert(noreply_index >= 0);
 
     /*
       NOTE: this function is not the first place where we are going to
@@ -2404,7 +2405,7 @@ static inline void process_get_command(conn *c, token_t *tokens, size_t ntokens,
     return;
 }
 
-static void process_update_command(conn *c, token_t *tokens, const size_t ntokens, int comm, bool handle_cas) {
+void process_update_command(conn *c, token_t *tokens, const size_t ntokens, int comm, bool handle_cas) {
     char *key;
     size_t nkey;
     unsigned int flags;

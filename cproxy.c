@@ -74,10 +74,13 @@ downstream  *cproxy_create_downstream(char *proxy_sect);
 int          cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread);
 void         cproxy_wait_for_downstream(proxy_td *ptd, conn *c);
 void         cproxy_assign_downstream(proxy_td *ptd);
-
-void         cproxy_process_upstream_ascii(conn *c, char *line);
-void         cproxy_process_downstream_ascii(conn *c, char *line);
+void         cproxy_pause_upstream_for_downstream(proxy_td *ptd, conn *upstream);
 int          cproxy_server_index(downstream *d, char *key, size_t key_length);
+
+void cproxy_process_upstream_ascii(conn *c, char *line);
+void cproxy_process_upstream_ascii_nread(conn *c);
+
+void cproxy_process_downstream_ascii(conn *c, char *line);
 
 size_t scan_tokens(char *command, token_t *tokens, const size_t max_tokens);
 
@@ -89,7 +92,7 @@ conn_funcs cproxy_upstream_funcs = {
     cproxy_process_upstream_ascii,
     dispatch_bin_command,
     reset_cmd_handler,
-    complete_nread
+    cproxy_process_upstream_ascii_nread
 };
 
 conn_funcs cproxy_downstream_funcs = {
@@ -444,6 +447,8 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
     assert(c != NULL);
     assert(c->next == NULL);
     assert(c->extra != NULL);
+    assert(c->cmd == -1);
+    assert(c->item == NULL);
     assert(line != NULL);
     assert(line == c->rcurr);
     assert(IS_PROXY(c->protocol));
@@ -451,7 +456,7 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
     if (settings.verbose > 1)
         fprintf(stderr, "<%d %s\n", c->sfd, line);
 
-    /* for commands set/add/replace, we build an item and read the data
+    /* For commands set/add/replace, we build an item and read the data
      * directly into it, then continue in nread_complete().
      */
     c->msgcurr = 0;
@@ -480,9 +485,7 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
     if (ntokens >= 3 &&
         (strncmp(cmd, "get", 3) == 0)) {
 
-        conn_set_state(c, conn_pause);
-        cproxy_wait_for_downstream(ptd, c);
-        cproxy_assign_downstream(ptd);
+        cproxy_pause_upstream_for_downstream(ptd, c);
 
     } else if ((ntokens == 6 || ntokens == 7) &&
                ((strncmp(cmd, "add", 3) == 0     && (comm = NREAD_ADD)) ||
@@ -491,14 +494,12 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
                 (strncmp(cmd, "prepend", 7) == 0 && (comm = NREAD_PREPEND)) ||
                 (strncmp(cmd, "append", 6) == 0  && (comm = NREAD_APPEND)) )) {
 
-        c->funcs->conn_out_string(c, "ERROR");
-        // process_update_command(c, tokens, ntokens, comm, false);
+        process_update_command(c, tokens, ntokens, comm, false);
 
     } else if ((ntokens == 7 || ntokens == 8) &&
                (strncmp(cmd, "cas", 3) == 0 && (comm = NREAD_CAS))) {
 
-        c->funcs->conn_out_string(c, "ERROR");
-        // process_update_command(c, tokens, ntokens, comm, true);
+        process_update_command(c, tokens, ntokens, comm, true);
 
     } else if ((ntokens == 4 || ntokens == 5) &&
                (strncmp(cmd, "incr", 4) == 0)) {
@@ -581,6 +582,34 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
 
     } else {
         c->funcs->conn_out_string(c, "ERROR");
+    }
+}
+
+/* We get here after reading the value in set/add/replace
+ * commands. The command has been stored in c->cmd, and
+ * the item is ready in c->item.
+ */
+void cproxy_process_upstream_ascii_nread(conn *c) {
+    assert(c != NULL);
+    assert(c->item != NULL);
+    assert(c->extra != NULL);
+
+    item *it = c->item;
+
+    // pthread_mutex_lock(&c->thread->stats.mutex);
+    // c->thread->stats.slab_stats[it->slabs_clsid].set_cmds++;
+    // pthread_mutex_unlock(&c->thread->stats.mutex);
+
+    if (strncmp(ITEM_data(it) + it->nbytes - 2, "\r\n", 2) == 0) {
+        proxy_td *ptd = c->extra;
+        if (ptd == NULL) {
+            c->funcs->conn_out_string(c, "SERVER_ERROR expected proxy_td");
+            return;
+        }
+
+        cproxy_pause_upstream_for_downstream(ptd, c);
+    } else {
+        c->funcs->conn_out_string(c, "CLIENT_ERROR bad data chunk");
     }
 }
 
@@ -826,4 +855,13 @@ void cproxy_release_downstream_conn(downstream *d, conn *c) {
         cproxy_release_downstream(d->ptd, d);
         cproxy_assign_downstream(d->ptd);
     }
+}
+
+void cproxy_pause_upstream_for_downstream(proxy_td *ptd, conn *upstream) {
+    assert(ptd != NULL);
+    assert(upstream != NULL);
+
+    conn_set_state(upstream, conn_pause);
+    cproxy_wait_for_downstream(ptd, upstream);
+    cproxy_assign_downstream(ptd);
 }
