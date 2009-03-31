@@ -84,6 +84,7 @@ void         cproxy_wait_for_downstream(proxy_td *ptd, conn *c);
 void         cproxy_assign_downstream(proxy_td *ptd);
 bool         cproxy_forward_downstream(downstream *d);
 void         cproxy_pause_upstream_for_downstream(proxy_td *ptd, conn *upstream);
+void         cproxy_out_string_downstream(conn *c, const char *str);
 conn        *cproxy_find_downstream_conn(downstream *d, char *key, int key_length);
 int          cproxy_server_index(downstream *d, char *key, size_t key_length);
 
@@ -114,7 +115,7 @@ conn_funcs cproxy_downstream_funcs = {
     cproxy_init_downstream_conn,
     cproxy_on_close_downstream_conn,
     add_bytes_read,
-    out_string,
+    cproxy_out_string_downstream,
     cproxy_process_downstream_ascii,
     dispatch_bin_command,
     reset_cmd_handler,
@@ -619,11 +620,60 @@ void cproxy_process_downstream_ascii(conn *c, char *line) {
     assert(IS_PROXY(uc->protocol));
 
     if (strncmp(line, "VALUE ", 6) == 0) {
-        token_t tokens[MAX_TOKENS];
-        size_t  ntokens = scan_tokens(line, tokens, MAX_TOKENS);
+        token_t      tokens[MAX_TOKENS];
+        size_t       ntokens;
+        unsigned int flags;
+        int          vlen;
+        uint64_t     cas = 0;
 
-        if (ntokens > 1) {
+        ntokens = scan_tokens(line, tokens, MAX_TOKENS);
+        if (ntokens >= 5 && // Accounts for extra termimation token.
+            ntokens <= 6 &&
+            tokens[KEY_TOKEN].length <= KEY_MAX_LENGTH &&
+            safe_strtoul(tokens[2].value, (uint32_t *) &flags) &&
+            safe_strtoul(tokens[3].value, (uint32_t *) &vlen)) {
+            char  *key  = tokens[KEY_TOKEN].value;
+            size_t nkey = tokens[KEY_TOKEN].length;
+
+            item *it = item_alloc(key, nkey, flags, 0, vlen + 2);
+            if (it != NULL) {
+                if (ntokens == 5 ||
+                    safe_strtoull(tokens[4].value, &cas)) {
+                    ITEM_set_cas(it, cas);
+
+                    c->item = it;
+                    c->ritem = ITEM_data(it);
+                    c->rlbytes = it->nbytes;
+                    c->cmd = -1;
+
+                    conn_set_state(c, conn_nread);
+
+                    return; // Success.
+                } else {
+                    // TODO: Could not parse cas from line.
+                }
+            } else {
+                // if (item_size_ok(nkey, flags, vlen + 2)) {
+                // }
+
+                c->sbytes = vlen + 2;
+                conn_set_state(c, conn_swallow);
+            }
+
+            if (it != NULL)
+                item_remove(it);
         }
+
+        uc->funcs->conn_out_string(c, "SERVER_ERROR bad proxy connection");
+
+        // TODO: Need to swallow on c.
+
+        if (!update_event(uc, EV_WRITE | EV_PERSIST)) {
+            if (settings.verbose > 0)
+                fprintf(stderr, "Couldn't update upstream write event\n");
+            conn_set_state(uc, conn_closing);
+        }
+    } else if (strncmp(line, "END", 3) == 0) {
     } else {
         uc->funcs->conn_out_string(uc, line);
 
@@ -787,7 +837,10 @@ bool cproxy_forward_downstream(downstream *d) {
                     assert(IS_ASCII(c->protocol));
                     assert(IS_PROXY(c->protocol));
 
-                    c->funcs->conn_out_string(c, command);
+                    // Cannot use the c->funcs->conn_out_string here.
+                    // See the cproxy_out_string_downstream() comments.
+                    //
+                    out_string(c, command);
 
                     if (settings.verbose > 0)
                         fprintf(stderr, "forwarding from %d to %d, noreply %d\n", uc->sfd, c->sfd, uc->noreply);
@@ -946,6 +999,17 @@ void cproxy_pause_upstream_for_downstream(proxy_td *ptd, conn *upstream) {
     conn_set_state(upstream, conn_pause);
     cproxy_wait_for_downstream(ptd, upstream);
     cproxy_assign_downstream(ptd);
+}
+
+void cproxy_out_string_downstream(conn *c, const char *str) {
+    // This implementation is meant to catch incorrect
+    // c->funcs->conn_out_string() calls from
+    // drive_machine (which should never be writing
+    // to the downstream conn).
+    //
+    assert(false);
+
+    // TODO: Handle case when we're not in debug/assert mode.
 }
 
 char *nread_text(short x) {
