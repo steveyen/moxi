@@ -57,8 +57,6 @@ struct downstream {
 
     conn **downstream_conns; // Wraps the fd's of mst with conns.
     conn  *upstream_conn;    // Non-NULL when downstream is reserved.
-    char  *upstream_suffix;  // Suffix to write when no more replies,
-                             // when reply_expect goes down to 0.
 
     item  *reply_item_head;  // To serialize scatter-gather response,
     item  *reply_item_tail;  // such as during multi-get.
@@ -362,13 +360,11 @@ downstream *cproxy_reserve_downstream(proxy_td *ptd) {
     }
 
     assert(d->upstream_conn == NULL);
-    assert(d->upstream_suffix == NULL);
     assert(d->reply_item_head == NULL);
     assert(d->reply_item_tail == NULL);
     assert(d->reply_expect == 0);
 
     d->upstream_conn = NULL;
-    d->upstream_suffix = NULL;
     d->reply_item_head = NULL;
     d->reply_item_tail = NULL;
     d->reply_expect = 0;
@@ -385,22 +381,21 @@ void cproxy_release_downstream(downstream *d) {
     assert(d->next == NULL);
 
     d->upstream_conn = NULL;
-    d->upstream_suffix = NULL;
 
     // Back onto the free/available downstream list.
     //
     d->next = d->ptd->downstream_free;
     d->ptd->downstream_free = d;
 
+    d->reply_expect = 0;
+
     // TODO: Should cleanup here rather than just assert?
     //
     assert(d->reply_item_head == NULL);
     assert(d->reply_item_tail == NULL);
-    assert(d->reply_expect == 0);
 
     d->reply_item_head = NULL;
     d->reply_item_tail = NULL;
-    d->reply_expect = 0;
 }
 
 downstream *cproxy_create_downstream(char *config) {
@@ -861,7 +856,6 @@ void cproxy_assign_downstream(proxy_td *ptd) {
 
         assert(d->next == NULL);
         assert(d->upstream_conn == NULL);
-        assert(d->upstream_suffix == NULL);
         assert(d->reply_expect == 0);
         assert(d->reply_item_head == NULL);
         assert(d->reply_item_tail == NULL);
@@ -1076,15 +1070,7 @@ void cproxy_release_downstream_conn(downstream *d, conn *c) {
                 c->sfd, d->reply_expect);
 
     d->reply_expect--;
-    if (d->reply_expect <= 0) {
-        d->reply_expect = 0; // Can go < 0 when noreply.
-
-        if (d->upstream_conn != NULL && // No upstream_conn when noreply.
-            d->upstream_suffix != NULL) {
-            add_iov(d->upstream_conn, d->upstream_suffix, strlen(d->upstream_suffix));
-            d->upstream_suffix = NULL; // Assuming static string, like "END\r\n", no free() needed.
-        }
-
+    if (d->reply_expect <= 0) { // Might be negative when noreply.
         cproxy_release_downstream(d);
         cproxy_assign_downstream(d->ptd);
     }
