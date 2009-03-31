@@ -86,6 +86,8 @@ void cproxy_process_downstream_ascii(conn *c, char *line);
 
 size_t scan_tokens(char *command, token_t *tokens, const size_t max_tokens);
 
+char *nread_text(short x);
+
 conn_funcs cproxy_upstream_funcs = {
     cproxy_init_upstream_conn,
     cproxy_on_close_upstream_conn,
@@ -650,52 +652,6 @@ void cproxy_process_downstream_ascii(conn *c, char *line) {
     }
 }
 
-/* Tokenize the command string by updating the token array
- * with pointers to start of each token and length.
- * Does not modify the input command string.
- *
- * Returns total number of tokens.  The last valid token is the terminal
- * token (value points to the first unprocessed character of the string and
- * length zero).
- *
- * Usage example:
- *
- *  while (scan_tokens(command, tokens, max_tokens) > 0) {
- *      for(int ix = 0; tokens[ix].length != 0; ix++) {
- *          ...
- *      }
- *      command = tokens[ix].value;
- *  }
- */
-size_t scan_tokens(char *command, token_t *tokens, const size_t max_tokens) {
-    char *s, *e;
-    size_t ntokens = 0;
-
-    assert(command != NULL && tokens != NULL && max_tokens > 1);
-
-    for (s = e = command; ntokens < max_tokens - 1; ++e) {
-        if (*e == '\0' || *e == ' ') {
-            if (s != e) {
-                tokens[ntokens].value = s;
-                tokens[ntokens].length = e - s;
-                ntokens++;
-            }
-            if (*e == '\0')
-                break; /* string end */
-            s = e + 1;
-        }
-    }
-
-    /* If we scanned the whole string, the terminal value pointer is null,
-     * otherwise it is the first unprocessed character.
-     */
-    tokens[ntokens].value = (*e == '\0' ? NULL : e);
-    tokens[ntokens].length = 0;
-    ntokens++;
-
-    return ntokens;
-}
-
 conn *cproxy_find_downstream_conn(downstream *d, char *key, int key_length) {
     assert(d != NULL);
     assert(d->downstream_conns != NULL);
@@ -858,7 +814,11 @@ bool cproxy_forward_downstream(downstream *d) {
             if (c != NULL) {
                 assert(c->item == NULL);
 
-                if (add_iov(c, "set ", 4) == 0 &&
+                char *verb = nread_text(uc->cmd);
+
+                assert(verb != NULL);
+
+                if (add_iov(c, verb, 4) == 0 &&
                     add_iov(c, ITEM_key(it), it->nkey) == 0 &&
                     add_iov(c, " 0 ", 3) == 0 &&
                     add_iov(c, ITEM_suffix(it), it->nsuffix + it->nbytes) == 0) {
@@ -929,5 +889,76 @@ void cproxy_pause_upstream_for_downstream(proxy_td *ptd, conn *upstream) {
     conn_set_state(upstream, conn_pause);
     cproxy_wait_for_downstream(ptd, upstream);
     cproxy_assign_downstream(ptd);
+}
+
+char *nread_text(short x) {
+    char *rv = NULL;
+    switch(x) {
+    case NREAD_SET:
+        rv = "set ";
+        break;
+    case NREAD_ADD:
+        rv = "add ";
+        break;
+    case NREAD_REPLACE:
+        rv = "replace ";
+        break;
+    case NREAD_APPEND:
+        rv = "append ";
+        break;
+    case NREAD_PREPEND:
+        rv = "prepend ";
+        break;
+    case NREAD_CAS:
+        rv = "cas ";
+        break;
+    }
+    return rv;
+}
+
+/* Tokenize the command string by updating the token array
+ * with pointers to start of each token and length.
+ * Does not modify the input command string.
+ *
+ * Returns total number of tokens.  The last valid token is the terminal
+ * token (value points to the first unprocessed character of the string and
+ * length zero).
+ *
+ * Usage example:
+ *
+ *  while (scan_tokens(command, tokens, max_tokens) > 0) {
+ *      for(int ix = 0; tokens[ix].length != 0; ix++) {
+ *          ...
+ *      }
+ *      command = tokens[ix].value;
+ *  }
+ */
+size_t scan_tokens(char *command, token_t *tokens, const size_t max_tokens) {
+    char *s, *e;
+    size_t ntokens = 0;
+
+    assert(command != NULL && tokens != NULL && max_tokens > 1);
+
+    for (s = e = command; ntokens < max_tokens - 1; ++e) {
+        if (*e == '\0' || *e == ' ') {
+            if (s != e) {
+                tokens[ntokens].value = s;
+                tokens[ntokens].length = e - s;
+                ntokens++;
+            }
+            if (*e == '\0')
+                break; /* string end */
+            s = e + 1;
+        }
+    }
+
+    /* If we scanned the whole string, the terminal value pointer is null,
+     * otherwise it is the first unprocessed character.
+     */
+    tokens[ntokens].value = (*e == '\0' ? NULL : e);
+    tokens[ntokens].length = 0;
+    ntokens++;
+
+    return ntokens;
 }
 
