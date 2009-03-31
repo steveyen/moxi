@@ -504,28 +504,23 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
         process_update_command(c, tokens, ntokens, comm, true);
 
     } else if ((ntokens == 4 || ntokens == 5) &&
-               (strncmp(cmd, "incr", 4) == 0)) {
+               (strncmp(cmd, "incr", 4) == 0 ||
+                strncmp(cmd, "decr", 4) == 0)) {
 
-        c->funcs->conn_out_string(c, "ERROR");
-        // process_arithmetic_command(c, tokens, ntokens, 1);
+        set_noreply_maybe(c, tokens, ntokens);
+        cproxy_pause_upstream_for_downstream(ptd, c);
+
+    } else if (ntokens >= 3 && ntokens <= 4 &&
+               (strncmp(cmd, "delete", 6) == 0)) {
+
+        set_noreply_maybe(c, tokens, ntokens);
+        cproxy_pause_upstream_for_downstream(ptd, c);
 
     } else if (ntokens >= 3 &&
                (strncmp(cmd, "gets", 4) == 0)) {
 
         c->funcs->conn_out_string(c, "ERROR");
         // process_get_command(c, tokens, ntokens, true);
-
-    } else if ((ntokens == 4 || ntokens == 5) &&
-               (strncmp(cmd, "decr", 4) == 0)) {
-
-        c->funcs->conn_out_string(c, "ERROR");
-        // process_arithmetic_command(c, tokens, ntokens, 0);
-
-    } else if (ntokens >= 3 && ntokens <= 4 &&
-               (strncmp(cmd, "delete", 6) == 0)) {
-
-        c->funcs->conn_out_string(c, "ERROR");
-        // process_delete_command(c, tokens, ntokens);
 
     } else if (ntokens >= 2 &&
                (strncmp(cmd, "stats", 5) == 0)) {
