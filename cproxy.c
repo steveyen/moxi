@@ -818,7 +818,7 @@ bool cproxy_forward_downstream(downstream *d) {
 
                 assert(verb != NULL);
 
-                if (add_iov(c, verb, 4) == 0 &&
+                if (add_iov(c, verb, strlen(verb)) == 0 &&
                     add_iov(c, ITEM_key(it), it->nkey) == 0 &&
                     add_iov(c, " 0 ", 3) == 0 &&
                     add_iov(c, ITEM_suffix(it), it->nsuffix + it->nbytes) == 0) {
