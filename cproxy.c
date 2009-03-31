@@ -75,7 +75,7 @@ int          cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread);
 void         cproxy_wait_for_downstream(proxy_td *ptd, conn *c);
 void         cproxy_assign_downstream(proxy_td *ptd);
 void         cproxy_pause_upstream_for_downstream(proxy_td *ptd, conn *upstream);
-conn        *cproxy_downstream_conn(downstream *d, char *key, int key_length);
+conn        *cproxy_find_downstream_conn(downstream *d, char *key, int key_length);
 int          cproxy_server_index(downstream *d, char *key, size_t key_length);
 
 void cproxy_process_upstream_ascii(conn *c, char *line);
@@ -713,7 +713,7 @@ size_t scan_tokens(char *command, token_t *tokens, const size_t max_tokens) {
     return ntokens;
 }
 
-conn *cproxy_downstream_conn(downstream *d, char *key, int key_length) {
+conn *cproxy_find_downstream_conn(downstream *d, char *key, int key_length) {
     assert(d != NULL);
     assert(d->downstream_conns != NULL);
     assert(key != NULL);
@@ -721,8 +721,20 @@ conn *cproxy_downstream_conn(downstream *d, char *key, int key_length) {
 
     int s = cproxy_server_index(d, key, key_length);
     if (s >= 0 &&
-        s < memcached_server_count(&d->mst))
-        return d->downstream_conns[s];
+        s < memcached_server_count(&d->mst)) {
+        conn *c = d->downstream_conns[s];
+
+        assert(c->state == conn_pause);
+
+        c->msgcurr = 0; // TODO: Mem leak just by blowing these to 0?
+        c->msgused = 0;
+        c->iovused = 0;
+
+        if (add_msghdr(c) == 0)
+            return c;
+
+        // TODO: Need separate error msg/code for add_msghdr failure.
+    }
 
     return NULL;
 }
@@ -807,31 +819,22 @@ void cproxy_assign_downstream(proxy_td *ptd) {
                 int      key_len = tokens[KEY_TOKEN].length;
 
                 if (ntokens > 1) {
-                    conn *c = cproxy_downstream_conn(d, key, key_len);
+                    conn *c = cproxy_find_downstream_conn(d, key, key_len);
                     if (c != NULL) {
-                        assert(c->state == conn_pause);
+                        char *upstream_suffix = NULL;
 
-                        c->msgcurr = 0; // TODO: Mem leak just by blowing these to 0?
-                        c->msgused = 0;
-                        c->iovused = 0;
+                        c->funcs->conn_out_string(c, command);
 
-                        if (add_msghdr(c) == 0) {
-                            char *upstream_suffix = NULL;
+                        if (update_event(c, EV_WRITE | EV_PERSIST)) {
+                            d->reply_expect = 1;
+                            d->upstream_suffix = upstream_suffix;
+                            continue;
+                        }
 
-                            c->funcs->conn_out_string(c, command);
+                        if (settings.verbose > 0)
+                            fprintf(stderr, "Couldn't update cproxy write event\n");
 
-                            if (update_event(c, EV_WRITE | EV_PERSIST)) {
-                                d->reply_expect = 1;
-                                d->upstream_suffix = upstream_suffix;
-                                continue;
-                            }
-
-                            if (settings.verbose > 0)
-                                fprintf(stderr, "Couldn't update cproxy write event\n");
-
-                            conn_set_state(c, conn_closing);
-                        } else
-                            c->funcs->conn_out_string(c, "SERVER_ERROR out of memory preparing response");
+                        conn_set_state(c, conn_closing);
                     }
                 }
             } else {
@@ -841,8 +844,22 @@ void cproxy_assign_downstream(proxy_td *ptd) {
 
                 assert(it != NULL);
 
-                conn *c = cproxy_downstream_conn(d, ITEM_key(it), it->nkey);
+                conn *c = cproxy_find_downstream_conn(d, ITEM_key(it), it->nkey);
                 if (c != NULL) {
+                    char *upstream_suffix = NULL;
+
+                    // c->funcs->conn_out_string(c, command);
+
+                    if (update_event(c, EV_WRITE | EV_PERSIST)) {
+                        d->reply_expect = 1;
+                        d->upstream_suffix = upstream_suffix;
+                        continue;
+                    }
+
+                    if (settings.verbose > 0)
+                        fprintf(stderr, "Couldn't update cproxy write event\n");
+
+                    conn_set_state(c, conn_closing);
                 }
             }
         }
