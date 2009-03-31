@@ -2391,6 +2391,7 @@ static inline void process_get_command(conn *c, token_t *tokens, size_t ntokens,
     }
     else {
         conn_set_state(c, conn_mwrite);
+        c->write_and_go = conn_new_cmd;
         c->msgcurr = 0;
     }
 
@@ -3335,12 +3336,7 @@ static void drive_machine(conn *c) {
                         c->suffixcurr++;
                         c->suffixleft--;
                     }
-                    /* XXX:  I don't know why this wasn't the general case */
-                    if(c->protocol == binary_prot) {
-                        conn_set_state(c, c->write_and_go);
-                    } else {
-                        conn_set_state(c, conn_new_cmd);
-                    }
+                    conn_set_state(c, c->write_and_go);
                 } else if (c->state == conn_write) {
                     if (c->write_and_free) {
                         free(c->write_and_free);
