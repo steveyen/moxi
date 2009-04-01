@@ -497,6 +497,8 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
     if (ntokens >= 3 &&
         (strncmp(cmd, "get", 3) == 0)) {
 
+        // Handles get and gets.
+        //
         cproxy_pause_upstream_for_downstream(ptd, c);
 
     } else if ((ntokens == 6 || ntokens == 7) &&
@@ -526,20 +528,16 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
         set_noreply_maybe(c, tokens, ntokens);
         cproxy_pause_upstream_for_downstream(ptd, c);
 
-    } else if (ntokens >= 3 &&
-               (strncmp(cmd, "gets", 4) == 0)) {
+    } else if (ntokens >= 2 && ntokens <= 4 &&
+               (strncmp(cmd, "flush_all", 9) == 0)) {
 
-        c->funcs->conn_out_string(c, "ERROR");
+        set_noreply_maybe(c, tokens, ntokens);
+        cproxy_pause_upstream_for_downstream(ptd, c);
 
     } else if (ntokens >= 2 &&
                (strncmp(cmd, "stats", 5) == 0)) {
 
-        c->funcs->conn_out_string(c, "ERROR");
-
-    } else if (ntokens >= 2 && ntokens <= 4 &&
-               (strncmp(cmd, "flush_all", 9) == 0)) {
-
-        c->funcs->conn_out_string(c, "ERROR");
+        c->funcs->conn_out_string(c, "ERROR"); // TODO
 
     } else if (ntokens == 2 &&
                (strncmp(cmd, "version", 7) == 0)) {
