@@ -79,6 +79,7 @@ int          cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread);
 void         cproxy_wait_for_downstream(proxy_td *ptd, conn *c);
 void         cproxy_assign_downstream(proxy_td *ptd);
 bool         cproxy_forward_downstream(downstream *d);
+bool         cproxy_forward_simple_downstream(downstream *d, char *command, conn *uc);
 bool         cproxy_forward_item_downstream(downstream *d, short cmd, item *it);
 void         cproxy_pause_upstream_for_downstream(proxy_td *ptd, conn *upstream);
 void         cproxy_out_string_downstream(conn *c, const char *str);
@@ -903,64 +904,75 @@ bool cproxy_forward_downstream(downstream *d) {
         assert(d->downstream_conns != NULL);
 
         if (uc->cmd == -1) {
-            // Simple, one-liner command.
-            //
-            assert(uc->item == NULL);
-
-            char    *command = uc->rcurr;
-            token_t  tokens[MAX_TOKENS];
-            size_t   ntokens = scan_tokens(command, tokens, MAX_TOKENS);
-            char    *key     = tokens[KEY_TOKEN].value;
-            int      key_len = tokens[KEY_TOKEN].length;
-
-            // TODO: Handle multi-get.
-            //
-            if (ntokens > 1) {
-                conn *c = cproxy_find_downstream_conn(d, key, key_len);
-                if (c != NULL) {
-                    assert(c->item == NULL);
-                    assert(c->state == conn_pause);
-                    assert(IS_ASCII(c->protocol));
-                    assert(IS_PROXY(c->protocol));
-                    assert(c->ilist != NULL);
-                    assert(c->isize > 0);
-
-                    c->icurr = c->ilist;
-                    c->ileft = 0;
-
-                    // Cannot use the c->funcs->conn_out_string here.
-                    // See the cproxy_out_string_downstream() comments.
-                    //
-                    out_string(c, command);
-
-                    if (settings.verbose > 0)
-                        fprintf(stderr,
-                                "forwarding from %d to %d, noreply %d\n",
-                                uc->sfd, c->sfd, uc->noreply);
-
-                    if (update_event(c, EV_WRITE | EV_PERSIST)) {
-                        if (uc->noreply == false) {
-                            d->reply_expect = 1; // TODO: Need timeout?
-                        } else {
-                            uc->noreply      = false;
-                            d->reply_expect  = 0;
-                            d->upstream_conn = NULL;
-                            c->write_and_go  = conn_pause;
-
-                            cproxy_reset_upstream(uc);
-                        }
-                        return true;
-                    }
-
-                    if (settings.verbose > 0)
-                        fprintf(stderr,
-                                "Couldn't update cproxy write event\n");
-
-                    conn_set_state(c, conn_closing);
-                }
-            }
+            return cproxy_forward_simple_downstream(d, uc->rcurr, uc);
         } else {
             return cproxy_forward_item_downstream(d, uc->cmd, uc->item);
+        }
+    }
+
+    return false;
+}
+
+/* Forward a simple one-liner command downstream.
+ * The response, though, might be a simple line or
+ * multiple VALUE+END lines.
+ */
+bool cproxy_forward_simple_downstream(downstream *d, char *command, conn *uc) {
+    assert(d != NULL);
+    assert(d->downstream_conns != NULL);
+    assert(command != NULL);
+    assert(uc != NULL);
+    assert(uc->item == NULL);
+
+    token_t  tokens[MAX_TOKENS];
+    size_t   ntokens = scan_tokens(command, tokens, MAX_TOKENS);
+    char    *key     = tokens[KEY_TOKEN].value;
+    int      key_len = tokens[KEY_TOKEN].length;
+
+    // TODO: Handle multi-get.
+    //
+    if (ntokens > 1) {
+        conn *c = cproxy_find_downstream_conn(d, key, key_len);
+        if (c != NULL) {
+            assert(c->item == NULL);
+            assert(c->state == conn_pause);
+            assert(IS_ASCII(c->protocol));
+            assert(IS_PROXY(c->protocol));
+            assert(c->ilist != NULL);
+            assert(c->isize > 0);
+
+            c->icurr = c->ilist;
+            c->ileft = 0;
+
+            // Cannot use the c->funcs->conn_out_string here.
+            // See the cproxy_out_string_downstream() comments.
+            //
+            out_string(c, command);
+
+            if (settings.verbose > 0)
+                fprintf(stderr,
+                        "forwarding to %d, noreply %d\n",
+                        c->sfd, uc->noreply);
+
+            if (update_event(c, EV_WRITE | EV_PERSIST)) {
+                if (uc->noreply == false) {
+                    d->reply_expect = 1; // TODO: Need timeout?
+                } else {
+                    uc->noreply      = false;
+                    d->reply_expect  = 0;
+                    d->upstream_conn = NULL;
+                    c->write_and_go  = conn_pause;
+
+                    cproxy_reset_upstream(uc);
+                }
+                return true;
+            }
+
+            if (settings.verbose > 0)
+                fprintf(stderr,
+                        "Couldn't update cproxy write event\n");
+
+            conn_set_state(c, conn_closing);
         }
     }
 
@@ -976,6 +988,8 @@ bool cproxy_forward_item_downstream(downstream *d, short cmd, item *it) {
 
     assert(it != NULL);
 
+    // Assuming we're already connected to downstream.
+    //
     conn *c = cproxy_find_downstream_conn(d, ITEM_key(it), it->nkey);
     if (c != NULL) {
         assert(c->item == NULL);
@@ -994,8 +1008,11 @@ bool cproxy_forward_item_downstream(downstream *d, short cmd, item *it) {
 
         if (add_iov(c, verb, strlen(verb)) == 0 &&
             add_iov(c, ITEM_key(it), it->nkey) == 0 &&
-            add_iov(c, " 0 ", 3) == 0 &&
+            add_iov(c, " 0 ", 3) == 0 && // TODO: Handle flags/expiration.
             add_iov(c, ITEM_suffix(it), it->nsuffix + it->nbytes) == 0) {
+            // TODO: Handle cas.
+            // TODO: Handle noreply.
+            //
             conn_set_state(c, conn_mwrite);
             c->write_and_go = conn_new_cmd;
 
