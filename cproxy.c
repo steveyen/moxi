@@ -702,6 +702,29 @@ void cproxy_process_downstream_ascii(conn *c, char *line) {
     } else if (strncmp(line, "END", 3) == 0 ||
                strncmp(line, "OK", 2) == 0) {
         conn_set_state(c, conn_pause);
+    } else if (strncmp(line, "STAT ", 5) == 0) {
+        if (uc != NULL) {
+            if (uc->suffixleft >= uc->suffixsize) {
+                char **new_suffix_list =
+                    realloc(c->suffixlist,
+                            sizeof(char *) * c->suffixsize * 2);
+                if (new_suffix_list) {
+                    c->suffixsize *= 2;
+                    c->suffixlist = new_suffix_list;
+                    c->suffixcurr = new_suffix_list;
+                }
+            }
+
+            if (uc->suffixleft < uc->suffixsize) {
+                char *suffix = uc->suffixlist[uc->suffixleft];
+                strcpy(suffix, line);
+                uc->suffixleft++;
+
+                if (add_iov(uc, suffix, strlen(suffix)) == 0) {
+                }
+            }
+        }
+        conn_set_state(c, conn_new_cmd);
     } else {
         conn_set_state(c, conn_pause);
 
@@ -763,11 +786,11 @@ void cproxy_process_downstream_ascii_nread(conn *c) {
                     if (new_list) {
                         uc->isize *= 2;
                         uc->ilist = new_list;
+                        uc->icurr = new_list;
                     }
                 }
 
                 if (uc->ileft < uc->isize) {
-                    uc->icurr = uc->ilist;
                     uc->ilist[uc->ileft] = it;
                     uc->ileft++;
 
@@ -816,6 +839,19 @@ conn *cproxy_find_downstream_conn(downstream *d, char *key, int key_length) {
 
 bool cproxy_prep_conn_for_write(conn *c) {
     if (c != NULL) {
+        assert(c->item == NULL);
+        assert(IS_ASCII(c->protocol));
+        assert(IS_PROXY(c->protocol));
+        assert(c->ilist != NULL);
+        assert(c->isize > 0);
+        assert(c->suffixlist != NULL);
+        assert(c->suffixsize > 0);
+
+        c->icurr      = c->ilist;
+        c->ileft      = 0;
+        c->suffixcurr = c->suffixlist;
+        c->suffixleft = 0;
+
         c->msgcurr = 0; // TODO: Mem leak just by blowing these to 0?
         c->msgused = 0;
         c->iovused = 0;
@@ -980,15 +1016,7 @@ bool cproxy_forward_simple_downstream(downstream *d, char *command, conn *uc) {
     conn *c = cproxy_find_downstream_conn(d, key, key_len);
     if (c != NULL &&
         cproxy_prep_conn_for_write(c)) {
-        assert(c->item == NULL);
         assert(c->state == conn_pause);
-        assert(IS_ASCII(c->protocol));
-        assert(IS_PROXY(c->protocol));
-        assert(c->ilist != NULL);
-        assert(c->isize > 0);
-
-        c->icurr = c->ilist;
-        c->ileft = 0;
 
         out_string(c, command);
 
@@ -1030,8 +1058,10 @@ bool cproxy_forward_multiget_downstream(downstream *d, char *command, conn *uc) 
     int nwrite = 0;
     int nconns = memcached_server_count(&d->mst);
 
-    for (int i = 0; i < nconns; i++)
+    for (int i = 0; i < nconns; i++) {
         cproxy_prep_conn_for_write(d->downstream_conns[i]);
+        assert(d->downstream_conns[i]->state == conn_pause);
+    }
 
     char *space = strchr(command, ' ');
     assert(space > command);
@@ -1138,15 +1168,9 @@ bool cproxy_broadcast_downstream(downstream *d, char *command, conn *uc, char *s
 
     for (int i = 0; i < nconns; i++) {
         conn *c = d->downstream_conns[i];
-        if (c != NULL) {
-            assert(c->item == NULL);
+        if (c != NULL &&
+            cproxy_prep_conn_for_write(c)) {
             assert(c->state == conn_pause);
-            assert(IS_ASCII(c->protocol));
-            assert(IS_PROXY(c->protocol));
-            assert(c->ilist != NULL);
-            assert(c->isize > 0);
-
-            cproxy_prep_conn_for_write(c);
 
             out_string(c, command);
 
@@ -1196,15 +1220,7 @@ bool cproxy_forward_item_downstream(downstream *d, short cmd, item *it) {
     conn *c = cproxy_find_downstream_conn(d, ITEM_key(it), it->nkey);
     if (c != NULL &&
         cproxy_prep_conn_for_write(c)) {
-        assert(c->item == NULL);
         assert(c->state == conn_pause);
-        assert(IS_ASCII(c->protocol));
-        assert(IS_PROXY(c->protocol));
-        assert(c->ilist != NULL);
-        assert(c->isize > 0);
-
-        c->icurr = c->ilist;
-        c->ileft = 0;
 
         char *verb = nread_text(cmd);
 
