@@ -101,6 +101,9 @@ void cproxy_process_downstream_ascii_nread(conn *c);
 
 rel_time_t cproxy_realtime(const time_t exptime);
 
+bool  add_conn_item(conn *c, item *it);
+char *add_conn_suffix(conn *c);
+
 size_t scan_tokens(char *command, token_t *tokens, const size_t max_tokens);
 
 char *nread_text(short x);
@@ -704,25 +707,6 @@ void cproxy_process_downstream_ascii(conn *c, char *line) {
         conn_set_state(c, conn_pause);
     } else if (strncmp(line, "STAT ", 5) == 0) {
         if (uc != NULL) {
-            if (uc->suffixleft >= uc->suffixsize) {
-                char **new_suffix_list =
-                    realloc(c->suffixlist,
-                            sizeof(char *) * c->suffixsize * 2);
-                if (new_suffix_list) {
-                    c->suffixsize *= 2;
-                    c->suffixlist = new_suffix_list;
-                    c->suffixcurr = new_suffix_list;
-                }
-            }
-
-            if (uc->suffixleft < uc->suffixsize) {
-                char *suffix = uc->suffixlist[uc->suffixleft];
-                strcpy(suffix, line);
-                uc->suffixleft++;
-
-                if (add_iov(uc, suffix, strlen(suffix)) == 0) {
-                }
-            }
         }
         conn_set_state(c, conn_new_cmd);
     } else {
@@ -779,34 +763,17 @@ void cproxy_process_downstream_ascii_nread(conn *c) {
         if (strncmp(ITEM_data(it) + it->nbytes - 2, "\r\n", 2) == 0) {
             if (add_iov(uc, "VALUE ", 6) == 0 &&
                 add_iov(uc, ITEM_key(it), it->nkey) == 0 &&
-                add_iov(uc, ITEM_suffix(it), it->nsuffix + it->nbytes) == 0) {
-                if (uc->ileft >= uc->isize) {
-                    item **new_list =
-                        realloc(c->ilist, sizeof(item *) * uc->isize * 2);
-                    if (new_list) {
-                        uc->isize *= 2;
-                        uc->ilist = new_list;
-                        uc->icurr = new_list;
-                    }
-                }
+                add_iov(uc, ITEM_suffix(it), it->nsuffix + it->nbytes) == 0 &&
+                add_conn_item(uc, it)) {
+                if (settings.verbose > 1)
+                    fprintf(stderr,
+                            "<%d cproxy_process_downstream_ascii success\n",
+                            c->sfd);
 
-                if (uc->ileft < uc->isize) {
-                    uc->ilist[uc->ileft] = it;
-                    uc->ileft++;
-
-                    if (settings.verbose > 1)
-                        fprintf(stderr,
-                                "<%d cproxy_process_downstream_ascii success\n",
-                                c->sfd);
-
-                    return; // Success.
-                } else {
-                    if (settings.verbose > 1)
-                        fprintf(stderr, "proxy out of response ilist memory");
-                }
+                return; // Success.
             } else {
                 if (settings.verbose > 1)
-                    fprintf(stderr, "proxy out of response iov memory");
+                    fprintf(stderr, "proxy out of response memory");
             }
         } else {
             if (settings.verbose > 1)
@@ -1350,6 +1317,63 @@ rel_time_t cproxy_realtime(const time_t exptime) {
     // time math munging, just pass through.
     //
     return (rel_time_t) exptime;
+}
+
+bool add_conn_item(conn *c, item *it) {
+    assert(it != NULL);
+    assert(c != NULL);
+    assert(c->ilist != NULL);
+    assert(c->icurr != NULL);
+    assert(c->isize > 0);
+
+    if (c->ileft >= c->isize) {
+        item **new_list =
+            realloc(c->ilist, sizeof(item *) * c->isize * 2);
+        if (new_list) {
+            c->isize *= 2;
+            c->ilist = new_list;
+            c->icurr = new_list;
+        }
+    }
+
+    if (c->ileft < c->isize) {
+        c->ilist[c->ileft] = it;
+        c->ileft++;
+
+        return true;
+    }
+
+    return false;
+}
+
+char *add_conn_suffix(conn *c) {
+    assert(c != NULL);
+    assert(c->suffixlist != NULL);
+    assert(c->suffixcurr != NULL);
+    assert(c->suffixsize > 0);
+
+    if (c->suffixleft >= c->suffixsize) {
+        char **new_suffix_list =
+            realloc(c->suffixlist,
+                    sizeof(char *) * c->suffixsize * 2);
+        if (new_suffix_list) {
+            c->suffixsize *= 2;
+            c->suffixlist = new_suffix_list;
+            c->suffixcurr = new_suffix_list;
+        }
+    }
+
+    if (c->suffixleft < c->suffixsize) {
+        char *suffix = suffix_from_freelist();
+        if (suffix != NULL) {
+            c->suffixlist[c->suffixleft] = suffix;
+            c->suffixleft++;
+
+            return suffix;
+        }
+    }
+
+    return NULL;
 }
 
 char *nread_text(short x) {
