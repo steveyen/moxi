@@ -84,7 +84,6 @@ bool  cproxy_forward_multiget_downstream(downstream *d, char *command, conn *uc)
 bool  cproxy_forward_simple_downstream(downstream *d, char *command, conn *uc);
 bool  cproxy_forward_item_downstream(downstream *d, short cmd, item *it);
 void  cproxy_pause_upstream_for_downstream(proxy_td *ptd, conn *upstream);
-void  cproxy_out_string_downstream(conn *c, const char *str);
 conn *cproxy_find_downstream_conn(downstream *d, char *key, int key_length);
 bool  cproxy_prep_conn_for_write(conn *c);
 int   cproxy_server_index(downstream *d, char *key, size_t key_length);
@@ -107,7 +106,6 @@ conn_funcs cproxy_upstream_funcs = {
     cproxy_init_upstream_conn,
     cproxy_on_close_upstream_conn,
     add_bytes_read,
-    out_string,
     cproxy_process_upstream_ascii,
     dispatch_bin_command,
     reset_cmd_handler,
@@ -120,7 +118,6 @@ conn_funcs cproxy_downstream_funcs = {
     cproxy_init_downstream_conn,
     cproxy_on_close_downstream_conn,
     add_bytes_read,
-    cproxy_out_string_downstream,
     cproxy_process_downstream_ascii,
     dispatch_bin_command,
     reset_cmd_handler,
@@ -486,7 +483,7 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
      * directly into it, then continue in nread_complete().
      */
     if (!cproxy_prep_conn_for_write(c)) {
-        c->funcs->conn_out_string(c, "SERVER_ERROR out of memory preparing response");
+        out_string(c, "SERVER_ERROR out of memory preparing response");
         return;
     }
 
@@ -542,12 +539,12 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
     } else if (ntokens >= 2 &&
                (strncmp(cmd, "stats", 5) == 0)) {
 
-        c->funcs->conn_out_string(c, "ERROR"); // TODO
+        out_string(c, "ERROR"); // TODO
 
     } else if (ntokens == 2 &&
                (strncmp(cmd, "version", 7) == 0)) {
 
-        c->funcs->conn_out_string(c, "VERSION " VERSION);
+        out_string(c, "VERSION " VERSION);
 
     } else if (ntokens == 2 &&
                (strncmp(cmd, "quit", 4) == 0)) {
@@ -555,7 +552,7 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
         conn_set_state(c, conn_closing);
 
     } else {
-        c->funcs->conn_out_string(c, "ERROR");
+        out_string(c, "ERROR");
     }
 }
 
@@ -581,7 +578,7 @@ void cproxy_process_upstream_ascii_nread(conn *c) {
 
         cproxy_pause_upstream_for_downstream(ptd, c);
     } else
-        c->funcs->conn_out_string(c, "CLIENT_ERROR bad data chunk");
+        out_string(c, "CLIENT_ERROR bad data chunk");
 
     // TODO: Need to EV_WRITE the upstream conn?
 }
@@ -664,7 +661,7 @@ void cproxy_process_downstream_ascii(conn *c, char *line) {
         }
 
         if (uc != NULL) {
-            uc->funcs->conn_out_string(c, "SERVER_ERROR bad proxy connection");
+            out_string(uc, "SERVER_ERROR bad proxy connection");
 
             // TODO: Need to swallow on c.
 
@@ -694,7 +691,7 @@ void cproxy_process_downstream_ascii(conn *c, char *line) {
         conn_set_state(c, conn_pause);
 
         if (uc != NULL) {
-            uc->funcs->conn_out_string(uc, line);
+            out_string(uc, line);
 
             if (!update_event(uc, EV_WRITE | EV_PERSIST)) {
                 if (settings.verbose > 0)
@@ -973,9 +970,6 @@ bool cproxy_forward_simple_downstream(downstream *d, char *command, conn *uc) {
         c->icurr = c->ilist;
         c->ileft = 0;
 
-        // Cannot use the c->funcs->conn_out_string here.
-        // See the cproxy_out_string_downstream() comments.
-        //
         out_string(c, command);
 
         if (settings.verbose > 0)
@@ -1118,7 +1112,8 @@ bool cproxy_forward_item_downstream(downstream *d, short cmd, item *it) {
     // Assuming we're already connected to downstream.
     //
     conn *c = cproxy_find_downstream_conn(d, ITEM_key(it), it->nkey);
-    if (c != NULL) {
+    if (c != NULL &&
+        cproxy_prep_conn_for_write(c)) {
         assert(c->item == NULL);
         assert(c->state == conn_pause);
         assert(IS_ASCII(c->protocol));
@@ -1250,17 +1245,6 @@ void cproxy_pause_upstream_for_downstream(proxy_td *ptd, conn *upstream) {
     conn_set_state(upstream, conn_pause);
     cproxy_wait_for_downstream(ptd, upstream);
     cproxy_assign_downstream(ptd);
-}
-
-void cproxy_out_string_downstream(conn *c, const char *str) {
-    // This implementation is meant to catch incorrect
-    // c->funcs->conn_out_string() calls from
-    // drive_machine (which should never be writing
-    // to the downstream conn).
-    //
-    assert(false);
-
-    // TODO: Handle case when we're not in debug/assert mode.
 }
 
 rel_time_t cproxy_realtime(const time_t exptime) {

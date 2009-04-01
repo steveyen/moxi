@@ -314,7 +314,6 @@ struct conn_funcs {
     void (*conn_init)(conn *c);
     void (*conn_close)(conn *c);
     void (*conn_add_bytes_read)(conn *c, int bytes_read);
-    void (*conn_out_string)(conn *c, const char *str);
     void (*conn_process_ascii_command)(conn *c, char *command);
     void (*conn_process_binary_command)(conn *c);
     void (*conn_reset_cmd_handler)(conn *c);
