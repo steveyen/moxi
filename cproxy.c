@@ -444,7 +444,8 @@ int cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread) {
                     d->downstream_conns[i] =
                         conn_new(fd, conn_pause, 0, DATA_BUFFER_SIZE,
                                  proxy_downstream_ascii_prot,
-                                 thread->base, &cproxy_downstream_funcs, d);
+                                 thread->base,
+                                 &cproxy_downstream_funcs, d);
                     d->downstream_conns[i]->thread = thread;
                 }
             }
@@ -473,7 +474,8 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
     assert(IS_PROXY(c->protocol));
 
     if (settings.verbose > 1)
-        fprintf(stderr, "<%d cproxy_process_upstream_ascii %s\n", c->sfd, line);
+        fprintf(stderr, "<%d cproxy_process_upstream_ascii %s\n",
+                c->sfd, line);
 
     /* For commands set/add/replace, we build an item and read the data
      * directly into it, then continue in nread_complete().
@@ -591,7 +593,8 @@ void cproxy_process_downstream_ascii(conn *c, char *line) {
     assert(IS_PROXY(c->protocol));
 
     if (settings.verbose > 1)
-        fprintf(stderr, "<%d cproxy_process_downstream_ascii %s\n", c->sfd, line);
+        fprintf(stderr, "<%d cproxy_process_downstream_ascii %s\n",
+                c->sfd, line);
 
     downstream *d = c->extra;
 
@@ -651,7 +654,8 @@ void cproxy_process_downstream_ascii(conn *c, char *line) {
 
             conn_set_state(c, conn_swallow);
         } else {
-            // TODO: Don't know how much to swallow?  Close the upstream?
+            // TODO: Don't know how much to swallow?
+            //       So, close the upstream?
         }
 
         if (uc != NULL) {
@@ -661,7 +665,8 @@ void cproxy_process_downstream_ascii(conn *c, char *line) {
 
             if (!update_event(uc, EV_WRITE | EV_PERSIST)) {
                 if (settings.verbose > 0)
-                    fprintf(stderr, "Can't update upstream write event\n");
+                    fprintf(stderr,
+                            "Can't update upstream write event\n");
                 conn_set_state(uc, conn_closing);
             }
         }
@@ -674,7 +679,9 @@ void cproxy_process_downstream_ascii(conn *c, char *line) {
                 conn_set_state(uc, conn_mwrite);
             } else {
                 if (settings.verbose > 0)
-                    fprintf(stderr, "Could not update upstream write event\n");
+                    fprintf(stderr,
+                            "Could not update upstream write event\n");
+
                 conn_set_state(uc, conn_closing);
             }
         }
@@ -686,7 +693,9 @@ void cproxy_process_downstream_ascii(conn *c, char *line) {
 
             if (!update_event(uc, EV_WRITE | EV_PERSIST)) {
                 if (settings.verbose > 0)
-                    fprintf(stderr, "Couldn't update upstream write event\n");
+                    fprintf(stderr,
+                            "Couldn't update upstream write event\n");
+
                 conn_set_state(uc, conn_closing);
             }
         }
@@ -700,7 +709,8 @@ void cproxy_process_downstream_ascii_nread(conn *c) {
     assert(c != NULL);
 
     if (settings.verbose > 1)
-        fprintf(stderr, "<%d cproxy_process_downstream_ascii_nread %d %d\n",
+        fprintf(stderr,
+                "<%d cproxy_process_downstream_ascii_nread %d %d\n",
                 c->sfd, c->ileft, c->isize);
 
     downstream *d = c->extra;
@@ -731,7 +741,8 @@ void cproxy_process_downstream_ascii_nread(conn *c) {
                 add_iov(uc, ITEM_key(it), it->nkey) == 0 &&
                 add_iov(uc, ITEM_suffix(it), it->nsuffix + it->nbytes) == 0) {
                 if (uc->ileft >= uc->isize) {
-                    item **new_list = realloc(c->ilist, sizeof(item *) * uc->isize * 2);
+                    item **new_list =
+                        realloc(c->ilist, sizeof(item *) * uc->isize * 2);
                     if (new_list) {
                         uc->isize *= 2;
                         uc->ilist = new_list;
@@ -744,7 +755,8 @@ void cproxy_process_downstream_ascii_nread(conn *c) {
                     uc->ileft++;
 
                     if (settings.verbose > 1)
-                        fprintf(stderr, "<%d cproxy_process_downstream_ascii success\n",
+                        fprintf(stderr,
+                                "<%d cproxy_process_downstream_ascii success\n",
                                 c->sfd);
 
                     return; // Success.
@@ -805,14 +817,16 @@ int cproxy_server_index(downstream *d, char *key, size_t key_length) {
 
     // memcached_return rc;
     //
-    // rc = memcached_validate_key_length(key_length, d->mst.flags & MEM_BINARY_PROTOCOL);
+    // rc = memcached_validate_key_length(key_length,
+    //          d->mst.flags & MEM_BINARY_PROTOCOL);
     // unlikely (rc != MEMCACHED_SUCCESS)
     //    return -1;
 
     if (memcached_server_count(&d->mst) <= 0)
         return -1;
 
-    // if (memcached_key_test((char **) &key, &key_length, 1) == MEMCACHED_BAD_KEY_PROVIDED)
+    // if (memcached_key_test((char **) &key, &key_length, 1) ==
+    //     MEMCACHED_BAD_KEY_PROVIDED)
     //     return -1;
 
     return (int) memcached_generate_hash(&d->mst, key, key_length);
@@ -851,7 +865,8 @@ void cproxy_assign_downstream(proxy_td *ptd) {
         // waiting upstream conn to it.
         //
         d->upstream_conn = ptd->waiting_for_downstream_head;
-        ptd->waiting_for_downstream_head = ptd->waiting_for_downstream_head->next;
+        ptd->waiting_for_downstream_head =
+            ptd->waiting_for_downstream_head->next;
         if (ptd->waiting_for_downstream_head == NULL)
             ptd->waiting_for_downstream_tail = NULL;
         d->upstream_conn->next = NULL;
@@ -860,17 +875,20 @@ void cproxy_assign_downstream(proxy_td *ptd) {
             fprintf(stderr, "assign_downstream, matched\n");
 
         if (!cproxy_forward_downstream(d)) {
-            // We reach here on error, so put upstream conn back on the wait
-            // list to retry, and release the downstream.
+            // We reach here on error, so put upstream conn back
+            // on the wait list to retry, and release the downstream.
             //
-            // TOOD: Count this to eventually give up & error, rather than retry.
+            // TOOD: Count this to eventually give up & error,
+            //       instead of retry.
             //
             conn *uc = d->upstream_conn;
 
             assert(uc != NULL);
 
             if (settings.verbose > 1)
-                fprintf(stderr, "%d could not forward upstream to downstream\n", uc->sfd);
+                fprintf(stderr,
+                        "%d could not forward upstream to downstream\n",
+                        uc->sfd);
 
             cproxy_release_downstream(d);
             cproxy_wait_for_downstream(ptd, uc);
@@ -1016,9 +1034,6 @@ bool cproxy_forward_multiget_downstream(downstream *d, char *command, conn *uc) 
         // This key_len check helps skips consecutive spaces.
         //
         if (key_len > 0) {
-            if (settings.verbose > 1)
-                fprintf(stderr, "forward multiget key %s (%d)\n", key, key_len);
-
             conn *c = cproxy_find_downstream_conn(d, key, key_len);
             if (c != NULL) {
                 assert(c->item == NULL);
@@ -1033,16 +1048,8 @@ bool cproxy_forward_multiget_downstream(downstream *d, char *command, conn *uc) 
 
                 if (c->msgused <= 1 &&
                     c->msgbytes <= 0) {
-                    if (settings.verbose > 1)
-                        fprintf(stderr, ">%d forward multiget command %s (%d)\n",
-                                c->sfd, command, cmd_len);
-
                     add_iov(c, command, cmd_len);
                 }
-
-                if (settings.verbose > 1)
-                    fprintf(stderr, ">%d forward multiget key %s (%d)\n",
-                            c->sfd, key, key_len);
 
                 // Write the key, including the preceding space.
                 //
@@ -1071,7 +1078,8 @@ bool cproxy_forward_multiget_downstream(downstream *d, char *command, conn *uc) 
                 }
             } else {
                 if (settings.verbose > 0)
-                    fprintf(stderr, "Couldn't update cproxy write event\n");
+                    fprintf(stderr,
+                            "Couldn't update cproxy write event\n");
 
                 conn_set_state(c, conn_closing);
             }
@@ -1230,7 +1238,8 @@ void cproxy_pause_upstream_for_downstream(proxy_td *ptd, conn *upstream) {
     assert(upstream != NULL);
 
     if (settings.verbose > 1)
-        fprintf(stderr, "%d pause_upstream_for_downstream\n", upstream->sfd);
+        fprintf(stderr, "%d pause_upstream_for_downstream\n",
+                upstream->sfd);
 
     conn_set_state(upstream, conn_pause);
     cproxy_wait_for_downstream(ptd, upstream);
