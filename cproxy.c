@@ -79,6 +79,7 @@ int          cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread);
 void         cproxy_wait_for_downstream(proxy_td *ptd, conn *c);
 void         cproxy_assign_downstream(proxy_td *ptd);
 bool         cproxy_forward_downstream(downstream *d);
+bool         cproxy_forward_item_downstream(downstream *d, short cmd, item *it);
 void         cproxy_pause_upstream_for_downstream(proxy_td *ptd, conn *upstream);
 void         cproxy_out_string_downstream(conn *c, const char *str);
 conn        *cproxy_find_downstream_conn(downstream *d, char *key, int key_length);
@@ -959,51 +960,59 @@ bool cproxy_forward_downstream(downstream *d) {
                 }
             }
         } else {
-            // Command that came with item data, like set/add/replace/etc.
-            //
-            item *it = uc->item;
+            return cproxy_forward_item_downstream(d, uc->cmd, uc->item);
+        }
+    }
 
-            assert(it != NULL);
+    return false;
+}
 
-            conn *c = cproxy_find_downstream_conn(d, ITEM_key(it), it->nkey);
-            if (c != NULL) {
-                assert(c->item == NULL);
-                assert(c->state == conn_pause);
-                assert(IS_ASCII(c->protocol));
-                assert(IS_PROXY(c->protocol));
-                assert(c->ilist != NULL);
-                assert(c->isize > 0);
+/* Forward an upstream command that came with item data,
+ * like set/add/replace/etc.
+ */
+bool cproxy_forward_item_downstream(downstream *d, short cmd, item *it) {
+    assert(d != NULL);
+    assert(d->downstream_conns != NULL);
 
-                c->icurr = c->ilist;
-                c->ileft = 0;
+    assert(it != NULL);
 
-                char *verb = nread_text(uc->cmd);
+    conn *c = cproxy_find_downstream_conn(d, ITEM_key(it), it->nkey);
+    if (c != NULL) {
+        assert(c->item == NULL);
+        assert(c->state == conn_pause);
+        assert(IS_ASCII(c->protocol));
+        assert(IS_PROXY(c->protocol));
+        assert(c->ilist != NULL);
+        assert(c->isize > 0);
 
-                assert(verb != NULL);
+        c->icurr = c->ilist;
+        c->ileft = 0;
 
-                if (add_iov(c, verb, strlen(verb)) == 0 &&
-                    add_iov(c, ITEM_key(it), it->nkey) == 0 &&
-                    add_iov(c, " 0 ", 3) == 0 &&
-                    add_iov(c, ITEM_suffix(it), it->nsuffix + it->nbytes) == 0) {
-                    conn_set_state(c, conn_mwrite);
-                    c->write_and_go = conn_new_cmd;
+        char *verb = nread_text(cmd);
 
-                    if (update_event(c, EV_WRITE | EV_PERSIST)) {
-                        d->reply_expect = 1;
-                        return true;
-                    }
+        assert(verb != NULL);
 
-                    if (settings.verbose > 0)
-                        fprintf(stderr, "Couldn't update cproxy write event\n");
+        if (add_iov(c, verb, strlen(verb)) == 0 &&
+            add_iov(c, ITEM_key(it), it->nkey) == 0 &&
+            add_iov(c, " 0 ", 3) == 0 &&
+            add_iov(c, ITEM_suffix(it), it->nsuffix + it->nbytes) == 0) {
+            conn_set_state(c, conn_mwrite);
+            c->write_and_go = conn_new_cmd;
 
-                    conn_set_state(c, conn_closing);
-                } else {
-                    // TODO: Need better out-of-memory behavior.
-                    //
-                    if (settings.verbose > 0)
-                        fprintf(stderr, "Couldn't alloc cproxy iov memory\n");
-                }
+            if (update_event(c, EV_WRITE | EV_PERSIST)) {
+                d->reply_expect = 1;
+                return true;
             }
+
+            if (settings.verbose > 0)
+                fprintf(stderr, "Couldn't update cproxy write event\n");
+
+            conn_set_state(c, conn_closing);
+        } else {
+            // TODO: Need better out-of-memory behavior.
+            //
+            if (settings.verbose > 0)
+                fprintf(stderr, "Couldn't alloc cproxy iov memory\n");
         }
     }
 
