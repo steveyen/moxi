@@ -323,6 +323,8 @@ void cproxy_on_close_upstream_conn(conn *c) {
     if (settings.verbose > 1)
         fprintf(stderr, "<%d cproxy_on_close_upstream_conn\n", c->sfd);
 
+    // TODO: Cleanup more.
+
     c->extra = NULL;
 }
 
@@ -332,6 +334,8 @@ void cproxy_on_close_downstream_conn(conn *c) {
 
     if (settings.verbose > 1)
         fprintf(stderr, "<%d cproxy_on_close_downstream_conn\n", c->sfd);
+
+    // TODO: Cleanup more.
 
     c->extra = NULL;
 }
@@ -843,7 +847,7 @@ void cproxy_assign_downstream(proxy_td *ptd) {
     // resources to waiting upstream conns.
     //
     // Remember the wait list tail when we start, in case more
-    // upstream conns tacked onto the wait list while we're
+    // upstream conns are tacked onto the wait list while we're
     // processing.  This helps avoid infinite loop where conn's
     // just keep on moving to the tail.
     //
@@ -957,7 +961,8 @@ bool cproxy_forward_simple_downstream(downstream *d, char *command, conn *uc) {
     // Assuming we're already connected to downstream.
     //
     conn *c = cproxy_find_downstream_conn(d, key, key_len);
-    if (c != NULL) {
+    if (c != NULL &&
+        cproxy_prep_conn_for_write(c)) {
         assert(c->item == NULL);
         assert(c->state == conn_pause);
         assert(IS_ASCII(c->protocol));
@@ -978,16 +983,16 @@ bool cproxy_forward_simple_downstream(downstream *d, char *command, conn *uc) {
                     c->sfd, uc->noreply);
 
         if (update_event(c, EV_WRITE | EV_PERSIST)) {
-            if (uc->noreply == false) {
-                d->downstream_used = 1; // TODO: Need timeout?
-            } else {
-                uc->noreply        = false;
-                d->downstream_used = 0;
-                d->upstream_conn   = NULL;
-                c->write_and_go    = conn_pause;
+            d->downstream_used = 1; // TODO: Need timeout?
+
+            if (uc->noreply) {
+                uc->noreply      = false;
+                d->upstream_conn = NULL;
+                c->write_and_go  = conn_pause;
 
                 cproxy_reset_upstream(uc);
             }
+
             return true;
         }
 
