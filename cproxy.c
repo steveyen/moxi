@@ -914,6 +914,7 @@ bool cproxy_forward_downstream(downstream *d) {
 }
 
 /* Forward a simple one-liner command downstream.
+ * For example, get, incr/decr, delete, etc.
  * The response, though, might be a simple line or
  * multiple VALUE+END lines.
  */
@@ -929,51 +930,54 @@ bool cproxy_forward_simple_downstream(downstream *d, char *command, conn *uc) {
     char    *key     = tokens[KEY_TOKEN].value;
     int      key_len = tokens[KEY_TOKEN].length;
 
+    if (ntokens <= 1) { // This was checked long ago, while parsing
+        assert(false);  // the upstream conn.
+        return false;
+    }
+
+    // Assuming we're already connected to downstream.
+    //
     // TODO: Handle multi-get.
     //
-    if (ntokens > 1) {
-        conn *c = cproxy_find_downstream_conn(d, key, key_len);
-        if (c != NULL) {
-            assert(c->item == NULL);
-            assert(c->state == conn_pause);
-            assert(IS_ASCII(c->protocol));
-            assert(IS_PROXY(c->protocol));
-            assert(c->ilist != NULL);
-            assert(c->isize > 0);
+    conn *c = cproxy_find_downstream_conn(d, key, key_len);
+    if (c != NULL) {
+        assert(c->item == NULL);
+        assert(c->state == conn_pause);
+        assert(IS_ASCII(c->protocol));
+        assert(IS_PROXY(c->protocol));
+        assert(c->ilist != NULL);
+        assert(c->isize > 0);
 
-            c->icurr = c->ilist;
-            c->ileft = 0;
+        c->icurr = c->ilist;
+        c->ileft = 0;
 
-            // Cannot use the c->funcs->conn_out_string here.
-            // See the cproxy_out_string_downstream() comments.
-            //
-            out_string(c, command);
+        // Cannot use the c->funcs->conn_out_string here.
+        // See the cproxy_out_string_downstream() comments.
+        //
+        out_string(c, command);
 
-            if (settings.verbose > 0)
-                fprintf(stderr,
-                        "forwarding to %d, noreply %d\n",
-                        c->sfd, uc->noreply);
+        if (settings.verbose > 0)
+            fprintf(stderr, "forwarding to %d, noreply %d\n",
+                    c->sfd, uc->noreply);
 
-            if (update_event(c, EV_WRITE | EV_PERSIST)) {
-                if (uc->noreply == false) {
-                    d->reply_expect = 1; // TODO: Need timeout?
-                } else {
-                    uc->noreply      = false;
-                    d->reply_expect  = 0;
-                    d->upstream_conn = NULL;
-                    c->write_and_go  = conn_pause;
+        if (update_event(c, EV_WRITE | EV_PERSIST)) {
+            if (uc->noreply == false) {
+                d->reply_expect = 1; // TODO: Need timeout?
+            } else {
+                uc->noreply      = false;
+                d->reply_expect  = 0;
+                d->upstream_conn = NULL;
+                c->write_and_go  = conn_pause;
 
-                    cproxy_reset_upstream(uc);
-                }
-                return true;
+                cproxy_reset_upstream(uc);
             }
-
-            if (settings.verbose > 0)
-                fprintf(stderr,
-                        "Couldn't update cproxy write event\n");
-
-            conn_set_state(c, conn_closing);
+            return true;
         }
+
+        if (settings.verbose > 0)
+            fprintf(stderr, "Couldn't update cproxy write event\n");
+
+        conn_set_state(c, conn_closing);
     }
 
     return false;
@@ -985,7 +989,6 @@ bool cproxy_forward_simple_downstream(downstream *d, char *command, conn *uc) {
 bool cproxy_forward_item_downstream(downstream *d, short cmd, item *it) {
     assert(d != NULL);
     assert(d->downstream_conns != NULL);
-
     assert(it != NULL);
 
     // Assuming we're already connected to downstream.
