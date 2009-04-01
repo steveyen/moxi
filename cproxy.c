@@ -84,6 +84,8 @@ bool  cproxy_forward_downstream(downstream *d);
 bool  cproxy_forward_multiget_downstream(downstream *d, char *command, conn *uc);
 bool  cproxy_forward_simple_downstream(downstream *d, char *command, conn *uc);
 bool  cproxy_forward_item_downstream(downstream *d, short cmd, item *it);
+bool  cproxy_broadcast_downstream(downstream *d, char *command, conn *uc,
+                                  char *suffix);
 void  cproxy_pause_upstream_for_downstream(proxy_td *ptd, conn *upstream);
 conn *cproxy_find_downstream_conn(downstream *d, char *key, int key_length);
 bool  cproxy_prep_conn_for_write(conn *c);
@@ -697,7 +699,8 @@ void cproxy_process_downstream_ascii(conn *c, char *line) {
                 conn_set_state(uc, conn_closing);
             }
         }
-    } else if (strncmp(line, "END", 3) == 0) {
+    } else if (strncmp(line, "END", 3) == 0 ||
+               strncmp(line, "OK", 2) == 0) {
         conn_set_state(c, conn_pause);
     } else {
         conn_set_state(c, conn_pause);
@@ -959,6 +962,9 @@ bool cproxy_forward_simple_downstream(downstream *d, char *command, conn *uc) {
     if (strncmp(command, "get", 3) == 0)
         return cproxy_forward_multiget_downstream(d, command, uc);
 
+    if (strncmp(command, "flush_all", 9) == 0)
+        return cproxy_broadcast_downstream(d, command, uc, "OK\r\n");
+
     token_t  tokens[MAX_TOKENS];
     size_t   ntokens = scan_tokens(command, tokens, MAX_TOKENS);
     char    *key     = tokens[KEY_TOKEN].value;
@@ -1114,6 +1120,65 @@ bool cproxy_forward_multiget_downstream(downstream *d, char *command, conn *uc) 
         cproxy_reset_upstream(uc);
     } else
         d->upstream_suffix = "END\r\n";
+
+    return nwrite > 0;
+}
+
+/* Used for broadcast commands, like flush_all or stats.
+ */
+bool cproxy_broadcast_downstream(downstream *d, char *command, conn *uc, char *suffix) {
+    assert(d != NULL);
+    assert(d->downstream_conns != NULL);
+    assert(command != NULL);
+    assert(uc != NULL);
+    assert(uc->item == NULL);
+
+    int nwrite = 0;
+    int nconns = memcached_server_count(&d->mst);
+
+    for (int i = 0; i < nconns; i++) {
+        conn *c = d->downstream_conns[i];
+        if (c != NULL) {
+            assert(c->item == NULL);
+            assert(c->state == conn_pause);
+            assert(IS_ASCII(c->protocol));
+            assert(IS_PROXY(c->protocol));
+            assert(c->ilist != NULL);
+            assert(c->isize > 0);
+
+            cproxy_prep_conn_for_write(c);
+
+            out_string(c, command);
+
+            if (update_event(c, EV_WRITE | EV_PERSIST)) {
+                nwrite++;
+
+                if (uc->noreply) {
+                    c->write_and_go = conn_pause;
+                }
+            } else {
+                if (settings.verbose > 0)
+                    fprintf(stderr,
+                            "Update cproxy write event failed\n");
+
+                conn_set_state(c, conn_closing);
+            }
+        }
+    }
+
+    if (settings.verbose > 1)
+        fprintf(stderr, "forward multiget nwrite %d out of %d\n",
+                nwrite, nconns);
+
+    d->downstream_used = nwrite; // TODO: Need timeout?
+
+    if (uc->noreply) {
+        uc->noreply = false;
+        d->upstream_conn = NULL;
+        d->upstream_suffix = NULL;
+        cproxy_reset_upstream(uc);
+    } else
+        d->upstream_suffix = suffix;
 
     return nwrite > 0;
 }
