@@ -59,6 +59,7 @@ struct downstream {
     int    downstream_used;  // Number of in-use downstream conns, might
                              // be >1 during scatter-gather commands.
     conn  *upstream_conn;    // Non-NULL when downstream is reserved.
+    char  *upstream_suffix;  // Last bit to write when downstreams are done.
 };
 
 proxy    *cproxy_create(int proxy_port, char *proxy_sect, int nthreads);
@@ -367,9 +368,11 @@ downstream *cproxy_reserve_downstream(proxy_td *ptd) {
     }
 
     assert(d->upstream_conn == NULL);
+    assert(d->upstream_suffix == NULL);
     assert(d->downstream_used == 0);
 
     d->upstream_conn = NULL;
+    d->upstream_suffix = NULL;
     d->downstream_used = 0;
 
     return d;
@@ -383,7 +386,29 @@ void cproxy_release_downstream(downstream *d) {
     assert(d->ptd != NULL);
     assert(d->next == NULL);
 
+    if (d->upstream_conn != NULL &&
+        d->upstream_suffix != NULL) {
+        // Do a last write on the upstream_conn.  For example,
+        // the upstream_suffix might be "END\r\n" or other
+        // way to mark the end of a scatter-gather or
+        // multiline response.
+        //
+        if (add_iov(d->upstream_conn,
+                    d->upstream_suffix,
+                    strlen(d->upstream_suffix)) == 0 &&
+            update_event(d->upstream_conn, EV_WRITE | EV_PERSIST)) {
+            conn_set_state(d->upstream_conn, conn_mwrite);
+        } else {
+            if (settings.verbose > 0)
+                fprintf(stderr,
+                        "Could not update upstream write event\n");
+
+            conn_set_state(d->upstream_conn, conn_closing);
+        }
+    }
+
     d->upstream_conn = NULL;
+    d->upstream_suffix = NULL; // No free(), expecting a static string.
     d->downstream_used = 0;
 
     // Back onto the free/available downstream list.
@@ -674,19 +699,6 @@ void cproxy_process_downstream_ascii(conn *c, char *line) {
         }
     } else if (strncmp(line, "END", 3) == 0) {
         conn_set_state(c, conn_pause);
-
-        if (uc != NULL) {
-            if (add_iov(uc, "END\r\n", 5) == 0 &&
-                update_event(uc, EV_WRITE | EV_PERSIST)) {
-                conn_set_state(uc, conn_mwrite);
-            } else {
-                if (settings.verbose > 0)
-                    fprintf(stderr,
-                            "Could not update upstream write event\n");
-
-                conn_set_state(uc, conn_closing);
-            }
-        }
     } else {
         conn_set_state(c, conn_pause);
 
@@ -883,6 +895,8 @@ void cproxy_assign_downstream(proxy_td *ptd) {
             // TOOD: Count this to eventually give up & error,
             //       instead of retry.
             //
+            // TODO: Do we need to clear the upstream_suffix?
+            //
             conn *uc = d->upstream_conn;
 
             assert(uc != NULL);
@@ -980,9 +994,10 @@ bool cproxy_forward_simple_downstream(downstream *d, char *command, conn *uc) {
             d->downstream_used = 1; // TODO: Need timeout?
 
             if (uc->noreply) {
-                uc->noreply      = false;
-                d->upstream_conn = NULL;
-                c->write_and_go  = conn_pause;
+                uc->noreply        = false;
+                d->upstream_conn   = NULL;
+                d->upstream_suffix = NULL;
+                c->write_and_go    = conn_pause;
 
                 cproxy_reset_upstream(uc);
             }
@@ -1095,8 +1110,10 @@ bool cproxy_forward_multiget_downstream(downstream *d, char *command, conn *uc) 
     if (uc->noreply) {
         uc->noreply = false;
         d->upstream_conn = NULL;
+        d->upstream_suffix = NULL;
         cproxy_reset_upstream(uc);
-    }
+    } else
+        d->upstream_suffix = "END\r\n";
 
     return nwrite > 0;
 }
