@@ -56,9 +56,9 @@ struct downstream {
     downstream    *next;                // To track free list.
 
     conn **downstream_conns; // Wraps the fd's of mst with conns.
-    conn  *upstream_conn;    // Non-NULL when downstream is reserved.
-    int    reply_expect;     // Number of replies to expect, might
+    int    downstream_used;  // Number of in-use downstream conns, might
                              // be >1 during scatter-gather commands.
+    conn  *upstream_conn;    // Non-NULL when downstream is reserved.
 };
 
 proxy       *cproxy_create(int proxy_port, char *proxy_sect, int nthreads);
@@ -79,11 +79,13 @@ int          cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread);
 void         cproxy_wait_for_downstream(proxy_td *ptd, conn *c);
 void         cproxy_assign_downstream(proxy_td *ptd);
 bool         cproxy_forward_downstream(downstream *d);
+bool         cproxy_forward_multiget_downstream(downstream *d, char *command, conn *uc);
 bool         cproxy_forward_simple_downstream(downstream *d, char *command, conn *uc);
 bool         cproxy_forward_item_downstream(downstream *d, short cmd, item *it);
 void         cproxy_pause_upstream_for_downstream(proxy_td *ptd, conn *upstream);
 void         cproxy_out_string_downstream(conn *c, const char *str);
 conn        *cproxy_find_downstream_conn(downstream *d, char *key, int key_length);
+bool         cproxy_prep_conn_for_write(conn *c);
 int          cproxy_server_index(downstream *d, char *key, size_t key_length);
 
 void cproxy_reset_upstream(conn *uc);
@@ -363,10 +365,10 @@ downstream *cproxy_reserve_downstream(proxy_td *ptd) {
     }
 
     assert(d->upstream_conn == NULL);
-    assert(d->reply_expect == 0);
+    assert(d->downstream_used == 0);
 
     d->upstream_conn = NULL;
-    d->reply_expect = 0;
+    d->downstream_used = 0;
 
     return d;
 }
@@ -380,7 +382,7 @@ void cproxy_release_downstream(downstream *d) {
     assert(d->next == NULL);
 
     d->upstream_conn = NULL;
-    d->reply_expect = 0;
+    d->downstream_used = 0;
 
     // Back onto the free/available downstream list.
     //
@@ -476,11 +478,7 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
     /* For commands set/add/replace, we build an item and read the data
      * directly into it, then continue in nread_complete().
      */
-    c->msgcurr = 0;
-    c->msgused = 0;
-    c->iovused = 0;
-
-    if (add_msghdr(c) != 0) {
+    if (!cproxy_prep_conn_for_write(c)) {
         c->funcs->conn_out_string(c, "SERVER_ERROR out of memory preparing response");
         return;
     }
@@ -782,21 +780,22 @@ conn *cproxy_find_downstream_conn(downstream *d, char *key, int key_length) {
     int s = cproxy_server_index(d, key, key_length);
     if (s >= 0 &&
         s < memcached_server_count(&d->mst)) {
-        conn *c = d->downstream_conns[s];
+        return d->downstream_conns[s];
+    }
+    return NULL;
+}
 
-        assert(c->state == conn_pause);
-
+bool cproxy_prep_conn_for_write(conn *c) {
+    if (c != NULL) {
         c->msgcurr = 0; // TODO: Mem leak just by blowing these to 0?
         c->msgused = 0;
         c->iovused = 0;
 
         if (add_msghdr(c) == 0)
-            return c;
-
-        // TODO: Need separate error msg/code for add_msghdr failure.
+            return true;
     }
 
-    return NULL;
+    return false;
 }
 
 int cproxy_server_index(downstream *d, char *key, size_t key_length) {
@@ -846,7 +845,7 @@ void cproxy_assign_downstream(proxy_td *ptd) {
 
         assert(d->next == NULL);
         assert(d->upstream_conn == NULL);
-        assert(d->reply_expect == 0);
+        assert(d->downstream_used == 0);
 
         // We have a downstream reserved, so assign the first
         // waiting upstream conn to it.
@@ -923,6 +922,9 @@ bool cproxy_forward_simple_downstream(downstream *d, char *command, conn *uc) {
     assert(uc != NULL);
     assert(uc->item == NULL);
 
+    if (strncmp(command, "get", 3) == 0)
+        return cproxy_forward_multiget_downstream(d, command, uc);
+
     token_t  tokens[MAX_TOKENS];
     size_t   ntokens = scan_tokens(command, tokens, MAX_TOKENS);
     char    *key     = tokens[KEY_TOKEN].value;
@@ -934,8 +936,6 @@ bool cproxy_forward_simple_downstream(downstream *d, char *command, conn *uc) {
     }
 
     // Assuming we're already connected to downstream.
-    //
-    // TODO: Handle multi-get.
     //
     conn *c = cproxy_find_downstream_conn(d, key, key_len);
     if (c != NULL) {
@@ -960,12 +960,12 @@ bool cproxy_forward_simple_downstream(downstream *d, char *command, conn *uc) {
 
         if (update_event(c, EV_WRITE | EV_PERSIST)) {
             if (uc->noreply == false) {
-                d->reply_expect = 1; // TODO: Need timeout?
+                d->downstream_used = 1; // TODO: Need timeout?
             } else {
-                uc->noreply      = false;
-                d->reply_expect  = 0;
-                d->upstream_conn = NULL;
-                c->write_and_go  = conn_pause;
+                uc->noreply        = false;
+                d->downstream_used = 0;
+                d->upstream_conn   = NULL;
+                c->write_and_go    = conn_pause;
 
                 cproxy_reset_upstream(uc);
             }
@@ -979,6 +979,118 @@ bool cproxy_forward_simple_downstream(downstream *d, char *command, conn *uc) {
     }
 
     return false;
+}
+
+bool cproxy_forward_multiget_downstream(downstream *d, char *command, conn *uc) {
+    assert(d != NULL);
+    assert(d->downstream_conns != NULL);
+    assert(command != NULL);
+    assert(uc != NULL);
+    assert(uc->item == NULL);
+
+    int nwrite = 0;
+    int nconns = memcached_server_count(&d->mst);
+
+    for (int i = 0; i < nconns; i++)
+        cproxy_prep_conn_for_write(d->downstream_conns[i]);
+
+    char *space = strchr(command, ' ');
+    assert(space > command);
+
+    int cmd_len = space - command;
+    assert(cmd_len == 3 || cmd_len == 4); // Either get or gets.
+
+    if (settings.verbose > 1)
+        fprintf(stderr, "forward multiget %s (%d)\n", command, cmd_len);
+
+    while (space != NULL) {
+        char *key = space + 1;
+        char *next_space = strchr(key, ' ');
+        int   key_len;
+
+        if (next_space != NULL)
+            key_len = next_space - key;
+        else
+            key_len = strlen(key);
+
+        // This key_len check helps skips consecutive spaces.
+        //
+        if (key_len > 0) {
+            if (settings.verbose > 1)
+                fprintf(stderr, "forward multiget key %s (%d)\n", key, key_len);
+
+            conn *c = cproxy_find_downstream_conn(d, key, key_len);
+            if (c != NULL) {
+                assert(c->item == NULL);
+                assert(c->state == conn_pause);
+                assert(IS_ASCII(c->protocol));
+                assert(IS_PROXY(c->protocol));
+                assert(c->ilist != NULL);
+                assert(c->isize > 0);
+
+                c->icurr = c->ilist;
+                c->ileft = 0;
+
+                if (c->msgused <= 1 &&
+                    c->msgbytes <= 0) {
+                    if (settings.verbose > 1)
+                        fprintf(stderr, ">%d forward multiget command %s (%d)\n",
+                                c->sfd, command, cmd_len);
+
+                    add_iov(c, command, cmd_len);
+                }
+
+                if (settings.verbose > 1)
+                    fprintf(stderr, ">%d forward multiget key %s (%d)\n",
+                            c->sfd, key, key_len);
+
+                // Write the key, including the preceding space.
+                //
+                add_iov(c, key - 1, key_len + 1);
+            }
+        }
+
+        space = next_space;
+    }
+
+    for (int i = 0; i < nconns; i++) {
+        conn *c = d->downstream_conns[i];
+        if (c != NULL &&
+            (c->msgused > 1 ||
+             c->msgbytes > 0)) {
+            add_iov(c, "\r\n", 2);
+
+            conn_set_state(c, conn_mwrite);
+            c->write_and_go = conn_new_cmd;
+
+            if (update_event(c, EV_WRITE | EV_PERSIST)) {
+                nwrite++;
+
+                if (uc->noreply) {
+                    c->write_and_go = conn_pause;
+                }
+            } else {
+                if (settings.verbose > 0)
+                    fprintf(stderr, "Couldn't update cproxy write event\n");
+
+                conn_set_state(c, conn_closing);
+            }
+        }
+    }
+
+    if (settings.verbose > 1)
+        fprintf(stderr, "forward multiget nwrite %d out of %d\n",
+                nwrite, nconns);
+
+    d->downstream_used = nwrite; // TODO: Need timeout?
+
+    if (uc->noreply) {
+        uc->noreply = false;
+        d->upstream_conn = NULL;
+        cproxy_reset_upstream(uc);
+    }
+
+    return nwrite > 0;
 }
 
 /* Forward an upstream command that came with item data,
@@ -1018,7 +1130,7 @@ bool cproxy_forward_item_downstream(downstream *d, short cmd, item *it) {
             c->write_and_go = conn_new_cmd;
 
             if (update_event(c, EV_WRITE | EV_PERSIST)) {
-                d->reply_expect = 1;
+                d->downstream_used = 1;
                 return true;
             }
 
@@ -1063,7 +1175,8 @@ void cproxy_reset_upstream(conn *uc) {
 void cproxy_wait_for_downstream(proxy_td *ptd, conn *c) {
     assert(c != NULL);
     assert(ptd != NULL);
-    assert(!ptd->waiting_for_downstream_tail || !ptd->waiting_for_downstream_tail->next);
+    assert(!ptd->waiting_for_downstream_tail ||
+           !ptd->waiting_for_downstream_tail->next);
 
     // Add the conn to the wait list.
     //
@@ -1081,11 +1194,12 @@ void cproxy_release_downstream_conn(downstream *d, conn *c) {
     assert(c != NULL);
 
     if (settings.verbose > 1)
-        fprintf(stderr, "%d release_downstream_conn, reply_expect %d\n",
-                c->sfd, d->reply_expect);
+        fprintf(stderr,
+                "%d release_downstream_conn, downstream_used %d\n",
+                c->sfd, d->downstream_used);
 
-    d->reply_expect--;
-    if (d->reply_expect <= 0) { // Might be negative when noreply.
+    d->downstream_used--;
+    if (d->downstream_used <= 0) {
         cproxy_release_downstream(d);
         cproxy_assign_downstream(d->ptd);
     }
@@ -1096,7 +1210,8 @@ void cproxy_on_pause_downstream_conn(conn *c) {
     assert(c->extra != NULL);
 
     if (settings.verbose > 1)
-        fprintf(stderr, "<%d cproxy_on_pause_downstream_conn\n", c->sfd);
+        fprintf(stderr, "<%d cproxy_on_pause_downstream_conn\n",
+                c->sfd);
 
     downstream *d = c->extra;
 
