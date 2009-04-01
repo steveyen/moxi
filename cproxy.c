@@ -61,32 +61,33 @@ struct downstream {
     conn  *upstream_conn;    // Non-NULL when downstream is reserved.
 };
 
-proxy       *cproxy_create(int proxy_port, char *proxy_sect, int nthreads);
-int          cproxy_listen(proxy *p);
-proxy_td    *cproxy_find_thread_data(proxy *p, pthread_t thread_id);
-void         cproxy_init_upstream_conn(conn *c);
-void         cproxy_init_downstream_conn(conn *c);
-void         cproxy_on_close_upstream_conn(conn *c);
-void         cproxy_on_close_downstream_conn(conn *c);
-void         cproxy_on_pause_downstream_conn(conn *c);
+proxy    *cproxy_create(int proxy_port, char *proxy_sect, int nthreads);
+int       cproxy_listen(proxy *p);
+proxy_td *cproxy_find_thread_data(proxy *p, pthread_t thread_id);
+void      cproxy_init_upstream_conn(conn *c);
+void      cproxy_init_downstream_conn(conn *c);
+void      cproxy_on_close_upstream_conn(conn *c);
+void      cproxy_on_close_downstream_conn(conn *c);
+void      cproxy_on_pause_downstream_conn(conn *c);
 
-void         cproxy_add_downstream(proxy_td *ptd);
-downstream  *cproxy_reserve_downstream(proxy_td *ptd);
-void         cproxy_release_downstream(downstream *d);
-void         cproxy_release_downstream_conn(downstream *d, conn *c);
-downstream  *cproxy_create_downstream(char *proxy_sect);
-int          cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread);
-void         cproxy_wait_for_downstream(proxy_td *ptd, conn *c);
-void         cproxy_assign_downstream(proxy_td *ptd);
-bool         cproxy_forward_downstream(downstream *d);
-bool         cproxy_forward_multiget_downstream(downstream *d, char *command, conn *uc);
-bool         cproxy_forward_simple_downstream(downstream *d, char *command, conn *uc);
-bool         cproxy_forward_item_downstream(downstream *d, short cmd, item *it);
-void         cproxy_pause_upstream_for_downstream(proxy_td *ptd, conn *upstream);
-void         cproxy_out_string_downstream(conn *c, const char *str);
-conn        *cproxy_find_downstream_conn(downstream *d, char *key, int key_length);
-bool         cproxy_prep_conn_for_write(conn *c);
-int          cproxy_server_index(downstream *d, char *key, size_t key_length);
+void        cproxy_add_downstream(proxy_td *ptd);
+downstream *cproxy_create_downstream(char *proxy_sect);
+downstream *cproxy_reserve_downstream(proxy_td *ptd);
+void        cproxy_release_downstream(downstream *d);
+void        cproxy_release_downstream_conn(downstream *d, conn *c);
+
+int   cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread);
+void  cproxy_wait_for_downstream(proxy_td *ptd, conn *c);
+void  cproxy_assign_downstream(proxy_td *ptd);
+bool  cproxy_forward_downstream(downstream *d);
+bool  cproxy_forward_multiget_downstream(downstream *d, char *command, conn *uc);
+bool  cproxy_forward_simple_downstream(downstream *d, char *command, conn *uc);
+bool  cproxy_forward_item_downstream(downstream *d, short cmd, item *it);
+void  cproxy_pause_upstream_for_downstream(proxy_td *ptd, conn *upstream);
+void  cproxy_out_string_downstream(conn *c, const char *str);
+conn *cproxy_find_downstream_conn(downstream *d, char *key, int key_length);
+bool  cproxy_prep_conn_for_write(conn *c);
+int   cproxy_server_index(downstream *d, char *key, size_t key_length);
 
 void cproxy_reset_upstream(conn *uc);
 
