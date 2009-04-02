@@ -1215,31 +1215,40 @@ bool cproxy_forward_item_downstream(downstream *d, short cmd, item *it) {
 
         assert(verb != NULL);
 
-        if (add_iov(c, verb, strlen(verb)) == 0 &&
-            add_iov(c, ITEM_key(it), it->nkey) == 0 &&
-            add_iov(c, " 0 ", 3) == 0 && // TODO: Handle flags/expiration.
-            add_iov(c, ITEM_suffix(it), it->nsuffix + it->nbytes) == 0) {
-            // TODO: Handle cas.
-            // TODO: Handle noreply.
-            //
-            conn_set_state(c, conn_mwrite);
-            c->write_and_go = conn_new_cmd;
+        char *str_flags   = ITEM_suffix(it);            // Includes space char prefix.
+        char *str_length  = strchr(str_flags + 1, ' '); // Includes space char prefix.
+        int   len_flags   = str_length - str_flags;
+        char *str_exptime = add_conn_suffix(c);
 
-            if (update_event(c, EV_WRITE | EV_PERSIST)) {
-                d->downstream_used = 1;
-                return true;
+        if (str_flags != NULL &&
+            str_length != NULL &&
+            len_flags > 1 &&
+            str_exptime != NULL) {
+            sprintf(str_exptime, " %du", it->exptime);
+
+            if (add_iov(c, verb, strlen(verb)) == 0 &&
+                add_iov(c, ITEM_key(it), it->nkey) == 0 &&
+                add_iov(c, str_flags, len_flags) == 0 &&
+                add_iov(c, str_exptime, strlen(str_exptime)) == 0 &&
+                add_iov(c, str_length,
+                        it->nsuffix - len_flags + it->nbytes) == 0) {
+                // TODO: Handle cas.
+                // TODO: Handle noreply.
+                //
+                conn_set_state(c, conn_mwrite);
+                c->write_and_go = conn_new_cmd;
+
+                if (update_event(c, EV_WRITE | EV_PERSIST)) {
+                    d->downstream_used = 1;
+                    return true;
+                }
             }
-
-            if (settings.verbose > 0)
-                fprintf(stderr, "Couldn't update cproxy write event\n");
-
-            conn_set_state(c, conn_closing);
-        } else {
-            // TODO: Need better out-of-memory behavior.
-            //
-            if (settings.verbose > 0)
-                fprintf(stderr, "Couldn't alloc cproxy iov memory\n");
         }
+
+        if (settings.verbose > 0)
+            fprintf(stderr, "Proxy item write out of memory");
+
+        // TODO: Need better out-of-memory behavior.
     }
 
     return false;
