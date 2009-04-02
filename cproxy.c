@@ -761,20 +761,42 @@ void cproxy_process_downstream_ascii_nread(conn *c) {
         assert(IS_PROXY(uc->protocol));
 
         if (strncmp(ITEM_data(it) + it->nbytes - 2, "\r\n", 2) == 0) {
-            if (add_iov(uc, "VALUE ", 6) == 0 &&
-                add_iov(uc, ITEM_key(it), it->nkey) == 0 &&
-                add_iov(uc, ITEM_suffix(it), it->nsuffix + it->nbytes) == 0 &&
-                add_conn_item(uc, it)) {
-                if (settings.verbose > 1)
-                    fprintf(stderr,
-                            "<%d cproxy_process_downstream_ascii success\n",
-                            c->sfd);
+            uint64_t cas = ITEM_get_cas(it);
+            if (cas == NOT_CAS) {
+                if (add_iov(uc, "VALUE ", 6) == 0 &&
+                    add_iov(uc, ITEM_key(it), it->nkey) == 0 &&
+                    add_iov(uc, ITEM_suffix(it), it->nsuffix + it->nbytes) == 0 &&
+                    add_conn_item(uc, it)) {
+                    if (settings.verbose > 1)
+                        fprintf(stderr,
+                                "<%d cproxy_process_downstream_ascii success\n",
+                                c->sfd);
 
-                return; // Success.
+                    return; // Success.
+                }
             } else {
-                if (settings.verbose > 1)
-                    fprintf(stderr, "proxy out of response memory");
+                char *suffix = add_conn_suffix(uc);
+                if (suffix != NULL) {
+                    sprintf(suffix, " %llu\r\n", (unsigned long long) cas);
+
+                    if (add_iov(uc, "VALUE ", 6) == 0 &&
+                        add_iov(uc, ITEM_key(it), it->nkey) == 0 &&
+                        add_iov(uc, ITEM_suffix(it), it->nsuffix - 2) == 0 &&
+                        add_iov(uc, suffix, strlen(suffix)) == 0 &&
+                        add_iov(uc, ITEM_data(it), it->nbytes) == 0 &&
+                        add_conn_item(uc, it)) {
+                        if (settings.verbose > 1)
+                            fprintf(stderr,
+                                    "<%d cproxy_process_downstream_ascii success\n",
+                                    c->sfd);
+
+                        return; // Success.
+                    }
+                }
             }
+
+            if (settings.verbose > 1)
+                fprintf(stderr, "proxy out of response memory");
         } else {
             if (settings.verbose > 1)
                 fprintf(stderr, "unexpected item data block in proxy");
