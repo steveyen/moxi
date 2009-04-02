@@ -1221,24 +1221,30 @@ bool cproxy_forward_item_downstream(downstream *d, short cmd, item *it, conn *uc
         int   len_flags   = str_length - str_flags;
         int   len_length  = it->nsuffix - len_flags - 2;
         char *str_exptime = add_conn_suffix(c);
+        char *str_cas     = (cmd == NREAD_CAS ? add_conn_suffix(c) : NULL);
 
         if (str_flags != NULL &&
             str_length != NULL &&
             len_flags > 1 &&
             len_length > 1 &&
-            str_exptime != NULL) {
+            str_exptime != NULL &&
+            (cmd != NREAD_CAS ||
+             str_cas != NULL)) {
             sprintf(str_exptime, " %u", it->exptime);
+
+            if (str_cas != NULL)
+                sprintf(str_cas, " %llu", (unsigned long long) ITEM_get_cas(it));
 
             if (add_iov(c, verb, strlen(verb)) == 0 &&
                 add_iov(c, ITEM_key(it), it->nkey) == 0 &&
                 add_iov(c, str_flags, len_flags) == 0 &&
                 add_iov(c, str_exptime, strlen(str_exptime)) == 0 &&
                 add_iov(c, str_length, len_length) == 0 &&
+                (str_cas == NULL ||
+                 add_iov(c, str_cas, strlen(str_cas)) == 0) &&
                 (uc->noreply == false ||
                  add_iov(c, " noreply", 8) == 0) &&
                 add_iov(c, ITEM_data(it) - 2, it->nbytes + 2) == 0) {
-                // TODO: Handle cas.
-                //
                 conn_set_state(c, conn_mwrite);
                 c->write_and_go = conn_new_cmd;
 
