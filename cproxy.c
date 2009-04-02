@@ -83,7 +83,7 @@ void  cproxy_assign_downstream(proxy_td *ptd);
 bool  cproxy_forward_downstream(downstream *d);
 bool  cproxy_forward_multiget_downstream(downstream *d, char *command, conn *uc);
 bool  cproxy_forward_simple_downstream(downstream *d, char *command, conn *uc);
-bool  cproxy_forward_item_downstream(downstream *d, short cmd, item *it);
+bool  cproxy_forward_item_downstream(downstream *d, short cmd, item *it, conn *uc);
 bool  cproxy_broadcast_downstream(downstream *d, char *command, conn *uc,
                                   char *suffix);
 void  cproxy_pause_upstream_for_downstream(proxy_td *ptd, conn *upstream);
@@ -965,7 +965,7 @@ bool cproxy_forward_downstream(downstream *d) {
         if (uc->cmd == -1) {
             return cproxy_forward_simple_downstream(d, uc->rcurr, uc);
         } else {
-            return cproxy_forward_item_downstream(d, uc->cmd, uc->item);
+            return cproxy_forward_item_downstream(d, uc->cmd, uc->item, uc);
         }
     }
 
@@ -1199,10 +1199,11 @@ bool cproxy_broadcast_downstream(downstream *d, char *command, conn *uc, char *s
 /* Forward an upstream command that came with item data,
  * like set/add/replace/etc.
  */
-bool cproxy_forward_item_downstream(downstream *d, short cmd, item *it) {
+bool cproxy_forward_item_downstream(downstream *d, short cmd, item *it, conn *uc) {
     assert(d != NULL);
     assert(d->downstream_conns != NULL);
     assert(it != NULL);
+    assert(uc != NULL);
 
     // Assuming we're already connected to downstream.
     //
@@ -1215,31 +1216,44 @@ bool cproxy_forward_item_downstream(downstream *d, short cmd, item *it) {
 
         assert(verb != NULL);
 
-        char *str_flags   = ITEM_suffix(it);            // Includes space char prefix.
-        char *str_length  = strchr(str_flags + 1, ' '); // Includes space char prefix.
+        char *str_flags   = ITEM_suffix(it);
+        char *str_length  = strchr(str_flags + 1, ' ');
         int   len_flags   = str_length - str_flags;
+        int   len_length  = it->nsuffix - len_flags - 2;
         char *str_exptime = add_conn_suffix(c);
 
         if (str_flags != NULL &&
             str_length != NULL &&
             len_flags > 1 &&
+            len_length > 1 &&
             str_exptime != NULL) {
-            sprintf(str_exptime, " %du", it->exptime);
+            sprintf(str_exptime, " %u", it->exptime);
 
             if (add_iov(c, verb, strlen(verb)) == 0 &&
                 add_iov(c, ITEM_key(it), it->nkey) == 0 &&
                 add_iov(c, str_flags, len_flags) == 0 &&
                 add_iov(c, str_exptime, strlen(str_exptime)) == 0 &&
-                add_iov(c, str_length,
-                        it->nsuffix - len_flags + it->nbytes) == 0) {
+                add_iov(c, str_length, len_length) == 0 &&
+                (uc->noreply == false ||
+                 add_iov(c, " noreply", 8) == 0) &&
+                add_iov(c, ITEM_data(it) - 2, it->nbytes + 2) == 0) {
                 // TODO: Handle cas.
-                // TODO: Handle noreply.
                 //
                 conn_set_state(c, conn_mwrite);
                 c->write_and_go = conn_new_cmd;
 
                 if (update_event(c, EV_WRITE | EV_PERSIST)) {
-                    d->downstream_used = 1;
+                    d->downstream_used = 1; // TODO: Need timeout?
+
+                    if (uc->noreply) {
+                        uc->noreply        = false;
+                        d->upstream_conn   = NULL;
+                        d->upstream_suffix = NULL;
+                        c->write_and_go    = conn_pause;
+
+                        cproxy_reset_upstream(uc);
+                    }
+
                     return true;
                 }
             }
