@@ -20,11 +20,9 @@ my $builddir = getcwd;
 
 sub new_memcached_proxy {
     my ($args, $passed_port) = @_;
-    my $port  = $passed_port || free_port();
-    my $portB = free_port();
-    my $portC = $portB;
+    my $port = $passed_port || free_port();
 
-    $args .= " -W $port=localhost:$portB -p $portC";
+    TOPOLOGY
 
     print("new_memcached_proxy $args\n");
 
@@ -85,7 +83,57 @@ sub supports_udp {
 
 PREFIX
 
-my $test_name = $ARGV[0] || 'flags';
+my $simple_topology = <<'SIMPLE_TOPOLOGY';
+    my $portA = free_port();
+    my $portC = $portA;
+    my $topology =
+      " -W \"".
+        "$port=".
+          "localhost:$portA\"".
+      " -p $portC";
+    $args .= $topology;
+SIMPLE_TOPOLOGY
+
+my $fanout_topology = <<'FANOUT_TOPOLOGY';
+    my $portA = free_port();
+    my $portC = $portA;
+    my $topology =
+      " -W \"".
+        "$port=".
+          "localhost:$portA,".
+          "localhost:$portA,".
+          "localhost:$portA,".
+          "localhost:$portA\"".
+      " -p $portC";
+    $args .= $topology;
+FANOUT_TOPOLOGY
+
+my $fanoutin_topology = <<'FANOUTIN_TOPOLOGY';
+    my $portA = free_port();
+    my $portB = free_port();
+    my $portC = $portB;
+    my $topology =
+      " -W \"".
+        "$port=".
+          "localhost:$portA,".
+          "localhost:$portA,".
+          "localhost:$portA,".
+          "localhost:$portA;".
+        "$portA=".
+          "localhost:$portB\"".
+      " -p $portC";
+    $args .= $topology;
+FANOUTIN_TOPOLOGY
+
+my %topology_map = (
+    'simple' => $simple_topology,
+    'fanout' => $fanout_topology,
+    'fanoutin' => $fanoutin_topology
+);
+
+my $test_name     = $ARGV[0] || 'flags';
+my $topology_name = $ARGV[1] || 'simple';
+my $topology      = $topology_map{$topology_name};
 
 # Tack on ./t/ directory prefix if needed.
 if ($test_name !~ /^\.\/t/) {
@@ -100,6 +148,8 @@ if ($test_name !~ /\.t$/) {
 if ($test_name =~ /cproxy/) {
   print("fail cannot test against self\n");
 } else {
+  $prefix =~ s/TOPOLOGY/{$topology }/g;
+
   eval($prefix . `cat $test_name`);
   print($@);
 }
