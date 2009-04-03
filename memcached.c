@@ -2632,7 +2632,7 @@ static void process_delete_command(conn *c, token_t *tokens, const size_t ntoken
     }
 }
 
-static void process_verbosity_command(conn *c, token_t *tokens, const size_t ntokens) {
+void process_verbosity_command(conn *c, token_t *tokens, const size_t ntokens) {
     unsigned int level;
 
     assert(c != NULL);

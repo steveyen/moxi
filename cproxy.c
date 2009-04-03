@@ -576,6 +576,11 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
 
         out_string(c, "VERSION " VERSION);
 
+    } else if ((ntokens == 3 || ntokens == 4) &&
+               (strncmp(cmd, "verbosity", 9) == 0)) {
+
+        process_verbosity_command(c, tokens, ntokens);
+
     } else if (ntokens == 2 &&
                (strncmp(cmd, "quit", 4) == 0)) {
 

@@ -449,6 +449,7 @@ bool update_event(conn *c, const int new_flags);
 int try_read_command(conn *c);
 void process_command(conn *c, char *command);
 void process_update_command(conn *c, token_t *tokens, const size_t ntokens, int comm, bool handle_cas);
+void process_verbosity_command(conn *c, token_t *tokens, const size_t ntokens);
 void dispatch_bin_command(conn *c);
 void reset_cmd_handler(conn *c);
 void complete_nread(conn *c);
