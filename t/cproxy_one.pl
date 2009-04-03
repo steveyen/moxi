@@ -1,5 +1,8 @@
 #!/usr/bin/perl
 
+my $test_name     = $ARGV[0] || './t/flags.t';
+my $topology_name = $ARGV[1] || 'simple';
+
 my $prefix = <<'PREFIX';
 
 use strict;
@@ -131,9 +134,7 @@ my %topology_map = (
     'fanoutin' => $fanoutin_topology
 );
 
-my $test_name     = $ARGV[0] || 'flags';
-my $topology_name = $ARGV[1] || 'simple';
-my $topology      = $topology_map{$topology_name};
+my $topology = $topology_map{$topology_name};
 
 # Tack on ./t/ directory prefix if needed.
 if ($test_name !~ /^\.\/t/) {
