@@ -146,12 +146,12 @@ if ($test_name !~ /\.t$/) {
   $test_name = "$test_name.t";
 }
 
-if ($test_name =~ /cproxy/) {
-  print("fail cannot test against self\n");
-} else {
-  $prefix =~ s/TOPOLOGY/{$topology }/g;
+$prefix =~ s/TOPOLOGY/{$topology }/g;
 
-  eval($prefix . `cat $test_name`);
-  print($@);
-}
+eval($prefix . `cat $test_name`);
+
+print($@);
+
+
+
 
