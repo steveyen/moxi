@@ -98,7 +98,7 @@ my $simple_topology = <<'SIMPLE_TOPOLOGY';
 SIMPLE_TOPOLOGY
 
 my $chain_topology = <<'CHAIN_TOPOLOGY';
-    my $portA = free_port();
+    my $portA0 = free_port();
     my $portA1 = free_port();
     my $portA2 = free_port();
     my $portA3 = free_port();
@@ -107,8 +107,8 @@ my $chain_topology = <<'CHAIN_TOPOLOGY';
     my $topology =
       " -W \"".
         "$port=".
-          "localhost:$portA;".
-        "$portA=".
+          "localhost:$portA0;".
+        "$portA0=".
           "localhost:$portA1;".
         "$portA1=".
           "localhost:$portA2;".
