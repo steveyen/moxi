@@ -1364,6 +1364,13 @@ void cproxy_pause_upstream_for_downstream(proxy_td *ptd, conn *upstream) {
 }
 
 rel_time_t cproxy_realtime(const time_t exptime) {
+    // Input is a long...
+    //
+    // 0       | (0...REALIME_MAXDELTA] | (REALTIME_MAXDELTA...
+    // forever | delta,                 | unix_time
+    //
+    // Storage is an unsigned int.
+
     // The cproxy version of realtime doesn't do any
     // time math munging, just pass through.
     //

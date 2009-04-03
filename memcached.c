@@ -125,8 +125,6 @@ conn_funcs conn_funcs_default = {
     realtime
 };
 
-#define REALTIME_MAXDELTA 60*60*24*30
-
 /*
  * given time value that's either unix time or delta from current unix time, return
  * unix time. Use the fact that delta can't exceed one month (and real time value can't
