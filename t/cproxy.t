@@ -21,8 +21,11 @@ sub new_memcached_proxy {
 
 PREFIX
 
-eval($prefix . `cat ./t/flags.t`);
-print("hi\n");
+my $test_name = $ARGV[0] || 'flags';
 
-
+if ($test_name eq "cproxy") {
+  print("fail cannot test against self\n");
+} else {
+  eval($prefix . `cat ./t/$test_name.t`);
+}
 
