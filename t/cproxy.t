@@ -23,9 +23,19 @@ PREFIX
 
 my $test_name = $ARGV[0] || 'flags';
 
-if ($test_name eq "cproxy") {
+# Tack on ./t/ directory prefix if needed.
+if ($test_name !~ /^\.\/t/) {
+  $test_name = "./t/$test_name";
+}
+
+# Tack on .t filename suffix if needed.
+if ($test_name !~ /\.t$/) {
+  $test_name = "$test_name.t";
+}
+
+if ($test_name =~ /cproxy/) {
   print("fail cannot test against self\n");
 } else {
-  eval($prefix . `cat ./t/$test_name.t`);
+  eval($prefix . `cat $test_name`);
 }
 
