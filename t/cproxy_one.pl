@@ -97,6 +97,29 @@ my $simple_topology = <<'SIMPLE_TOPOLOGY';
     $args .= $topology;
 SIMPLE_TOPOLOGY
 
+my $chain_topology = <<'CHAIN_TOPOLOGY';
+    my $portA = free_port();
+    my $portA1 = free_port();
+    my $portA2 = free_port();
+    my $portA3 = free_port();
+    my $portA4 = free_port();
+    my $portC = $portA4;
+    my $topology =
+      " -W \"".
+        "$port=".
+          "localhost:$portA;".
+        "$portA=".
+          "localhost:$portA1;".
+        "$portA1=".
+          "localhost:$portA2;".
+        "$portA2=".
+          "localhost:$portA3;".
+        "$portA3=".
+          "localhost:$portA4\"".
+      " -p $portC";
+    $args .= $topology;
+CHAIN_TOPOLOGY
+
 my $fanout_topology = <<'FANOUT_TOPOLOGY';
     my $portA = free_port();
     my $portC = $portA;
@@ -130,6 +153,7 @@ FANOUTIN_TOPOLOGY
 
 my %topology_map = (
     'simple' => $simple_topology,
+    'chain' => $chain_topology,
     'fanout' => $fanout_topology,
     'fanoutin' => $fanoutin_topology
 );
