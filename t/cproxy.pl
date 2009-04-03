@@ -9,16 +9,17 @@ cas.t
 expirations.t
 flags.t
 flush-all.t
-getset.t
 incrdecr.t
 line-lengths.t
 maxconns.t
 multiversioning.t
-noreply.t
 slab-reassign.t
 );
 
 my @skip_tests = qw(
+noreply.t
+getset.t
+
 00-startup.t
 64bit.t
 binary.t
