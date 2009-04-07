@@ -15,10 +15,7 @@ memcached_return memcached_connect(memcached_server_st *ptr);
 uint32_t memcached_generate_hash(memcached_st *ptr, const char *key,
                                  size_t key_length);
 
-// TODO: Move into configurable settings one day.
-//
-#define DOWNSTREAM_MAX 10
-#define NOT_CAS        -1
+#define NOT_CAS -1
 
 typedef struct proxy      proxy;
 typedef struct proxy_td   proxy_td;
@@ -283,8 +280,8 @@ int cproxy_listen(proxy *p) {
             p->listening++;
 
             // TODO: Listening conn's never seem to close,
-            //       but need to handle memory leak if they do,
-            //       such as if we handle SIGHUP one day.
+            //       but need to handle cleanup if they do,
+            //       such as if we handle graceful shutdown one day.
             //
             c->extra = p;
             c->funcs = &cproxy_listen_funcs;
