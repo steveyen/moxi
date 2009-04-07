@@ -339,14 +339,53 @@ void cproxy_init_downstream_conn(conn *c) {
 
 void cproxy_on_close_upstream_conn(conn *c) {
     assert(c != NULL);
-    assert(c->extra != NULL);
 
     if (settings.verbose > 1)
         fprintf(stderr, "<%d cproxy_on_close_upstream_conn\n", c->sfd);
 
-    // TODO: Cleanup more.
+    proxy_td *ptd = c->extra;
+    assert(ptd != NULL);
 
     c->extra = NULL;
+
+    ptd->num_upstream--;
+    assert(ptd->num_upstream >= 0);
+
+    for (downstream *d = ptd->downstream_reserved; d != NULL; d = d->next) {
+        if (d->upstream_conn == c) {
+            d->upstream_conn = NULL;
+            d->upstream_suffix = NULL;
+
+            // Don't need to do anything else, as we need to keep
+            // reading for any inflight downstream replies.
+            // Eventually, the downstream will be released.
+        }
+    }
+
+    conn *prev = NULL;
+    conn *curr = ptd->waiting_for_downstream_head;
+
+    while (curr != NULL) {
+        if (curr == c) {
+            if (ptd->waiting_for_downstream_tail == curr)
+                ptd->waiting_for_downstream_tail = prev;
+
+            if (prev != NULL) {
+                assert(curr != ptd->waiting_for_downstream_head);
+                prev->next = curr->next;
+                break;
+            }
+
+            assert(curr == ptd->waiting_for_downstream_head);
+            ptd->waiting_for_downstream_head = curr->next;
+            break;
+        }
+
+        prev = curr;
+        curr = curr->next;
+    }
+
+    c->next = NULL;
 }
 
 void cproxy_on_close_downstream_conn(conn *c) {
