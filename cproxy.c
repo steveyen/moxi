@@ -1006,7 +1006,9 @@ void cproxy_assign_downstream(proxy_td *ptd) {
             }
 
             cproxy_release_downstream(d);
-            cproxy_wait_for_downstream(ptd, uc);
+
+            if (uc != NULL)
+                cproxy_wait_for_downstream(ptd, uc);
         }
     }
 
