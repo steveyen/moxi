@@ -501,7 +501,7 @@ void cproxy_release_downstream(downstream *d) {
     //
     d->ptd->downstream_reserved = downstream_list_remove(d->ptd->downstream_reserved, d);
 
-    // TODO: Cleanup the downstream conns?  Shrink if too many?
+    // See if this downstream has real connections.
     //
     int s = 0;
     int n = memcached_server_count(&d->mst);
@@ -509,7 +509,8 @@ void cproxy_release_downstream(downstream *d) {
     assert(n > 0);
 
     for (int i = 0; i < n; i++) {
-        if (d->downstream_conns[i] != NULL) {
+        if (d->downstream_conns[i] != NULL &&
+            d->downstream_conns[i]->sfd >= 0) {
             s++;
             assert(d->downstream_conns[i]->state == conn_pause ||
                    d->downstream_conns[i]->state == conn_closing);
