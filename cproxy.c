@@ -646,8 +646,6 @@ void cproxy_process_upstream_ascii_nread(conn *c) {
         cproxy_pause_upstream_for_downstream(ptd, c);
     } else
         out_string(c, "CLIENT_ERROR bad data chunk");
-
-    // TODO: Need to EV_WRITE the upstream conn?
 }
 
 void cproxy_process_downstream_ascii(conn *c, char *line) {
