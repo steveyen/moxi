@@ -105,6 +105,8 @@ void cproxy_process_downstream_ascii_nread(conn *c);
 
 rel_time_t cproxy_realtime(const time_t exptime);
 
+void cproxy_close_conn(conn *c);
+
 bool  add_conn_item(conn *c, item *it);
 char *add_conn_suffix(conn *c);
 
@@ -422,7 +424,7 @@ void cproxy_release_downstream(downstream *d) {
                 fprintf(stderr,
                         "Could not update upstream write event\n");
 
-            conn_set_state(d->upstream_conn, conn_closing);
+            cproxy_close_conn(d->upstream_conn);
         }
     }
 
@@ -745,10 +747,7 @@ void cproxy_process_downstream_ascii(conn *c, char *line) {
                     fprintf(stderr,
                             "Can't update upstream write event\n");
 
-                // TODO: This state change might not work, since
-                //       the dispatch loop is on c, not on uc.
-                //
-                conn_set_state(uc, conn_closing);
+                cproxy_close_conn(uc);
             }
         }
     }
@@ -1053,9 +1052,7 @@ bool cproxy_forward_simple_downstream(downstream *d, char *command, conn *uc) {
         if (settings.verbose > 1)
             fprintf(stderr, "Couldn't update cproxy write event\n");
 
-        // TODO: We might be on the wrong dispatch loop to close this.
-        //
-        conn_set_state(c, conn_closing);
+        cproxy_close_conn(c);
     }
 
     return false;
@@ -1145,9 +1142,7 @@ bool cproxy_forward_multiget_downstream(downstream *d, char *command, conn *uc) 
                     fprintf(stderr,
                             "Couldn't update cproxy write event\n");
 
-                // TODO: We might be on the wrong dispatch loop to close this.
-                //
-                conn_set_state(c, conn_closing);
+                cproxy_close_conn(c);
             }
         }
     }
@@ -1200,9 +1195,7 @@ bool cproxy_broadcast_downstream(downstream *d, char *command, conn *uc, char *s
                     fprintf(stderr,
                             "Update cproxy write event failed\n");
 
-                // TODO: We might be on the wrong dispatch loop to close this.
-                //
-                conn_set_state(c, conn_closing);
+                cproxy_close_conn(c);
             }
         }
     }
@@ -1303,18 +1296,21 @@ bool cproxy_forward_item_downstream(downstream *d, short cmd, item *it, conn *uc
 }
 
 void cproxy_reset_upstream(conn *uc) {
+    assert(uc != NULL);
+
     conn_set_state(uc, conn_new_cmd);
 
     if (uc->rbytes <= 0) {
-        if (update_event(uc, EV_READ | EV_PERSIST))
+        if (update_event(uc, EV_READ | EV_PERSIST)) {
             return;
+        } else {
+            if (settings.verbose > 1)
+                fprintf(stderr, "Couldn't update uc READ event\n");
 
-        if (settings.verbose > 1)
-            fprintf(stderr, "Couldn't update uc READ event\n");
+            cproxy_close_conn(uc);
 
-        // TODO: We might be in the wrong dispatch loop to close this.
-        //
-        conn_set_state(uc, conn_closing);
+            return;
+        }
     }
 
     // TODO: Subtle potential bug, where we may have already
@@ -1405,6 +1401,19 @@ rel_time_t cproxy_realtime(const time_t exptime) {
     // time math munging, just pass through.
     //
     return (rel_time_t) exptime;
+}
+
+void cproxy_close_conn(conn *c) {
+    assert(c != NULL);
+
+    conn_set_state(c, conn_closing);
+
+    // We need this to handle case when the conn is not the
+    // current conn in the thread's drive_machine() loop.
+    // This should wakeup libevent on the next run to
+    // cleanup the conn.
+    //
+    close(c->sfd);
 }
 
 bool add_conn_item(conn *c, item *it) {
@@ -1559,3 +1568,4 @@ downstream *downstream_list_remove(downstream *head, downstream *d) {
 
     return head;
 }
+
