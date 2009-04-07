@@ -431,7 +431,7 @@ void cproxy_release_downstream(downstream *d) {
     d->downstream_used = 0;
 
     // TODO: Consider adding a downstream->prev backpointer
-    // or doubly-linked list to save on this scan.
+    //       or doubly-linked list to save on this scan.
     //
     // Remove from the reserved downstream list.
     //
@@ -442,7 +442,18 @@ void cproxy_release_downstream(downstream *d) {
     d->next = d->ptd->downstream_released;
     d->ptd->downstream_released = d;
 
-    // TODO: Cleanup the downstream conns?
+    // TODO: Cleanup the downstream conns?  Shrink if too many?
+    //
+    int n = memcached_server_count(&d->mst);
+
+    assert(n > 0);
+
+    for (int i = 0; i < n; i++) {
+        if (d->downstream_conns[i] != NULL) {
+            assert(d->downstream_conns[i]->state == conn_pause ||
+                   d->downstream_conns[i]->state == conn_closing);
+        }
+    }
 }
 
 downstream *cproxy_create_downstream(char *config) {
