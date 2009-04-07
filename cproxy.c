@@ -265,8 +265,9 @@ int cproxy_listen(proxy *p) {
 
             p->listening++;
 
-            // TODO: Memory leak, need to clean up listen_conn->extra,
-            //       or, perhaps listening conn's never close?
+            // TODO: Listening conn's never seem to close,
+            //       but need to handle memory leak if they do,
+            //       such as if we handle SIGHUP one day.
             //
             c->extra = p;
             c->funcs = &cproxy_upstream_funcs;
