@@ -121,7 +121,6 @@ conn_funcs cproxy_listen_funcs = {
     NULL,
     NULL,
     NULL,
-    NULL,
     NULL
 };
 
@@ -131,7 +130,6 @@ conn_funcs cproxy_upstream_funcs = {
     add_bytes_read,
     cproxy_process_upstream_ascii,
     dispatch_bin_command,
-    reset_cmd_handler,
     cproxy_process_upstream_ascii_nread,
     NULL,
     cproxy_realtime
@@ -143,7 +141,6 @@ conn_funcs cproxy_downstream_funcs = {
     add_bytes_read,
     cproxy_process_downstream_ascii,
     dispatch_bin_command,
-    reset_cmd_handler,
     cproxy_process_downstream_ascii_nread,
     cproxy_on_pause_downstream_conn,
     cproxy_realtime

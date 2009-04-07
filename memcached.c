@@ -119,7 +119,6 @@ conn_funcs conn_funcs_default = {
     add_bytes_read,
     process_command,
     dispatch_bin_command,
-    reset_cmd_handler,
     complete_nread,
     NULL,
     realtime
@@ -3203,7 +3202,7 @@ static void drive_machine(conn *c) {
             break;
 
         case conn_new_cmd:
-            c->funcs->conn_reset_cmd_handler(c);
+            reset_cmd_handler(c);
             break;
 
         case conn_nread:
