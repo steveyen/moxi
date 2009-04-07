@@ -1407,7 +1407,9 @@ rel_time_t cproxy_realtime(const time_t exptime) {
     // forever | delta,                 | unix_time
     //
     // Storage is an unsigned int.
-
+    //
+    // TODO: Handle data loss.
+    //
     // The cproxy version of realtime doesn't do any
     // time math munging, just pass through.
     //
