@@ -40,22 +40,24 @@ struct proxy {
 struct proxy_td { // Per proxy, per worker-thread data struct.
     proxy *proxy; // Immutable parent pointer.
 
-    // Upstream conns that are paused, waiting for a free downstream.
+    // Upstream conns that are paused, waiting for
+    // an available, released downstream.
     //
     conn *waiting_for_downstream_head;
     conn *waiting_for_downstream_tail;
 
-    downstream *downstream_free; // Downstreams not assigned to upstreams.
-    int         downstream_num;  // Number downstreams created.
-    int         downstream_max;  // Max downstream concurrency number.
+    downstream *downstream_reserved; // Downstreams assigned to upstreams.
+    downstream *downstream_released; // Downstreams not assigned to upstreams.
+    int         downstream_num;      // Number downstreams created.
+    int         downstream_max;      // Max downstream concurrency number.
 
     int num_upstream; // # of upstreams conns where conn->extra == this.
 };
 
 struct downstream {
-    proxy_td      *ptd;                 // Immutable parent pointer.
-    memcached_st   mst;                 // Immutable.
-    downstream    *next;                // To track free list.
+    proxy_td      *ptd;      // Immutable parent pointer.
+    memcached_st   mst;      // Immutable, from libmemcached.
+    downstream    *next;     // To track reserved/free lists.
 
     conn **downstream_conns; // Wraps the fd's of mst with conns.
     int    downstream_used;  // Number of in-use downstream conns, might
@@ -105,6 +107,8 @@ rel_time_t cproxy_realtime(const time_t exptime);
 
 bool  add_conn_item(conn *c, item *it);
 char *add_conn_suffix(conn *c);
+
+downstream *downstream_list_remove(downstream *head, downstream *d);
 
 size_t scan_tokens(char *command, token_t *tokens, const size_t max_tokens);
 
@@ -213,7 +217,8 @@ proxy *cproxy_create(int port, char *config, int nthreads) {
                 ptd->proxy = p;
                 ptd->waiting_for_downstream_head = NULL;
                 ptd->waiting_for_downstream_tail = NULL;
-                ptd->downstream_free = NULL;
+                ptd->downstream_reserved = NULL;
+                ptd->downstream_released = NULL;
                 ptd->downstream_num  = 0;
                 ptd->downstream_max  = DOWNSTREAM_MAX;
                 ptd->num_upstream = 0;
@@ -366,23 +371,25 @@ downstream *cproxy_reserve_downstream(proxy_td *ptd) {
 
     downstream *d;
 
-    d = ptd->downstream_free;
+    d = ptd->downstream_released;
     if (d == NULL)
         cproxy_add_downstream(ptd);
 
-    d = ptd->downstream_free;
+    d = ptd->downstream_released;
     if (d != NULL) {
-        ptd->downstream_free = d->next;
-        d->next = NULL;
+        ptd->downstream_released = d->next;
+
+        d->next = ptd->downstream_reserved;
+        ptd->downstream_reserved = d;
+
+        assert(d->upstream_conn == NULL);
+        assert(d->upstream_suffix == NULL);
+        assert(d->downstream_used == 0);
+
+        d->upstream_conn = NULL;
+        d->upstream_suffix = NULL;
+        d->downstream_used = 0;
     }
-
-    assert(d->upstream_conn == NULL);
-    assert(d->upstream_suffix == NULL);
-    assert(d->downstream_used == 0);
-
-    d->upstream_conn = NULL;
-    d->upstream_suffix = NULL;
-    d->downstream_used = 0;
 
     return d;
 }
@@ -420,10 +427,17 @@ void cproxy_release_downstream(downstream *d) {
     d->upstream_suffix = NULL; // No free(), expecting a static string.
     d->downstream_used = 0;
 
-    // Back onto the free/available downstream list.
+    // TODO: Consider adding a downstream->prev backpointer
+    // or doubly-linked list to save on this scan.
     //
-    d->next = d->ptd->downstream_free;
-    d->ptd->downstream_free = d;
+    // Remove from the reserved downstream list.
+    //
+    d->ptd->downstream_reserved = downstream_list_remove(d->ptd->downstream_reserved, d);
+
+    // Back onto the available, released downstream list.
+    //
+    d->next = d->ptd->downstream_released;
+    d->ptd->downstream_released = d;
 
     // TODO: Cleanup the downstream conns?
 }
@@ -461,7 +475,7 @@ downstream *cproxy_create_downstream(char *config) {
 int cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread) {
     assert(d != NULL);
     assert(d->ptd != NULL);
-    assert(d->ptd->downstream_free != d); // Should not be in free list.
+    assert(d->ptd->downstream_released != d); // Should not be in free list.
     assert(d->next == NULL);
     assert(d->downstream_conns != NULL);
     assert(memcached_server_count(&d->mst) > 0);
@@ -1514,3 +1528,27 @@ size_t scan_tokens(char *command, token_t *tokens, const size_t max_tokens) {
     return ntokens;
 }
 
+/* Returns the new head of the list.
+ */
+downstream *downstream_list_remove(downstream *head, downstream *d) {
+    downstream *prev = NULL;
+    downstream *curr = head;
+
+    while (curr != NULL) {
+        if (curr == d) {
+            if (prev != NULL) {
+                assert(curr != head);
+                prev->next = curr->next;
+                return head;
+            }
+
+            assert(curr == head);
+            return curr->next;
+        }
+
+        prev = curr;
+        curr = curr ->next;
+    }
+
+    return head;
+}
