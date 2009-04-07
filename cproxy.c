@@ -415,7 +415,7 @@ void cproxy_release_downstream(downstream *d) {
             update_event(d->upstream_conn, EV_WRITE | EV_PERSIST)) {
             conn_set_state(d->upstream_conn, conn_mwrite);
         } else {
-            if (settings.verbose > 0)
+            if (settings.verbose > 1)
                 fprintf(stderr,
                         "Could not update upstream write event\n");
 
@@ -719,7 +719,7 @@ void cproxy_process_downstream_ascii(conn *c, char *line) {
             // TODO: Need to swallow on c.
 
             if (!update_event(uc, EV_WRITE | EV_PERSIST)) {
-                if (settings.verbose > 0)
+                if (settings.verbose > 1)
                     fprintf(stderr,
                             "Can't update upstream write event\n");
                 conn_set_state(uc, conn_closing);
@@ -739,7 +739,7 @@ void cproxy_process_downstream_ascii(conn *c, char *line) {
             out_string(uc, line);
 
             if (!update_event(uc, EV_WRITE | EV_PERSIST)) {
-                if (settings.verbose > 0)
+                if (settings.verbose > 1)
                     fprintf(stderr,
                             "Couldn't update upstream write event\n");
 
@@ -1032,7 +1032,7 @@ bool cproxy_forward_simple_downstream(downstream *d, char *command, conn *uc) {
 
         out_string(c, command);
 
-        if (settings.verbose > 0)
+        if (settings.verbose > 1)
             fprintf(stderr, "forwarding to %d, noreply %d\n",
                     c->sfd, uc->noreply);
 
@@ -1051,7 +1051,7 @@ bool cproxy_forward_simple_downstream(downstream *d, char *command, conn *uc) {
             return true;
         }
 
-        if (settings.verbose > 0)
+        if (settings.verbose > 1)
             fprintf(stderr, "Couldn't update cproxy write event\n");
 
         conn_set_state(c, conn_closing);
@@ -1140,7 +1140,7 @@ bool cproxy_forward_multiget_downstream(downstream *d, char *command, conn *uc) 
                     c->write_and_go = conn_pause;
                 }
             } else {
-                if (settings.verbose > 0)
+                if (settings.verbose > 1)
                     fprintf(stderr,
                             "Couldn't update cproxy write event\n");
 
@@ -1193,7 +1193,7 @@ bool cproxy_broadcast_downstream(downstream *d, char *command, conn *uc, char *s
                     c->write_and_go = conn_pause;
                 }
             } else {
-                if (settings.verbose > 0)
+                if (settings.verbose > 1)
                     fprintf(stderr,
                             "Update cproxy write event failed\n");
 
@@ -1288,7 +1288,7 @@ bool cproxy_forward_item_downstream(downstream *d, short cmd, item *it, conn *uc
             }
         }
 
-        if (settings.verbose > 0)
+        if (settings.verbose > 1)
             fprintf(stderr, "Proxy item write out of memory");
 
         // TODO: Need better out-of-memory behavior.
@@ -1304,7 +1304,7 @@ void cproxy_reset_upstream(conn *uc) {
         if (update_event(uc, EV_READ | EV_PERSIST))
             return;
 
-        if (settings.verbose > 0)
+        if (settings.verbose > 1)
             fprintf(stderr, "Couldn't update uc READ event\n");
 
         conn_set_state(uc, conn_closing);
