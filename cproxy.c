@@ -351,17 +351,21 @@ void cproxy_on_close_upstream_conn(conn *c) {
     ptd->num_upstream--;
     assert(ptd->num_upstream >= 0);
 
+    // Delink from any reserved downstream.
+    //
     for (downstream *d = ptd->downstream_reserved; d != NULL; d = d->next) {
         if (d->upstream_conn == c) {
             d->upstream_conn = NULL;
             d->upstream_suffix = NULL;
 
-            // Don't need to do anything else, as we need to keep
-            // reading for any inflight downstream replies.
+            // Don't need to do anything else, as we'll now just
+            // read and drop any remaining inflight downstream replies.
             // Eventually, the downstream will be released.
         }
     }
 
+    // Delink from any wait queue.
+    //
     conn *prev = NULL;
     conn *curr = ptd->waiting_for_downstream_head;
 
