@@ -905,13 +905,13 @@ void cproxy_assign_downstream(proxy_td *ptd) {
     if (settings.verbose > 1)
         fprintf(stderr, "assign_downstream\n");
 
-    // Key loop that tries to reserve any free downstream
-    // resources to waiting upstream conns.
+    // Key loop that tries to reserve any available, released
+    // downstream resources to waiting upstream conns.
     //
     // Remember the wait list tail when we start, in case more
     // upstream conns are tacked onto the wait list while we're
-    // processing.  This helps avoid infinite loop where conn's
-    // just keep on moving to the tail.
+    // processing.  This helps avoid infinite loop where upstream
+    // conns just keep on moving to the tail.
     //
     conn *tail = ptd->waiting_for_downstream_tail;
     int   stop = 0;
@@ -948,16 +948,13 @@ void cproxy_assign_downstream(proxy_td *ptd) {
             // TOOD: Count this to eventually give up & error,
             //       instead of retry.
             //
-            // TODO: Do we need to clear the upstream_suffix?
-            //
             conn *uc = d->upstream_conn;
-
-            assert(uc != NULL);
-
-            if (settings.verbose > 1)
-                fprintf(stderr,
-                        "%d could not forward upstream to downstream\n",
-                        uc->sfd);
+            if (uc != NULL) {
+                if (settings.verbose > 1)
+                    fprintf(stderr,
+                            "%d could not forward upstream to downstream\n",
+                            uc->sfd);
+            }
 
             cproxy_release_downstream(d);
             cproxy_wait_for_downstream(ptd, uc);
@@ -1056,6 +1053,8 @@ bool cproxy_forward_simple_downstream(downstream *d, char *command, conn *uc) {
         if (settings.verbose > 1)
             fprintf(stderr, "Couldn't update cproxy write event\n");
 
+        // TODO: We might be on the wrong dispatch loop to close this.
+        //
         conn_set_state(c, conn_closing);
     }
 
@@ -1146,6 +1145,8 @@ bool cproxy_forward_multiget_downstream(downstream *d, char *command, conn *uc) 
                     fprintf(stderr,
                             "Couldn't update cproxy write event\n");
 
+                // TODO: We might be on the wrong dispatch loop to close this.
+                //
                 conn_set_state(c, conn_closing);
             }
         }
@@ -1199,6 +1200,8 @@ bool cproxy_broadcast_downstream(downstream *d, char *command, conn *uc, char *s
                     fprintf(stderr,
                             "Update cproxy write event failed\n");
 
+                // TODO: We might be on the wrong dispatch loop to close this.
+                //
                 conn_set_state(c, conn_closing);
             }
         }
@@ -1309,6 +1312,8 @@ void cproxy_reset_upstream(conn *uc) {
         if (settings.verbose > 1)
             fprintf(stderr, "Couldn't update uc READ event\n");
 
+        // TODO: We might be in the wrong dispatch loop to close this.
+        //
         conn_set_state(uc, conn_closing);
     }
 
