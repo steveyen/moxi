@@ -501,22 +501,29 @@ void cproxy_release_downstream(downstream *d) {
     //
     d->ptd->downstream_reserved = downstream_list_remove(d->ptd->downstream_reserved, d);
 
-    // Back onto the available, released downstream list.
-    //
-    d->next = d->ptd->downstream_released;
-    d->ptd->downstream_released = d;
-
     // TODO: Cleanup the downstream conns?  Shrink if too many?
     //
+    int s = 0;
     int n = memcached_server_count(&d->mst);
 
     assert(n > 0);
 
     for (int i = 0; i < n; i++) {
         if (d->downstream_conns[i] != NULL) {
+            s++;
             assert(d->downstream_conns[i]->state == conn_pause ||
                    d->downstream_conns[i]->state == conn_closing);
         }
+    }
+
+    // If this downstream still has real connections, go
+    // back onto the available, released downstream list.
+    //
+    if (s > 0) {
+        d->next = d->ptd->downstream_released;
+        d->ptd->downstream_released = d;
+    } else {
+        // TODO: Need to free the downstream.
     }
 }
 
