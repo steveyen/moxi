@@ -120,14 +120,12 @@ conn_funcs cproxy_listen_funcs = {
     NULL,
     NULL,
     NULL,
-    NULL,
     NULL
 };
 
 conn_funcs cproxy_upstream_funcs = {
     NULL,
     cproxy_on_close_upstream_conn,
-    add_bytes_read,
     cproxy_process_upstream_ascii,
     NULL,
     cproxy_process_upstream_ascii_nread,
@@ -138,7 +136,6 @@ conn_funcs cproxy_upstream_funcs = {
 conn_funcs cproxy_downstream_funcs = {
     cproxy_init_downstream_conn,
     cproxy_on_close_downstream_conn,
-    add_bytes_read,
     cproxy_process_downstream_ascii,
     NULL,
     cproxy_process_downstream_ascii_nread,

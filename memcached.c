@@ -116,7 +116,6 @@ static enum transmit_result transmit(conn *c);
 conn_funcs conn_funcs_default = {
     NULL,
     NULL,
-    add_bytes_read,
     process_command,
     dispatch_bin_command,
     complete_nread,
@@ -2920,7 +2919,7 @@ static enum try_read_result try_read_udp(conn *c) {
     if (res > 8) {
         unsigned char *buf = (unsigned char *)c->rbuf;
 
-        c->funcs->conn_add_bytes_read(c, res);
+        add_bytes_read(c, res);
 
         /* Beginning of UDP packet is the request ID; save it. */
         c->request_id = buf[0] * 256 + buf[1];
@@ -2979,7 +2978,7 @@ static enum try_read_result try_read_network(conn *c) {
         int avail = c->rsize - c->rbytes;
         res = read(c->sfd, c->rbuf + c->rbytes, avail);
         if (res > 0) {
-            c->funcs->conn_add_bytes_read(c, res);
+            add_bytes_read(c, res);
 
             gotdata = READ_DATA_RECEIVED;
             c->rbytes += res;
@@ -3228,7 +3227,7 @@ static void drive_machine(conn *c) {
             /*  now try reading from the socket */
             res = read(c->sfd, c->ritem, c->rlbytes);
             if (res > 0) {
-                c->funcs->conn_add_bytes_read(c, res);
+                add_bytes_read(c, res);
 
                 if (c->rcurr == c->ritem) {
                     c->rcurr += res;
@@ -3276,7 +3275,7 @@ static void drive_machine(conn *c) {
             /*  now try reading from the socket */
             res = read(c->sfd, c->rbuf, c->rsize > c->sbytes ? c->sbytes : c->rsize);
             if (res > 0) {
-                c->funcs->conn_add_bytes_read(c, res);
+                add_bytes_read(c, res);
                 c->sbytes -= res;
                 break;
             }
