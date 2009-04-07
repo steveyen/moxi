@@ -48,6 +48,8 @@ struct proxy_td { // Per proxy, per worker-thread data struct.
     downstream *downstream_free; // Downstreams not assigned to upstreams.
     int         downstream_num;  // Number downstreams created.
     int         downstream_max;  // Max downstream concurrency number.
+
+    int num_upstream; // # of upstreams conns where conn->extra == this.
 };
 
 struct downstream {
@@ -214,6 +216,7 @@ proxy *cproxy_create(int port, char *config, int nthreads) {
                 ptd->downstream_free = NULL;
                 ptd->downstream_num  = 0;
                 ptd->downstream_max  = DOWNSTREAM_MAX;
+                ptd->num_upstream = 0;
             }
             return p;
         }
@@ -298,6 +301,7 @@ void cproxy_init_upstream_conn(conn *c) {
 
         proxy_td *ptd = cproxy_find_thread_data(p, pthread_self());
         if (ptd != NULL) {
+            ptd->num_upstream++;
             c->extra = ptd;
             return; // Success.
         }
