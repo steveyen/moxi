@@ -827,7 +827,7 @@ void cproxy_process_downstream_ascii_nread(conn *c) {
                 fprintf(stderr, "proxy out of response memory");
         } else {
             if (settings.verbose > 1)
-                fprintf(stderr, "unexpected item data block in proxy");
+                fprintf(stderr, "unexpected downstream data block");
         }
     } else {
         if (settings.verbose > 1)
@@ -835,9 +835,6 @@ void cproxy_process_downstream_ascii_nread(conn *c) {
     }
 
     item_remove(it);
-
-    // TODO: Need to tell the upstream_conn and EV_WRITE on it?
-    // TODO: Put downstream conn into conn_pause?
 }
 
 conn *cproxy_find_downstream_conn(downstream *d, char *key, int key_length) {
