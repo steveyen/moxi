@@ -14,6 +14,7 @@ memcached_return memcached_version(memcached_st *ptr);
 memcached_return memcached_connect(memcached_server_st *ptr);
 uint32_t memcached_generate_hash(memcached_st *ptr, const char *key,
                                  size_t key_length);
+void memcached_quit_server(memcached_server_st *ptr, uint8_t io_death);
 
 #define NOT_CAS -1
 
@@ -345,7 +346,6 @@ void cproxy_on_close_upstream_conn(conn *c) {
 
     proxy_td *ptd = c->extra;
     assert(ptd != NULL);
-
     c->extra = NULL;
 
     ptd->num_upstream--;
@@ -394,14 +394,25 @@ void cproxy_on_close_upstream_conn(conn *c) {
 
 void cproxy_on_close_downstream_conn(conn *c) {
     assert(c != NULL);
-    assert(c->extra != NULL);
+
+    downstream *d = c->extra;
+    assert(d != NULL);
+    c->extra = NULL;
 
     if (settings.verbose > 1)
         fprintf(stderr, "<%d cproxy_on_close_downstream_conn\n", c->sfd);
 
-    // TODO: Cleanup more.
+    int n = memcached_server_count(&d->mst);
 
-    c->extra = NULL;
+    for (int i = 0; i < n; i++) {
+        if (d->downstream_conns[i] == c) {
+            d->downstream_conns[i] = NULL;
+            memcached_quit_server(&d->mst.hosts[i], 1);
+            assert(d->mst.hosts[i].fd == -1);
+        }
+    }
+
+    // Need to do a downstream conn release?
 }
 
 void cproxy_add_downstream(proxy_td *ptd) {
@@ -1467,6 +1478,9 @@ void cproxy_close_conn(conn *c) {
     // This should wakeup libevent on the next run to
     // cleanup the conn.
     //
+    // The shutdown() should help prevent blocking at close().
+    //
+    shutdown(c->sfd, SHUT_RDWR);
     close(c->sfd);
 }
 
