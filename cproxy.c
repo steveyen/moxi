@@ -116,8 +116,20 @@ size_t scan_tokens(char *command, token_t *tokens, const size_t max_tokens);
 
 char *nread_text(short x);
 
-conn_funcs cproxy_upstream_funcs = {
+conn_funcs cproxy_listen_funcs = {
     cproxy_init_upstream_conn,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL
+};
+
+conn_funcs cproxy_upstream_funcs = {
+    NULL,
     cproxy_on_close_upstream_conn,
     add_bytes_read,
     cproxy_process_upstream_ascii,
@@ -275,7 +287,7 @@ int cproxy_listen(proxy *p) {
             //       such as if we handle SIGHUP one day.
             //
             c->extra = p;
-            c->funcs = &cproxy_upstream_funcs;
+            c->funcs = &cproxy_listen_funcs;
             c = c->next;
         }
     }
@@ -318,6 +330,7 @@ void cproxy_init_upstream_conn(conn *c) {
 
     ptd->num_upstream++;
     c->extra = ptd;
+    c->funcs = &cproxy_upstream_funcs;
 }
 
 void cproxy_init_downstream_conn(conn *c) {
@@ -512,7 +525,8 @@ int cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread) {
                                  proxy_downstream_ascii_prot,
                                  thread->base,
                                  &cproxy_downstream_funcs, d);
-                    d->downstream_conns[i]->thread = thread;
+                    if (d->downstream_conns[i] != NULL)
+                        d->downstream_conns[i]->thread = thread;
                 }
             }
         }
