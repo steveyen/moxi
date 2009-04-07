@@ -394,6 +394,7 @@ void cproxy_on_close_upstream_conn(conn *c) {
 
 void cproxy_on_close_downstream_conn(conn *c) {
     assert(c != NULL);
+    assert(c->sfd >= 0);
 
     downstream *d = c->extra;
     assert(d != NULL);
@@ -407,12 +408,15 @@ void cproxy_on_close_downstream_conn(conn *c) {
     for (int i = 0; i < n; i++) {
         if (d->downstream_conns[i] == c) {
             d->downstream_conns[i] = NULL;
+            assert(d->mst.hosts[i].fd == c->sfd);
             memcached_quit_server(&d->mst.hosts[i], 1);
             assert(d->mst.hosts[i].fd == -1);
         }
     }
 
-    // Need to do a downstream conn release?
+    // TODO: Are we over-decrementing?
+    //
+    cproxy_release_downstream_conn(d, c);
 }
 
 void cproxy_add_downstream(proxy_td *ptd) {
