@@ -66,7 +66,7 @@ struct downstream {
     char  *upstream_suffix;  // Last bit to write when downstreams are done.
 };
 
-proxy    *cproxy_create(int proxy_port, char *proxy_sect, int nthreads);
+proxy    *cproxy_create(int port, char *config, int nthreads, int downstream_max);
 int       cproxy_listen(proxy *p);
 proxy_td *cproxy_find_thread_data(proxy *p, pthread_t thread_id);
 void      cproxy_init_upstream_conn(conn *c);
@@ -144,9 +144,12 @@ conn_funcs cproxy_downstream_funcs = {
  * will be a proxy to downstream memcached server running at
  * host memcached1.foo.net on port 11211.
  */
-int cproxy_init(const char *cfg, int nthreads) {
+int cproxy_init(const char *cfg, int nthreads, int downstream_max) {
     if (cfg == NULL)
         return 0;
+
+    assert(nthreads == settings.num_threads);
+    assert(downstream_max > 0);
 
     char *buff;
     char *next;
@@ -170,7 +173,7 @@ int cproxy_init(const char *cfg, int nthreads) {
             exit(EXIT_FAILURE);
         }
 
-        proxy *p = cproxy_create(proxy_port, proxy_sect, nthreads);
+        proxy *p = cproxy_create(proxy_port, proxy_sect, nthreads, downstream_max);
         if (p != NULL) {
             int n = cproxy_listen(p);
             if (n > 0) {
@@ -190,7 +193,7 @@ int cproxy_init(const char *cfg, int nthreads) {
     return 0;
 }
 
-proxy *cproxy_create(int port, char *config, int nthreads) {
+proxy *cproxy_create(int port, char *config, int nthreads, int downstream_max) {
     assert(port > 0);
     assert(config != NULL);
 
@@ -220,7 +223,7 @@ proxy *cproxy_create(int port, char *config, int nthreads) {
                 ptd->downstream_reserved = NULL;
                 ptd->downstream_released = NULL;
                 ptd->downstream_num  = 0;
-                ptd->downstream_max  = DOWNSTREAM_MAX;
+                ptd->downstream_max  = downstream_max;
                 ptd->num_upstream = 0;
             }
             return p;
