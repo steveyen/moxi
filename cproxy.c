@@ -669,11 +669,6 @@ void cproxy_process_downstream_ascii(conn *c, char *line) {
     assert(d->ptd != NULL);
     assert(d->next == NULL);
 
-    // The upstream conn might be NULL when closed already or
-    // during noreply.
-    //
-    conn *uc = d->upstream_conn;
-
     if (strncmp(line, "VALUE ", 6) == 0) {
         token_t      tokens[MAX_TOKENS];
         size_t       ntokens;
@@ -705,56 +700,54 @@ void cproxy_process_downstream_ascii(conn *c, char *line) {
 
                     return; // Success.
                 } else {
-                    // TODO: Could not parse cas from line.
+                    if (settings.verbose > 1)
+                        fprintf(stderr, "cproxy could not parse cas\n");
                 }
             } else {
-                // TODO: Could not item_alloc().
-                //
-                // if (item_size_ok(nkey, flags, vlen + 2)) {
-                // }
+                if (settings.verbose > 1)
+                    fprintf(stderr, "cproxy could not item_alloc size %u\n", vlen + 2);
             }
 
             if (it != NULL)
                 item_remove(it);
+            it = NULL;
 
-            c->sbytes = vlen + 2;
+            c->sbytes = vlen + 2; // Number of bytes to swallow.
 
             conn_set_state(c, conn_swallow);
+
+            // Note, eventually, we'll see an END later.
         } else {
-            // TODO: Don't know how much to swallow?
-            //       So, close the upstream?
-        }
+            // TODO: Don't know how much to swallow, so close the downstream.
+            //
+            conn_set_state(c, conn_closing);
 
-        if (uc != NULL) {
-            out_string(uc, "SERVER_ERROR bad proxy connection");
-
-            // TODO: Need to swallow on c.
-
-            if (!update_event(uc, EV_WRITE | EV_PERSIST)) {
-                if (settings.verbose > 1)
-                    fprintf(stderr,
-                            "Can't update upstream write event\n");
-                conn_set_state(uc, conn_closing);
-            }
+            // TODO: Make sure conn_closing releases the downstream,
+            //       which should write an END to the upstream.
         }
     } else if (strncmp(line, "END", 3) == 0 ||
                strncmp(line, "OK", 2) == 0) {
         conn_set_state(c, conn_pause);
-    } else if (strncmp(line, "STAT ", 5) == 0) {
-        if (uc != NULL) {
-        }
+    } else if (strncmp(line, "STAT ", 5) == 0) { // TODO
         conn_set_state(c, conn_new_cmd);
     } else {
         conn_set_state(c, conn_pause);
 
+        // The upstream conn might be NULL when closed already
+        // or while handling a noreply.
+        //
+        conn *uc = d->upstream_conn;
         if (uc != NULL) {
             out_string(uc, line);
 
             if (!update_event(uc, EV_WRITE | EV_PERSIST)) {
                 if (settings.verbose > 1)
                     fprintf(stderr,
-                            "Couldn't update upstream write event\n");
+                            "Can't update upstream write event\n");
 
+                // TODO: This state change might not work, since
+                //       the dispatch loop is on c, not on uc.
+                //
                 conn_set_state(uc, conn_closing);
             }
         }
