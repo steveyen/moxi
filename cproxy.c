@@ -279,41 +279,40 @@ int cproxy_listen(proxy *p) {
 }
 
 proxy_td *cproxy_find_thread_data(proxy *p, pthread_t thread_id) {
-    int i = thread_index(thread_id);
+    if (p != NULL) {
+        int i = thread_index(thread_id);
 
-    // 0 is the main listen thread, not a worker thread.
-    assert(i > 0);
-    assert(i < p->thread_data_num);
+        // 0 is the main listen thread, not a worker thread.
+        assert(i > 0);
+        assert(i < p->thread_data_num);
 
-    if (i > 0 && i < p->thread_data_num)
-        return &p->thread_data[i];
+        if (i > 0 && i < p->thread_data_num)
+            return &p->thread_data[i];
+    }
 
     return NULL;
 }
 
 void cproxy_init_upstream_conn(conn *c) {
-    assert(c->extra != NULL);
+    assert(c != NULL);
 
     // We're called once per client/upstream conn early in its
     // lifecycle, so it's a good place to remember the proxy_td.
     //
     proxy *p = c->extra;
-    if (p != NULL) {
-        if (settings.verbose > 1)
-            fprintf(stderr,
-                    "<%d cproxy_init_upstream_conn (%s)"
-                    " for %d, downstream %s\n",
-                    c->sfd, state_text(c->state), p->port, p->config);
+    assert(p != NULL);
 
-        proxy_td *ptd = cproxy_find_thread_data(p, pthread_self());
-        if (ptd != NULL) {
-            ptd->num_upstream++;
-            c->extra = ptd;
-            return; // Success.
-        }
-    }
+    if (settings.verbose > 1)
+        fprintf(stderr,
+                "<%d cproxy_init_upstream_conn (%s)"
+                " for %d, downstream %s\n",
+                c->sfd, state_text(c->state), p->port, p->config);
 
-    // TODO: Error, so close the conn?
+    proxy_td *ptd = cproxy_find_thread_data(p, pthread_self());
+    assert(ptd != NULL);
+
+    ptd->num_upstream++;
+    c->extra = ptd;
 }
 
 void cproxy_init_downstream_conn(conn *c) {
