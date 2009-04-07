@@ -778,7 +778,9 @@ void cproxy_process_downstream_ascii(conn *c, char *line) {
     } else if (strncmp(line, "END", 3) == 0 ||
                strncmp(line, "OK", 2) == 0) {
         conn_set_state(c, conn_pause);
-    } else if (strncmp(line, "STAT ", 5) == 0) { // TODO
+    } else if (strncmp(line, "STAT ", 5) == 0 ||
+               strncmp(line, "ITEM ", 5) == 0 ||
+               strncmp(line, "PREFIX ", 7) == 0) { // TODO
         conn_set_state(c, conn_new_cmd);
     } else {
         conn_set_state(c, conn_pause);
