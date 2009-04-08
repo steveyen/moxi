@@ -83,6 +83,7 @@ downstream *cproxy_create_downstream(char *config, int config_ver);
 downstream *cproxy_reserve_downstream(proxy_td *ptd);
 bool        cproxy_release_downstream(downstream *d, bool force);
 void        cproxy_release_downstream_conn(downstream *d, conn *c);
+bool        cproxy_downstream_config_check(downstream *d);
 
 int   cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread);
 void  cproxy_wait_for_downstream(proxy_td *ptd, conn *c);
@@ -468,6 +469,8 @@ downstream *cproxy_reserve_downstream(proxy_td *ptd) {
 
     d = ptd->downstream_released;
     if (d != NULL) {
+        // TODO: Check that config is still correct?
+        //
         ptd->downstream_released = d->next;
 
         d->next = ptd->downstream_reserved;
@@ -541,17 +544,19 @@ bool cproxy_release_downstream(downstream *d, bool force) {
         }
     }
 
-    // If this downstream still has real connections, go
-    // back onto the available, released downstream list.
+    // If this downstream still has the same configuration
+    // and also has real connections, go back onto the
+    // available, released downstream list.
     //
-    if (s > 0 || force) {
+    if ((s > 0 && cproxy_downstream_config_check(d)) || force) {
         d->next = d->ptd->downstream_released;
         d->ptd->downstream_released = d;
 
         return true;
     }
 
-    // No more downstream conns open, so don't add to released list.
+    // No more downstream conns open or we've got an
+    // old configuration, so don't add to released list.
     //
     cproxy_free_downstream(d);
 
@@ -614,6 +619,25 @@ downstream *cproxy_create_downstream(char *config, int config_ver) {
         free(d);
     }
     return NULL;
+}
+
+/* See if the downstream config matches the top-level proxy config.
+ */
+bool cproxy_downstream_config_check(downstream *d) {
+    assert(d != NULL);
+    assert(d->ptd != NULL);
+    assert(d->ptd->proxy != NULL);
+    assert(d->ptd->proxy->config != NULL);
+
+    if (d->config_ver == d->ptd->proxy->config_ver)
+        return true;
+
+    if (strcmp(d->config, d->ptd->proxy->config) == 0) {
+        d->config_ver = d->ptd->proxy->config_ver;
+        return true;
+    }
+
+    return false;
 }
 
 int cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread) {
