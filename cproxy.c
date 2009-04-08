@@ -572,6 +572,8 @@ downstream *cproxy_create_downstream(char *config) {
     downstream *d = (downstream *) calloc(1, sizeof(downstream));
     if (d != NULL) {
         if (memcached_create(&d->mst) != NULL) {
+            memcached_behavior_set(&d->mst, MEMCACHED_BEHAVIOR_NO_BLOCK, 1);
+
             memcached_server_st *mservers;
 
             mservers = memcached_servers_parse(config);
@@ -1051,7 +1053,8 @@ void cproxy_assign_downstream(proxy_td *ptd) {
         d->upstream_conn->next = NULL;
 
         if (settings.verbose > 1)
-            fprintf(stderr, "assign_downstream, matched\n");
+            fprintf(stderr, "assign_downstream, matched to upstream %d\n",
+                    d->upstream_conn->sfd);
 
         if (!cproxy_forward_downstream(d)) {
             // We reach here on error, so put upstream conn back
