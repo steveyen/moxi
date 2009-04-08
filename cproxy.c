@@ -1026,6 +1026,9 @@ bool cproxy_prep_conn_for_write(conn *c) {
 
         if (add_msghdr(c) == 0)
             return true;
+
+        if (settings.verbose > 1)
+            fprintf(stderr, "%d: cproxy_prep_conn_for_write failed\n", c->sfd);
     }
 
     return false;
@@ -1068,11 +1071,11 @@ void cproxy_assign_downstream(proxy_td *ptd) {
     // conns just keep on moving to the tail.
     //
     conn *tail = ptd->waiting_for_downstream_tail;
-    int   stop = 0;
+    bool  stop = false;
 
     while (ptd->waiting_for_downstream_head != NULL && !stop) {
         if (ptd->waiting_for_downstream_head == tail)
-            stop = 1;
+            stop = true;
 
         downstream *d = cproxy_reserve_downstream(ptd);
         if (d == NULL)
