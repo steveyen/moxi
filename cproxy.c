@@ -66,7 +66,6 @@ struct downstream {
                              // be >1 during scatter-gather commands.
     conn  *upstream_conn;    // Non-NULL when downstream is reserved.
     char  *upstream_suffix;  // Last bit to write when downstreams are done.
-    char  *upstream_error;   // What to write on upstream when downstream error.
 };
 
 proxy    *cproxy_create(int port, char *config, int nthreads, int downstream_max);
@@ -367,7 +366,6 @@ void cproxy_on_close_upstream_conn(conn *c) {
         if (d->upstream_conn == c) {
             d->upstream_conn = NULL;
             d->upstream_suffix = NULL;
-            d->upstream_error = NULL;
 
             // Don't need to do anything else, as we'll now just
             // read and drop any remaining inflight downstream replies.
@@ -426,6 +424,10 @@ void cproxy_on_close_downstream_conn(conn *c) {
         }
     }
 
+    if (d->upstream_conn != NULL &&
+        d->upstream_suffix == NULL)
+        d->upstream_suffix = "SERVER_ERROR proxy downstream closed\r\n";
+
     // Are we over-decrementing here, and in handling conn_pause?
     //
     // Case 1: we're in conn_pause, and socket is closed concurrently.
@@ -440,9 +442,6 @@ void cproxy_on_close_downstream_conn(conn *c) {
     // conn_parse_cmd or conn_nread), and the downstream socket
     // is closed concurrently.  We then move to conn_pause,
     // and same as Case 1.
-    //
-    // TODO: Need to always write and error on the upstream conn,
-    //       so, need an upstream_error field?
     //
     cproxy_release_downstream_conn(d, c);
 }
@@ -482,12 +481,10 @@ downstream *cproxy_reserve_downstream(proxy_td *ptd) {
 
         assert(d->upstream_conn == NULL);
         assert(d->upstream_suffix == NULL);
-        assert(d->upstream_error == NULL);
         assert(d->downstream_used == 0);
 
         d->upstream_conn = NULL;
         d->upstream_suffix = NULL;
-        d->upstream_error = NULL;
         d->downstream_used = 0;
     }
 
@@ -525,7 +522,6 @@ bool cproxy_release_downstream(downstream *d, bool force) {
 
     d->upstream_conn = NULL;
     d->upstream_suffix = NULL; // No free(), expecting a static string.
-    d->upstream_error = NULL; // No free(), expecting a static string.
     d->downstream_used = 0;
 
     // TODO: Consider adding a downstream->prev backpointer
@@ -1486,7 +1482,6 @@ bool cproxy_dettach_if_noreply(downstream *d, conn *uc) {
         uc->noreply        = false;
         d->upstream_conn   = NULL;
         d->upstream_suffix = NULL;
-        d->upstream_error  = NULL;
 
         cproxy_reset_upstream(uc);
 
