@@ -610,14 +610,17 @@ downstream *cproxy_create_downstream(char *config, int config_ver) {
                     return d;
                 }
             }
+
             if (mservers != NULL)
                 memcached_server_list_free(mservers);
 
             memcached_free(&d->mst);
         }
+
         free(d->config);
         free(d);
     }
+
     return NULL;
 }
 

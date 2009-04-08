@@ -407,7 +407,6 @@ struct conn {
     int opaque;
     int keylen;
     conn *next;     /* Used for generating a list of conn structures */
-    conn *prev;
     LIBEVENT_THREAD *thread; /* Pointer to the thread object serving this connection */
 
     conn_funcs *funcs;
