@@ -66,6 +66,7 @@ struct downstream {
                              // be >1 during scatter-gather commands.
     conn  *upstream_conn;    // Non-NULL when downstream is reserved.
     char  *upstream_suffix;  // Last bit to write when downstreams are done.
+    char  *upstream_error;   // What to write on upstream when downstream error.
 };
 
 proxy    *cproxy_create(int port, char *config, int nthreads, int downstream_max);
@@ -98,6 +99,8 @@ void  cproxy_pause_upstream_for_downstream(proxy_td *ptd, conn *upstream);
 conn *cproxy_find_downstream_conn(downstream *d, char *key, int key_length);
 bool  cproxy_prep_conn_for_write(conn *c);
 int   cproxy_server_index(downstream *d, char *key, size_t key_length);
+
+bool cproxy_dettach_if_noreply(downstream *d, conn *uc);
 
 void cproxy_reset_upstream(conn *uc);
 
@@ -364,6 +367,7 @@ void cproxy_on_close_upstream_conn(conn *c) {
         if (d->upstream_conn == c) {
             d->upstream_conn = NULL;
             d->upstream_suffix = NULL;
+            d->upstream_error = NULL;
 
             // Don't need to do anything else, as we'll now just
             // read and drop any remaining inflight downstream replies.
@@ -478,10 +482,12 @@ downstream *cproxy_reserve_downstream(proxy_td *ptd) {
 
         assert(d->upstream_conn == NULL);
         assert(d->upstream_suffix == NULL);
+        assert(d->upstream_error == NULL);
         assert(d->downstream_used == 0);
 
         d->upstream_conn = NULL;
         d->upstream_suffix = NULL;
+        d->upstream_error = NULL;
         d->downstream_used = 0;
     }
 
@@ -519,6 +525,7 @@ bool cproxy_release_downstream(downstream *d, bool force) {
 
     d->upstream_conn = NULL;
     d->upstream_suffix = NULL; // No free(), expecting a static string.
+    d->upstream_error = NULL; // No free(), expecting a static string.
     d->downstream_used = 0;
 
     // TODO: Consider adding a downstream->prev backpointer
@@ -1205,14 +1212,8 @@ bool cproxy_forward_simple_downstream(downstream *d, char *command, conn *uc) {
         if (update_event(c, EV_WRITE | EV_PERSIST)) {
             d->downstream_used = 1; // TODO: Need timeout?
 
-            if (uc->noreply) {
-                uc->noreply        = false;
-                d->upstream_conn   = NULL;
-                d->upstream_suffix = NULL;
-                c->write_and_go    = conn_pause;
-
-                cproxy_reset_upstream(uc);
-            }
+            if (cproxy_dettach_if_noreply(d, uc))
+                c->write_and_go = conn_pause;
 
             return true;
         }
@@ -1323,12 +1324,7 @@ bool cproxy_forward_multiget_downstream(downstream *d, char *command, conn *uc) 
 
     d->downstream_used = nwrite; // TODO: Need timeout?
 
-    if (uc->noreply) {
-        uc->noreply = false;
-        d->upstream_conn = NULL;
-        d->upstream_suffix = NULL;
-        cproxy_reset_upstream(uc);
-    } else
+    if (cproxy_dettach_if_noreply(d, uc) == false)
         d->upstream_suffix = "END\r\n";
 
     return nwrite > 0;
@@ -1376,12 +1372,7 @@ bool cproxy_broadcast_downstream(downstream *d, char *command, conn *uc, char *s
 
     d->downstream_used = nwrite; // TODO: Need timeout?
 
-    if (uc->noreply) {
-        uc->noreply = false;
-        d->upstream_conn = NULL;
-        d->upstream_suffix = NULL;
-        cproxy_reset_upstream(uc);
-    } else
+    if (cproxy_dettach_if_noreply(d, uc) == false)
         d->upstream_suffix = suffix;
 
     return nwrite > 0;
@@ -1442,14 +1433,8 @@ bool cproxy_forward_item_downstream(downstream *d, short cmd, item *it, conn *uc
                 if (update_event(c, EV_WRITE | EV_PERSIST)) {
                     d->downstream_used = 1; // TODO: Need timeout?
 
-                    if (uc->noreply) {
-                        uc->noreply        = false;
-                        d->upstream_conn   = NULL;
-                        d->upstream_suffix = NULL;
-                        c->write_and_go    = conn_pause;
-
-                        cproxy_reset_upstream(uc);
-                    }
+                    if (cproxy_dettach_if_noreply(d, uc))
+                        c->write_and_go = conn_pause;
 
                     return true;
                 }
@@ -1494,6 +1479,21 @@ void cproxy_reset_upstream(conn *uc) {
     //
     if (settings.verbose > 1)
         fprintf(stderr, "cproxy_reset_upstream with bytes available\n");
+}
+
+bool cproxy_dettach_if_noreply(downstream *d, conn *uc) {
+    if (uc->noreply) {
+        uc->noreply        = false;
+        d->upstream_conn   = NULL;
+        d->upstream_suffix = NULL;
+        d->upstream_error  = NULL;
+
+        cproxy_reset_upstream(uc);
+
+        return true;
+    }
+
+    return false;
 }
 
 void cproxy_wait_for_downstream(proxy_td *ptd, conn *c) {
