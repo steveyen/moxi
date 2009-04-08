@@ -23,8 +23,9 @@ typedef struct proxy_td   proxy_td;
 typedef struct downstream downstream;
 
 struct proxy {
-    int   port;   // Immutable.
-    char *config; // Immutable, alloc'ed by proxy.
+    int   port;       // Immutable.
+    char *config;     // Mutable, mem owned by proxy.
+    int   config_ver; // Inc'ed whenever config changes.
 
     // Number of listening conn's acting as a proxy,
     // where ((proxy *) conn->extra == this).
@@ -53,9 +54,12 @@ struct proxy_td { // Per proxy, per worker-thread data struct.
 };
 
 struct downstream {
-    proxy_td      *ptd;      // Immutable parent pointer.
-    memcached_st   mst;      // Immutable, from libmemcached.
-    downstream    *next;     // To track reserved/free lists.
+    proxy_td     *ptd;        // Immutable parent pointer.
+    char         *config;     // Immutable, mem owned by downstream.
+    int           config_ver; // Immutable, snapshot of proxy->config_ver.
+    memcached_st  mst;        // Immutable, from libmemcached.
+
+    downstream *next;        // To track reserved/free lists.
 
     conn **downstream_conns; // Wraps the fd's of mst with conns.
     int    downstream_used;  // Number of in-use downstream conns, might
@@ -75,7 +79,7 @@ void      cproxy_on_pause_downstream_conn(conn *c);
 
 void        cproxy_add_downstream(proxy_td *ptd);
 void        cproxy_free_downstream(downstream *d);
-downstream *cproxy_create_downstream(char *proxy_sect);
+downstream *cproxy_create_downstream(char *config, int config_ver);
 downstream *cproxy_reserve_downstream(proxy_td *ptd);
 bool        cproxy_release_downstream(downstream *d, bool force);
 void        cproxy_release_downstream_conn(downstream *d, conn *c);
@@ -210,9 +214,10 @@ proxy *cproxy_create(int port, char *config, int nthreads, int downstream_max) {
 
     proxy *p = (proxy *) calloc(1, sizeof(proxy));
     if (p != NULL) {
-        p->port   = port;
-        p->config = strdup(config);
-        p->listening = 0;
+        p->port       = port;
+        p->config     = strdup(config);
+        p->config_ver = 0;
+        p->listening  = 0;
 
         p->thread_data_num = nthreads;
         p->thread_data = (proxy_td *) calloc(p->thread_data_num,
@@ -442,7 +447,8 @@ void cproxy_add_downstream(proxy_td *ptd) {
 
     if (ptd != NULL &&
         ptd->downstream_num < ptd->downstream_max) {
-        downstream *d = cproxy_create_downstream(ptd->proxy->config);
+        downstream *d = cproxy_create_downstream(ptd->proxy->config,
+                                                 ptd->proxy->config_ver);
         if (d != NULL) {
             d->ptd = ptd;
             ptd->downstream_num++;
@@ -565,18 +571,27 @@ void cproxy_free_downstream(downstream *d) {
     if (d->downstream_conns != NULL)
         free(d->downstream_conns);
 
+    if (d->config != NULL)
+        free(d->config);
+
     free(d);
 }
 
-downstream *cproxy_create_downstream(char *config) {
+/* The config input is something libmemcached can parse.
+ * See memcached_servers_parse().
+ */
+downstream *cproxy_create_downstream(char *config, int config_ver) {
     downstream *d = (downstream *) calloc(1, sizeof(downstream));
     if (d != NULL) {
+        d->config     = strdup(config);
+        d->config_ver = config_ver;
+
         if (memcached_create(&d->mst) != NULL) {
             memcached_behavior_set(&d->mst, MEMCACHED_BEHAVIOR_NO_BLOCK, 1);
 
             memcached_server_st *mservers;
 
-            mservers = memcached_servers_parse(config);
+            mservers = memcached_servers_parse(d->config);
             if (mservers != NULL) {
                 memcached_server_push(&d->mst, mservers);
                 memcached_server_list_free(mservers);
@@ -595,6 +610,7 @@ downstream *cproxy_create_downstream(char *config) {
 
             memcached_free(&d->mst);
         }
+        free(d->config);
         free(d);
     }
     return NULL;
