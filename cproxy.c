@@ -74,9 +74,10 @@ void      cproxy_on_close_downstream_conn(conn *c);
 void      cproxy_on_pause_downstream_conn(conn *c);
 
 void        cproxy_add_downstream(proxy_td *ptd);
+void        cproxy_free_downstream(downstream *d);
 downstream *cproxy_create_downstream(char *proxy_sect);
 downstream *cproxy_reserve_downstream(proxy_td *ptd);
-void        cproxy_release_downstream(downstream *d);
+bool        cproxy_release_downstream(downstream *d, bool force);
 void        cproxy_release_downstream_conn(downstream *d, conn *c);
 
 int   cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread);
@@ -445,7 +446,7 @@ void cproxy_add_downstream(proxy_td *ptd) {
         if (d != NULL) {
             d->ptd = ptd;
             ptd->downstream_num++;
-            cproxy_release_downstream(d);
+            cproxy_release_downstream(d, true);
         }
     }
 }
@@ -478,7 +479,7 @@ downstream *cproxy_reserve_downstream(proxy_td *ptd) {
     return d;
 }
 
-void cproxy_release_downstream(downstream *d) {
+bool cproxy_release_downstream(downstream *d, bool force) {
     if (settings.verbose > 1)
         fprintf(stderr, "release_downstream\n");
 
@@ -537,12 +538,34 @@ void cproxy_release_downstream(downstream *d) {
     // If this downstream still has real connections, go
     // back onto the available, released downstream list.
     //
-    if (s > 0) {
+    if (s > 0 || force) {
         d->next = d->ptd->downstream_released;
         d->ptd->downstream_released = d;
-    } else {
-        // TODO: Need to free the downstream.
+
+        return true;
     }
+
+    // No more downstream conns open, so don't add to released list.
+    //
+    cproxy_free_downstream(d);
+
+    return false;
+}
+
+void cproxy_free_downstream(downstream *d) {
+    assert(d != NULL);
+    assert(d->next == NULL);
+    assert(d->upstream_conn == NULL);
+
+    if (settings.verbose > 1)
+        fprintf(stderr, "cproxy_free_downstream\n");
+
+    memcached_free(&d->mst);
+
+    if (d->downstream_conns != NULL)
+        free(d->downstream_conns);
+
+    free(d);
 }
 
 downstream *cproxy_create_downstream(char *config) {
@@ -1045,7 +1068,7 @@ void cproxy_assign_downstream(proxy_td *ptd) {
                             uc->sfd);
             }
 
-            cproxy_release_downstream(d);
+            cproxy_release_downstream(d, false);
 
             if (uc != NULL)
                 cproxy_wait_for_downstream(ptd, uc);
@@ -1432,9 +1455,11 @@ void cproxy_wait_for_downstream(proxy_td *ptd, conn *c) {
 }
 
 void cproxy_release_downstream_conn(downstream *d, conn *c) {
-    assert(d != NULL);
-    assert(d->ptd != NULL);
     assert(c != NULL);
+    assert(d != NULL);
+
+    proxy_td *ptd = d->ptd;
+    assert(ptd != NULL);
 
     if (settings.verbose > 1)
         fprintf(stderr,
@@ -1443,8 +1468,8 @@ void cproxy_release_downstream_conn(downstream *d, conn *c) {
 
     d->downstream_used--;
     if (d->downstream_used <= 0) {
-        cproxy_release_downstream(d);
-        cproxy_assign_downstream(d->ptd);
+        cproxy_release_downstream(d, false);
+        cproxy_assign_downstream(ptd);
     }
 }
 
