@@ -2,7 +2,7 @@
 
 use strict;
 
-my $topology_name = $ARGV[1] || 'simple';
+my $topology_name = $ARGV[0] || 'simple';
 
 my @good_tests = qw(
 binary-get.t
