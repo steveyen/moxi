@@ -83,7 +83,7 @@ downstream *cproxy_create_downstream(char *config, int config_ver);
 downstream *cproxy_reserve_downstream(proxy_td *ptd);
 bool        cproxy_release_downstream(downstream *d, bool force);
 void        cproxy_release_downstream_conn(downstream *d, conn *c);
-bool        cproxy_downstream_config_check(downstream *d);
+bool        cproxy_check_downstream_config(downstream *d);
 
 int   cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread);
 void  cproxy_wait_for_downstream(proxy_td *ptd, conn *c);
@@ -548,7 +548,7 @@ bool cproxy_release_downstream(downstream *d, bool force) {
     // and also has real connections, go back onto the
     // available, released downstream list.
     //
-    if ((s > 0 && cproxy_downstream_config_check(d)) || force) {
+    if ((s > 0 && cproxy_check_downstream_config(d)) || force) {
         d->next = d->ptd->downstream_released;
         d->ptd->downstream_released = d;
 
@@ -623,7 +623,7 @@ downstream *cproxy_create_downstream(char *config, int config_ver) {
 
 /* See if the downstream config matches the top-level proxy config.
  */
-bool cproxy_downstream_config_check(downstream *d) {
+bool cproxy_check_downstream_config(downstream *d) {
     assert(d != NULL);
     assert(d->ptd != NULL);
     assert(d->ptd->proxy != NULL);
