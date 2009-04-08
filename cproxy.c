@@ -395,6 +395,7 @@ void cproxy_on_close_upstream_conn(conn *c) {
 void cproxy_on_close_downstream_conn(conn *c) {
     assert(c != NULL);
     assert(c->sfd >= 0);
+    assert(c->state == conn_closing);
 
     downstream *d = c->extra;
     assert(d != NULL);
@@ -414,7 +415,23 @@ void cproxy_on_close_downstream_conn(conn *c) {
         }
     }
 
-    // TODO: Are we over-decrementing?
+    // Are we over-decrementing here, and in handling conn_pause?
+    //
+    // Case 1: we're in conn_pause, and socket is closed concurrently.
+    // We unpause due to reserve, we move to conn_write/conn_mwrite,
+    // fail and move to conn_closing.  So, no over-decrement.
+    //
+    // Case 2: we're waiting for a downstream response in conn_new_cmd,
+    // and socket is closed concurrently.  State goes to conn_closing,
+    // so, no over-decrement.
+    //
+    // Case 3: we've finished processing downstream response (in
+    // conn_parse_cmd or conn_nread), and the downstream socket
+    // is closed concurrently.  We then move to conn_pause,
+    // and same as Case 1.
+    //
+    // TODO: Need to always write and error on the upstream conn,
+    //       so, need an upstream_error field?
     //
     cproxy_release_downstream_conn(d, c);
 }
