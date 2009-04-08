@@ -1106,9 +1106,6 @@ void cproxy_assign_downstream(proxy_td *ptd) {
             // We reach here on error, so put upstream conn back
             // on the wait list to retry, and release the downstream.
             //
-            // TOOD: Count this to eventually give up & error,
-            //       instead of retry.
-            //
             conn *uc = d->upstream_conn;
             if (uc != NULL) {
                 if (settings.verbose > 1)
@@ -1119,8 +1116,15 @@ void cproxy_assign_downstream(proxy_td *ptd) {
 
             cproxy_release_downstream(d, false);
 
-            if (uc != NULL)
-                cproxy_wait_for_downstream(ptd, uc);
+            if (uc != NULL) {
+                // TOOD: Count retrying instead of error, but need counter.
+                //
+                // cproxy_wait_for_downstream(ptd, uc);
+                //
+                out_string(uc, "SERVER_ERROR proxy could not write to downstream");
+
+                update_event(uc, EV_WRITE | EV_PERSIST);
+            }
         }
     }
 

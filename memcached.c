@@ -3192,7 +3192,7 @@ static void drive_machine(conn *c) {
             }
             break;
 
-        case conn_parse_cmd :
+        case conn_parse_cmd:
             if (try_read_command(c) == 0) {
                 /* wee need more data! */
                 conn_set_state(c, conn_waiting);
