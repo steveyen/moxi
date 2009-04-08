@@ -1273,6 +1273,8 @@ bool cproxy_forward_multiget_downstream(downstream *d, char *command, conn *uc) 
                 // Write the key, including the preceding space.
                 //
                 add_iov(c, key - 1, key_len + 1);
+            } else {
+                // TODO: Handle when downstream conn is down.
             }
         }
 
