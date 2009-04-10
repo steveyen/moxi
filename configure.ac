@@ -233,10 +233,6 @@ AC_SEARCH_LIBS(socket, socket)
 AC_SEARCH_LIBS(gethostbyname, nsl)
 AC_SEARCH_LIBS(umem_cache_create, umem)
 
-LIBS="$LIBS -lmemcached"
-
-AC_SEARCH_LIBS(memcached_create, memcached)
-
 AC_HEADER_STDBOOL
 AC_C_CONST
 
@@ -378,6 +374,11 @@ then
   CFLAGS="$CFLAGS -errfmt=error -errwarn -errshort=tags"
 fi
 
+LIBS="$LIBS -lmemcached -lmemagent -lsqlite3 -lstrophe -lexpat -lresolv"
+LIBS="$LIBS -L\$(HOME)/lib"
+CPPFLAGS="$CPPFLAGS -I\$(HOME)/include"
+
+AC_SEARCH_LIBS(memcached_create, memcached)
 
 AC_CONFIG_FILES(Makefile doc/Makefile)
 AC_OUTPUT
