@@ -7,6 +7,7 @@
 #include <assert.h>
 #include <libmemcached/memcached.h>
 #include "memcached.h"
+#include "memagent.h"
 #include "cproxy.h"
 
 /** From libmemcached. */
@@ -20,9 +21,15 @@ void memcached_quit_server(memcached_server_st *ptr, uint8_t io_death);
 
 typedef struct proxy      proxy;
 typedef struct proxy_td   proxy_td;
+typedef struct proxy_base proxy_base;
 typedef struct downstream downstream;
 
+struct proxy_base {
+    agent_config_t config; // Immutable.
+};
+
 struct proxy {
+    char *name;       // Immutable, mostly for debugging.
     int   port;       // Immutable.
     char *config;     // Mutable, mem owned by proxy.
     int   config_ver; // Inc'ed whenever config changes.
@@ -68,7 +75,8 @@ struct downstream {
     char  *upstream_suffix;  // Last bit to write when downstreams are done.
 };
 
-proxy    *cproxy_create(int port, char *config, int nthreads, int downstream_max);
+proxy    *cproxy_create(char *name, int port,
+                        char *config, int nthreads, int downstream_max);
 int       cproxy_listen(proxy *p);
 proxy_td *cproxy_find_thread_data(proxy *p, pthread_t thread_id);
 void      cproxy_init_upstream_conn(conn *c);
@@ -122,6 +130,9 @@ size_t scan_tokens(char *command, token_t *tokens, const size_t max_tokens);
 
 char *nread_text(short x);
 
+void on_memagent_new_serverlist(void *opaque, memcached_server_list_t **lists);
+void on_memagent_get_stats(void *opaque, agent_add_stat add_stat);
+
 conn_funcs cproxy_listen_funcs = {
     cproxy_init_upstream_conn,
     NULL,
@@ -152,13 +163,54 @@ conn_funcs cproxy_downstream_funcs = {
     cproxy_realtime
 };
 
-/**
- * cfg should look like "local_port=host:port,host:port;local_port=host:port"
- * like "11222=memcached1.foo.net:11211"  This means local port 11222
- * will be a proxy to downstream memcached server running at
- * host memcached1.foo.net on port 11211.
- */
+void on_memagent_new_serverlist(void *opaque, memcached_server_list_t **lists) {
+    if (settings.verbose > 1)
+        fprintf(stderr, "on_memagent_new_serverlist\n");
+
+    for (int i = 0; lists[i]; i++) {
+        memcached_server_list_t *list = lists[i];
+        printf("\tList:  ``%s'' (bound to %d)\n", list->name, list->binding);
+
+        for (int j = 0; list->servers[j]; j++) {
+            memcached_server_t *server = list->servers[j];
+            printf("\t\t%s:%d\n", server->host, server->port);
+        }
+    }
+}
+
+void on_memagent_get_stats(void *opaque, agent_add_stat add_stat) {
+    add_stat(opaque, "stat1", "val1");
+    add_stat(opaque, "stat2", "val2");
+    add_stat(opaque, NULL, NULL);
+}
+
 int cproxy_init(const char *cfg, int nthreads, int downstream_max) {
+    proxy_base *b = calloc(1, sizeof(proxy_base));
+    if (b != NULL) {
+        b->config.jid = "customer@stevenmb.local"; // Different jid's for production, staging, etc.
+        b->config.pass = "password";
+        b->config.host = "localhost"; // TODO: Where the XMPP server lives, for dev.
+        b->config.software = "memscale";
+        b->config.version = "0.1";
+        b->config.save_path = "/tmp/memscale.db";
+        b->config.opaque = b;
+        b->config.new_serverlist = on_memagent_new_serverlist;
+        b->config.get_stats = on_memagent_get_stats;
+
+        if (start_agent(b->config)) {
+            return 0;
+        }
+    }
+
+    fprintf(stderr, "Could not initialize memagent\n");
+
+    return 1;
+
+    /* cfg should look like "local_port=host:port,host:port;local_port=host:port"
+     * like "11222=memcached1.foo.net:11211"  This means local port 11222
+     * will be a proxy to downstream memcached server running at
+     * host memcached1.foo.net on port 11211.
+     */
     if (cfg == NULL)
         return 0;
 
@@ -167,6 +219,7 @@ int cproxy_init(const char *cfg, int nthreads, int downstream_max) {
 
     char *buff;
     char *next;
+    char *proxy_name = "default";
     char *proxy_sect;
     char *proxy_port_str;
     int   proxy_port;
@@ -187,7 +240,7 @@ int cproxy_init(const char *cfg, int nthreads, int downstream_max) {
             exit(EXIT_FAILURE);
         }
 
-        proxy *p = cproxy_create(proxy_port, proxy_sect, nthreads, downstream_max);
+        proxy *p = cproxy_create(proxy_name, proxy_port, proxy_sect, nthreads, downstream_max);
         if (p != NULL) {
             int n = cproxy_listen(p);
             if (n > 0) {
@@ -207,7 +260,8 @@ int cproxy_init(const char *cfg, int nthreads, int downstream_max) {
     return 0;
 }
 
-proxy *cproxy_create(int port, char *config, int nthreads, int downstream_max) {
+proxy *cproxy_create(char *name, int port, char *config, int nthreads, int downstream_max) {
+    assert(name != NULL);
     assert(port > 0);
     assert(config != NULL);
 
@@ -217,6 +271,7 @@ proxy *cproxy_create(int port, char *config, int nthreads, int downstream_max) {
 
     proxy *p = (proxy *) calloc(1, sizeof(proxy));
     if (p != NULL) {
+        p->name       = strdup(name);
         p->port       = port;
         p->config     = strdup(config);
         p->config_ver = 0;
@@ -243,6 +298,7 @@ proxy *cproxy_create(int port, char *config, int nthreads, int downstream_max) {
             }
             return p;
         }
+        free(p->name);
         free(p->config);
     }
     free(p);
