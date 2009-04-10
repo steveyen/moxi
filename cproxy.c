@@ -21,11 +21,17 @@ void memcached_quit_server(memcached_server_st *ptr, uint8_t io_death);
 
 typedef struct proxy      proxy;
 typedef struct proxy_td   proxy_td;
-typedef struct proxy_base proxy_base;
+typedef struct proxy_main proxy_main;
 typedef struct downstream downstream;
 
-struct proxy_base {
+struct proxy_main {
     agent_config_t config; // Immutable.
+
+    int listener_send_fd; // To communicate with listen thread.
+    int listener_recv_fd;
+
+    struct event_base *listener_event_base;
+    struct event       listener_event;
 };
 
 struct proxy {
@@ -130,8 +136,10 @@ size_t scan_tokens(char *command, token_t *tokens, const size_t max_tokens);
 
 char *nread_text(short x);
 
-void on_memagent_new_serverlist(void *opaque, memcached_server_list_t **lists);
-void on_memagent_get_stats(void *opaque, agent_add_stat add_stat);
+void on_memagent_new_serverlist(void *userdata, memcached_server_list_t **lists);
+void on_memagent_get_stats(void *userdata, void *opaque, agent_add_stat add_stat);
+
+void cproxy_listener_notify(int fd, short which, void *arg);
 
 conn_funcs cproxy_listen_funcs = {
     cproxy_init_upstream_conn,
@@ -163,7 +171,15 @@ conn_funcs cproxy_downstream_funcs = {
     cproxy_realtime
 };
 
-void on_memagent_new_serverlist(void *opaque, memcached_server_list_t **lists) {
+void on_memagent_new_serverlist(void *userdata, memcached_server_list_t **lists) {
+    assert(lists != NULL);
+
+    proxy_main *m = userdata;
+    assert(m != NULL);
+
+    if (false)
+        write(m->listener_send_fd, "", 1);
+
     if (settings.verbose > 1)
         fprintf(stderr, "on_memagent_new_serverlist\n");
 
@@ -178,28 +194,50 @@ void on_memagent_new_serverlist(void *opaque, memcached_server_list_t **lists) {
     }
 }
 
-void on_memagent_get_stats(void *opaque, agent_add_stat add_stat) {
+void on_memagent_get_stats(void *userdata, void *opaque, agent_add_stat add_stat) {
     add_stat(opaque, "stat1", "val1");
     add_stat(opaque, "stat2", "val2");
     add_stat(opaque, NULL, NULL);
 }
 
 int cproxy_init(const char *cfg, int nthreads, int downstream_max) {
-    proxy_base *b = calloc(1, sizeof(proxy_base));
-    if (b != NULL) {
-        b->config.jid = "customer@stevenmb.local"; // Different jid's for production, staging, etc.
-        b->config.pass = "password";
-        b->config.host = "localhost"; // TODO: Where the XMPP server lives, for dev.
-        b->config.software = "memscale";
-        b->config.version = "0.1";
-        b->config.save_path = "/tmp/memscale.db";
-        b->config.opaque = b;
-        b->config.new_serverlist = on_memagent_new_serverlist;
-        b->config.get_stats = on_memagent_get_stats;
+    proxy_main *m = calloc(1, sizeof(proxy_main));
+    if (m != NULL) {
+        LIBEVENT_THREAD *listener = thread_by_index(0);
+        assert(listener != NULL); // Should be the main thread.
 
-        if (start_agent(b->config)) {
-            return 0;
+        m->listener_event_base = listener->base;
+        assert(m->listener_event_base != NULL);
+
+        int fds[2];
+
+        if (pipe(fds) == 0) {
+            m->listener_recv_fd = fds[0];
+            m->listener_send_fd = fds[1];
+
+            event_set(&m->listener_event, m->listener_recv_fd,
+                      EV_READ | EV_PERSIST, cproxy_listener_notify, m);
+            event_base_set(m->listener_event_base, &m->listener_event);
+
+            if (event_add(&m->listener_event, 0) == 0) {
+                // Different jid's for production, staging, etc.
+                m->config.jid = "customer@stevenmb.local";
+                m->config.pass = "password";
+                m->config.host = "localhost"; // TODO: XMPP server host, for dev.
+                m->config.software = "memscale";
+                m->config.version = "0.1";
+                m->config.save_path = "/tmp/memscale.db";
+                m->config.userdata = m;
+                m->config.new_serverlist = on_memagent_new_serverlist;
+                m->config.get_stats = on_memagent_get_stats;
+
+                if (start_agent(m->config)) {
+                    return 0;
+                }
+            }
         }
+
+        perror("Cannot create cproxy listen thread pipe");
     }
 
     fprintf(stderr, "Could not initialize memagent\n");
@@ -1800,3 +1838,20 @@ downstream *downstream_list_remove(downstream *head, downstream *d) {
     return head;
 }
 
+void cproxy_listener_notify(int fd, short which, void *arg) {
+    proxy_main *m = arg;
+    assert(m != NULL);
+    assert(m->listener_recv_fd == fd);
+    assert(m->listener_send_fd >= 0);
+    assert(m->listener_event_base != NULL);
+
+    char buf[1];
+
+    if (read(fd, buf, 1) == 1) {
+        if (m != NULL) {
+        }
+    } else {
+        if (settings.verbose > 1)
+            fprintf(stderr, "cproxy listener can't read from pipe\n");
+    }
+}

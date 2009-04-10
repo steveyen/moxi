@@ -352,6 +352,10 @@ int thread_index(pthread_t thread_id) {
     return -1;
 }
 
+LIBEVENT_THREAD *thread_by_index(int i) {
+    return &threads[i];
+}
+
 /********************************* ITEM ACCESS *******************************/
 
 /*
