@@ -324,12 +324,12 @@ void on_memagent_get_stats(void *userdata, void *opaque, agent_add_stat add_stat
 
     char buf[100];
 
-#define add_int_stat(key, val)    \
-    sprintf(buf, "%u", val);      \
+#define more_stat(spec, key, val) \
+    sprintf(buf, spec, val);      \
     add_stat(opaque, key, buf);
 
-    add_int_stat("nthreads", m->nthreads);
-    add_int_stat("default_downstream_max", m->default_downstream_max);
+    more_stat("%u", "nthreads",               m->nthreads);
+    more_stat("%u", "default_downstream_max", m->default_downstream_max);
 
     add_stat(opaque, NULL, NULL);
 }
