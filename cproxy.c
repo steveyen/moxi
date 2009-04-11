@@ -4,6 +4,7 @@
 #include <string.h>
 #include <errno.h>
 #include <sysexits.h>
+#include <pthread.h>
 #include <assert.h>
 #include <libmemcached/memcached.h>
 #include "memcached.h"
@@ -23,15 +24,26 @@ typedef struct proxy      proxy;
 typedef struct proxy_td   proxy_td;
 typedef struct proxy_main proxy_main;
 typedef struct downstream downstream;
+typedef struct func_work  func_work;
+
+struct func_work {
+    void      (*func)(void *data);
+    void       *data;
+    func_work  *next;
+};
 
 struct proxy_main {
     agent_config_t config; // Immutable.
 
-    int listener_send_fd; // To communicate with listen thread.
-    int listener_recv_fd;
+    int main_send_fd; // Pipe to notify main, listener thread.
+    int main_recv_fd;
 
-    struct event_base *listener_event_base;
-    struct event       listener_event;
+    struct event_base *main_event_base;
+    struct event       main_event;
+
+    func_work      *main_work_head;
+    func_work      *main_work_tail;
+    pthread_mutex_t main_work_lock;
 };
 
 struct proxy {
@@ -139,7 +151,7 @@ char *nread_text(short x);
 void on_memagent_new_serverlist(void *userdata, memcached_server_list_t **lists);
 void on_memagent_get_stats(void *userdata, void *opaque, agent_add_stat add_stat);
 
-void cproxy_listener_notify(int fd, short which, void *arg);
+void cproxy_main_notify(int fd, short which, void *arg);
 
 conn_funcs cproxy_listen_funcs = {
     cproxy_init_upstream_conn,
@@ -178,7 +190,7 @@ void on_memagent_new_serverlist(void *userdata, memcached_server_list_t **lists)
     assert(m != NULL);
 
     if (false)
-        write(m->listener_send_fd, "", 1);
+        write(m->main_send_fd, "", 1);
 
     if (settings.verbose > 1)
         fprintf(stderr, "on_memagent_new_serverlist\n");
@@ -203,23 +215,27 @@ void on_memagent_get_stats(void *userdata, void *opaque, agent_add_stat add_stat
 int cproxy_init(const char *cfg, int nthreads, int downstream_max) {
     proxy_main *m = calloc(1, sizeof(proxy_main));
     if (m != NULL) {
-        LIBEVENT_THREAD *listener = thread_by_index(0);
-        assert(listener != NULL); // Should be the main thread.
+        pthread_mutex_init(&m->main_work_lock, NULL);
+        m->main_work_head = NULL;
+        m->main_work_tail = NULL;
 
-        m->listener_event_base = listener->base;
-        assert(m->listener_event_base != NULL);
+        LIBEVENT_THREAD *mthread = thread_by_index(0);
+        assert(mthread != NULL); // Should be the main thread.
+
+        m->main_event_base = mthread->base;
+        assert(m->main_event_base != NULL);
 
         int fds[2];
 
         if (pipe(fds) == 0) {
-            m->listener_recv_fd = fds[0];
-            m->listener_send_fd = fds[1];
+            m->main_recv_fd = fds[0];
+            m->main_send_fd = fds[1];
 
-            event_set(&m->listener_event, m->listener_recv_fd,
-                      EV_READ | EV_PERSIST, cproxy_listener_notify, m);
-            event_base_set(m->listener_event_base, &m->listener_event);
+            event_set(&m->main_event, m->main_recv_fd,
+                      EV_READ | EV_PERSIST, cproxy_main_notify, m);
+            event_base_set(m->main_event_base, &m->main_event);
 
-            if (event_add(&m->listener_event, 0) == 0) {
+            if (event_add(&m->main_event, 0) == 0) {
                 // Different jid's for production, staging, etc.
                 m->config.jid = "customer@stevenmb.local";
                 m->config.pass = "password";
@@ -1838,20 +1854,34 @@ downstream *downstream_list_remove(downstream *head, downstream *d) {
     return head;
 }
 
-void cproxy_listener_notify(int fd, short which, void *arg) {
+void cproxy_main_notify(int fd, short which, void *arg) {
     proxy_main *m = arg;
     assert(m != NULL);
-    assert(m->listener_recv_fd == fd);
-    assert(m->listener_send_fd >= 0);
-    assert(m->listener_event_base != NULL);
+    assert(m->main_recv_fd == fd);
+    assert(m->main_send_fd >= 0);
+    assert(m->main_event_base != NULL);
 
     char buf[1];
 
-    if (read(fd, buf, 1) == 1) {
-        if (m != NULL) {
-        }
-    } else {
+    pthread_mutex_lock(&m->main_work_lock);
+
+    if (read(fd, buf, 1) != 1) {
         if (settings.verbose > 1)
-            fprintf(stderr, "cproxy listener can't read from pipe\n");
+            fprintf(stderr, "cproxy main can't read from pipe\n");
     }
+
+    while (m->main_work_head != NULL) {
+        func_work *w = m->main_work_head;
+
+        m->main_work_head = m->main_work_head->next;
+        if (m->main_work_head == NULL)
+            m->main_work_tail = NULL;
+
+        w->next = NULL;
+        w->func(w->data);
+
+        free(w);
+    }
+
+    pthread_mutex_unlock(&m->main_work_lock);
 }
