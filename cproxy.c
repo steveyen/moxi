@@ -310,8 +310,18 @@ void on_memagent_new_serverlist(void *userdata, memcached_server_list_t **lists)
 }
 
 void on_memagent_get_stats(void *userdata, void *opaque, agent_add_stat add_stat) {
-    add_stat(opaque, "stat1", "val1");
-    add_stat(opaque, "stat2", "val2");
+    proxy_main *m = userdata;
+    assert(m != NULL);
+
+    char buf[100];
+
+#define add_int_stat(key, val)    \
+    sprintf(buf, "%u", val);      \
+    add_stat(opaque, key, buf);
+
+    add_int_stat("nthreads", m->nthreads);
+    add_int_stat("default_downstream_max", m->default_downstream_max);
+
     add_stat(opaque, NULL, NULL);
 }
 
