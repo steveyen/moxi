@@ -1061,12 +1061,11 @@ void cproxy_process_downstream_ascii(conn *c, char *line) {
 
             // Note, eventually, we'll see an END later.
         } else {
-            // TODO: Don't know how much to swallow, so close the downstream.
+            // We don't know how much to swallow, so close the downstream.
+            // The conn_closing should release the downstream,
+            // which should write a suffix/error to the upstream.
             //
             conn_set_state(c, conn_closing);
-
-            // TODO: Make sure conn_closing releases the downstream,
-            //       which should write an END to the upstream.
         }
     } else if (strncmp(line, "END", 3) == 0 ||
                strncmp(line, "OK", 2) == 0) {
