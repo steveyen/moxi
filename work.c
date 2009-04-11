@@ -18,6 +18,10 @@ bool work_queue_init(work_queue *m, struct event_base *event_base) {
     m->work_head = NULL;
     m->work_tail = NULL;
 
+    m->num_items = 0;
+    m->tot_sends = 0;
+    m->tot_recvs = 0;
+
     m->event_base = event_base;
     assert(m->event_base != NULL);
 
@@ -67,6 +71,8 @@ bool work_send(work_queue *m,
         if (m->work_head == NULL)
             m->work_head = w;
 
+        m->tot_sends++;
+
         if (write(m->send_fd, "", 1) == 1)
             rv = true;
 
@@ -101,11 +107,24 @@ void work_recv(int fd, short which, void *arg) {
 
     pthread_mutex_unlock(&m->work_lock);
 
+    uint64_t num_items = 0;
+
     while (curr != NULL) {
         next = curr->next;
+        num_items++;
         curr->func(curr->data0, curr->data1);
         free(curr);
         curr = next;
+    }
+
+    if (num_items > 0) {
+        pthread_mutex_lock(&m->work_lock);
+
+        m->tot_recvs += num_items;
+        m->num_items -= num_items;
+        assert(m->num_items >= 0);
+
+        pthread_mutex_unlock(&m->work_lock);
     }
 }
 

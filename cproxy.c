@@ -21,10 +21,11 @@ void memcached_quit_server(memcached_server_st *ptr, uint8_t io_death);
 
 #define NOT_CAS -1
 
-typedef struct proxy      proxy;
-typedef struct proxy_td   proxy_td;
-typedef struct proxy_main proxy_main;
-typedef struct downstream downstream;
+typedef struct proxy       proxy;
+typedef struct proxy_td    proxy_td;
+typedef struct proxy_main  proxy_main;
+typedef struct proxy_stats proxy_stats;
+typedef struct downstream  downstream;
 
 struct proxy_main {
     agent_config_t config; // Immutable.
@@ -57,6 +58,14 @@ struct proxy {
     proxy *next;
 };
 
+struct proxy_stats {
+    uint64_t num_upstream; // Current # of upstreams conns using this proxy.
+    uint64_t tot_upstream; // Total # upstream conns that used this proxy.
+
+    uint64_t tot_downstream_released;
+    uint64_t tot_downstream_reserved;
+};
+
 struct proxy_td { // Per proxy, per worker-thread data struct.
     proxy *proxy; // Immutable parent pointer.
 
@@ -73,7 +82,7 @@ struct proxy_td { // Per proxy, per worker-thread data struct.
     int         downstream_num;      // Number downstreams created.
     int         downstream_max;      // Max downstream concurrency number.
 
-    int num_upstream; // # of upstreams conns where conn->extra == this.
+    proxy_stats stats;
 };
 
 struct downstream {
@@ -405,7 +414,8 @@ proxy *cproxy_create(char *name, int port, char *config,
                 ptd->downstream_released = NULL;
                 ptd->downstream_num = 0;
                 ptd->downstream_max = downstream_max;
-                ptd->num_upstream = 0;
+                ptd->stats.num_upstream = 0;
+                ptd->stats.tot_upstream = 0;
 
                 LIBEVENT_THREAD *t = thread_by_index(i);
                 if (t == NULL ||
@@ -509,7 +519,9 @@ void cproxy_init_upstream_conn(conn *c) {
     proxy_td *ptd = cproxy_find_thread_data(p, pthread_self());
     assert(ptd != NULL);
 
-    ptd->num_upstream++;
+    ptd->stats.num_upstream++;
+    ptd->stats.tot_upstream++;
+
     c->extra = ptd;
     c->funcs = &cproxy_upstream_funcs;
 }
@@ -537,8 +549,8 @@ void cproxy_on_close_upstream_conn(conn *c) {
     assert(ptd != NULL);
     c->extra = NULL;
 
-    ptd->num_upstream--;
-    assert(ptd->num_upstream >= 0);
+    ptd->stats.num_upstream--;
+    assert(ptd->stats.num_upstream >= 0);
 
     // Delink from any reserved downstream.
     //

@@ -30,6 +30,10 @@ struct work_queue {
     work_item      *work_head;
     work_item      *work_tail;
     pthread_mutex_t work_lock;
+
+    uint64_t num_items; // Current number of items in queue.
+    uint64_t tot_sends;
+    uint64_t tot_recvs;
 };
 
 bool work_queue_init(work_queue *m, struct event_base *base);
