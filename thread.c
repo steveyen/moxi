@@ -215,6 +215,15 @@ static void setup_thread(LIBEVENT_THREAD *me) {
     }
     cq_init(me->new_conn_queue);
 
+    // TODO: Merge new_conn_queue with work_queue.
+    //
+    me->work_queue = calloc(1, sizeof(work_queue));
+    if (me->work_queue == NULL) {
+        perror("Failed to allocate memory for work queue");
+        exit(EXIT_FAILURE);
+    }
+    work_queue_init(me->work_queue, me->base);
+
     if (pthread_mutex_init(&me->stats.mutex, NULL) != 0) {
         perror("Failed to initialize mutex");
         exit(EXIT_FAILURE);
