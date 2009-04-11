@@ -40,7 +40,7 @@ struct proxy_main {
 
 struct proxy {
     int   port;       // Immutable.
-    char *name;       // Mutable, covered by proxy_lock, mostly for debugging.
+    char *name;       // Mutable, covered by proxy_lock, for debugging.
     char *config;     // Mutable, covered by proxy_lock, mem owned by proxy.
     int   config_ver; // Mutable, covered by proxy_lock, incremented
                       // whenever config changes.
@@ -78,7 +78,7 @@ struct proxy_td { // Per proxy, per worker-thread data struct.
     conn *waiting_for_downstream_tail;
 
     downstream *downstream_reserved; // Downstreams assigned to upstreams.
-    downstream *downstream_released; // Downstreams not assigned to upstreams.
+    downstream *downstream_released; // Downstreams unassigned to upstreams.
     int         downstream_num;      // Number downstreams created.
     int         downstream_max;      // Max downstream concurrency number.
 
@@ -122,9 +122,12 @@ int   cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread);
 void  cproxy_wait_for_downstream(proxy_td *ptd, conn *c);
 void  cproxy_assign_downstream(proxy_td *ptd);
 bool  cproxy_forward_downstream(downstream *d);
-bool  cproxy_forward_multiget_downstream(downstream *d, char *command, conn *uc);
-bool  cproxy_forward_simple_downstream(downstream *d, char *command, conn *uc);
-bool  cproxy_forward_item_downstream(downstream *d, short cmd, item *it, conn *uc);
+bool  cproxy_forward_multiget_downstream(downstream *d, char *command,
+                                         conn *uc);
+bool  cproxy_forward_simple_downstream(downstream *d, char *command,
+                                       conn *uc);
+bool  cproxy_forward_item_downstream(downstream *d, short cmd, item *it,
+                                     conn *uc);
 bool  cproxy_broadcast_downstream(downstream *d, char *command, conn *uc,
                                   char *suffix);
 void  cproxy_pause_upstream_for_downstream(proxy_td *ptd, conn *upstream);
@@ -155,8 +158,10 @@ size_t scan_tokens(char *command, token_t *tokens, const size_t max_tokens);
 
 char *nread_text(short x);
 
-void on_memagent_new_serverlist(void *userdata, memcached_server_list_t **lists);
-void on_memagent_get_stats(void *userdata, void *opaque, agent_add_stat add_stat);
+void on_memagent_new_serverlist(void *userdata,
+                                memcached_server_list_t **lists);
+void on_memagent_get_stats(void *userdata, void *opaque,
+                           agent_add_stat add_stat);
 
 void cproxy_on_new_serverlist(void *data0, void *data1);
 
@@ -254,7 +259,8 @@ void cproxy_on_new_serverlist(void *data0, void *data1) {
         }
     } else {
         if (settings.verbose > 1)
-            fprintf(stderr, "cproxy main handling config change %u\n", p->port);
+            fprintf(stderr, "cproxy main handling config change %u\n",
+                    p->port);
 
         pthread_mutex_lock(&p->proxy_lock);
 
@@ -271,7 +277,8 @@ void cproxy_on_new_serverlist(void *data0, void *data1) {
 
         if (strcmp(p->config, cfg) != 0) {
             if (settings.verbose > 1)
-                fprintf(stderr, "cproxy main config changed from %s to %s\n",
+                fprintf(stderr,
+                        "cproxy main config changed from %s to %s\n",
                         p->config, cfg);
 
             free(p->config);
@@ -289,7 +296,8 @@ void cproxy_on_new_serverlist(void *data0, void *data1) {
     free_server_list(list);
 }
 
-void on_memagent_new_serverlist(void *userdata, memcached_server_list_t **lists) {
+void on_memagent_new_serverlist(void *userdata,
+                                memcached_server_list_t **lists) {
     assert(lists != NULL);
 
     proxy_main *m = userdata;
@@ -318,7 +326,8 @@ void on_memagent_new_serverlist(void *userdata, memcached_server_list_t **lists)
     }
 }
 
-void on_memagent_get_stats(void *userdata, void *opaque, agent_add_stat add_stat) {
+void on_memagent_get_stats(void *userdata, void *opaque,
+                           agent_add_stat add_stat) {
     proxy_main *m = userdata;
     assert(m != NULL);
 
@@ -334,7 +343,8 @@ void on_memagent_get_stats(void *userdata, void *opaque, agent_add_stat add_stat
     add_stat(opaque, NULL, NULL);
 }
 
-int cproxy_init(const char *cfg, int nthreads, int default_downstream_max) {
+int cproxy_init(const char *cfg, int nthreads,
+                int default_downstream_max) {
     assert(nthreads == settings.num_threads);
     assert(default_downstream_max > 0);
 
@@ -670,7 +680,8 @@ void cproxy_add_downstream(proxy_td *ptd) {
 downstream *cproxy_reserve_downstream(proxy_td *ptd) {
     assert(ptd != NULL);
 
-    // Loop in case we need to clear out downstreams that have outdated configs.
+    // Loop in case we need to clear out downstreams
+    // that have outdated configs.
     //
     while (true) {
         downstream *d;
@@ -1167,11 +1178,12 @@ void cproxy_process_downstream_ascii_nread(conn *c) {
             if (cas == NOT_CAS) {
                 if (add_iov(uc, "VALUE ", 6) == 0 &&
                     add_iov(uc, ITEM_key(it), it->nkey) == 0 &&
-                    add_iov(uc, ITEM_suffix(it), it->nsuffix + it->nbytes) == 0 &&
+                    add_iov(uc, ITEM_suffix(it),
+                            it->nsuffix + it->nbytes) == 0 &&
                     add_conn_item(uc, it)) {
                     if (settings.verbose > 1)
                         fprintf(stderr,
-                                "<%d cproxy_process_downstream_ascii success\n",
+                                "<%d cproxy downstream ascii success\n",
                                 c->sfd);
 
                     return; // Success.
@@ -1189,7 +1201,7 @@ void cproxy_process_downstream_ascii_nread(conn *c) {
                         add_conn_item(uc, it)) {
                         if (settings.verbose > 1)
                             fprintf(stderr,
-                                    "<%d cproxy_process_downstream_ascii ok\n",
+                                    "<%d cproxy downstream ascii ok\n",
                                     c->sfd);
 
                         return; // Success.
@@ -1211,7 +1223,8 @@ void cproxy_process_downstream_ascii_nread(conn *c) {
     item_remove(it);
 }
 
-conn *cproxy_find_downstream_conn(downstream *d, char *key, int key_length) {
+conn *cproxy_find_downstream_conn(downstream *d,
+                                  char *key, int key_length) {
     assert(d != NULL);
     assert(d->downstream_conns != NULL);
     assert(key != NULL);
@@ -1248,7 +1261,8 @@ bool cproxy_prep_conn_for_write(conn *c) {
             return true;
 
         if (settings.verbose > 1)
-            fprintf(stderr, "%d: cproxy_prep_conn_for_write failed\n", c->sfd);
+            fprintf(stderr,
+                    "%d: cproxy_prep_conn_for_write failed\n", c->sfd);
     }
 
     return false;
@@ -1338,7 +1352,7 @@ void cproxy_assign_downstream(proxy_td *ptd) {
                 //
                 // cproxy_wait_for_downstream(ptd, uc);
                 //
-                out_string(uc, "SERVER_ERROR proxy could not write to downstream");
+                out_string(uc, "SERVER_ERROR proxy write to downstream");
 
                 update_event(uc, EV_WRITE | EV_PERSIST);
             }
@@ -1383,7 +1397,8 @@ bool cproxy_forward_downstream(downstream *d) {
  * The response, though, might be a simple line or
  * multiple VALUE+END lines.
  */
-bool cproxy_forward_simple_downstream(downstream *d, char *command, conn *uc) {
+bool cproxy_forward_simple_downstream(downstream *d,
+                                      char *command, conn *uc) {
     assert(d != NULL);
     assert(d->downstream_conns != NULL);
     assert(command != NULL);
@@ -1437,7 +1452,8 @@ bool cproxy_forward_simple_downstream(downstream *d, char *command, conn *uc) {
     return false;
 }
 
-bool cproxy_forward_multiget_downstream(downstream *d, char *command, conn *uc) {
+bool cproxy_forward_multiget_downstream(downstream *d,
+                                        char *command, conn *uc) {
     assert(d != NULL);
     assert(d->downstream_conns != NULL);
     assert(command != NULL);
@@ -1592,7 +1608,8 @@ bool cproxy_broadcast_downstream(downstream *d, char *command, conn *uc,
 /* Forward an upstream command that came with item data,
  * like set/add/replace/etc.
  */
-bool cproxy_forward_item_downstream(downstream *d, short cmd, item *it, conn *uc) {
+bool cproxy_forward_item_downstream(downstream *d, short cmd,
+                                    item *it, conn *uc) {
     assert(d != NULL);
     assert(d->downstream_conns != NULL);
     assert(it != NULL);
@@ -1626,7 +1643,8 @@ bool cproxy_forward_item_downstream(downstream *d, short cmd, item *it, conn *uc
             sprintf(str_exptime, " %u", it->exptime);
 
             if (str_cas != NULL)
-                sprintf(str_cas, " %llu", (unsigned long long) ITEM_get_cas(it));
+                sprintf(str_cas, " %llu",
+                        (unsigned long long) ITEM_get_cas(it));
 
             if (add_iov(c, verb, strlen(verb)) == 0 &&
                 add_iov(c, ITEM_key(it), it->nkey) == 0 &&
@@ -1905,7 +1923,8 @@ char *nread_text(short x) {
  *      command = tokens[ix].value;
  *  }
  */
-size_t scan_tokens(char *command, token_t *tokens, const size_t max_tokens) {
+size_t scan_tokens(char *command, token_t *tokens,
+                   const size_t max_tokens) {
     char *s, *e;
     size_t ntokens = 0;
 
