@@ -57,7 +57,8 @@ struct proxy {
     int   port;       // Immutable.
     char *name;       // Mutable, covered by proxy_lock, mostly for debugging.
     char *config;     // Mutable, covered by proxy_lock, mem owned by proxy.
-    int   config_ver; // Mutable, covered by proxy_lock, inc'ed whenever config changes.
+    int   config_ver; // Mutable, covered by proxy_lock, incremented
+                      // whenever config changes.
 
     pthread_mutex_t proxy_lock;
 
@@ -243,7 +244,8 @@ void on_main_new_serverlist(void *data0, void *data1) {
             fprintf(stderr, "cproxy main creating new proxy for %s on %d\n",
                     cfg, list->binding);
 
-        p = cproxy_create(list->name, list->binding, cfg, m->nthreads, m->default_downstream_max);
+        p = cproxy_create(list->name, list->binding, cfg,
+                          m->nthreads, m->default_downstream_max);
         if (p != NULL) {
             p->next = m->proxy_head;
             m->proxy_head = p;
@@ -276,7 +278,8 @@ void on_main_new_serverlist(void *data0, void *data1) {
 
         if (strcmp(p->config, cfg) != 0) {
             if (settings.verbose > 1)
-                fprintf(stderr, "cproxy main config changed from %s to %s\n", p->config, cfg);
+                fprintf(stderr, "cproxy main config changed from %s to %s\n",
+                        p->config, cfg);
 
             free(p->config);
             p->config = cfg;
@@ -386,7 +389,8 @@ int cproxy_init(const char *cfg, int nthreads, int default_downstream_max) {
     return 1;
 }
 
-proxy *cproxy_create(char *name, int port, char *config, int nthreads, int downstream_max) {
+proxy *cproxy_create(char *name, int port, char *config,
+                     int nthreads, int downstream_max) {
     assert(name != NULL);
     assert(port > 0);
     assert(config != NULL);
@@ -1070,7 +1074,8 @@ void cproxy_process_downstream_ascii(conn *c, char *line) {
                 }
             } else {
                 if (settings.verbose > 1)
-                    fprintf(stderr, "cproxy could not item_alloc size %u\n", vlen + 2);
+                    fprintf(stderr, "cproxy could not item_alloc size %u\n",
+                            vlen + 2);
             }
 
             if (it != NULL)
@@ -1178,7 +1183,7 @@ void cproxy_process_downstream_ascii_nread(conn *c) {
                         add_conn_item(uc, it)) {
                         if (settings.verbose > 1)
                             fprintf(stderr,
-                                    "<%d cproxy_process_downstream_ascii success\n",
+                                    "<%d cproxy_process_downstream_ascii ok\n",
                                     c->sfd);
 
                         return; // Success.
@@ -1531,7 +1536,8 @@ bool cproxy_forward_multiget_downstream(downstream *d, char *command, conn *uc) 
 
 /* Used for broadcast commands, like flush_all or stats.
  */
-bool cproxy_broadcast_downstream(downstream *d, char *command, conn *uc, char *suffix) {
+bool cproxy_broadcast_downstream(downstream *d, char *command, conn *uc,
+                                 char *suffix) {
     assert(d != NULL);
     assert(d->downstream_conns != NULL);
     assert(command != NULL);
@@ -1947,7 +1953,8 @@ downstream *downstream_list_remove(downstream *head, downstream *d) {
     return head;
 }
 
-bool cproxy_main_send_work(proxy_main *m, void (*func)(void *data0, void *data1),
+bool cproxy_main_send_work(proxy_main *m,
+                           void (*func)(void *data0, void *data1),
                            void *data0, void *data1) {
     assert(m != NULL);
     assert(m->main_recv_fd >= 0);
