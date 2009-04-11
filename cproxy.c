@@ -50,10 +50,13 @@ struct proxy {
     int   config_ver; // Mutable, covered by proxy_lock, incremented
                       // whenever config changes.
 
+    // Any thread that accesses the mutable fields should
+    // first acquire the proxy_lock.
+    //
     pthread_mutex_t proxy_lock;
 
     // Immutable number of listening conn's acting as a proxy,
-    // where ((proxy *) conn->extra == this).
+    // where (((proxy *) conn->extra) == this).
     //
     int listening;
 
@@ -90,6 +93,8 @@ struct proxy_td { // Per proxy, per worker-thread data struct.
     proxy_stats stats;
 };
 
+/* Owned by worker thread.
+ */
 struct downstream {
     proxy_td     *ptd;        // Immutable parent pointer.
     char         *config;     // Immutable, mem owned by downstream.
@@ -343,10 +348,9 @@ typedef struct proxy_stats_collect proxy_stats_collect;
 
 struct proxy_stats_collect {
     proxy_main     *m;         // Immutable.
-    int             nthreads;  // Immutable.
-    int             ithread;   // Thread index.
+    int             nreqs;     // Immutable.
     pthread_mutex_t done_lock;
-    pthread_cond_t  done_cond; // Signaled when ithread >= nthreads.
+    pthread_cond_t  done_cond; // Signaled when nreqs drops to 0.
     proxy_stats     proxy_stats;
 };
 
@@ -363,36 +367,29 @@ void cproxy_request_stats(void *data0, void *data1) {
     if (!is_listen_thread())
         return;
 
-    int    nreqs = 0;
+    int    nproxy = 0;
     proxy *p;
 
-    p = m->proxy_head;
-    while (p != NULL) {
-        // Subtract 1 to account for the main listen thread.
-        //
-        nreqs += p->thread_data_num - 1;
-        p = p->next;
-    }
+    for (p = m->proxy_head; p != NULL; p = p->next)
+        nproxy++;
 
-    // c->nreqs = nreqs;
-
-    p = m->proxy_head;
-    while (p != NULL) {
-        // Starting at 1 because 0 is the main listen thread.
-        //
-        for (int i = 1; i < p->thread_data_num; i++) {
-            proxy_td *ptd = &p->thread_data[i];
-            if (ptd != NULL) {
-                if (false
-                    /*work_send(ptd->work_queue, cproxy_gather_stats,
-                                p, c) */) {
-                    if (c) {
+    proxy_stats_collect *pc = calloc(nproxy, sizeof(proxy_stats_collect));
+    if (pc != NULL) {
+        for (p = m->proxy_head; p != NULL; p = p->next) {
+            // Starting at 1 because 0 is the main listen thread.
+            //
+            for (int i = 1; i < p->thread_data_num; i++) {
+                proxy_td *ptd = &p->thread_data[i];
+                if (ptd != NULL) {
+                    if (false
+                        /*work_send(ptd->work_queue, cproxy_gather_stats,
+                          p, c) */) {
+                        if (c) {
+                        }
                     }
                 }
             }
         }
-
-        p = p->next;
     }
 
     // Need to wait until done so that number of proxies
@@ -421,16 +418,16 @@ void on_memagent_get_stats(void *userdata, void *opaque,
 
     proxy_stats_collect *c = calloc(1, sizeof(proxy_stats_collect));
     if (c != NULL) {
-        c->m        = m;
-        c->nthreads = m->nthreads;
-        c->ithread  = 0;
+        c->m     = m;
+        c->nreqs = 0;
 
         pthread_mutex_init(&c->done_lock, NULL);
         pthread_cond_init(&c->done_cond, NULL);
 
         if (work_send(mthread->work_queue, cproxy_request_stats,
                       m, c)) {
-            // Wait for all the threads to finish.
+            // Wait for all the stats gathering to finish.
+            //
             pthread_mutex_lock(&c->done_lock);
             // while (c->thread < c->nthreads) {
             //     pthread_cond_wait(&c->done_cond, &c->done_lock);
