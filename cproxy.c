@@ -590,12 +590,17 @@ void cproxy_on_close_downstream_conn(conn *c) {
     assert(c->sfd >= 0);
     assert(c->state == conn_closing);
 
-    downstream *d = c->extra;
-    assert(d != NULL);
-    c->extra = NULL;
-
     if (settings.verbose > 1)
         fprintf(stderr, "<%d cproxy_on_close_downstream_conn\n", c->sfd);
+
+    downstream *d = c->extra;
+
+    // Might have been set to NULL during cproxy_free_downstream().
+    //
+    if (d == NULL)
+        return;
+
+    c->extra = NULL;
 
     int n = memcached_server_count(&d->mst);
 
@@ -657,20 +662,20 @@ void cproxy_add_downstream(proxy_td *ptd) {
 downstream *cproxy_reserve_downstream(proxy_td *ptd) {
     assert(ptd != NULL);
 
-    downstream *d;
+    // Loop in case we need to clear out downstreams that have outdated configs.
+    //
+    while (true) {
+        downstream *d;
 
-    d = ptd->downstream_released;
-    if (d == NULL)
-        cproxy_add_downstream(ptd);
+        d = ptd->downstream_released;
+        if (d == NULL)
+            cproxy_add_downstream(ptd);
 
-    d = ptd->downstream_released;
-    if (d != NULL) {
-        // TODO: Check that config is still correct?
-        //
+        d = ptd->downstream_released;
+        if (d == NULL)
+            return NULL;
+
         ptd->downstream_released = d->next;
-
-        d->next = ptd->downstream_reserved;
-        ptd->downstream_reserved = d;
 
         assert(d->upstream_conn == NULL);
         assert(d->upstream_suffix == NULL);
@@ -679,9 +684,16 @@ downstream *cproxy_reserve_downstream(proxy_td *ptd) {
         d->upstream_conn = NULL;
         d->upstream_suffix = NULL;
         d->downstream_used = 0;
-    }
 
-    return d;
+        if (cproxy_check_downstream_config(d)) {
+            d->next = ptd->downstream_reserved;
+            ptd->downstream_reserved = d;
+
+            return d;
+        }
+
+        cproxy_free_downstream(d);
+    }
 }
 
 bool cproxy_release_downstream(downstream *d, bool force) {
@@ -722,7 +734,8 @@ bool cproxy_release_downstream(downstream *d, bool force) {
     //
     // Remove from the reserved downstream list.
     //
-    d->ptd->downstream_reserved = downstream_list_remove(d->ptd->downstream_reserved, d);
+    d->ptd->downstream_reserved =
+        downstream_list_remove(d->ptd->downstream_reserved, d);
 
     // If this downstream still has the same configuration as our top-level
     // proxy config, go back onto the available, released downstream list.
@@ -734,14 +747,14 @@ bool cproxy_release_downstream(downstream *d, bool force) {
         return true;
     }
 
-    // No more downstream conns open or we've got an
-    // old configuration, so don't add to released list.
-    //
     cproxy_free_downstream(d);
 
     return false;
 }
 
+/* This should be called when the downstream is neither on
+ * the reserved list or the released list.
+ */
 void cproxy_free_downstream(downstream *d) {
     assert(d != NULL);
     assert(d->next == NULL);
@@ -750,6 +763,15 @@ void cproxy_free_downstream(downstream *d) {
     if (settings.verbose > 1)
         fprintf(stderr, "cproxy_free_downstream\n");
 
+    int n = memcached_server_count(&d->mst);
+
+    for (int i = 0; i < n; i++)
+        d->downstream_conns[i]->extra = NULL;
+
+    // This will close sockets, which will force associated conn's
+    // to go to conn_closing state.  Since we've already cleared
+    // the conn->extra pointers, there's no extra release/free.
+    //
     memcached_free(&d->mst);
 
     if (d->downstream_conns != NULL)
