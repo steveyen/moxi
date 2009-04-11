@@ -54,12 +54,14 @@ struct proxy_main {
 };
 
 struct proxy {
-    char *name;       // Mutable, mostly for debugging.
     int   port;       // Immutable.
-    char *config;     // Mutable, mem owned by proxy.
-    int   config_ver; // Inc'ed whenever config changes.
+    char *name;       // Mutable, covered by proxy_lock, mostly for debugging.
+    char *config;     // Mutable, covered by proxy_lock, mem owned by proxy.
+    int   config_ver; // Mutable, covered by proxy_lock, inc'ed whenever config changes.
 
-    // Number of listening conn's acting as a proxy,
+    pthread_mutex_t proxy_lock;
+
+    // Immutable number of listening conn's acting as a proxy,
     // where ((proxy *) conn->extra == this).
     //
     int listening;
@@ -203,6 +205,9 @@ void on_main_new_serverlist(void *data0, void *data1) {
     assert(list);
     assert(list->servers);
 
+    // Create a config string that libmemcached likes,
+    // first by counting up buffer size needed.
+    //
     int j;
     int n = 0;
     for (j = 0; list->servers[j]; j++) {
@@ -210,7 +215,7 @@ void on_main_new_serverlist(void *data0, void *data1) {
         n = n + strlen(server->host) + 50;
     }
 
-    char *cfg = calloc(n, 1); // TODO: Need free().
+    char *cfg = calloc(n, 1);
 
     for (int j = 0; list->servers[j]; j++) {
         memcached_server_t *server = list->servers[j];
@@ -225,6 +230,9 @@ void on_main_new_serverlist(void *data0, void *data1) {
         fprintf(stderr, "cproxy main has new cfg: %s (bound to %d)\n",
                 cfg, list->binding);
 
+    // See if we've already got a proxy running on the port,
+    // and create one if needed.
+    //
     proxy *p = m->proxy_head;
     while (p != NULL &&
            p->port != list->binding)
@@ -239,10 +247,22 @@ void on_main_new_serverlist(void *data0, void *data1) {
         if (p != NULL) {
             p->next = m->proxy_head;
             m->proxy_head = p;
-        }
-    }
 
-    if (p != NULL) {
+            int n = cproxy_listen(p);
+            if (n > 0) {
+                if (settings.verbose > 1)
+                    fprintf(stderr, "cproxy listening on %d conns\n", n);
+            } else {
+                if (settings.verbose > 1)
+                    fprintf(stderr, "cproxy_listen failed on %u\n", p->port);
+            }
+        }
+    } else {
+        if (settings.verbose > 1)
+            fprintf(stderr, "cproxy main handling config change %u\n", p->port);
+
+        pthread_mutex_lock(&p->proxy_lock);
+
         if (p->name != NULL && list->name != NULL &&
             strcmp(p->name, list->name) != 0) {
             if (p->name != NULL) {
@@ -254,15 +274,21 @@ void on_main_new_serverlist(void *data0, void *data1) {
             list->name != NULL)
             p->name = strdup(list->name);
 
-        int n = cproxy_listen(p);
-        if (n > 0) {
+        if (strcmp(p->config, cfg) != 0) {
             if (settings.verbose > 1)
-                fprintf(stderr, "cproxy listening on %d conns\n", n);
-        } else {
-            if (settings.verbose > 1)
-                fprintf(stderr, "cproxy_listen failed on %u\n", p->port);
+                fprintf(stderr, "cproxy main config changed from %s to %s\n", p->config, cfg);
+
+            free(p->config);
+            p->config = cfg;
+            p->config_ver++;
+            cfg = NULL;
         }
+
+        pthread_mutex_unlock(&p->proxy_lock);
     }
+
+    if (cfg != NULL)
+        free(cfg);
 
     free_server_list(list);
 }
@@ -376,6 +402,8 @@ proxy *cproxy_create(char *name, int port, char *config, int nthreads, int downs
         p->config     = strdup(config);
         p->config_ver = 0;
         p->listening  = 0;
+
+        pthread_mutex_init(&p->proxy_lock, NULL);
 
         p->thread_data_num = nthreads;
         p->thread_data = (proxy_td *) calloc(p->thread_data_num,
@@ -607,13 +635,22 @@ void cproxy_add_downstream(proxy_td *ptd) {
 
     if (ptd != NULL &&
         ptd->downstream_num < ptd->downstream_max) {
-        downstream *d = cproxy_create_downstream(ptd->proxy->config,
-                                                 ptd->proxy->config_ver);
+        // TODO: The lock area here is big, but we don't
+        //       want the config getting free'ed out from under us.
+        //
+        pthread_mutex_lock(&ptd->proxy->proxy_lock);
+
+        char *config     = config;
+        int   config_ver = config_ver;
+
+        downstream *d = cproxy_create_downstream(config, config_ver);
         if (d != NULL) {
             d->ptd = ptd;
             ptd->downstream_num++;
             cproxy_release_downstream(d, true);
         }
+
+        pthread_mutex_unlock(&ptd->proxy->proxy_lock);
     }
 }
 
@@ -687,27 +724,10 @@ bool cproxy_release_downstream(downstream *d, bool force) {
     //
     d->ptd->downstream_reserved = downstream_list_remove(d->ptd->downstream_reserved, d);
 
-    // See if this downstream has real connections.
+    // If this downstream still has the same configuration as our top-level
+    // proxy config, go back onto the available, released downstream list.
     //
-    int s = 0;
-    int n = memcached_server_count(&d->mst);
-
-    assert(n > 0);
-
-    for (int i = 0; i < n; i++) {
-        if (d->downstream_conns[i] != NULL &&
-            d->downstream_conns[i]->sfd >= 0) {
-            s++;
-            assert(d->downstream_conns[i]->state == conn_pause ||
-                   d->downstream_conns[i]->state == conn_closing);
-        }
-    }
-
-    // If this downstream still has the same configuration
-    // and also has real connections, go back onto the
-    // available, released downstream list.
-    //
-    if ((s > 0 && cproxy_check_downstream_config(d)) || force) {
+    if (cproxy_check_downstream_config(d) || force) {
         d->next = d->ptd->downstream_released;
         d->ptd->downstream_released = d;
 
@@ -789,17 +809,23 @@ bool cproxy_check_downstream_config(downstream *d) {
     assert(d != NULL);
     assert(d->ptd != NULL);
     assert(d->ptd->proxy != NULL);
+
+    int rv = false;
+
+    pthread_mutex_lock(&d->ptd->proxy->proxy_lock);
+
     assert(d->ptd->proxy->config != NULL);
 
-    if (d->config_ver == d->ptd->proxy->config_ver)
-        return true;
-
-    if (strcmp(d->config, d->ptd->proxy->config) == 0) {
+    if (d->config_ver == d->ptd->proxy->config_ver) {
+        rv = true;
+    } else if (strcmp(d->config, d->ptd->proxy->config) == 0) {
         d->config_ver = d->ptd->proxy->config_ver;
-        return true;
+        rv = true;
     }
 
-    return false;
+    pthread_mutex_lock(&d->ptd->proxy->proxy_lock);
+
+    return rv;
 }
 
 int cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread) {
