@@ -29,7 +29,7 @@ typedef struct downstream downstream;
 struct proxy_main {
     agent_config_t config; // Immutable.
 
-    work_queue queue;
+    work_queue work_queue;
 
     int nthreads;
     int default_downstream_max;
@@ -295,7 +295,8 @@ void on_memagent_new_serverlist(void *userdata, memcached_server_list_t **lists)
 
         list_copy = copy_server_list(list);
         if (list_copy != NULL) {
-            err = !work_send(&m->queue, cproxy_on_new_serverlist, m, list_copy);
+            err = !work_send(&m->work_queue, cproxy_on_new_serverlist,
+                             m, list_copy);
         } else
             err = true;
 
@@ -326,7 +327,7 @@ int cproxy_init(const char *cfg, int nthreads, int default_downstream_max) {
         m->nthreads               = nthreads;
         m->default_downstream_max = default_downstream_max;
 
-        if (work_queue_init(&m->queue, mthread->base)) {
+        if (work_queue_init(&m->work_queue, mthread->base)) {
             // Different jid's for production, staging, etc.
             m->config.jid = "customer@stevenmb.local";
             m->config.pass = "password";
