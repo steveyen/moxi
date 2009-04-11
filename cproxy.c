@@ -865,6 +865,8 @@ int cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread) {
     assert(d->next == NULL);
     assert(d->downstream_conns != NULL);
     assert(memcached_server_count(&d->mst) > 0);
+    assert(thread != NULL);
+    assert(thread->base != NULL);
 
     memcached_return rc;
 
