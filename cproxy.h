@@ -102,9 +102,12 @@ struct downstream {
     char  *upstream_suffix;   // Last bit to write when downstreams are done.
 };
 
-proxy    *cproxy_create(char *name, int port,
-                        char *config, int nthreads, int downstream_max);
-int       cproxy_listen(proxy *p);
+// Functions.
+//
+proxy *cproxy_create(char *name, int port,
+                     char *config, int nthreads, int downstream_max);
+int    cproxy_listen(proxy *p);
+
 proxy_td *cproxy_find_thread_data(proxy *p, pthread_t thread_id);
 void      cproxy_init_upstream_conn(conn *c);
 void      cproxy_init_downstream_conn(conn *c);
@@ -136,10 +139,9 @@ bool  cproxy_broadcast_downstream(downstream *d, char *command, conn *uc,
 
 void  cproxy_pause_upstream_for_downstream(proxy_td *ptd, conn *upstream);
 conn *cproxy_find_downstream_conn(downstream *d, char *key, int key_length);
-bool  cproxy_prep_conn_for_write(conn *c);
 int   cproxy_server_index(downstream *d, char *key, size_t key_length);
-
-bool cproxy_dettach_if_noreply(downstream *d, conn *uc);
+bool  cproxy_prep_conn_for_write(conn *c);
+bool  cproxy_dettach_if_noreply(downstream *d, conn *uc);
 
 void cproxy_reset_upstream(conn *uc);
 
