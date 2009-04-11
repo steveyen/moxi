@@ -18,19 +18,21 @@ uint32_t memcached_generate_hash(memcached_st *ptr, const char *key,
                                  size_t key_length);
 void memcached_quit_server(memcached_server_st *ptr, uint8_t io_death);
 
+typedef struct func_work func_work;
+
+struct func_work { // Generic callback work.
+    void      (*func)(void *data0, void *data1);
+    void       *data0;
+    void       *data1;
+    func_work  *next;
+};
+
 #define NOT_CAS -1
 
 typedef struct proxy      proxy;
 typedef struct proxy_td   proxy_td;
 typedef struct proxy_main proxy_main;
 typedef struct downstream downstream;
-typedef struct func_work  func_work;
-
-struct func_work {
-    void      (*func)(void *data);
-    void       *data;
-    func_work  *next;
-};
 
 struct proxy_main {
     agent_config_t config; // Immutable.
@@ -151,7 +153,10 @@ char *nread_text(short x);
 void on_memagent_new_serverlist(void *userdata, memcached_server_list_t **lists);
 void on_memagent_get_stats(void *userdata, void *opaque, agent_add_stat add_stat);
 
-bool cproxy_main_send_work(proxy_main *m, void (*func)(void *data), void *data);
+void on_main_new_serverlist(void *data0, void *data1);
+
+bool cproxy_main_send_work(proxy_main *m, void (*func)(void *data0, void *data1),
+                           void *data0, void *data1);
 void cproxy_main_recv_work(int fd, short which, void *arg);
 
 conn_funcs cproxy_listen_funcs = {
@@ -184,11 +189,17 @@ conn_funcs cproxy_downstream_funcs = {
     cproxy_realtime
 };
 
-void print_string(void *data);
+void on_main_new_serverlist(void *data0, void *data1) {
+    proxy_main *m = data0;
+    assert(m);
+    memcached_server_list_t *list = data1;
+    assert(list);
 
-void print_string(void *data) {
-    char *s = data;
-    fprintf(stderr, "%s\n", s);
+    if (m != NULL) {
+        printf("hello heya\n");
+    }
+
+    free_server_list(list);
 }
 
 void on_memagent_new_serverlist(void *userdata, memcached_server_list_t **lists) {
@@ -197,18 +208,24 @@ void on_memagent_new_serverlist(void *userdata, memcached_server_list_t **lists)
     proxy_main *m = userdata;
     assert(m != NULL);
 
-    cproxy_main_send_work(m, print_string, "hello world\n");
-
     if (settings.verbose > 1)
         fprintf(stderr, "on_memagent_new_serverlist\n");
 
-    for (int i = 0; lists[i]; i++) {
-        memcached_server_list_t *list = lists[i];
-        printf("\tList:  ``%s'' (bound to %d)\n", list->name, list->binding);
+    bool err = false;
 
-        for (int j = 0; list->servers[j]; j++) {
-            memcached_server_t *server = list->servers[j];
-            printf("\t\t%s:%d\n", server->host, server->port);
+    for (int i = 0; lists[i] && !err; i++) {
+        memcached_server_list_t *list = lists[i];
+        memcached_server_list_t *list_copy;
+
+        list_copy = copy_server_list(list);
+        if (list_copy != NULL) {
+            err = !cproxy_main_send_work(m, on_main_new_serverlist, m, list_copy);
+        } else
+            err = true;
+
+        if (err) {
+            if (list_copy != NULL)
+                free_server_list(list_copy);
         }
     }
 }
@@ -1861,21 +1878,22 @@ downstream *downstream_list_remove(downstream *head, downstream *d) {
     return head;
 }
 
-bool cproxy_main_send_work(proxy_main *m, void (*func)(void *data), void *data) {
+bool cproxy_main_send_work(proxy_main *m, void (*func)(void *data0, void *data1),
+                           void *data0, void *data1) {
     assert(m != NULL);
     assert(m->main_recv_fd >= 0);
     assert(m->main_send_fd >= 0);
     assert(m->main_event_base != NULL);
     assert(func != NULL);
-    assert(data != NULL);
 
     bool rv = false;
 
     func_work *w = calloc(1, sizeof(func_work));
     if (w != NULL) {
-        w->func = func;
-        w->data = data;
-        w->next = NULL;
+        w->func  = func;
+        w->data0 = data0;
+        w->data1 = data1;
+        w->next  = NULL;
 
         pthread_mutex_lock(&m->main_work_lock);
 
@@ -1921,7 +1939,7 @@ void cproxy_main_recv_work(int fd, short which, void *arg) {
             m->main_work_tail = NULL;
 
         w->next = NULL;
-        w->func(w->data);
+        w->func(w->data0, w->data1);
 
         free(w);
     }
