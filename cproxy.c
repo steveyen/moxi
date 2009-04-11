@@ -27,17 +27,24 @@ typedef struct proxy_main  proxy_main;
 typedef struct proxy_stats proxy_stats;
 typedef struct downstream  downstream;
 
+/* Owned by main listener thread.
+ */
 struct proxy_main {
     agent_config_t config; // Immutable.
 
     work_queue work_queue;
 
-    int nthreads;
-    int default_downstream_max;
+    int nthreads;               // Immutable.
+    int default_downstream_max; // Immutable.
 
-    proxy *proxy_head; // Start of proxy list.
+    // Start of proxy list.  Only the main listener thread
+    // should access or modify this field.
+    //
+    proxy *proxy_head;
 };
 
+/* Owned by main listener thread.
+ */
 struct proxy {
     int   port;       // Immutable.
     char *name;       // Mutable, covered by proxy_lock, for debugging.
@@ -52,10 +59,10 @@ struct proxy {
     //
     int listening;
 
+    proxy *next; // Modified/accessed only by main listener thread.
+
     proxy_td *thread_data;     // Immutable.
     int       thread_data_num; // Immutable.
-
-    proxy *next;
 };
 
 struct proxy_stats {
@@ -66,6 +73,8 @@ struct proxy_stats {
     uint64_t tot_downstream_reserved;
 };
 
+/* Owned by worker thread.
+ */
 struct proxy_td { // Per proxy, per worker-thread data struct.
     proxy *proxy; // Immutable parent pointer.
 
@@ -201,6 +210,10 @@ void cproxy_on_new_serverlist(void *data0, void *data1) {
     memcached_server_list_t *list = data1;
     assert(list);
     assert(list->servers);
+    assert(is_listen_thread());
+
+    if (!is_listen_thread())
+        return;
 
     // Create a config string that libmemcached likes,
     // first by counting up buffer size needed.
@@ -326,19 +339,109 @@ void on_memagent_new_serverlist(void *userdata,
     }
 }
 
+typedef struct proxy_stats_collect proxy_stats_collect;
+
+struct proxy_stats_collect {
+    proxy_main     *m;         // Immutable.
+    int             nthreads;  // Immutable.
+    int             ithread;   // Thread index.
+    pthread_mutex_t done_lock;
+    pthread_cond_t  done_cond; // Signaled when ithread >= nthreads.
+    proxy_stats     proxy_stats;
+};
+
+void cproxy_scatter_stats(void *data0, void *data1);
+void cproxy_gather_stats(void *data0, void *data1);
+
+void cproxy_scatter_stats(void *data0, void *data1) {
+    proxy_main *m = data0;
+    assert(m);
+    proxy_stats_collect *c = data1;
+    assert(c);
+    assert(is_listen_thread());
+
+    if (!is_listen_thread())
+        return;
+
+    int    nreqs = 0;
+    proxy *p;
+
+    p = m->proxy_head;
+    while (p != NULL) {
+        // Subtract 1 to account for the main listen thread.
+        //
+        nreqs += p->thread_data_num - 1;
+        p = p->next;
+    }
+
+    // c->nreqs = nreqs;
+
+    p = m->proxy_head;
+    while (p != NULL) {
+        // Starting at 1 because 0 is the main listen thread.
+        //
+        for (int i = 1; i < p->thread_data_num; i++) {
+            proxy_td *ptd = &p->thread_data[i];
+            if (ptd != NULL &&
+                work_send(&ptd->work_queue, cproxy_gather_stats,
+                          p, c)) {
+            }
+        }
+
+        p = p->next;
+    }
+
+    // Need to wait until done so that number of proxies
+    // doesn't change on us, such as during a reconfig.
+    //
+}
+
+void cproxy_gather_stats(void *data0, void *data1) {
+    proxy *p = data0;
+    assert(p);
+    proxy_stats_collect *c = data1;
+    assert(c);
+    assert(is_listen_thread() == false); // Expecting a worker thread.
+
+    if (p && c) {
+    }
+}
+
 void on_memagent_get_stats(void *userdata, void *opaque,
                            agent_add_stat add_stat) {
     proxy_main *m = userdata;
     assert(m != NULL);
 
-    char buf[100];
+    proxy_stats_collect *c = calloc(1, sizeof(proxy_stats_collect));
+    if (c != NULL) {
+        c->m        = m;
+        c->nthreads = m->nthreads;
+        c->ithread  = 0;
+
+        pthread_mutex_init(&c->done_lock, NULL);
+        pthread_cond_init(&c->done_cond, NULL);
+
+        if (work_send(&m->work_queue, cproxy_scatter_stats,
+                      m, c)) {
+            // Wait for all the threads to finish.
+            pthread_mutex_lock(&c->done_lock);
+            // while (c->thread < c->nthreads) {
+            //     pthread_cond_wait(&c->done_cond, &c->done_lock);
+            // }
+            pthread_mutex_unlock(&c->done_lock);
+
+            char buf[100];
 
 #define more_stat(spec, key, val) \
     sprintf(buf, spec, val);      \
     add_stat(opaque, key, buf);
 
-    more_stat("%u", "nthreads",               m->nthreads);
-    more_stat("%u", "default_downstream_max", m->default_downstream_max);
+            more_stat("%u", "nthreads",               m->nthreads);
+            more_stat("%u", "default_downstream_max", m->default_downstream_max);
+        }
+
+        free(c);
+    }
 
     add_stat(opaque, NULL, NULL);
 }
@@ -427,6 +530,9 @@ proxy *cproxy_create(char *name, int port, char *config,
                 ptd->stats.num_upstream = 0;
                 ptd->stats.tot_upstream = 0;
 
+                // TODO: Need to move work_queue_init() to
+                //       the worker thread?
+                //
                 LIBEVENT_THREAD *t = thread_by_index(i);
                 if (t == NULL ||
                     t->base == NULL ||
@@ -496,6 +602,8 @@ int cproxy_listen(proxy *p) {
     return p->listening;
 }
 
+/* Finds the proxy_td associated with a worker thread.
+ */
 proxy_td *cproxy_find_thread_data(proxy *p, pthread_t thread_id) {
     if (p != NULL) {
         int i = thread_index(thread_id);
@@ -515,7 +623,8 @@ void cproxy_init_upstream_conn(conn *c) {
     assert(c != NULL);
 
     // We're called once per client/upstream conn early in its
-    // lifecycle, so it's a good place to remember the proxy_td.
+    // lifecycle, on the worker thread, so it's a good place
+    // to record the proxy_td into the conn->extra.
     //
     proxy *p = c->extra;
     assert(p != NULL);
