@@ -15,6 +15,7 @@ memcached_SOURCES = memcached.c memcached.h \
                     stats.c stats.h \
                     util.c util.h \
                     trace.h cache.h \
+                    work.c work.h \
                     cproxy.c cproxy.h
 
 if BUILD_CACHE

@@ -10,6 +10,7 @@
 #include "memcached.h"
 #include "memagent.h"
 #include "cproxy.h"
+#include "work.h"
 
 /** From libmemcached. */
 memcached_return memcached_version(memcached_st *ptr);
@@ -17,15 +18,6 @@ memcached_return memcached_connect(memcached_server_st *ptr);
 uint32_t memcached_generate_hash(memcached_st *ptr, const char *key,
                                  size_t key_length);
 void memcached_quit_server(memcached_server_st *ptr, uint8_t io_death);
-
-typedef struct func_work func_work;
-
-struct func_work { // Generic callback work.
-    void      (*func)(void *data0, void *data1);
-    void       *data0;
-    void       *data1;
-    func_work  *next;
-};
 
 #define NOT_CAS -1
 
@@ -37,15 +29,7 @@ typedef struct downstream downstream;
 struct proxy_main {
     agent_config_t config; // Immutable.
 
-    int main_send_fd; // Pipe to notify main, listener thread.
-    int main_recv_fd;
-
-    struct event_base *main_event_base;
-    struct event       main_event;
-
-    func_work      *main_work_head;
-    func_work      *main_work_tail;
-    pthread_mutex_t main_work_lock;
+    work_queue queue;
 
     int nthreads;
     int default_downstream_max;
@@ -163,11 +147,7 @@ char *nread_text(short x);
 void on_memagent_new_serverlist(void *userdata, memcached_server_list_t **lists);
 void on_memagent_get_stats(void *userdata, void *opaque, agent_add_stat add_stat);
 
-void on_main_new_serverlist(void *data0, void *data1);
-
-bool cproxy_main_send_work(proxy_main *m, void (*func)(void *data0, void *data1),
-                           void *data0, void *data1);
-void cproxy_main_recv_work(int fd, short which, void *arg);
+void cproxy_on_new_serverlist(void *data0, void *data1);
 
 conn_funcs cproxy_listen_funcs = {
     cproxy_init_upstream_conn,
@@ -199,7 +179,7 @@ conn_funcs cproxy_downstream_funcs = {
     cproxy_realtime
 };
 
-void on_main_new_serverlist(void *data0, void *data1) {
+void cproxy_on_new_serverlist(void *data0, void *data1) {
     proxy_main *m = data0;
     assert(m);
     memcached_server_list_t *list = data1;
@@ -233,6 +213,8 @@ void on_main_new_serverlist(void *data0, void *data1) {
 
     // See if we've already got a proxy running on the port,
     // and create one if needed.
+    //
+    // TODO: Need to shutdown old proxies.
     //
     proxy *p = m->proxy_head;
     while (p != NULL &&
@@ -313,7 +295,7 @@ void on_memagent_new_serverlist(void *userdata, memcached_server_list_t **lists)
 
         list_copy = copy_server_list(list);
         if (list_copy != NULL) {
-            err = !cproxy_main_send_work(m, on_main_new_serverlist, m, list_copy);
+            err = !work_send(&m->queue, cproxy_on_new_serverlist, m, list_copy);
         } else
             err = true;
 
@@ -336,55 +318,37 @@ int cproxy_init(const char *cfg, int nthreads, int default_downstream_max) {
 
     proxy_main *m = calloc(1, sizeof(proxy_main));
     if (m != NULL) {
-        pthread_mutex_init(&m->main_work_lock, NULL);
-        m->main_work_head = NULL;
-        m->main_work_tail = NULL;
-
         LIBEVENT_THREAD *mthread = thread_by_index(0);
-        assert(mthread != NULL); // Should be the main thread.
-
-        m->main_event_base = mthread->base;
-        assert(m->main_event_base != NULL);
+        assert(mthread != NULL);
+        assert(mthread->base != NULL);
 
         m->proxy_head             = NULL;
         m->nthreads               = nthreads;
         m->default_downstream_max = default_downstream_max;
 
-        int fds[2];
+        if (work_queue_init(&m->queue, mthread->base)) {
+            // Different jid's for production, staging, etc.
+            m->config.jid = "customer@stevenmb.local";
+            m->config.pass = "password";
+            m->config.host = "localhost"; // TODO: XMPP server host, for dev.
+            m->config.software = "memscale";
+            m->config.version = "0.1";
+            m->config.save_path = "/tmp/memscale.db";
+            m->config.userdata = m;
+            m->config.new_serverlist = on_memagent_new_serverlist;
+            m->config.get_stats = on_memagent_get_stats;
 
-        if (pipe(fds) == 0) {
-            m->main_recv_fd = fds[0];
-            m->main_send_fd = fds[1];
+            if (start_agent(m->config)) {
+                if (settings.verbose > 1)
+                    fprintf(stderr, "cproxy_init done\n");
 
-            event_set(&m->main_event, m->main_recv_fd,
-                      EV_READ | EV_PERSIST, cproxy_main_recv_work, m);
-            event_base_set(m->main_event_base, &m->main_event);
-
-            if (event_add(&m->main_event, 0) == 0) {
-                // Different jid's for production, staging, etc.
-                m->config.jid = "customer@stevenmb.local";
-                m->config.pass = "password";
-                m->config.host = "localhost"; // TODO: XMPP server host, for dev.
-                m->config.software = "memscale";
-                m->config.version = "0.1";
-                m->config.save_path = "/tmp/memscale.db";
-                m->config.userdata = m;
-                m->config.new_serverlist = on_memagent_new_serverlist;
-                m->config.get_stats = on_memagent_get_stats;
-
-                if (start_agent(m->config)) {
-                    if (settings.verbose > 1)
-                        fprintf(stderr, "cproxy_init done\n");
-
-                    return 0;
-                }
+                return 0;
             }
         }
-
-        perror("Cannot create cproxy listen thread pipe");
     }
 
-    fprintf(stderr, "Could not initialize memagent\n");
+    if (settings.verbose > 1)
+        fprintf(stderr, "cproxy could not start memagent\n");
 
     return 1;
 }
@@ -1953,72 +1917,3 @@ downstream *downstream_list_remove(downstream *head, downstream *d) {
     return head;
 }
 
-bool cproxy_main_send_work(proxy_main *m,
-                           void (*func)(void *data0, void *data1),
-                           void *data0, void *data1) {
-    assert(m != NULL);
-    assert(m->main_recv_fd >= 0);
-    assert(m->main_send_fd >= 0);
-    assert(m->main_event_base != NULL);
-    assert(func != NULL);
-
-    bool rv = false;
-
-    func_work *w = calloc(1, sizeof(func_work));
-    if (w != NULL) {
-        w->func  = func;
-        w->data0 = data0;
-        w->data1 = data1;
-        w->next  = NULL;
-
-        pthread_mutex_lock(&m->main_work_lock);
-
-        if (m->main_work_tail != NULL)
-            m->main_work_tail->next = w;
-        m->main_work_tail = w;
-        if (m->main_work_head == NULL)
-            m->main_work_head = w;
-
-        if (write(m->main_send_fd, "", 1) == 1)
-            rv = true;
-
-        pthread_mutex_unlock(&m->main_work_lock);
-    }
-
-    return rv;
-}
-
-void cproxy_main_recv_work(int fd, short which, void *arg) {
-    proxy_main *m = arg;
-    assert(m != NULL);
-    assert(m->main_recv_fd == fd);
-    assert(m->main_send_fd >= 0);
-    assert(m->main_event_base != NULL);
-
-    char buf[1];
-
-    // Very wide lock area, but we're not expecting too
-    // many work messages.
-    //
-    pthread_mutex_lock(&m->main_work_lock);
-
-    if (read(fd, buf, 1) != 1) {
-        if (settings.verbose > 1)
-            fprintf(stderr, "cproxy main can't read from pipe\n");
-    }
-
-    while (m->main_work_head != NULL) {
-        func_work *w = m->main_work_head;
-
-        m->main_work_head = m->main_work_head->next;
-        if (m->main_work_head == NULL)
-            m->main_work_tail = NULL;
-
-        w->next = NULL;
-        w->func(w->data0, w->data1);
-
-        free(w);
-    }
-
-    pthread_mutex_unlock(&m->main_work_lock);
-}
