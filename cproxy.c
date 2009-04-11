@@ -46,10 +46,15 @@ struct proxy_main {
     func_work      *main_work_head;
     func_work      *main_work_tail;
     pthread_mutex_t main_work_lock;
+
+    int nthreads;
+    int default_downstream_max;
+
+    proxy *proxy_head; // Start of proxy list.
 };
 
 struct proxy {
-    char *name;       // Immutable, mostly for debugging.
+    char *name;       // Mutable, mostly for debugging.
     int   port;       // Immutable.
     char *config;     // Mutable, mem owned by proxy.
     int   config_ver; // Inc'ed whenever config changes.
@@ -61,6 +66,8 @@ struct proxy {
 
     proxy_td *thread_data;     // Immutable.
     int       thread_data_num; // Immutable.
+
+    proxy *next;
 };
 
 struct proxy_td { // Per proxy, per worker-thread data struct.
@@ -194,13 +201,66 @@ void on_main_new_serverlist(void *data0, void *data1) {
     assert(m);
     memcached_server_list_t *list = data1;
     assert(list);
+    assert(list->servers);
 
-    if (m != NULL) {
-        printf("\tmain has new list: ``%s'' (bound to %d)\n", list->name, list->binding);
+    int j;
+    int n = 0;
+    for (j = 0; list->servers[j]; j++) {
+        memcached_server_t *server = list->servers[j];
+        n = n + strlen(server->host) + 50;
+    }
 
-        for (int j = 0; list->servers[j]; j++) {
-            memcached_server_t* server = list->servers[j];
-            printf("\t\t%s:%d\n", server->host, server->port);
+    char *cfg = calloc(n, 1); // TODO: Need free().
+
+    for (int j = 0; list->servers[j]; j++) {
+        memcached_server_t *server = list->servers[j];
+        char *cur = cfg + strlen(cfg);
+        if (j == 0)
+            sprintf(cur, "%s:%u", server->host, server->port);
+        else
+            sprintf(cur, ",%s:%u", server->host, server->port);
+    }
+
+    if (settings.verbose > 1)
+        fprintf(stderr, "cproxy main has new cfg: %s (bound to %d)\n",
+                cfg, list->binding);
+
+    proxy *p = m->proxy_head;
+    while (p != NULL &&
+           p->port != list->binding)
+        p = p->next;
+
+    if (p == NULL) {
+        if (settings.verbose > 1)
+            fprintf(stderr, "cproxy main creating new proxy for %s on %d\n",
+                    cfg, list->binding);
+
+        p = cproxy_create(list->name, list->binding, cfg, m->nthreads, m->default_downstream_max);
+        if (p != NULL) {
+            p->next = m->proxy_head;
+            m->proxy_head = p;
+        }
+    }
+
+    if (p != NULL) {
+        if (p->name != NULL && list->name != NULL &&
+            strcmp(p->name, list->name) != 0) {
+            if (p->name != NULL) {
+                free(p->name);
+                p->name = NULL;
+            }
+        }
+        if (p->name == NULL &&
+            list->name != NULL)
+            p->name = strdup(list->name);
+
+        int n = cproxy_listen(p);
+        if (n > 0) {
+            if (settings.verbose > 1)
+                fprintf(stderr, "cproxy listening on %d conns\n", n);
+        } else {
+            if (settings.verbose > 1)
+                fprintf(stderr, "cproxy_listen failed on %u\n", p->port);
         }
     }
 
@@ -241,7 +301,10 @@ void on_memagent_get_stats(void *userdata, void *opaque, agent_add_stat add_stat
     add_stat(opaque, NULL, NULL);
 }
 
-int cproxy_init(const char *cfg, int nthreads, int downstream_max) {
+int cproxy_init(const char *cfg, int nthreads, int default_downstream_max) {
+    assert(nthreads == settings.num_threads);
+    assert(default_downstream_max > 0);
+
     proxy_main *m = calloc(1, sizeof(proxy_main));
     if (m != NULL) {
         pthread_mutex_init(&m->main_work_lock, NULL);
@@ -253,6 +316,10 @@ int cproxy_init(const char *cfg, int nthreads, int downstream_max) {
 
         m->main_event_base = mthread->base;
         assert(m->main_event_base != NULL);
+
+        m->proxy_head             = NULL;
+        m->nthreads               = nthreads;
+        m->default_downstream_max = default_downstream_max;
 
         int fds[2];
 
@@ -277,6 +344,9 @@ int cproxy_init(const char *cfg, int nthreads, int downstream_max) {
                 m->config.get_stats = on_memagent_get_stats;
 
                 if (start_agent(m->config)) {
+                    if (settings.verbose > 1)
+                        fprintf(stderr, "cproxy_init done\n");
+
                     return 0;
                 }
             }
@@ -288,59 +358,6 @@ int cproxy_init(const char *cfg, int nthreads, int downstream_max) {
     fprintf(stderr, "Could not initialize memagent\n");
 
     return 1;
-
-    /* cfg should look like "local_port=host:port,host:port;local_port=host:port"
-     * like "11222=memcached1.foo.net:11211"  This means local port 11222
-     * will be a proxy to downstream memcached server running at
-     * host memcached1.foo.net on port 11211.
-     */
-    if (cfg == NULL)
-        return 0;
-
-    assert(nthreads == settings.num_threads);
-    assert(downstream_max > 0);
-
-    char *buff;
-    char *next;
-    char *proxy_name = "default";
-    char *proxy_sect;
-    char *proxy_port_str;
-    int   proxy_port;
-
-    buff = strdup(cfg);
-    next = buff;
-    while (next != NULL) {
-        proxy_sect = strsep(&next, ";");
-
-        proxy_port_str = strsep(&proxy_sect, "=");
-        if (proxy_sect == NULL) {
-            fprintf(stderr, "bad cproxy config, missing =\n");
-            exit(EXIT_FAILURE);
-        }
-        proxy_port = atoi(proxy_port_str);
-        if (proxy_port <= 0) {
-            fprintf(stderr, "bad cproxy config, bad proxy port\n");
-            exit(EXIT_FAILURE);
-        }
-
-        proxy *p = cproxy_create(proxy_name, proxy_port, proxy_sect, nthreads, downstream_max);
-        if (p != NULL) {
-            int n = cproxy_listen(p);
-            if (n > 0) {
-                if (settings.verbose > 1)
-                    fprintf(stderr, "cproxy listening on %d conns\n", n);
-            }
-        } else {
-            fprintf(stderr, "could not alloc proxy\n");
-            exit(EXIT_FAILURE);
-        }
-    }
-    free(buff);
-
-    if (settings.verbose > 1)
-        fprintf(stderr, "cproxy_init done\n");
-
-    return 0;
 }
 
 proxy *cproxy_create(char *name, int port, char *config, int nthreads, int downstream_max) {
