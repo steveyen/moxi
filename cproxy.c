@@ -84,13 +84,13 @@ struct downstream {
     int           config_ver; // Immutable, snapshot of proxy->config_ver.
     memcached_st  mst;        // Immutable, from libmemcached.
 
-    downstream *next;        // To track reserved/free lists.
+    downstream *next;         // To track reserved/free lists.
 
-    conn **downstream_conns; // Wraps the fd's of mst with conns.
-    int    downstream_used;  // Number of in-use downstream conns, might
-                             // be >1 during scatter-gather commands.
-    conn  *upstream_conn;    // Non-NULL when downstream is reserved.
-    char  *upstream_suffix;  // Last bit to write when downstreams are done.
+    conn **downstream_conns;  // Wraps the fd's of mst with conns.
+    int    downstream_used;   // Number of in-use downstream conns, might
+                              // be >1 during scatter-gather commands.
+    conn  *upstream_conn;     // Non-NULL when downstream is reserved.
+    char  *upstream_suffix;   // Last bit to write when downstreams are done.
 };
 
 proxy    *cproxy_create(char *name, int port,
@@ -151,7 +151,8 @@ char *nread_text(short x);
 void on_memagent_new_serverlist(void *userdata, memcached_server_list_t **lists);
 void on_memagent_get_stats(void *userdata, void *opaque, agent_add_stat add_stat);
 
-void cproxy_main_notify(int fd, short which, void *arg);
+bool cproxy_main_send_work(proxy_main *m, void (*func)(void *data), void *data);
+void cproxy_main_recv_work(int fd, short which, void *arg);
 
 conn_funcs cproxy_listen_funcs = {
     cproxy_init_upstream_conn,
@@ -232,7 +233,7 @@ int cproxy_init(const char *cfg, int nthreads, int downstream_max) {
             m->main_send_fd = fds[1];
 
             event_set(&m->main_event, m->main_recv_fd,
-                      EV_READ | EV_PERSIST, cproxy_main_notify, m);
+                      EV_READ | EV_PERSIST, cproxy_main_recv_work, m);
             event_base_set(m->main_event_base, &m->main_event);
 
             if (event_add(&m->main_event, 0) == 0) {
@@ -1854,7 +1855,40 @@ downstream *downstream_list_remove(downstream *head, downstream *d) {
     return head;
 }
 
-void cproxy_main_notify(int fd, short which, void *arg) {
+bool cproxy_main_send_work(proxy_main *m, void (*func)(void *data), void *data) {
+    assert(m != NULL);
+    assert(m->main_recv_fd >= 0);
+    assert(m->main_send_fd >= 0);
+    assert(m->main_event_base != NULL);
+    assert(func != NULL);
+    assert(data != NULL);
+
+    bool rv = false;
+
+    func_work *w = calloc(1, sizeof(func_work));
+    if (w != NULL) {
+        w->func = func;
+        w->data = data;
+        w->next = NULL;
+
+        pthread_mutex_lock(&m->main_work_lock);
+
+        if (m->main_work_tail != NULL)
+            m->main_work_tail->next = w;
+        m->main_work_tail = w;
+        if (m->main_work_head == NULL)
+            m->main_work_head = w;
+
+        if (write(m->main_send_fd, "", 1) == 1)
+            rv = true;
+
+        pthread_mutex_unlock(&m->main_work_lock);
+    }
+
+    return rv;
+}
+
+void cproxy_main_recv_work(int fd, short which, void *arg) {
     proxy_main *m = arg;
     assert(m != NULL);
     assert(m->main_recv_fd == fd);
@@ -1863,6 +1897,9 @@ void cproxy_main_notify(int fd, short which, void *arg) {
 
     char buf[1];
 
+    // Very wide lock area, but we're not expecting too
+    // many work messages.
+    //
     pthread_mutex_lock(&m->main_work_lock);
 
     if (read(fd, buf, 1) != 1) {
