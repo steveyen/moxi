@@ -1778,7 +1778,7 @@ rel_time_t cproxy_realtime(const time_t exptime) {
     // Input is a long...
     //
     // 0       | (0...REALIME_MAXDELTA] | (REALTIME_MAXDELTA...
-    // forever | delta,                 | unix_time
+    // forever | delta                  | unix_time
     //
     // Storage is an unsigned int.
     //
