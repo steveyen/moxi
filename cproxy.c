@@ -184,14 +184,20 @@ conn_funcs cproxy_downstream_funcs = {
     cproxy_realtime
 };
 
+void print_string(void *data);
+
+void print_string(void *data) {
+    char *s = data;
+    fprintf(stderr, "%s\n", s);
+}
+
 void on_memagent_new_serverlist(void *userdata, memcached_server_list_t **lists) {
     assert(lists != NULL);
 
     proxy_main *m = userdata;
     assert(m != NULL);
 
-    if (false)
-        write(m->main_send_fd, "", 1);
+    cproxy_main_send_work(m, print_string, "hello world\n");
 
     if (settings.verbose > 1)
         fprintf(stderr, "on_memagent_new_serverlist\n");
