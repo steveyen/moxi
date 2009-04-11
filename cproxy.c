@@ -60,6 +60,8 @@ struct proxy {
 struct proxy_td { // Per proxy, per worker-thread data struct.
     proxy *proxy; // Immutable parent pointer.
 
+    work_queue work_queue;
+
     // Upstream conns that are paused, waiting for
     // an available, released downstream.
     //
@@ -382,22 +384,37 @@ proxy *cproxy_create(char *name, int port, char *config,
             // thread, and not a true worker thread.  Too lazy to save
             // the wasted thread[0] slot memory.
             //
-            for (int i = 1; i < p->thread_data_num; i++) {
+            int i;
+
+            for (i = 1; i < p->thread_data_num; i++) {
                 proxy_td *ptd = &p->thread_data[i];
                 ptd->proxy = p;
                 ptd->waiting_for_downstream_head = NULL;
                 ptd->waiting_for_downstream_tail = NULL;
                 ptd->downstream_reserved = NULL;
                 ptd->downstream_released = NULL;
-                ptd->downstream_num  = 0;
-                ptd->downstream_max  = downstream_max;
+                ptd->downstream_num = 0;
+                ptd->downstream_max = downstream_max;
                 ptd->num_upstream = 0;
+
+                LIBEVENT_THREAD *t = thread_by_index(i);
+                if (t == NULL ||
+                    t->base == NULL ||
+                    !work_queue_init(&ptd->work_queue, t->base)) {
+                    break;
+                }
             }
-            return p;
+
+            if (i >= p->thread_data_num)
+                return p;
+
+            free(p->thread_data);
         }
+
         free(p->name);
         free(p->config);
     }
+
     free(p);
 
     return NULL;
