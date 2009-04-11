@@ -196,7 +196,12 @@ void on_main_new_serverlist(void *data0, void *data1) {
     assert(list);
 
     if (m != NULL) {
-        printf("hello heya\n");
+        printf("\tmain has new list: ``%s'' (bound to %d)\n", list->name, list->binding);
+
+        for (int j = 0; list->servers[j]; j++) {
+            memcached_server_t* server = list->servers[j];
+            printf("\t\t%s:%d\n", server->host, server->port);
+        }
     }
 
     free_server_list(list);
