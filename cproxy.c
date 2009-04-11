@@ -32,8 +32,6 @@ typedef struct downstream  downstream;
 struct proxy_main {
     agent_config_t config; // Immutable.
 
-    work_queue work_queue;
-
     int nthreads;               // Immutable.
     int default_downstream_max; // Immutable.
 
@@ -77,8 +75,6 @@ struct proxy_stats {
  */
 struct proxy_td { // Per proxy, per worker-thread data struct.
     proxy *proxy; // Immutable parent pointer.
-
-    work_queue work_queue;
 
     // Upstream conns that are paused, waiting for
     // an available, released downstream.
@@ -316,6 +312,9 @@ void on_memagent_new_serverlist(void *userdata,
     proxy_main *m = userdata;
     assert(m != NULL);
 
+    LIBEVENT_THREAD *mthread = thread_by_index(0);
+    assert(mthread != NULL);
+
     if (settings.verbose > 1)
         fprintf(stderr, "on_memagent_new_serverlist\n");
 
@@ -327,7 +326,8 @@ void on_memagent_new_serverlist(void *userdata,
 
         list_copy = copy_server_list(list);
         if (list_copy != NULL) {
-            err = !work_send(&m->work_queue, cproxy_on_new_serverlist,
+            err = !work_send(mthread->work_queue,
+                             cproxy_on_new_serverlist,
                              m, list_copy);
         } else
             err = true;
@@ -350,10 +350,10 @@ struct proxy_stats_collect {
     proxy_stats     proxy_stats;
 };
 
-void cproxy_scatter_stats(void *data0, void *data1);
+void cproxy_request_stats(void *data0, void *data1);
 void cproxy_gather_stats(void *data0, void *data1);
 
-void cproxy_scatter_stats(void *data0, void *data1) {
+void cproxy_request_stats(void *data0, void *data1) {
     proxy_main *m = data0;
     assert(m);
     proxy_stats_collect *c = data1;
@@ -382,9 +382,13 @@ void cproxy_scatter_stats(void *data0, void *data1) {
         //
         for (int i = 1; i < p->thread_data_num; i++) {
             proxy_td *ptd = &p->thread_data[i];
-            if (ptd != NULL &&
-                work_send(&ptd->work_queue, cproxy_gather_stats,
-                          p, c)) {
+            if (ptd != NULL) {
+                if (false
+                    /*work_send(ptd->work_queue, cproxy_gather_stats,
+                                p, c) */) {
+                    if (c) {
+                    }
+                }
             }
         }
 
@@ -412,6 +416,9 @@ void on_memagent_get_stats(void *userdata, void *opaque,
     proxy_main *m = userdata;
     assert(m != NULL);
 
+    LIBEVENT_THREAD *mthread = thread_by_index(0);
+    assert(mthread != NULL);
+
     proxy_stats_collect *c = calloc(1, sizeof(proxy_stats_collect));
     if (c != NULL) {
         c->m        = m;
@@ -421,7 +428,7 @@ void on_memagent_get_stats(void *userdata, void *opaque,
         pthread_mutex_init(&c->done_lock, NULL);
         pthread_cond_init(&c->done_cond, NULL);
 
-        if (work_send(&m->work_queue, cproxy_scatter_stats,
+        if (work_send(mthread->work_queue, cproxy_request_stats,
                       m, c)) {
             // Wait for all the threads to finish.
             pthread_mutex_lock(&c->done_lock);
@@ -453,32 +460,26 @@ int cproxy_init(const char *cfg, int nthreads,
 
     proxy_main *m = calloc(1, sizeof(proxy_main));
     if (m != NULL) {
-        LIBEVENT_THREAD *mthread = thread_by_index(0);
-        assert(mthread != NULL);
-        assert(mthread->base != NULL);
-
         m->proxy_head             = NULL;
         m->nthreads               = nthreads;
         m->default_downstream_max = default_downstream_max;
 
-        if (work_queue_init(&m->work_queue, mthread->base)) {
-            // Different jid's for production, staging, etc.
-            m->config.jid = "customer@stevenmb.local";
-            m->config.pass = "password";
-            m->config.host = "localhost"; // TODO: XMPP server host, for dev.
-            m->config.software = "memscale";
-            m->config.version = "0.1";
-            m->config.save_path = "/tmp/memscale.db";
-            m->config.userdata = m;
-            m->config.new_serverlist = on_memagent_new_serverlist;
-            m->config.get_stats = on_memagent_get_stats;
+        // Different jid's for production, staging, etc.
+        m->config.jid = "customer@stevenmb.local";
+        m->config.pass = "password";
+        m->config.host = "localhost"; // TODO: XMPP server host, for dev.
+        m->config.software = "memscale";
+        m->config.version = "0.1";
+        m->config.save_path = "/tmp/memscale.db";
+        m->config.userdata = m;
+        m->config.new_serverlist = on_memagent_new_serverlist;
+        m->config.get_stats = on_memagent_get_stats;
 
-            if (start_agent(m->config)) {
-                if (settings.verbose > 1)
-                    fprintf(stderr, "cproxy_init done\n");
+        if (start_agent(m->config)) {
+            if (settings.verbose > 1)
+                fprintf(stderr, "cproxy_init done\n");
 
-                return 0;
-            }
+            return 0;
         }
     }
 
@@ -516,9 +517,7 @@ proxy *cproxy_create(char *name, int port, char *config,
             // thread, and not a true worker thread.  Too lazy to save
             // the wasted thread[0] slot memory.
             //
-            int i;
-
-            for (i = 1; i < p->thread_data_num; i++) {
+            for (int i = 1; i < p->thread_data_num; i++) {
                 proxy_td *ptd = &p->thread_data[i];
                 ptd->proxy = p;
                 ptd->waiting_for_downstream_head = NULL;
@@ -529,22 +528,9 @@ proxy *cproxy_create(char *name, int port, char *config,
                 ptd->downstream_max = downstream_max;
                 ptd->stats.num_upstream = 0;
                 ptd->stats.tot_upstream = 0;
-
-                // TODO: Need to move work_queue_init() to
-                //       the worker thread?
-                //
-                LIBEVENT_THREAD *t = thread_by_index(i);
-                if (t == NULL ||
-                    t->base == NULL ||
-                    !work_queue_init(&ptd->work_queue, t->base)) {
-                    break;
-                }
             }
 
-            if (i >= p->thread_data_num)
-                return p;
-
-            free(p->thread_data);
+            return p;
         }
 
         free(p->name);
