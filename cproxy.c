@@ -91,6 +91,7 @@ proxy *cproxy_create(char *name, int port, char *config,
                 ptd->waiting_for_downstream_tail = NULL;
                 ptd->downstream_reserved = NULL;
                 ptd->downstream_released = NULL;
+                ptd->downstream_tot = 0;
                 ptd->downstream_num = 0;
                 ptd->downstream_max = downstream_max;
                 ptd->stats.num_upstream = 0;
@@ -333,6 +334,7 @@ void cproxy_add_downstream(proxy_td *ptd) {
         downstream *d = cproxy_create_downstream(config, config_ver);
         if (d != NULL) {
             d->ptd = ptd;
+            ptd->downstream_tot++;
             ptd->downstream_num++;
             cproxy_release_downstream(d, true);
         }

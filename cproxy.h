@@ -79,7 +79,8 @@ struct proxy_td { // Per proxy, per worker-thread data struct.
 
     downstream *downstream_reserved; // Downstreams assigned to upstreams.
     downstream *downstream_released; // Downstreams unassigned to upstreams.
-    int         downstream_num;      // Number downstreams created.
+    uint64_t    downstream_tot;      // Total lifetime downstreams created.
+    int         downstream_num;      // Number downstreams existing.
     int         downstream_max;      // Max downstream concurrency number.
 
     proxy_stats stats;
