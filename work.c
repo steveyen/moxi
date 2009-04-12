@@ -148,12 +148,19 @@ void work_collect_wait(work_collect *c) {
     pthread_mutex_unlock(&c->collect_lock);
 }
 
+void work_collect_count(work_collect *c, int count) {
+    pthread_mutex_lock(&c->collect_lock);
+    c->count = count;
+    if (c->count <= 0)
+        pthread_cond_signal(&c->collect_cond);
+    pthread_mutex_unlock(&c->collect_lock);
+}
+
 void work_collect_one(work_collect *c) {
     pthread_mutex_lock(&c->collect_lock);
     assert(c->count >= 1);
     c->count--;
-    if (c->count <= 0) {
+    if (c->count <= 0)
         pthread_cond_signal(&c->collect_cond);
-    }
     pthread_mutex_unlock(&c->collect_lock);
 }
