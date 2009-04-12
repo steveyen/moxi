@@ -115,6 +115,7 @@ void cproxy_on_new_serverlists(void *data0, void *data1) {
     for (proxy *p = m->proxy_head; p != NULL; p = p->next) {
         if (p->config_ver != new_config_ver) {
             // TODO: Shutdown old proxies.
+            assert(false);
         }
     }
 
