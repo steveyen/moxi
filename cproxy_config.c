@@ -12,11 +12,21 @@
 #include "cproxy.h"
 #include "work.h"
 
+static int old_init(const char *cfg, int nthreads,
+                    int default_downstream_max);
+
 int cproxy_init(const char *cfg, int nthreads,
                 int default_downstream_max) {
     assert(nthreads > 1); // Main + at least one worker.
     assert(nthreads == settings.num_threads);
     assert(default_downstream_max > 0);
+
+    if (cfg == NULL ||
+        strlen(cfg) <= 0)
+        return 0;
+
+    if (cfg[0] >= '1' && cfg[0] <= '9')
+        return old_init(cfg, nthreads, default_downstream_max);
 
     proxy_main *m = calloc(1, sizeof(proxy_main));
     if (m != NULL) {
@@ -225,3 +235,63 @@ void cproxy_on_new_serverlist(proxy_main *m,
         free(cfg);
 }
 
+// ----------------------------------------------------------
+
+static int old_init(const char *cfg, int nthreads,
+                    int default_downstream_max) {
+    /* cfg should look like "local_port=host:port,host:port;local_port=host:port"
+     * like "11222=memcached1.foo.net:11211"  This means local port 11222
+     * will be a proxy to downstream memcached server running at
+     * host memcached1.foo.net on port 11211.
+     */
+    assert(nthreads > 1); // Main + at least one worker.
+    assert(nthreads == settings.num_threads);
+    assert(default_downstream_max > 0);
+
+    if (cfg == NULL ||
+        strlen(cfg) <= 0)
+        return 0;
+
+    char *buff;
+    char *next;
+    char *proxy_name = "default";
+    char *proxy_sect;
+    char *proxy_port_str;
+    int   proxy_port;
+
+    buff = strdup(cfg);
+    next = buff;
+    while (next != NULL) {
+        proxy_sect = strsep(&next, ";");
+
+        proxy_port_str = strsep(&proxy_sect, "=");
+        if (proxy_sect == NULL) {
+            fprintf(stderr, "bad cproxy config, missing =\n");
+            exit(EXIT_FAILURE);
+        }
+        proxy_port = atoi(proxy_port_str);
+        if (proxy_port <= 0) {
+            fprintf(stderr, "bad cproxy config, bad proxy port\n");
+            exit(EXIT_FAILURE);
+        }
+
+        proxy *p = cproxy_create(proxy_name, proxy_port, proxy_sect, 0,
+                                 nthreads, default_downstream_max);
+        if (p != NULL) {
+            int n = cproxy_listen(p);
+            if (n > 0) {
+                if (settings.verbose > 1)
+                    fprintf(stderr, "cproxy listening on %d conns\n", n);
+            }
+        } else {
+            fprintf(stderr, "could not alloc proxy\n");
+            exit(EXIT_FAILURE);
+        }
+    }
+    free(buff);
+
+    if (settings.verbose > 1)
+        fprintf(stderr, "cproxy_init done\n");
+
+    return 0;
+}

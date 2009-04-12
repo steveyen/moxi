@@ -324,13 +324,13 @@ void cproxy_add_downstream(proxy_td *ptd) {
 
     if (ptd != NULL &&
         ptd->downstream_num < ptd->downstream_max) {
-        // TODO: The lock area here is big, but we don't
-        //       want the config getting free'ed out from under us.
-        //
-        pthread_mutex_lock(&ptd->proxy->proxy_lock);
+        if (settings.verbose > 1)
+            fprintf(stderr, "cproxy_add_downstream\n");
 
-        char     *config     = config;
-        uint32_t  config_ver = config_ver;
+        pthread_mutex_lock(&ptd->proxy->proxy_lock);
+        char     *config     = strdup(ptd->proxy->config);
+        uint32_t  config_ver = ptd->proxy->config_ver;
+        pthread_mutex_unlock(&ptd->proxy->proxy_lock);
 
         downstream *d = cproxy_create_downstream(config, config_ver);
         if (d != NULL) {
@@ -340,7 +340,7 @@ void cproxy_add_downstream(proxy_td *ptd) {
             cproxy_release_downstream(d, true);
         }
 
-        pthread_mutex_unlock(&ptd->proxy->proxy_lock);
+        free(config);
     }
 }
 
@@ -482,6 +482,10 @@ downstream *cproxy_create_downstream(char *config, uint32_t config_ver) {
         d->config     = strdup(config);
         d->config_ver = config_ver;
 
+        if (settings.verbose > 1)
+            fprintf(stderr, "cproxy_create_downstream: %s, %u\n",
+                    config, config_ver);
+
         if (memcached_create(&d->mst) != NULL) {
             memcached_behavior_set(&d->mst, MEMCACHED_BEHAVIOR_NO_BLOCK, 1);
 
@@ -500,6 +504,10 @@ downstream *cproxy_create_downstream(char *config, uint32_t config_ver) {
                 if (d->downstream_conns != NULL) {
                     return d;
                 }
+            } else {
+                if (settings.verbose > 1)
+                    fprintf(stderr, "mserver_parse failed: %s\n",
+                            config);
             }
 
             if (mservers != NULL)
@@ -535,7 +543,7 @@ bool cproxy_check_downstream_config(downstream *d) {
         rv = true;
     }
 
-    pthread_mutex_lock(&d->ptd->proxy->proxy_lock);
+    pthread_mutex_unlock(&d->ptd->proxy->proxy_lock);
 
     return rv;
 }
