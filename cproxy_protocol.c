@@ -222,7 +222,27 @@ void cproxy_process_downstream_ascii(conn *c, char *line) {
         conn_set_state(c, conn_pause);
     } else if (strncmp(line, "STAT ", 5) == 0 ||
                strncmp(line, "ITEM ", 5) == 0 ||
-               strncmp(line, "PREFIX ", 7) == 0) { // TODO
+               strncmp(line, "PREFIX ", 7) == 0) {
+        conn *uc = d->upstream_conn;
+        if (uc != NULL) {
+            int nline = strlen(line);
+
+            item *it = item_alloc("s", 1, 0, 0, nline + 2);
+            if (it != NULL) {
+                strncpy(ITEM_data(it), line, nline);
+                strncpy(ITEM_data(it) + nline, "\r\n", 2);
+
+                if (add_conn_item(uc, it)) {
+                    add_iov(uc, ITEM_data(it), nline + 2);
+
+                    it = NULL;
+                }
+
+                if (it != NULL)
+                    item_remove(it);
+            }
+        }
+
         conn_set_state(c, conn_new_cmd);
     } else {
         conn_set_state(c, conn_pause);
@@ -282,39 +302,49 @@ void cproxy_process_downstream_ascii_nread(conn *c) {
         if (strncmp(ITEM_data(it) + it->nbytes - 2, "\r\n", 2) == 0) {
             uint64_t cas = ITEM_get_cas(it);
             if (cas == NOT_CAS) {
-                if (add_iov(uc, "VALUE ", 6) == 0 &&
-                    add_iov(uc, ITEM_key(it), it->nkey) == 0 &&
-                    add_iov(uc, ITEM_suffix(it),
-                            it->nsuffix + it->nbytes) == 0 &&
-                    add_conn_item(uc, it)) {
-                    if (settings.verbose > 1)
-                        fprintf(stderr,
-                                "<%d cproxy downstream ascii success\n",
-                                c->sfd);
+                if (add_conn_item(uc, it)) {
+                    if (add_iov(uc, "VALUE ", 6) == 0 &&
+                        add_iov(uc, ITEM_key(it), it->nkey) == 0 &&
+                        add_iov(uc, ITEM_suffix(it),
+                                it->nsuffix + it->nbytes) == 0) {
+                        if (settings.verbose > 1)
+                            fprintf(stderr,
+                                    "<%d cproxy downstream ascii success\n",
+                                    c->sfd);
 
-                    return; // Success.
+                        return; // Success.
+                    }
+
+                    it = NULL;
                 }
             } else {
                 char *suffix = add_conn_suffix(uc);
                 if (suffix != NULL) {
                     sprintf(suffix, " %llu\r\n", (unsigned long long) cas);
 
-                    if (add_iov(uc, "VALUE ", 6) == 0 &&
-                        add_iov(uc, ITEM_key(it), it->nkey) == 0 &&
-                        add_iov(uc, ITEM_suffix(it), it->nsuffix - 2) == 0 &&
-                        add_iov(uc, suffix, strlen(suffix)) == 0 &&
-                        add_iov(uc, ITEM_data(it), it->nbytes) == 0 &&
-                        add_conn_item(uc, it)) {
-                        if (settings.verbose > 1)
-                            fprintf(stderr,
-                                    "<%d cproxy downstream ascii ok\n",
-                                    c->sfd);
+                    if (add_conn_item(uc, it)) {
+                        if (add_iov(uc, "VALUE ", 6) == 0 &&
+                            add_iov(uc, ITEM_key(it), it->nkey) == 0 &&
+                            add_iov(uc, ITEM_suffix(it),
+                                    it->nsuffix - 2) == 0 &&
+                            add_iov(uc, suffix, strlen(suffix)) == 0 &&
+                            add_iov(uc, ITEM_data(it), it->nbytes) == 0) {
+                            if (settings.verbose > 1)
+                                fprintf(stderr,
+                                        "<%d cproxy downstream ascii ok\n",
+                                        c->sfd);
 
-                        return; // Success.
+                            return; // Success.
+                        }
+
+                        it = NULL;
                     }
                 }
             }
 
+            // TODO: Need to clean up half-written add_iov()'s.
+            //       Consider closing the upstream_conn?
+            //
             if (settings.verbose > 1)
                 fprintf(stderr, "proxy out of response memory");
         } else {
@@ -326,7 +356,8 @@ void cproxy_process_downstream_ascii_nread(conn *c) {
             fprintf(stderr, "proxy upstream seems closed already");
     }
 
-    item_remove(it);
+    if (it != NULL)
+        item_remove(it);
 }
 
 /* Do the actual work of forwarding the command from an
