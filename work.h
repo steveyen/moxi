@@ -10,8 +10,9 @@
 #include <stdint.h>
 #include <event.h>
 
-typedef struct work_item  work_item;
-typedef struct work_queue work_queue;
+typedef struct work_item   work_item;
+typedef struct work_queue  work_queue;
+typedef struct work_collect work_collect;
 
 struct work_item {
     void      (*func)(void *data0, void *data1);
@@ -36,6 +37,15 @@ struct work_queue {
     uint64_t tot_recvs;
 };
 
+struct work_collect {
+    int count;
+
+    pthread_mutex_t collect_lock;
+    pthread_cond_t  collect_cond; // Signaled when count drops to 0.
+
+    void *data;
+};
+
 bool work_queue_init(work_queue *m, struct event_base *base);
 
 bool work_send(work_queue *m,
@@ -43,5 +53,9 @@ bool work_send(work_queue *m,
                void *data0, void *data1);
 
 void work_recv(int fd, short which, void *arg);
+
+void work_collect_init(work_collect *c, int count, void *data);
+void work_collect_wait(work_collect *c);
+void work_collect_one(work_collect *c);
 
 #endif // WORK_H
