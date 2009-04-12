@@ -14,6 +14,7 @@
 
 int cproxy_init(const char *cfg, int nthreads,
                 int default_downstream_max) {
+    assert(nthreads > 1); // Main + at least one worker.
     assert(nthreads == settings.num_threads);
     assert(default_downstream_max > 0);
 
