@@ -736,7 +736,7 @@ void cproxy_reset_upstream(conn *uc) {
     //
     // This depends on what libevent does here.
     //
-    // May need to use the pipe to get drive_machine onto the uc?
+    // May need to use the work_queue to call drive_machine() on the uc?
     //
     if (settings.verbose > 1)
         fprintf(stderr, "cproxy_reset_upstream with bytes available\n");
