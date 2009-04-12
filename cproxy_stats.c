@@ -23,6 +23,10 @@ static void collect_stats(void *data0, void *data1);
  * We use the work_queues to retrieve the info, so that normal
  * runtime has fewer locks, at the cost of scatter/gather
  * complexity.
+ *
+ * TODO: We're currently gathering the reverse of what we
+ *       probably want -- thread-based stats rather than
+ *       proxy-based stats.  Need to flip it over.
  */
 void on_memagent_get_stats(void *userdata, void *opaque,
                            agent_add_stat add_stat) {
