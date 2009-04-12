@@ -13,7 +13,6 @@
 
 // From libmemcached.
 //
-memcached_return memcached_version(memcached_st *ptr);
 memcached_return memcached_connect(memcached_server_st *ptr);
 uint32_t memcached_generate_hash(memcached_st *ptr, const char *key,
                                  size_t key_length);
