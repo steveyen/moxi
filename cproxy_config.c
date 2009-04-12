@@ -32,7 +32,7 @@ int cproxy_init(const char *cfg, int nthreads,
         m->config.version = "0.1";
         m->config.save_path = "/tmp/memscale.db";
         m->config.userdata = m;
-        m->config.new_serverlist = on_memagent_new_serverlist;
+        m->config.new_serverlist = on_memagent_new_serverlists;
         m->config.get_stats = on_memagent_get_stats;
 
         if (start_agent(m->config)) {
@@ -49,16 +49,71 @@ int cproxy_init(const char *cfg, int nthreads,
     return 1;
 }
 
-void cproxy_on_new_serverlist(void *data0, void *data1) {
+void on_memagent_new_serverlists(void *userdata,
+                                 memcached_server_list_t **lists) {
+    assert(lists != NULL);
+
+    proxy_main *m = userdata;
+    assert(m != NULL);
+
+    LIBEVENT_THREAD *mthread = thread_by_index(0);
+    assert(mthread != NULL);
+
+    if (settings.verbose > 1)
+        fprintf(stderr, "on_memagent_new_serverlist\n");
+
+    int n = 0;
+    while (lists[n])
+        n++;
+
+    memcached_server_list_t **lists_copy =
+        calloc(n, sizeof(memcached_server_list_t *));
+    if (lists_copy != NULL) {
+        int i;
+
+        for (i = 0; i < n; i++) {
+            lists_copy[i] = copy_server_list(lists[i]);
+            if (lists_copy[i] == NULL)
+                break;
+        }
+
+        if (i >= n &&
+            work_send(mthread->work_queue,
+                      cproxy_on_new_serverlists,
+                      m, lists_copy))
+            return; // Success.
+
+        for (i = 0; i < n; i++) {
+            if (lists_copy[i] != NULL)
+                free_server_list(lists_copy[i]);
+        }
+
+        free(lists_copy);
+    }
+}
+
+void cproxy_on_new_serverlists(void *data0, void *data1) {
     proxy_main *m = data0;
     assert(m);
-    memcached_server_list_t *list = data1;
+    memcached_server_list_t **lists = data1;
+    assert(lists);
+    assert(is_listen_thread());
+
+    for (int i = 0; lists[i]; i++) {
+        cproxy_on_new_serverlist(m, lists[i]);
+
+        free_server_list(lists[i]);
+    }
+
+    free(lists);
+}
+
+void cproxy_on_new_serverlist(proxy_main *m,
+                              memcached_server_list_t *list) {
+    assert(m);
     assert(list);
     assert(list->servers);
     assert(is_listen_thread());
-
-    if (!is_listen_thread())
-        return;
 
     // Create a config string that libmemcached likes,
     // first by counting up buffer size needed.
@@ -71,6 +126,8 @@ void cproxy_on_new_serverlist(void *data0, void *data1) {
     }
 
     char *cfg = calloc(n, 1);
+    if (cfg == NULL)
+        return;
 
     for (int j = 0; list->servers[j]; j++) {
         memcached_server_t *server = list->servers[j];
@@ -150,41 +207,5 @@ void cproxy_on_new_serverlist(void *data0, void *data1) {
 
     if (cfg != NULL)
         free(cfg);
-
-    free_server_list(list);
-}
-
-void on_memagent_new_serverlist(void *userdata,
-                                memcached_server_list_t **lists) {
-    assert(lists != NULL);
-
-    proxy_main *m = userdata;
-    assert(m != NULL);
-
-    LIBEVENT_THREAD *mthread = thread_by_index(0);
-    assert(mthread != NULL);
-
-    if (settings.verbose > 1)
-        fprintf(stderr, "on_memagent_new_serverlist\n");
-
-    bool err = false;
-
-    for (int i = 0; lists[i] && !err; i++) {
-        memcached_server_list_t *list = lists[i];
-        memcached_server_list_t *list_copy;
-
-        list_copy = copy_server_list(list);
-        if (list_copy != NULL) {
-            err = !work_send(mthread->work_queue,
-                             cproxy_on_new_serverlist,
-                             m, list_copy);
-        } else
-            err = true;
-
-        if (err) {
-            if (list_copy != NULL)
-                free_server_list(list_copy);
-        }
-    }
 }
 

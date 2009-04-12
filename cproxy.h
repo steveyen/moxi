@@ -158,12 +158,14 @@ void cproxy_close_conn(conn *c);
 
 // Integration with memagent.
 //
-void on_memagent_new_serverlist(void *userdata,
-                                memcached_server_list_t **lists);
+void on_memagent_new_serverlists(void *userdata,
+                                 memcached_server_list_t **lists);
 void on_memagent_get_stats(void *userdata, void *opaque,
                            agent_add_stat add_stat);
 
-void cproxy_on_new_serverlist(void *data0, void *data1);
+void cproxy_on_new_serverlists(void *data0, void *data1);
+void cproxy_on_new_serverlist(proxy_main *m,
+                              memcached_server_list_t *list);
 
 // TODO: The following generic items should be broken out into util file.
 //
