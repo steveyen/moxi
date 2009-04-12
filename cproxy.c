@@ -440,11 +440,15 @@ bool cproxy_release_downstream(downstream *d, bool force) {
  */
 void cproxy_free_downstream(downstream *d) {
     assert(d != NULL);
+    assert(d->ptd != NULL);
     assert(d->next == NULL);
     assert(d->upstream_conn == NULL);
 
     if (settings.verbose > 1)
         fprintf(stderr, "cproxy_free_downstream\n");
+
+    d->ptd->downstream_num--;
+    assert(d->ptd->downstream_num >= 0);
 
     int n = memcached_server_count(&d->mst);
 
