@@ -109,8 +109,13 @@ void cproxy_on_new_serverlists(void *data0, void *data1) {
 
     for (int i = 0; lists[i]; i++) {
         cproxy_on_new_serverlist(m, lists[i], new_config_ver);
-
         free_server_list(lists[i]);
+    }
+
+    for (proxy *p = m->proxy_head; p != NULL; p = p->next) {
+        if (p->config_ver != new_config_ver) {
+            // TODO: Shutdown old proxies.
+        }
     }
 
     free(lists);
@@ -154,8 +159,6 @@ void cproxy_on_new_serverlist(proxy_main *m,
     // See if we've already got a proxy running on the port,
     // and create one if needed.
     //
-    // TODO: Need to shutdown old proxies.
-    //
     proxy *p = m->proxy_head;
     while (p != NULL &&
            p->port != list->binding)
@@ -183,7 +186,7 @@ void cproxy_on_new_serverlist(proxy_main *m,
         }
     } else {
         if (settings.verbose > 1)
-            fprintf(stderr, "cproxy main handling config change %u\n",
+            fprintf(stderr, "cproxy main handling existing config change %u\n",
                     p->port);
 
         pthread_mutex_lock(&p->proxy_lock);
