@@ -713,10 +713,16 @@ void cproxy_assign_downstream(proxy_td *ptd) {
 
             if (uc != NULL) {
                 // TOOD: Count retrying instead of error, but need counter.
+                //       cproxy_wait_for_downstream(ptd, uc);
                 //
-                // cproxy_wait_for_downstream(ptd, uc);
+                // Send an END on get/gets instead of generic SERVER_ERROR.
                 //
-                out_string(uc, "SERVER_ERROR proxy write to downstream");
+                if (uc->cmd == -1 &&
+                    uc->rcurr != NULL &&
+                    strncmp(uc->rcurr, "get", 3) == 0)
+                    out_string(uc, "END");
+                else
+                    out_string(uc, "SERVER_ERROR proxy write to downstream");
 
                 update_event(uc, EV_WRITE | EV_PERSIST);
             }
