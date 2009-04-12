@@ -12,6 +12,42 @@
 #include "cproxy.h"
 #include "work.h"
 
+int cproxy_init(const char *cfg, int nthreads,
+                int default_downstream_max) {
+    assert(nthreads == settings.num_threads);
+    assert(default_downstream_max > 0);
+
+    proxy_main *m = calloc(1, sizeof(proxy_main));
+    if (m != NULL) {
+        m->proxy_head             = NULL;
+        m->nthreads               = nthreads;
+        m->default_downstream_max = default_downstream_max;
+
+        // Different jid's for production, staging, etc.
+        m->config.jid = "customer@stevenmb.local";
+        m->config.pass = "password";
+        m->config.host = "localhost"; // TODO: XMPP server host, for dev.
+        m->config.software = "memscale";
+        m->config.version = "0.1";
+        m->config.save_path = "/tmp/memscale.db";
+        m->config.userdata = m;
+        m->config.new_serverlist = on_memagent_new_serverlist;
+        m->config.get_stats = on_memagent_get_stats;
+
+        if (start_agent(m->config)) {
+            if (settings.verbose > 1)
+                fprintf(stderr, "cproxy_init done\n");
+
+            return 0;
+        }
+    }
+
+    if (settings.verbose > 1)
+        fprintf(stderr, "cproxy could not start memagent\n");
+
+    return 1;
+}
+
 void cproxy_on_new_serverlist(void *data0, void *data1) {
     proxy_main *m = data0;
     assert(m);
