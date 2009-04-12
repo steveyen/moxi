@@ -699,8 +699,7 @@ void cproxy_assign_downstream(proxy_td *ptd) {
                     d->upstream_conn->sfd);
 
         if (!cproxy_forward_downstream(d)) {
-            // We reach here on error, so put upstream conn back
-            // on the wait list to retry, and release the downstream.
+            // We reach here on error, so send error upstream.
             //
             conn *uc = d->upstream_conn;
             if (uc != NULL) {
