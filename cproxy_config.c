@@ -99,8 +99,16 @@ void cproxy_on_new_serverlists(void *data0, void *data1) {
     assert(lists);
     assert(is_listen_thread());
 
+    uint32_t max_config_ver = 0;
+
+    for (proxy *p = m->proxy_head; p != NULL; p = p->next)
+        if (max_config_ver < p->config_ver)
+            max_config_ver = p->config_ver;
+
+    uint32_t new_config_ver = max_config_ver + 1;
+
     for (int i = 0; lists[i]; i++) {
-        cproxy_on_new_serverlist(m, lists[i]);
+        cproxy_on_new_serverlist(m, lists[i], new_config_ver);
 
         free_server_list(lists[i]);
     }
@@ -109,7 +117,8 @@ void cproxy_on_new_serverlists(void *data0, void *data1) {
 }
 
 void cproxy_on_new_serverlist(proxy_main *m,
-                              memcached_server_list_t *list) {
+                              memcached_server_list_t *list,
+                              uint32_t config_ver) {
     assert(m);
     assert(list);
     assert(list->servers);
@@ -139,8 +148,8 @@ void cproxy_on_new_serverlist(proxy_main *m,
     }
 
     if (settings.verbose > 1)
-        fprintf(stderr, "cproxy main has new cfg: %s (bound to %d)\n",
-                cfg, list->binding);
+        fprintf(stderr, "cproxy main has new cfg: %s (bound to %d) %u\n",
+                cfg, list->binding, config_ver);
 
     // See if we've already got a proxy running on the port,
     // and create one if needed.
@@ -157,7 +166,7 @@ void cproxy_on_new_serverlist(proxy_main *m,
             fprintf(stderr, "cproxy main creating new proxy for %s on %d\n",
                     cfg, list->binding);
 
-        p = cproxy_create(list->name, list->binding, cfg,
+        p = cproxy_create(list->name, list->binding, cfg, config_ver,
                           m->nthreads, m->default_downstream_max);
         if (p != NULL) {
             p->next = m->proxy_head;
@@ -198,9 +207,12 @@ void cproxy_on_new_serverlist(proxy_main *m,
 
             free(p->config);
             p->config = cfg;
-            p->config_ver++;
             cfg = NULL;
         }
+
+        assert(config_ver != p->config_ver);
+
+        p->config_ver = config_ver;
 
         pthread_mutex_unlock(&p->proxy_lock);
     }

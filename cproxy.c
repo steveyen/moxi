@@ -56,7 +56,8 @@ conn_funcs cproxy_downstream_funcs = {
 
 /* Main function to create a proxy struct.
  */
-proxy *cproxy_create(char *name, int port, char *config,
+proxy *cproxy_create(char *name, int port,
+                     char *config, uint32_t config_ver,
                      int nthreads, int downstream_max) {
     assert(name != NULL);
     assert(port > 0);
@@ -71,7 +72,7 @@ proxy *cproxy_create(char *name, int port, char *config,
         p->name       = strdup(name);
         p->port       = port;
         p->config     = strdup(config);
-        p->config_ver = 0;
+        p->config_ver = config_ver;
         p->listening  = 0;
 
         pthread_mutex_init(&p->proxy_lock, NULL);
@@ -328,8 +329,8 @@ void cproxy_add_downstream(proxy_td *ptd) {
         //
         pthread_mutex_lock(&ptd->proxy->proxy_lock);
 
-        char *config     = config;
-        int   config_ver = config_ver;
+        char     *config     = config;
+        uint32_t  config_ver = config_ver;
 
         downstream *d = cproxy_create_downstream(config, config_ver);
         if (d != NULL) {
@@ -475,7 +476,7 @@ void cproxy_free_downstream(downstream *d) {
 /* The config input is something libmemcached can parse.
  * See memcached_servers_parse().
  */
-downstream *cproxy_create_downstream(char *config, int config_ver) {
+downstream *cproxy_create_downstream(char *config, uint32_t config_ver) {
     downstream *d = (downstream *) calloc(1, sizeof(downstream));
     if (d != NULL) {
         d->config     = strdup(config);

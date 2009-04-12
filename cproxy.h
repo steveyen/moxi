@@ -39,8 +39,11 @@ struct proxy {
     int   port;       // Immutable.
     char *name;       // Mutable, covered by proxy_lock, for debugging.
     char *config;     // Mutable, covered by proxy_lock, mem owned by proxy.
-    int   config_ver; // Mutable, covered by proxy_lock, incremented
-                      // whenever config changes.
+
+    // Mutable, covered by proxy_lock, incremented
+    // whenever config changes.
+    //
+    uint32_t config_ver;
 
     // Any thread that accesses the mutable fields should
     // first acquire the proxy_lock.
@@ -91,7 +94,7 @@ struct proxy_td { // Per proxy, per worker-thread data struct.
 struct downstream {
     proxy_td     *ptd;        // Immutable parent pointer.
     char         *config;     // Immutable, mem owned by downstream.
-    int           config_ver; // Immutable, snapshot of proxy->config_ver.
+    uint32_t      config_ver; // Immutable, snapshot of proxy->config_ver.
     memcached_st  mst;        // Immutable, from libmemcached.
 
     downstream *next;         // To track reserved/free lists.
@@ -106,7 +109,8 @@ struct downstream {
 // Functions.
 //
 proxy *cproxy_create(char *name, int port,
-                     char *config, int nthreads, int downstream_max);
+                     char *config, uint32_t config_ver,
+                     int nthreads, int downstream_max);
 int    cproxy_listen(proxy *p);
 
 proxy_td *cproxy_find_thread_data(proxy *p, pthread_t thread_id);
@@ -118,7 +122,7 @@ void      cproxy_on_pause_downstream_conn(conn *c);
 
 void        cproxy_add_downstream(proxy_td *ptd);
 void        cproxy_free_downstream(downstream *d);
-downstream *cproxy_create_downstream(char *config, int config_ver);
+downstream *cproxy_create_downstream(char *config, uint32_t config_ver);
 downstream *cproxy_reserve_downstream(proxy_td *ptd);
 bool        cproxy_release_downstream(downstream *d, bool force);
 void        cproxy_release_downstream_conn(downstream *d, conn *c);
@@ -165,7 +169,8 @@ void on_memagent_get_stats(void *userdata, void *opaque,
 
 void cproxy_on_new_serverlists(void *data0, void *data1);
 void cproxy_on_new_serverlist(proxy_main *m,
-                              memcached_server_list_t *list);
+                              memcached_server_list_t *list,
+                              uint32_t config_ver);
 
 // TODO: The following generic items should be broken out into util file.
 //
