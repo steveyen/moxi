@@ -93,7 +93,7 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
     } else if (ntokens >= 2 &&
                (strncmp(cmd, "stats", 5) == 0)) {
 
-        out_string(c, "ERROR"); // TODO
+        cproxy_pause_upstream_for_downstream(ptd, c);
 
     } else if (ntokens == 2 &&
                (strncmp(cmd, "version", 7) == 0)) {
@@ -225,6 +225,8 @@ void cproxy_process_downstream_ascii(conn *c, char *line) {
                strncmp(line, "PREFIX ", 7) == 0) {
         conn *uc = d->upstream_conn;
         if (uc != NULL) {
+            // TODO: This only works for simple, single-target proxies.
+            //
             int nline = strlen(line);
 
             item *it = item_alloc("s", 1, 0, 0, nline + 2);
@@ -407,6 +409,9 @@ bool cproxy_forward_simple_downstream(downstream *d,
 
     if (strncmp(command, "flush_all", 9) == 0)
         return cproxy_broadcast_downstream(d, command, uc, "OK\r\n");
+
+    if (strncmp(command, "stats", 5) == 0)
+        return cproxy_broadcast_downstream(d, command, uc, "END\r\n");
 
     token_t  tokens[MAX_TOKENS];
     size_t   ntokens = scan_tokens(command, tokens, MAX_TOKENS);
