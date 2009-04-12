@@ -410,8 +410,12 @@ bool cproxy_forward_simple_downstream(downstream *d,
     if (strncmp(command, "flush_all", 9) == 0)
         return cproxy_broadcast_downstream(d, command, uc, "OK\r\n");
 
-    if (strncmp(command, "stats", 5) == 0)
+    if (strncmp(command, "stats", 5) == 0) {
+        if (strncmp(command + 5, " reset", 6) == 0)
+            return cproxy_broadcast_downstream(d, command, uc, "RESET\r\n");
+
         return cproxy_broadcast_downstream(d, command, uc, "END\r\n");
+    }
 
     token_t  tokens[MAX_TOKENS];
     size_t   ntokens = scan_tokens(command, tokens, MAX_TOKENS);
