@@ -90,8 +90,8 @@ proxy *cproxy_create(char *name, int port,
             for (int i = 1; i < p->thread_data_num; i++) {
                 proxy_td *ptd = &p->thread_data[i];
                 ptd->proxy = p;
-                ptd->waiting_for_downstream_head = NULL;
-                ptd->waiting_for_downstream_tail = NULL;
+                ptd->waiting_any_downstream_head = NULL;
+                ptd->waiting_any_downstream_tail = NULL;
                 ptd->downstream_reserved = NULL;
                 ptd->downstream_released = NULL;
                 ptd->downstream_tot = 0;
@@ -246,21 +246,21 @@ void cproxy_on_close_upstream_conn(conn *c) {
     // Delink from any wait queue.
     //
     conn *prev = NULL;
-    conn *curr = ptd->waiting_for_downstream_head;
+    conn *curr = ptd->waiting_any_downstream_head;
 
     while (curr != NULL) {
         if (curr == c) {
-            if (ptd->waiting_for_downstream_tail == curr)
-                ptd->waiting_for_downstream_tail = prev;
+            if (ptd->waiting_any_downstream_tail == curr)
+                ptd->waiting_any_downstream_tail = prev;
 
             if (prev != NULL) {
-                assert(curr != ptd->waiting_for_downstream_head);
+                assert(curr != ptd->waiting_any_downstream_head);
                 prev->next = curr->next;
                 break;
             }
 
-            assert(curr == ptd->waiting_for_downstream_head);
-            ptd->waiting_for_downstream_head = curr->next;
+            assert(curr == ptd->waiting_any_downstream_head);
+            ptd->waiting_any_downstream_head = curr->next;
             break;
         }
 
@@ -682,11 +682,11 @@ void cproxy_assign_downstream(proxy_td *ptd) {
     // processing.  This helps avoid infinite loop where upstream
     // conns just keep on moving to the tail.
     //
-    conn *tail = ptd->waiting_for_downstream_tail;
+    conn *tail = ptd->waiting_any_downstream_tail;
     bool  stop = false;
 
-    while (ptd->waiting_for_downstream_head != NULL && !stop) {
-        if (ptd->waiting_for_downstream_head == tail)
+    while (ptd->waiting_any_downstream_head != NULL && !stop) {
+        if (ptd->waiting_any_downstream_head == tail)
             stop = true;
 
         downstream *d = cproxy_reserve_downstream(ptd);
@@ -700,11 +700,11 @@ void cproxy_assign_downstream(proxy_td *ptd) {
         // We have a downstream reserved, so assign the first
         // waiting upstream conn to it.
         //
-        d->upstream_conn = ptd->waiting_for_downstream_head;
-        ptd->waiting_for_downstream_head =
-            ptd->waiting_for_downstream_head->next;
-        if (ptd->waiting_for_downstream_head == NULL)
-            ptd->waiting_for_downstream_tail = NULL;
+        d->upstream_conn = ptd->waiting_any_downstream_head;
+        ptd->waiting_any_downstream_head =
+            ptd->waiting_any_downstream_head->next;
+        if (ptd->waiting_any_downstream_head == NULL)
+            ptd->waiting_any_downstream_tail = NULL;
         d->upstream_conn->next = NULL;
 
         if (settings.verbose > 1)
@@ -726,7 +726,7 @@ void cproxy_assign_downstream(proxy_td *ptd) {
 
             if (uc != NULL) {
                 // TOOD: Count retrying instead of error, but need counter.
-                //       cproxy_wait_for_downstream(ptd, uc);
+                //       cproxy_wait_any_downstream(ptd, uc);
                 //
                 // Send an END on get/gets instead of generic SERVER_ERROR.
                 //
@@ -791,20 +791,20 @@ bool cproxy_dettach_if_noreply(downstream *d, conn *uc) {
     return false;
 }
 
-void cproxy_wait_for_downstream(proxy_td *ptd, conn *c) {
-    assert(c != NULL);
+void cproxy_wait_any_downstream(proxy_td *ptd, conn *uc) {
+    assert(uc != NULL);
     assert(ptd != NULL);
-    assert(!ptd->waiting_for_downstream_tail ||
-           !ptd->waiting_for_downstream_tail->next);
+    assert(!ptd->waiting_any_downstream_tail ||
+           !ptd->waiting_any_downstream_tail->next);
 
-    // Add the conn to the wait list.
+    // Add the upstream conn to the wait list.
     //
-    c->next = NULL;
-    if (ptd->waiting_for_downstream_tail != NULL)
-        ptd->waiting_for_downstream_tail->next = c;
-    ptd->waiting_for_downstream_tail = c;
-    if (ptd->waiting_for_downstream_head == NULL)
-        ptd->waiting_for_downstream_head = c;
+    uc->next = NULL;
+    if (ptd->waiting_any_downstream_tail != NULL)
+        ptd->waiting_any_downstream_tail->next = uc;
+    ptd->waiting_any_downstream_tail = uc;
+    if (ptd->waiting_any_downstream_head == NULL)
+        ptd->waiting_any_downstream_head = uc;
 }
 
 void cproxy_release_downstream_conn(downstream *d, conn *c) {
@@ -855,7 +855,7 @@ void cproxy_pause_upstream_for_downstream(proxy_td *ptd, conn *upstream) {
                 upstream->sfd);
 
     conn_set_state(upstream, conn_pause);
-    cproxy_wait_for_downstream(ptd, upstream);
+    cproxy_wait_any_downstream(ptd, upstream);
     cproxy_assign_downstream(ptd);
 }
 

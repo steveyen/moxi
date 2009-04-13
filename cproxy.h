@@ -79,8 +79,8 @@ struct proxy_td { // Per proxy, per worker-thread data struct.
     // Upstream conns that are paused, waiting for
     // an available, released downstream.
     //
-    conn *waiting_for_downstream_head;
-    conn *waiting_for_downstream_tail;
+    conn *waiting_any_downstream_head;
+    conn *waiting_any_downstream_tail;
 
     downstream *downstream_reserved; // Downstreams assigned to upstreams.
     downstream *downstream_released; // Downstreams unassigned to upstreams.
@@ -131,7 +131,7 @@ void        cproxy_release_downstream_conn(downstream *d, conn *c);
 bool        cproxy_check_downstream_config(downstream *d);
 
 int   cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread);
-void  cproxy_wait_for_downstream(proxy_td *ptd, conn *c);
+void  cproxy_wait_any_downstream(proxy_td *ptd, conn *c);
 void  cproxy_assign_downstream(proxy_td *ptd);
 
 bool  cproxy_forward_downstream(downstream *d);
