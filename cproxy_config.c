@@ -96,6 +96,8 @@ int cproxy_init(const char *cfg, int nthreads,
         }
     }
 
+    free(buff);
+
     return rv;
 }
 
