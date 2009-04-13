@@ -14,7 +14,6 @@
 #define NOT_CAS -1
 
 #define COMMAND_TOKEN    0
-#define SUBCOMMAND_TOKEN 1
 #define KEY_TOKEN        1
 #define MAX_TOKENS       8
 
