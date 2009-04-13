@@ -36,9 +36,10 @@ struct proxy_main {
 /* Owned by main listener thread.
  */
 struct proxy {
-    int   port;       // Immutable.
-    char *name;       // Mutable, covered by proxy_lock, for debugging.
-    char *config;     // Mutable, covered by proxy_lock, mem owned by proxy.
+    int   port;   // Immutable.
+    char *name;   // Mutable, covered by proxy_lock, for debugging, NULL-able.
+    char *config; // Mutable, covered by proxy_lock, mem owned by proxy,
+                  // might be NULL if the proxy is shutting down.
 
     // Mutable, covered by proxy_lock, incremented
     // whenever config changes.
@@ -168,9 +169,10 @@ void on_memagent_get_stats(void *userdata, void *opaque,
                            agent_add_stat add_stat);
 
 void cproxy_on_new_serverlists(void *data0, void *data1);
+
 void cproxy_on_new_serverlist(proxy_main *m,
-                              memcached_server_list_t *list,
-                              uint32_t config_ver);
+                              char *name, int port,
+                              char *config, uint32_t config_ver);
 
 // TODO: The following generic items should be broken out into util file.
 //

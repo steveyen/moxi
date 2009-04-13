@@ -329,20 +329,30 @@ void cproxy_add_downstream(proxy_td *ptd) {
         if (settings.verbose > 1)
             fprintf(stderr, "cproxy_add_downstream\n");
 
+        char *config = NULL;
+
         pthread_mutex_lock(&ptd->proxy->proxy_lock);
-        char     *config     = strdup(ptd->proxy->config);
-        uint32_t  config_ver = ptd->proxy->config_ver;
+
+        if (ptd->proxy->config != NULL)
+            config = strdup(ptd->proxy->config);
+
+        uint32_t config_ver = ptd->proxy->config_ver;
+
         pthread_mutex_unlock(&ptd->proxy->proxy_lock);
 
-        downstream *d = cproxy_create_downstream(config, config_ver);
-        if (d != NULL) {
-            d->ptd = ptd;
-            ptd->downstream_tot++;
-            ptd->downstream_num++;
-            cproxy_release_downstream(d, true);
-        }
+        // The config will be NULL if the proxy is shutting down.
+        //
+        if (config != NULL) {
+            downstream *d = cproxy_create_downstream(config, config_ver);
+            if (d != NULL) {
+                d->ptd = ptd;
+                ptd->downstream_tot++;
+                ptd->downstream_num++;
+                cproxy_release_downstream(d, true);
+            }
 
-        free(config);
+            free(config);
+        }
     }
 }
 
@@ -479,6 +489,8 @@ void cproxy_free_downstream(downstream *d) {
  * See memcached_servers_parse().
  */
 downstream *cproxy_create_downstream(char *config, uint32_t config_ver) {
+    assert(config != NULL);
+
     downstream *d = (downstream *) calloc(1, sizeof(downstream));
     if (d != NULL) {
         d->config     = strdup(config);
@@ -536,11 +548,11 @@ bool cproxy_check_downstream_config(downstream *d) {
 
     pthread_mutex_lock(&d->ptd->proxy->proxy_lock);
 
-    assert(d->ptd->proxy->config != NULL);
-
     if (d->config_ver == d->ptd->proxy->config_ver) {
         rv = true;
-    } else if (strcmp(d->config, d->ptd->proxy->config) == 0) {
+    } else if (d->config != NULL &&
+               d->ptd->proxy->config != NULL &&
+               strcmp(d->config, d->ptd->proxy->config) == 0) {
         d->config_ver = d->ptd->proxy->config_ver;
         rv = true;
     }

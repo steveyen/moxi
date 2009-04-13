@@ -121,7 +121,40 @@ void cproxy_on_new_serverlists(void *data0, void *data1) {
     uint32_t new_config_ver = max_config_ver + 1;
 
     for (int i = 0; lists[i]; i++) {
-        cproxy_on_new_serverlist(m, lists[i], new_config_ver);
+        memcached_server_list_t *list = lists[i];
+
+        assert(list->name);
+        assert(list->binding >= 0);
+        assert(list->servers);
+
+        // Create a config string that libmemcached likes,
+        // first by counting up buffer size needed.
+        //
+        int n = 0;
+
+        for (int j = 0; list->servers[j]; j++) {
+            memcached_server_t *server = list->servers[j];
+            n = n + strlen(server->host) + 50;
+        }
+
+        char *config = calloc(n, 1);
+        if (config != NULL) {
+            for (int j = 0; list->servers[j]; j++) {
+                memcached_server_t *server = list->servers[j];
+                char *cur = config + strlen(config);
+
+                if (j == 0)
+                    sprintf(cur, "%s:%u", server->host, server->port);
+                else
+                    sprintf(cur, ",%s:%u", server->host, server->port);
+            }
+
+            cproxy_on_new_serverlist(m, list->name, list->binding,
+                                     config, new_config_ver);
+
+            free(config);
+        }
+
         free_server_list(lists[i]);
     }
 
@@ -138,54 +171,32 @@ void cproxy_on_new_serverlists(void *data0, void *data1) {
 }
 
 void cproxy_on_new_serverlist(proxy_main *m,
-                              memcached_server_list_t *list,
-                              uint32_t config_ver) {
+                              char *name, int port,
+                              char *config, uint32_t config_ver) {
     assert(m);
-    assert(list);
-    assert(list->servers);
+    assert(name);
+    assert(port >= 0);
+    assert(config);
     assert(is_listen_thread());
-
-    // Create a config string that libmemcached likes,
-    // first by counting up buffer size needed.
-    //
-    int j;
-    int n = 0;
-    for (j = 0; list->servers[j]; j++) {
-        memcached_server_t *server = list->servers[j];
-        n = n + strlen(server->host) + 50;
-    }
-
-    char *cfg = calloc(n, 1);
-    if (cfg == NULL)
-        return;
-
-    for (int j = 0; list->servers[j]; j++) {
-        memcached_server_t *server = list->servers[j];
-        char *cur = cfg + strlen(cfg);
-        if (j == 0)
-            sprintf(cur, "%s:%u", server->host, server->port);
-        else
-            sprintf(cur, ",%s:%u", server->host, server->port);
-    }
 
     if (settings.verbose > 1)
         fprintf(stderr, "cproxy main has new cfg: %s (bound to %d) %u\n",
-                cfg, list->binding, config_ver);
+                config, port, config_ver);
 
     // See if we've already got a proxy running on the port,
     // and create one if needed.
     //
     proxy *p = m->proxy_head;
     while (p != NULL &&
-           p->port != list->binding)
+           p->port != port)
         p = p->next;
 
     if (p == NULL) {
         if (settings.verbose > 1)
             fprintf(stderr, "cproxy main creating new proxy for %s on %d\n",
-                    cfg, list->binding);
+                    config, port);
 
-        p = cproxy_create(list->name, list->binding, cfg, config_ver,
+        p = cproxy_create(name, port, config, config_ver,
                           m->nthreads, m->default_downstream_max);
         if (p != NULL) {
             p->next = m->proxy_head;
@@ -207,27 +218,32 @@ void cproxy_on_new_serverlist(proxy_main *m,
 
         pthread_mutex_lock(&p->proxy_lock);
 
-        if (p->name != NULL && list->name != NULL &&
-            strcmp(p->name, list->name) != 0) {
-            if (p->name != NULL) {
-                free(p->name);
-                p->name = NULL;
-            }
+        if (settings.verbose > 1) {
+            fprintf(stderr,
+                    "cproxy main name changed from %s to %s\n",
+                    p->name, name);
+            fprintf(stderr,
+                    "cproxy main config changed from %s to %s\n",
+                    p->config, config);
         }
-        if (p->name == NULL &&
-            list->name != NULL)
-            p->name = strdup(list->name);
 
-        if (strcmp(p->config, cfg) != 0) {
-            if (settings.verbose > 1)
-                fprintf(stderr,
-                        "cproxy main config changed from %s to %s\n",
-                        p->config, cfg);
+        if ((p->name != NULL) &&
+            (name == NULL ||
+             strcmp(p->name, name) != 0)) {
+            free(p->name);
+            p->name = NULL;
+        }
+        if (p->name == NULL && name != NULL)
+            p->name = strdup(name);
 
+        if ((p->config != NULL) &&
+            (config == NULL ||
+             strcmp(p->config, config) != 0)) {
             free(p->config);
-            p->config = cfg;
-            cfg = NULL;
+            p->config = NULL;
         }
+        if (p->config == NULL && config != NULL)
+            p->config = strdup(config);
 
         assert(config_ver != p->config_ver);
 
@@ -235,9 +251,6 @@ void cproxy_on_new_serverlist(proxy_main *m,
 
         pthread_mutex_unlock(&p->proxy_lock);
     }
-
-    if (cfg != NULL)
-        free(cfg);
 }
 
 // ----------------------------------------------------------
