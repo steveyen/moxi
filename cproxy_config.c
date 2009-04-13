@@ -93,6 +93,8 @@ void on_memagent_new_serverlists(void *userdata,
                       m, lists_copy))
             return; // Success.
 
+        // On error, free up our copies.
+        //
         for (i = 0; i < n; i++) {
             if (lists_copy[i] != NULL)
                 free_server_list(lists_copy[i]);
@@ -158,13 +160,42 @@ void cproxy_on_new_serverlists(void *data0, void *data1) {
         free_server_list(lists[i]);
     }
 
+    // If there were any proxies that weren't updated in the
+    // previous loop, we need to shut them down.
+    //
     for (proxy *p = m->proxy_head; p != NULL; p = p->next) {
+        bool  down   = false;
+        int   port   = 0;
+        char *name   = NULL;
+        char *config = NULL;
+
         pthread_mutex_lock(&p->proxy_lock);
+
         if (p->config_ver != new_config_ver) {
-            // TODO: Shutdown old proxies.
-            assert(false);
+            down = true;
+            port = p->port;
+
+            if (p->name != NULL)
+                name = strdup(p->name);
+            if (p->config != NULL)
+                config = strdup(p->config);
         }
+
         pthread_mutex_unlock(&p->proxy_lock);
+
+        if (down) {
+            if (settings.verbose > 1)
+                fprintf(stderr, "shutting down proxy %s:%d to %s\n",
+                        name, port, config);
+
+            cproxy_on_new_serverlist(m, NULL, port, NULL, new_config_ver);
+        }
+
+        if (name != NULL)
+            free(name);
+
+        if (config != NULL)
+            free(config);
     }
 
     free(lists);
@@ -174,9 +205,7 @@ void cproxy_on_new_serverlist(proxy_main *m,
                               char *name, int port,
                               char *config, uint32_t config_ver) {
     assert(m);
-    assert(name);
     assert(port >= 0);
-    assert(config);
     assert(is_listen_thread());
 
     if (settings.verbose > 1)
@@ -219,12 +248,17 @@ void cproxy_on_new_serverlist(proxy_main *m,
         pthread_mutex_lock(&p->proxy_lock);
 
         if (settings.verbose > 1) {
-            fprintf(stderr,
-                    "cproxy main name changed from %s to %s\n",
+            if (p->name && name &&
+                strcmp(p->name, name) != 0)
+                fprintf(stderr,
+                        "cproxy main name changed from %s to %s\n",
                     p->name, name);
-            fprintf(stderr,
-                    "cproxy main config changed from %s to %s\n",
-                    p->config, config);
+
+            if (p->config && config &&
+                strcmp(p->config, config) != 0)
+                fprintf(stderr,
+                        "cproxy main config changed from %s to %s\n",
+                        p->config, config);
         }
 
         if ((p->name != NULL) &&

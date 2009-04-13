@@ -323,6 +323,7 @@ void cproxy_on_close_downstream_conn(conn *c) {
 
 void cproxy_add_downstream(proxy_td *ptd) {
     assert(ptd != NULL);
+    assert(ptd->proxy != NULL);
 
     if (ptd != NULL &&
         ptd->downstream_num < ptd->downstream_max) {
