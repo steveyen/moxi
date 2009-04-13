@@ -469,8 +469,10 @@ bool cproxy_forward_multiget_downstream(downstream *d,
     int nconns = memcached_server_count(&d->mst);
 
     for (int i = 0; i < nconns; i++) {
-        cproxy_prep_conn_for_write(d->downstream_conns[i]);
-        assert(d->downstream_conns[i]->state == conn_pause);
+        if (d->downstream_conns[i] != NULL) {
+            cproxy_prep_conn_for_write(d->downstream_conns[i]);
+            assert(d->downstream_conns[i]->state == conn_pause);
+        }
     }
 
     char *space = strchr(command, ' ');
