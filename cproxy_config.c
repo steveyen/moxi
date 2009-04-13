@@ -15,6 +15,9 @@
 static int old_init(const char *cfg, int nthreads,
                     int default_downstream_max);
 
+static int cproxy_init_agent(char *jid, char *jpw, char *config, char *host,
+                             int nthreads, int default_downstream_max);
+
 int cproxy_init(const char *cfg, int nthreads,
                 int default_downstream_max) {
     assert(nthreads > 1); // Main + at least one worker.
@@ -28,6 +31,81 @@ int cproxy_init(const char *cfg, int nthreads,
     if (cfg[0] >= '1' && cfg[0] <= '9')
         return old_init(cfg, nthreads, default_downstream_max);
 
+    if (settings.verbose > 1)
+        fprintf(stderr, "cproxy_init %s\n", cfg);
+
+    char *buff = strdup(cfg);
+    char *next = buff;
+
+    // Each sec (or section) looks like...
+    //
+    //   apikey=jidname@jhostname%jpassword,config=config,host=host
+    //
+    // Only the apikey is needed.
+    //
+    int rv = 0;
+
+    while (next != NULL) {
+        char *jid    = NULL;
+        char *jpw    = NULL;
+        char *config = "/tmp/memscale.cfg"; // TODO: Revisit.
+        char *host   = "localhost";         // TODO: Revisit.
+
+        char *cur = strsep(&next, ";");
+        while (cur != NULL) {
+            char *key_val = strsep(&cur, ",");
+            if (key_val != NULL) {
+                char *key = strsep(&key_val, "=");
+                char *val = key_val;
+
+                if (settings.verbose > 1)
+                    fprintf(stderr, "cproxy_init kv %s %s\n", key, val);
+
+                if (val != NULL) {
+                    if (strcmp(key, "apikey") == 0) {
+                        jid = strsep(&val, "%");
+                        jpw = val;
+
+                        if (settings.verbose > 1)
+                            fprintf(stderr, "cproxy_init apikey %s %s\n", jid, jpw);
+                    }
+                    if (strcmp(key, "config") == 0)
+                        config = val;
+                    if (strcmp(key, "host") == 0)
+                        host = val;
+                }
+            }
+        }
+
+        if (jid == NULL) {
+            if (settings.verbose > 1)
+                fprintf(stderr, "cproxy_init missing jid\n");
+        } else if (jpw == NULL) {
+            if (settings.verbose > 1)
+                fprintf(stderr, "cproxy_init missing jpw\n");
+        } else if (config == NULL) {
+            if (settings.verbose > 1)
+                fprintf(stderr, "cproxy_init missing config\n");
+        } else if (host == NULL) {
+            if (settings.verbose > 1)
+                fprintf(stderr, "cproxy_init missing verbose\n");
+        } else {
+            if (cproxy_init_agent(jid, jpw, config, host,
+                                  nthreads, default_downstream_max) == 0)
+                rv++;
+        }
+    }
+
+    return rv;
+}
+
+static int cproxy_init_agent(char *jid, char *jpw, char *config, char *host,
+                             int nthreads, int default_downstream_max) {
+    assert(jid);
+    assert(jpw);
+    assert(config);
+    assert(host);
+
     proxy_main *m = calloc(1, sizeof(proxy_main));
     if (m != NULL) {
         m->proxy_head             = NULL;
@@ -35,12 +113,12 @@ int cproxy_init(const char *cfg, int nthreads,
         m->default_downstream_max = default_downstream_max;
 
         // Different jid's for production, staging, etc.
-        m->config.jid = "customer@stevenmb.local";
-        m->config.pass = "password";
-        m->config.host = "localhost"; // TODO: XMPP server host, for dev.
+        m->config.jid  = jid;  // "customer@stevenmb.local"
+        m->config.pass = jpw;  // "password"
+        m->config.host = host; // "localhost" // TODO: XMPP server, for dev.
         m->config.software = "memscale";
-        m->config.version = "0.1";
-        m->config.save_path = "/tmp/memscale.db";
+        m->config.version  = "0.1";   // TODO: Version.
+        m->config.save_path = config; // "/tmp/memscale.cfg"
         m->config.userdata = m;
         m->config.new_serverlist = on_memagent_new_serverlists;
         m->config.get_stats = on_memagent_get_stats;
