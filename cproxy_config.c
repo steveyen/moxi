@@ -161,7 +161,12 @@ void cproxy_on_new_serverlists(void *data0, void *data1) {
     }
 
     // If there were any proxies that weren't updated in the
-    // previous loop, we need to shut them down.
+    // previous loop, we need to shut them down.  We mark the
+    // proxy->config as NULL, and cproxy_check_downstream_config()
+    // will catch it.
+    //
+    // TODO: Close any listening conns for the proxy?
+    // TODO: Close any upstream conns for the proxy?
     //
     for (proxy *p = m->proxy_head; p != NULL; p = p->next) {
         bool  down   = false;
