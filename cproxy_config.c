@@ -111,9 +111,12 @@ void cproxy_on_new_serverlists(void *data0, void *data1) {
 
     uint32_t max_config_ver = 0;
 
-    for (proxy *p = m->proxy_head; p != NULL; p = p->next)
+    for (proxy *p = m->proxy_head; p != NULL; p = p->next) {
+        pthread_mutex_lock(&p->proxy_lock);
         if (max_config_ver < p->config_ver)
             max_config_ver = p->config_ver;
+        pthread_mutex_unlock(&p->proxy_lock);
+    }
 
     uint32_t new_config_ver = max_config_ver + 1;
 
@@ -123,10 +126,12 @@ void cproxy_on_new_serverlists(void *data0, void *data1) {
     }
 
     for (proxy *p = m->proxy_head; p != NULL; p = p->next) {
+        pthread_mutex_lock(&p->proxy_lock);
         if (p->config_ver != new_config_ver) {
             // TODO: Shutdown old proxies.
             assert(false);
         }
+        pthread_mutex_unlock(&p->proxy_lock);
     }
 
     free(lists);
