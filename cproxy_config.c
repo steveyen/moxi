@@ -167,6 +167,9 @@ void cproxy_on_new_serverlists(void *data0, void *data1) {
     //
     // TODO: Close any listening conns for the proxy?
     // TODO: Close any upstream conns for the proxy?
+    // TODO: We still need to free proxy memory, after all its
+    //       proxy_td's and downstreams are closed, and no more
+    //       upstreams are pointed at the proxy.
     //
     for (proxy *p = m->proxy_head; p != NULL; p = p->next) {
         bool  down   = false;
