@@ -9,7 +9,8 @@
 
 int cproxy_init(const char *cfg, int nthreads, int downstream_max);
 
-#define IS_PROXY(x) (x == proxy_upstream_ascii_prot || x == proxy_downstream_ascii_prot)
+#define IS_PROXY(x) (x == proxy_upstream_ascii_prot || \
+                     x == proxy_downstream_ascii_prot)
 
 // -------------------------------
 
