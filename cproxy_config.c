@@ -12,10 +12,15 @@
 #include "cproxy.h"
 #include "work.h"
 
+char **get_key_values(kvpair_t *kvs, char *key);
+
+kvpair_t *copy_kvpairs(kvpair_t *orig);
+
 static int old_init(const char *cfg, int nthreads,
                     int default_downstream_max);
 
-static int cproxy_init_agent(char *jid, char *jpw, char *config, char *host,
+static int cproxy_init_agent(char *jid, char *jpw,
+                             char *config, char *host,
                              int nthreads, int default_downstream_max);
 
 int cproxy_init(const char *cfg, int nthreads,
@@ -67,7 +72,8 @@ int cproxy_init(const char *cfg, int nthreads,
                         jpw = val;
 
                         if (settings.verbose > 1)
-                            fprintf(stderr, "cproxy_init apikey %s %s\n", jid, jpw);
+                            fprintf(stderr, "cproxy_init apikey %s %s\n",
+                                    jid, jpw);
                     }
                     if (strcmp(key, "config") == 0)
                         config = val;
@@ -118,12 +124,12 @@ static int cproxy_init_agent(char *jid, char *jpw, char *config, char *host,
         m->config.jid  = jid;  // "customer@stevenmb.local"
         m->config.pass = jpw;  // "password"
         m->config.host = host; // "localhost" // TODO: XMPP server, for dev.
-        m->config.software = "memscale";
-        m->config.version  = "0.1";   // TODO: Version.
-        m->config.save_path = config; // "/tmp/memscale.cfg"
-        m->config.userdata = m;
-        m->config.new_serverlist = on_memagent_new_serverlists;
-        m->config.get_stats = on_memagent_get_stats;
+        m->config.software   = "memscale";
+        m->config.version    = "0.1";   // TODO: Version.
+        m->config.save_path  = config; // "/tmp/memscale.cfg"
+        m->config.userdata   = m;
+        m->config.new_config = on_memagent_new_config;
+        m->config.get_stats  = on_memagent_get_stats;
 
         if (start_agent(m->config)) {
             if (settings.verbose > 1)
@@ -139,9 +145,8 @@ static int cproxy_init_agent(char *jid, char *jpw, char *config, char *host,
     return 1;
 }
 
-void on_memagent_new_serverlists(void *userdata,
-                                 memcached_server_list_t **lists) {
-    assert(lists != NULL);
+void on_memagent_new_config(void *userdata, kvpair_t *config) {
+    assert(config != NULL);
 
     proxy_main *m = userdata;
     assert(m != NULL);
@@ -152,43 +157,18 @@ void on_memagent_new_serverlists(void *userdata,
     if (settings.verbose > 1)
         fprintf(stderr, "on_memagent_new_serverlist\n");
 
-    int n = 0;
-    while (lists[n])
-        n++;
-
-    memcached_server_list_t **lists_copy =
-        calloc(n, sizeof(memcached_server_list_t *));
-    if (lists_copy != NULL) {
-        int i;
-
-        for (i = 0; i < n; i++) {
-            lists_copy[i] = copy_server_list(lists[i]);
-            if (lists_copy[i] == NULL)
-                break;
-        }
-
-        if (i >= n &&
-            work_send(mthread->work_queue,
-                      cproxy_on_new_serverlists,
-                      m, lists_copy))
-            return; // Success.
-
-        // On error, free up our copies.
-        //
-        for (i = 0; i < n; i++) {
-            if (lists_copy[i] != NULL)
-                free_server_list(lists_copy[i]);
-        }
-
-        free(lists_copy);
+    kvpair_t *copy = copy_kvpairs(config);
+    if (copy != NULL) {
+        work_send(mthread->work_queue, cproxy_on_new_serverlists, m, copy);
     }
 }
 
 void cproxy_on_new_serverlists(void *data0, void *data1) {
     proxy_main *m = data0;
     assert(m);
-    memcached_server_list_t **lists = data1;
-    assert(lists);
+
+    kvpair_t *kvs = data1;
+    assert(kvs);
     assert(is_listen_thread());
 
     uint32_t max_config_ver = 0;
@@ -202,42 +182,81 @@ void cproxy_on_new_serverlists(void *data0, void *data1) {
 
     uint32_t new_config_ver = max_config_ver + 1;
 
-    for (int i = 0; lists[i]; i++) {
-        memcached_server_list_t *list = lists[i];
+    // The kvs key-multivalues looks roughly like...
+    //
+    // 	customer1-b
+    // 	    localhost:11311
+    // 	    localhost:11312
+    // 	customer1-a
+    // 	    localhost:11211
+    // 	-bindings-
+    // 	    11221
+    // 	    11331
+    // 	-pools-
+    // 	    customer1-a
+    // 	    customer1-b
+    //
+    char **pools = get_key_values(kvs, "-pools-");
+    if (pools == NULL)
+        return;
 
-        assert(list->name);
-        assert(list->binding >= 0);
-        assert(list->servers);
+    char **bindings = get_key_values(kvs, "-bindings-");
+    if (bindings == NULL)
+        return;
 
-        // Create a config string that libmemcached likes,
-        // first by counting up buffer size needed.
-        //
-        int n = 0;
+    int npools = 0;
+    while (pools[npools])
+        npools++;
 
-        for (int j = 0; list->servers[j]; j++) {
-            memcached_server_t *server = list->servers[j];
-            n = n + strlen(server->host) + 50;
-        }
+    int nbindings = 0;
+    while (bindings[nbindings])
+        nbindings++;
 
-        char *config = calloc(n, 1);
-        if (config != NULL) {
-            for (int j = 0; list->servers[j]; j++) {
-                memcached_server_t *server = list->servers[j];
-                char *cur = config + strlen(config);
+    if (nbindings != npools) {
+        if (settings.verbose > 1)
+            fprintf(stderr, "npools does not match nbindings\n");
+        return;
+    }
 
-                if (j == 0)
-                    sprintf(cur, "%s:%u", server->host, server->port);
-                else
-                    sprintf(cur, ",%s:%u", server->host, server->port);
+    for (int i = 0; i < npools; i++) {
+        assert(pools[i]);
+        assert(bindings[i]);
+
+        if (pools[i] != NULL &&
+            bindings[i] != NULL) {
+            char  *pool_name = pools[i];
+            int    pool_port = atoi(bindings[i]);
+            char **servers   = get_key_values(kvs, pool_name);
+
+            assert(pool_name);
+            assert(pool_port >= 0);
+            assert(servers);
+
+            // Create a config string that libmemcached likes,
+            // first by counting up buffer size needed.
+            //
+            int n = 0;
+
+            for (int j = 0; servers[j]; j++)
+                n = n + strlen(servers[j]) + 50;
+
+            char *config = calloc(n, 1);
+            if (config != NULL) {
+                for (int j = 0; servers[j]; j++) {
+                    char *cur = config + strlen(config); // TODO: O(N^2).
+
+                    if (j == 0)
+                        sprintf(cur, "%s", servers[j]);
+                    else
+                        sprintf(cur, ",%s", servers[j]);
+                }
+
+                cproxy_on_new_serverlist(m, pool_name, pool_port,
+                                         config, new_config_ver);
+
+                free(config);
             }
-
-            cproxy_on_new_serverlist(m, list->name, list->binding,
-                                     config, new_config_ver);
-
-            free(config);
         }
-
-        free_server_list(lists[i]);
     }
 
     // If there were any proxies that weren't updated in the
@@ -286,7 +305,7 @@ void cproxy_on_new_serverlists(void *data0, void *data1) {
             free(config);
     }
 
-    free(lists);
+    free_kvpair(kvs);
 }
 
 void cproxy_on_new_serverlist(proxy_main *m,
@@ -435,3 +454,31 @@ static int old_init(const char *cfg, int nthreads,
 
     return 0;
 }
+
+char **get_key_values(kvpair_t *kvs, char *key) {
+    assert(kvs);
+    assert(key);
+
+    while (kvs != NULL) {
+        assert(kvs->key);
+
+        if (strcmp(kvs->key, key) == 0)
+            return kvs->values;
+
+        kvs = kvs->next;
+    }
+
+    return NULL;
+}
+
+kvpair_t *copy_kvpairs(kvpair_t *orig) {
+    if (orig != NULL) {
+        kvpair_t *copy = mk_kvpair(orig->key, orig->values);
+        if (copy != NULL) {
+            copy->next = copy_kvpairs(orig->next);
+            return copy;
+        }
+    }
+    return NULL;
+}
+

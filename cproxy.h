@@ -164,8 +164,7 @@ void cproxy_close_conn(conn *c);
 
 // Integration with memagent.
 //
-void on_memagent_new_serverlists(void *userdata,
-                                 memcached_server_list_t **lists);
+void on_memagent_new_config(void *userdata, kvpair_t *config);
 void on_memagent_get_stats(void *userdata, void *opaque,
                            agent_add_stat add_stat);
 
