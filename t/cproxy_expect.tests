@@ -1,0 +1,67 @@
+# The dollar ($) char adds implicit carriage-return/newline (\r\n).
+#
+# c means client connection.
+# P means proxy upstream.
+# d means proxy downstream.
+# S means memcached server.
+#
+############################
+
+TEST('version')
+
+send('c', 'P', '^version$')
+recv('P', 'c', '^VERSION .*$')
+quiet('S')
+
+TEST('some bogus command that does not hit server')
+
+send('c', 'P', '^bogus$')
+recv('P', 'c', '^.*ERROR.*$')
+quiet('S')
+
+TEST('simple set')
+
+send('c', 'P', '^set a 0 0 1$')
+send('c', 'P', '^1$')
+recv('d', 'S', "^set a 0 0 1\r\n1$")
+send('S', 'd', '^STORED$')
+recv('P', 'c', '^STORED$')
+
+TEST('flush_all broadcast/scatter/gather')
+
+send('c', 'P', '^flush_all$')
+recv('d', 'S', '^flush_all$')
+send('S', 'd', '^OK$')
+recv('P', 'c', '^OK$')
+
+TEST('Split a response over two writes.')
+
+send('c', 'P', '^set a 0 0 1$')
+send('c', 'P', '^1$')
+recv('d', 'S', "^set a 0 0 1\r\n1$")
+send('S', 'd', '^STO')
+wait(1)
+send('S', 'd', 'RED$')
+recv('P', 'c', '^STORED$')
+
+TEST('Chop the response with a server close.')
+
+send('c', 'P', '^set a 0 0 1$')
+send('c', 'P', '^1$')
+recv('d', 'S', "^set a 0 0 1\r\n1$")
+close('S')
+recv('P', 'c', '^SERVER_ERROR .*$')
+
+# Test chopped up responses from server.
+# Test chopped up responses from client.
+# Test servers going down during multiget write.
+# Test chopped up server responses during multiget.
+# Test if one server goes down during a broadcast/scatter-gather.
+# Test server going down.
+# Test server coming back up.
+# Test server getting very slow.
+# Test several backend servers, and one or more start flapping.
+## test get and multi-get
+## test simple update commands
+## test broadcast commands like flush_all
+
