@@ -116,9 +116,9 @@ class MockSession(threading.Thread):
 
     def close(self):
         self.running = 0
-        self.client.close()
-        if self in self.server.sessions:
-            self.server.sessions.remove(self)
+        if self.client:
+            self.client.close()
+        self.client = None
 
 sys.setcheckinterval(0)
 g_mock_server_port = 11311
@@ -144,31 +144,27 @@ class TestProxy(unittest.TestCase):
         self.mock_close()
         self.client_close()
 
-    def client_send(self, src, dst, what):
+    def client_send(self, what):
         w = string.strip(what, '^')
         w = string.replace(w, '$', "\r\n")
-        debug("client sending " + w)
-        self.client.send(w)
+        debug("client sending " + what)
+        self.client.send(what)
 
-    def mock_send(self, src, dst, what):
+    def mock_send(self, what):
         w = string.strip(what, '^')
         w = string.replace(w, '$', "\r\n")
-        debug("mock sending " + w)
+        debug("mock sending " + what)
         self.mock_server().sessions[0].client.send(w)
 
-    def client_recv(self, src, dst, what):
-        debug("client_recv: " + src + " " + dst + " " + what)
+    def client_recv(self, what):
+        debug("client_recv: " + what)
 
         s = self.client.recv(1024)
 
-        w = string.strip(what, '^')
-        w = string.replace(w, '$', "\r\n")
-        debug("recv expecting: " + w)
-        debug("recv got: " + s)
-        self.assertTrue(w == s or re.match(what, s) is not None)
+        self.assertTrue(what == s or re.match(what, s) is not None)
 
-    def mock_recv(self, src, dst, what):
-        debug("mock_recv: " + src + " " + dst + " " + what)
+    def mock_recv(self, what):
+        debug("mock_recv: " + what)
 
         wait_max = 5
 
@@ -185,11 +181,7 @@ class TestProxy(unittest.TestCase):
         if len(self.mock_server().received) > 0:
             s = self.mock_server().received.pop(0)
 
-        w = string.strip(what, '^')
-        w = string.replace(w, '$', "\r\n")
-        debug("recv expecting: " + w)
-        debug("recv got: " + s)
-        self.assertTrue(w == s or re.match(what, s) is not None)
+        self.assertTrue(what == s or re.match(what, s) is not None)
 
     def wait(self, x):
         debug("wait " + str(x))
@@ -211,48 +203,48 @@ class TestProxy(unittest.TestCase):
 
     def testBasicVersion(self):
         """Test version command does not reach mock server"""
-        self.client_send('c', 'P', '^version$')
-        self.client_recv('P', 'c', '^VERSION .*$')
+        self.client_send("version\r\n")
+        self.client_recv("VERSION .*\r\n")
         self.assertTrue(self.mock_quiet())
 
     def testBogusCommand(self):
         """Test bogus commands do not reach mock server"""
-        self.client_send('c', 'P', '^bogus$')
-        self.client_recv('P', 'c', '^.*ERROR.*$')
+        self.client_send('bogus\r\n')
+        self.client_recv('.*ERROR.*\r\n')
         self.assertTrue(self.mock_quiet())
 
     def testSimpleSet(self):
         """Test simple set against mock server"""
-        self.client_send('c', 'P', '^set a 0 0 1$')
-        self.client_send('c', 'P', '^1$')
-        self.mock_recv('d', 'S', "^set a 0 0 1\r\n1$")
-        self.mock_send('S', 'd', '^STORED$')
-        self.client_recv('P', 'c', '^STORED$')
+        self.client_send('set a 0 0 1\r\n')
+        self.client_send('1\r\n')
+        self.mock_recv('set a 0 0 1\r\n1\r\n')
+        self.mock_send('STORED\r\n')
+        self.client_recv('STORED\r\n')
 
     def testFlushAllBroadcast(self):
         """Test flush_all scatter/gather"""
-        self.client_send('c', 'P', '^flush_all$')
-        self.mock_recv('d', 'S', '^flush_all$')
-        self.mock_send('S', 'd', '^OK$')
-        self.client_recv('P', 'c', '^OK$')
+        self.client_send('flush_all\r\n')
+        self.mock_recv('flush_all\r\n')
+        self.mock_send('OK\r\n')
+        self.client_recv('OK\r\n')
 
     def testSplitResponseOverTwoWrites(self):
         """Test split a response over two writes"""
-        self.client_send('c', 'P', '^set a 0 0 1$')
-        self.client_send('c', 'P', '^1$')
-        self.mock_recv('d', 'S', "^set a 0 0 1\r\n1$")
-        self.mock_send('S', 'd', '^STO')
+        self.client_send('set a 0 0 1\r\n')
+        self.client_send('1\r\n')
+        self.mock_recv("set a 0 0 1\r\n1\r\n")
+        self.mock_send('STO')
         self.wait(1)
-        self.mock_send('S', 'd', 'RED$')
-        self.client_recv('P', 'c', '^STORED$')
+        self.mock_send('RED\r\n')
+        self.client_recv('STORED\r\n')
 
     def testResponseChopWithServerClose(self):
         """Test chop the response with a server close"""
-        self.client_send('c', 'P', '^set a 0 0 1$')
-        self.client_send('c', 'P', '^1$')
-        self.mock_recv('d', 'S', "^set a 0 0 1\r\n1$")
+        self.client_send('set chopped 0 0 1\r\n')
+        self.client_send('1\r\n')
+        self.mock_recv("set chopped 0 0 1\r\n1\r\n")
         self.mock_close()
-        self.client_recv('P', 'c', '^SERVER_ERROR .*$')
+        self.client_recv('.*ERROR .*\r\n')
 
 if __name__ == '__main__':
     unittest.main()
