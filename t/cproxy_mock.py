@@ -16,7 +16,7 @@ import unittest
 # S means connection on fake, mock memcached server.
 #
 def debug(x):
-    if False:
+    if True:
         print(x)
 
 class MockServer(threading.Thread):
@@ -92,7 +92,10 @@ class MockSession(threading.Thread):
                 if len(eready) > 0:
                     self.running = 0
                 elif len(iready) > 0:
+                    debug("MockSession recv...")
                     data = self.client.recv(self.recvlen)
+                    debug("MockSession recv done:" + data)
+
                     if data and len(data) > 0:
                         self.latest()
                         self.server.received.append(data)
@@ -215,9 +218,9 @@ class TestProxy(unittest.TestCase):
 
     def testSimpleSet(self):
         """Test simple set against mock server"""
-        self.client_send('set a 0 0 1\r\n')
+        self.client_send('set simpleSet 0 0 1\r\n')
         self.client_send('1\r\n')
-        self.mock_recv('set a 0 0 1\r\n1\r\n')
+        self.mock_recv('set simpleSet 0 0 1\r\n1\r\n')
         self.mock_send('STORED\r\n')
         self.client_recv('STORED\r\n')
 
@@ -228,17 +231,36 @@ class TestProxy(unittest.TestCase):
         self.mock_send('OK\r\n')
         self.client_recv('OK\r\n')
 
-    def testSplitResponseOverTwoWrites(self):
-        """Test split a response over two writes"""
-        self.client_send('set a 0 0 1\r\n')
+    def testSplitResponseOverSeveralWrites(self):
+        """Test split a response over several writes"""
+        self.client_send('set splitResponse 0 0 1\r\n')
         self.client_send('1\r\n')
-        self.mock_recv("set a 0 0 1\r\n1\r\n")
+        self.mock_recv("set splitResponse 0 0 1\r\n1\r\n")
         self.mock_send('STO')
         self.wait(1)
-        self.mock_send('RED\r\n')
+        self.mock_send('RED')
+        self.wait(1)
+        self.mock_send('\r')
+        self.wait(1)
+        self.mock_send('\n')
         self.client_recv('STORED\r\n')
 
-    def testResponseChopWithServerClose(self):
+    def testSplitRequestOverSeveralWrites(self):
+        """Test split a request over several writes"""
+        self.client_send('set splitRequest ')
+        self.wait(1)
+        self.client_send('0 0 5\r')
+        self.wait(1)
+        self.client_send('\n')
+        self.wait(1)
+        self.client_send('hel')
+        self.wait(1)
+        self.client_send('lo\r\n')
+        self.mock_recv("set splitRequest 0 0 5\r\nhello\r\n")
+        self.mock_send('STORED\r\n')
+        self.client_recv('STORED\r\n')
+
+    def testTerminateResponseWithServerClose(self):
         """Test chop the response with a server close"""
         self.client_send('set chopped 0 0 1\r\n')
         self.client_send('1\r\n')
