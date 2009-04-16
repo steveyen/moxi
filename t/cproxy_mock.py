@@ -345,13 +345,24 @@ class TestProxy(unittest.TestCase):
         self.client_recv('.*ERROR .*\r\n')
 
     def testGetValue(self):
-        """Test chop the VALUE response with a server close"""
+        """Test the proxy handles VALUE response"""
         self.client_connect()
         self.client_send('get someVal\r\n')
         self.mock_recv("get someVal\r\n")
         self.mock_send('VALUE someVal 0 10\r\n')
         self.mock_send('0123456789\r\n')
-        self.client_recv('VALUE someVal 0 10\r\n0123456789\r\n')
+        self.mock_send('END\r\n')
+        self.client_recv('VALUE someVal 0 10\r\n0123456789\r\nEND\r\n')
+
+    def testGetEmptyValue(self):
+        """Test the proxy handles empty VALUE response"""
+        self.client_connect()
+        self.client_send('get someVal\r\n')
+        self.mock_recv("get someVal\r\n")
+        self.mock_send('VALUE someVal 0 0\r\n')
+        self.mock_send('\r\n')
+        self.mock_send('END\r\n')
+        self.client_recv('VALUE someVal 0 0\r\n\r\nEND\r\n')
 
     def testTerminateResponseWithServerCloseInValue(self):
         """Test chop the VALUE response with a server close"""
