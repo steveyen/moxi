@@ -440,7 +440,8 @@ bool cproxy_forward_simple_downstream(downstream *d,
                     c->sfd, uc->noreply);
 
         if (update_event(c, EV_WRITE | EV_PERSIST)) {
-            d->downstream_used = 1; // TODO: Need timeout?
+            d->downstream_used_start = 1; // TODO: Need timeout?
+            d->downstream_used       = 1;
 
             if (cproxy_dettach_if_noreply(d, uc))
                 c->write_and_go = conn_pause;
@@ -555,7 +556,8 @@ bool cproxy_forward_multiget_downstream(downstream *d,
         fprintf(stderr, "forward multiget nwrite %d out of %d\n",
                 nwrite, nconns);
 
-    d->downstream_used = nwrite; // TODO: Need timeout?
+    d->downstream_used_start = nwrite; // TODO: Need timeout?
+    d->downstream_used       = nwrite;
 
     if (cproxy_dettach_if_noreply(d, uc) == false)
         d->upstream_suffix = "END\r\n";
@@ -604,7 +606,8 @@ bool cproxy_broadcast_downstream(downstream *d, char *command, conn *uc,
         fprintf(stderr, "forward multiget nwrite %d out of %d\n",
                 nwrite, nconns);
 
-    d->downstream_used = nwrite; // TODO: Need timeout?
+    d->downstream_used_start = nwrite; // TODO: Need timeout?
+    d->downstream_used       = nwrite;
 
     if (cproxy_dettach_if_noreply(d, uc) == false)
         d->upstream_suffix = suffix;
@@ -667,7 +670,8 @@ bool cproxy_forward_item_downstream(downstream *d, short cmd,
                 c->write_and_go = conn_new_cmd;
 
                 if (update_event(c, EV_WRITE | EV_PERSIST)) {
-                    d->downstream_used = 1; // TODO: Need timeout?
+                    d->downstream_used_start = 1; // TODO: Need timeout?
+                    d->downstream_used       = 1;
 
                     if (cproxy_dettach_if_noreply(d, uc))
                         c->write_and_go = conn_pause;

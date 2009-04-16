@@ -104,6 +104,7 @@ struct downstream {
     conn **downstream_conns;  // Wraps the fd's of mst with conns.
     int    downstream_used;   // Number of in-use downstream conns, might
                               // be >1 during scatter-gather commands.
+    int    downstream_used_start;
     conn  *upstream_conn;     // Non-NULL when downstream is reserved.
     char  *upstream_suffix;   // Last bit to write when downstreams are done.
 };

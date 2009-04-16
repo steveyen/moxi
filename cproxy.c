@@ -299,9 +299,34 @@ void cproxy_on_close_downstream_conn(conn *c) {
         }
     }
 
-    if (d->upstream_conn != NULL &&
-        d->upstream_suffix == NULL)
-        d->upstream_suffix = "SERVER_ERROR proxy downstream closed\r\n";
+    proxy_td *ptd = d->ptd;
+    assert(ptd);
+
+    conn *uc_retry = NULL;
+
+    if (d->upstream_conn != NULL) {
+        if (d->upstream_suffix == NULL)
+            d->upstream_suffix = "SERVER_ERROR proxy downstream closed\r\n";
+
+        // If we haven't received any reply yet, we retry.
+        // We sometimes see drive_machine/transmit not see a
+        // closed connection error during conn_mwrite.  Instead,
+        // it moves the state forward trying to read from the
+        // downstream conn (conn_new_cmd, conn_read, etc), and
+        // only then do we see the conn close situation,
+        // ending up here.
+        //
+        // TODO: Need a retry counter on the upstream conn.
+        //
+        if (c->rcurr != NULL &&
+            c->rbytes == 0 &&
+            d->downstream_used_start == d->downstream_used &&
+            d->downstream_used_start == 1) {
+            uc_retry = d->upstream_conn;
+
+            d->upstream_suffix = NULL;
+        }
+    }
 
     // Are we over-decrementing here, and in handling conn_pause?
     //
@@ -319,6 +344,13 @@ void cproxy_on_close_downstream_conn(conn *c) {
     // and same as Case 1.
     //
     cproxy_release_downstream_conn(d, c);
+
+    if (uc_retry != NULL) {
+        if (settings.verbose > 1)
+            fprintf(stderr, "No reply received, retrying\n");
+
+        cproxy_pause_upstream_for_downstream(ptd, uc_retry);
+    }
 }
 
 void cproxy_add_downstream(proxy_td *ptd) {
@@ -328,7 +360,9 @@ void cproxy_add_downstream(proxy_td *ptd) {
     if (ptd != NULL &&
         ptd->downstream_num < ptd->downstream_max) {
         if (settings.verbose > 1)
-            fprintf(stderr, "cproxy_add_downstream\n");
+            fprintf(stderr, "cproxy_add_downstream %d %d\n",
+                    ptd->downstream_num,
+                    ptd->downstream_max);
 
         char *config = NULL;
 
@@ -379,12 +413,19 @@ downstream *cproxy_reserve_downstream(proxy_td *ptd) {
         assert(d->upstream_conn == NULL);
         assert(d->upstream_suffix == NULL);
         assert(d->downstream_used == 0);
+        assert(d->downstream_used_start == 0);
 
         d->upstream_conn = NULL;
         d->upstream_suffix = NULL;
         d->downstream_used = 0;
+        d->downstream_used_start = 0;
 
         if (cproxy_check_downstream_config(d)) {
+            ptd->downstream_reserved =
+                downstream_list_remove(ptd->downstream_reserved, d);
+            ptd->downstream_released =
+                downstream_list_remove(ptd->downstream_released, d);
+
             d->next = ptd->downstream_reserved;
             ptd->downstream_reserved = d;
 
@@ -401,7 +442,6 @@ bool cproxy_release_downstream(downstream *d, bool force) {
 
     assert(d != NULL);
     assert(d->ptd != NULL);
-    assert(d->next == NULL);
 
     if (d->upstream_conn != NULL &&
         d->upstream_suffix != NULL) {
@@ -427,19 +467,20 @@ bool cproxy_release_downstream(downstream *d, bool force) {
     d->upstream_conn = NULL;
     d->upstream_suffix = NULL; // No free(), expecting a static string.
     d->downstream_used = 0;
-
-    // TODO: Consider adding a downstream->prev backpointer
-    //       or doubly-linked list to save on this scan.
-    //
-    // Remove from the reserved downstream list.
-    //
-    d->ptd->downstream_reserved =
-        downstream_list_remove(d->ptd->downstream_reserved, d);
+    d->downstream_used_start = 0;
 
     // If this downstream still has the same configuration as our top-level
     // proxy config, go back onto the available, released downstream list.
     //
     if (cproxy_check_downstream_config(d) || force) {
+        // TODO: Consider adding a downstream->prev backpointer
+        //       or doubly-linked list to save on this scan.
+        //
+        d->ptd->downstream_reserved =
+            downstream_list_remove(d->ptd->downstream_reserved, d);
+        d->ptd->downstream_released =
+            downstream_list_remove(d->ptd->downstream_released, d);
+
         d->next = d->ptd->downstream_released;
         d->ptd->downstream_released = d;
 
@@ -451,17 +492,18 @@ bool cproxy_release_downstream(downstream *d, bool force) {
     return false;
 }
 
-/* This should be called when the downstream is neither on
- * the reserved list or the released list.
- */
 void cproxy_free_downstream(downstream *d) {
     assert(d != NULL);
     assert(d->ptd != NULL);
-    assert(d->next == NULL);
     assert(d->upstream_conn == NULL);
 
     if (settings.verbose > 1)
         fprintf(stderr, "cproxy_free_downstream\n");
+
+    d->ptd->downstream_reserved =
+        downstream_list_remove(d->ptd->downstream_reserved, d);
+    d->ptd->downstream_released =
+        downstream_list_remove(d->ptd->downstream_released, d);
 
     d->ptd->downstream_num--;
     assert(d->ptd->downstream_num >= 0);
@@ -567,7 +609,6 @@ int cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread) {
     assert(d != NULL);
     assert(d->ptd != NULL);
     assert(d->ptd->downstream_released != d); // Should not be in free list.
-    assert(d->next == NULL);
     assert(d->downstream_conns != NULL);
     assert(memcached_server_count(&d->mst) > 0);
     assert(thread != NULL);
@@ -693,9 +734,9 @@ void cproxy_assign_downstream(proxy_td *ptd) {
         if (d == NULL)
             break; // If no downstreams are available, stop loop.
 
-        assert(d->next == NULL);
         assert(d->upstream_conn == NULL);
         assert(d->downstream_used == 0);
+        assert(d->downstream_used_start == 0);
 
         // We have a downstream reserved, so assign the first
         // waiting upstream conn to it.
@@ -816,8 +857,8 @@ void cproxy_release_downstream_conn(downstream *d, conn *c) {
 
     if (settings.verbose > 1)
         fprintf(stderr,
-                "%d release_downstream_conn, downstream_used %d\n",
-                c->sfd, d->downstream_used);
+                "%d release_downstream_conn, downstream_used %d %d\n",
+                c->sfd, d->downstream_used, d->downstream_used_start);
 
     d->downstream_used--;
     if (d->downstream_used <= 0) {
