@@ -16,7 +16,7 @@ import unittest
 # S means connection on fake, mock memcached server.
 #
 def debug(x):
-    if True:
+    if False:
         print(x)
 
 class MockServer(threading.Thread):
@@ -133,25 +133,31 @@ class TestProxy(unittest.TestCase):
     def __init__(self, x):
         unittest.TestCase.__init__(self, x)
         self.proxy_port = 11333
-        self.client = None
+        self.clients = {}
 
     def mock_server(self):
         global g_mock_server
         return g_mock_server
 
     def setUp(self):
-        self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.client.connect(("127.0.0.1", self.proxy_port))
+        """setUp"""
 
     def tearDown(self):
         self.mock_close()
-        self.client_close()
+        for k in self.clients:
+            self.client_close(k)
+        self.clients = []
 
-    def client_send(self, what):
+    def client_connect(self, idx=0):
+        c = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        c.connect(("127.0.0.1", self.proxy_port))
+        self.clients[idx] = c
+
+    def client_send(self, what, idx=0):
         w = string.strip(what, '^')
         w = string.replace(w, '$', "\r\n")
         debug("client sending " + what)
-        self.client.send(what)
+        self.clients[idx].send(what)
 
     def mock_send(self, what):
         w = string.strip(what, '^')
@@ -159,10 +165,10 @@ class TestProxy(unittest.TestCase):
         debug("mock sending " + what)
         self.mock_server().sessions[0].client.send(w)
 
-    def client_recv(self, what):
+    def client_recv(self, what, idx=0):
         debug("client_recv: " + what)
 
-        s = self.client.recv(1024)
+        s = self.clients[idx].recv(1024)
 
         debug("client_recv expect: " + what);
         debug("client_recv actual: " + s);
@@ -196,10 +202,10 @@ class TestProxy(unittest.TestCase):
         debug("wait " + str(x))
         time.sleep(x)
 
-    def client_close(self):
-        if self.client:
-            self.client.close()
-        self.client = None
+    def client_close(self, idx=0):
+        if self.clients[idx]:
+            self.clients[idx].close()
+        self.clients[idx] = None
 
     def mock_close(self):
         if self.mock_server():
@@ -212,18 +218,21 @@ class TestProxy(unittest.TestCase):
 
     def testBasicVersion(self):
         """Test version command does not reach mock server"""
+        self.client_connect()
         self.client_send("version\r\n")
         self.client_recv("VERSION .*\r\n")
         self.assertTrue(self.mock_quiet())
 
     def testBogusCommand(self):
         """Test bogus commands do not reach mock server"""
+        self.client_connect()
         self.client_send('bogus\r\n')
         self.client_recv('.*ERROR.*\r\n')
         self.assertTrue(self.mock_quiet())
 
     def testSimpleSet(self):
         """Test simple set against mock server"""
+        self.client_connect()
         self.client_send('set simpleSet 0 0 1\r\n')
         self.client_send('1\r\n')
         self.mock_recv('set simpleSet 0 0 1\r\n1\r\n')
@@ -232,6 +241,7 @@ class TestProxy(unittest.TestCase):
 
     def testFlushAllBroadcast(self):
         """Test flush_all scatter/gather"""
+        self.client_connect()
         self.client_send('flush_all\r\n')
         self.mock_recv('flush_all\r\n')
         self.mock_send('OK\r\n')
@@ -239,6 +249,7 @@ class TestProxy(unittest.TestCase):
 
     def testSplitResponseOverSeveralWrites(self):
         """Test split a response over several writes"""
+        self.client_connect()
         self.client_send('set splitResponse 0 0 1\r\n')
         self.client_send('1\r\n')
         self.mock_recv("set splitResponse 0 0 1\r\n1\r\n")
@@ -253,6 +264,7 @@ class TestProxy(unittest.TestCase):
 
     def testSplitRequestOverSeveralWrites(self):
         """Test split a request over several writes"""
+        self.client_connect()
         self.client_send('set splitRequest ')
         self.wait(1)
         self.client_send('0 0 5\r')
@@ -268,11 +280,25 @@ class TestProxy(unittest.TestCase):
 
     def testTerminateResponseWithServerClose(self):
         """Test chop the response with a server close"""
+        self.client_connect()
         self.client_send('set chopped 0 0 1\r\n')
         self.client_send('1\r\n')
         self.mock_recv("set chopped 0 0 1\r\n1\r\n")
         self.mock_close()
         self.client_recv('.*ERROR .*\r\n')
+
+# Test chopped up responses from server.
+# Test chopped up responses from client.
+# Test servers going down during multiget write.
+# Test chopped up server responses during multiget.
+# Test if one server goes down during a broadcast/scatter-gather.
+# Test server going down.
+# Test server coming back up.
+# Test server getting very slow.
+# Test several backend servers, and one or more start flapping.
+## test get and multi-get
+## test simple update commands
+## test broadcast commands like flush_all
 
 if __name__ == '__main__':
     unittest.main()
