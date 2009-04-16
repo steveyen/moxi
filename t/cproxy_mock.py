@@ -164,6 +164,9 @@ class TestProxy(unittest.TestCase):
 
         s = self.client.recv(1024)
 
+        debug("client_recv expect: " + what);
+        debug("client_recv actual: " + s);
+
         self.assertTrue(what == s or re.match(what, s) is not None)
 
     def mock_recv(self, what):
@@ -183,6 +186,9 @@ class TestProxy(unittest.TestCase):
 
         if len(self.mock_server().received) > 0:
             s = self.mock_server().received.pop(0)
+
+        debug("mock_recv expect: " + what);
+        debug("mock_recv actual: " + s);
 
         self.assertTrue(what == s or re.match(what, s) is not None)
 
