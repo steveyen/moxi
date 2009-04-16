@@ -90,6 +90,7 @@ class MockSession(threading.Thread):
 
                 iready, oready, eready = select.select(input, [], [], 1)
                 if len(eready) > 0:
+                    debug("MockSession select eready...")
                     self.running = 0
                 elif len(iready) > 0:
                     debug("MockSession recv...")
@@ -100,6 +101,7 @@ class MockSession(threading.Thread):
                         self.latest()
                         self.server.received.append(data)
                     else:
+                        debug("MockSession recv no data")
                         self.close()
 
         except KeyboardInterrupt:
@@ -110,6 +112,7 @@ class MockSession(threading.Thread):
         if self.running >= self.running_max:
             print "MockSession running too long, shutting down"
 
+        debug("MockSession closing")
         self.close()
 
     def latest(self):
@@ -118,6 +121,7 @@ class MockSession(threading.Thread):
         self.server.sessions.insert(0, self)
 
     def close(self):
+        debug("MockSession close")
         self.running = 0
         if self.client:
             self.client.close()
@@ -182,12 +186,12 @@ class TestProxy(unittest.TestCase):
 
         s = ""
         i = 1
-        while len(self.mock_server().sessions) <= 0 and i < wait_max:
+        while len(self.mock_server().received) <= 0 and i < wait_max:
             debug("sleeping waiting for mock_recv " + str(i))
             time.sleep(i)
             i = i + 1
 
-        if len(self.mock_server().sessions) <= 0 and i >= wait_max:
+        if len(self.mock_server().received) <= 0 and i >= wait_max:
             debug("waiting too long for mock_recv " + str(i))
 
         if len(self.mock_server().received) > 0:
@@ -200,7 +204,7 @@ class TestProxy(unittest.TestCase):
 
     def wait(self, x):
         debug("wait " + str(x))
-        time.sleep(x)
+        time.sleep(0.01 * x)
 
     def client_close(self, idx=0):
         if self.clients[idx]:
@@ -221,6 +225,39 @@ class TestProxy(unittest.TestCase):
         self.client_connect()
         self.client_send("version\r\n")
         self.client_recv("VERSION .*\r\n")
+        self.assertTrue(self.mock_quiet())
+        self.client_connect()
+        self.client_send("version\r\n")
+        self.client_recv("VERSION .*\r\n")
+        self.assertTrue(self.mock_quiet())
+
+    def testBasicGet(self):
+        """Test quit command does reach mock server"""
+        self.client_connect()
+        self.client_send("get keyNotThere\r\n")
+        self.mock_recv('get keyNotThere\r\n')
+        self.mock_send('END\r\n')
+        self.client_recv("END\r\n")
+
+        self.client_send("get keyNotThere\r\n")
+        self.mock_recv('get keyNotThere\r\n')
+        self.mock_send('END\r\n')
+        self.client_recv("END\r\n")
+
+        self.client_send("get keyNotThere\r\n")
+        self.mock_recv('get keyNotThere\r\n')
+        self.mock_send('END\r\n')
+        self.client_recv("END\r\n")
+
+    def testBasicQuit(self):
+        """Test quit command does not reach mock server"""
+        self.client_connect()
+        self.client_send("get keyNotThere\r\n")
+        self.mock_recv('get keyNotThere\r\n')
+        self.mock_send('END\r\n')
+        self.client_recv("END\r\n")
+
+        self.client_send("quit\r\n")
         self.assertTrue(self.mock_quiet())
 
     def testBogusCommand(self):
