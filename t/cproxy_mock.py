@@ -347,12 +347,26 @@ class TestProxy(unittest.TestCase):
     def testGetValue(self):
         """Test the proxy handles VALUE response"""
         self.client_connect()
-        self.client_send('get someVal\r\n')
-        self.mock_recv("get someVal\r\n")
-        self.mock_send('VALUE someVal 0 10\r\n')
+        self.client_send('get someVal0 someVal1\r\n')
+        self.mock_recv("get someVal0 someVal1\r\n")
+        self.mock_send('END\r\n')
+        self.client_recv('END\r\n')
+
+        self.client_send('get someVal0 someVal1\r\n')
+        self.mock_recv("get someVal0 someVal1\r\n")
+        self.mock_send('VALUE someVal0 0 10\r\n')
         self.mock_send('0123456789\r\n')
         self.mock_send('END\r\n')
-        self.client_recv('VALUE someVal 0 10\r\n0123456789\r\nEND\r\n')
+        self.client_recv('VALUE someVal0 0 10\r\n0123456789\r\nEND\r\n')
+
+        self.client_send('get someVal0 someVal1\r\n')
+        self.mock_recv("get someVal0 someVal1\r\n")
+        self.mock_send('VALUE someVal0 0 10\r\n')
+        self.mock_send('0123456789\r\n')
+        self.mock_send('VALUE someVal1 0 10\r\n')
+        self.mock_send('0123456789\r\n')
+        self.mock_send('END\r\n')
+        self.client_recv('VALUE someVal0 0 10\r\n0123456789\r\nVALUE someVal1 0 10\r\n0123456789\r\nEND\r\n')
 
     def testGetEmptyValue(self):
         """Test the proxy handles empty VALUE response"""
@@ -373,6 +387,18 @@ class TestProxy(unittest.TestCase):
         self.mock_send('012345')
         self.mock_close()
         self.client_recv('END\r\n')
+
+    def testTerminateResponseWithServerCloseIn2ndValue(self):
+        """Test chop the 2nd VALUE response with a server close"""
+        self.client_connect()
+        self.client_send('get someWholeVal someChoppedVal\r\n')
+        self.mock_recv("get someWholeVal someChoppedVal\r\n")
+        self.mock_send('VALUE someWhole 0 10\r\n')
+        self.mock_send('0123456789\r\n')
+        self.mock_send('VALUE someChoppedVal 0 10\r\n')
+        self.mock_send('012345')
+        self.mock_close()
+        self.client_recv('VALUE someWhole 0 10\r\n0123456789\r\nEND\r\n')
 
 # Test chopped up responses from multiple mock servers.
 # Test chopped up requests from multiple clients.
