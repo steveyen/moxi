@@ -28,7 +28,6 @@ class MockServer(threading.Thread):
         self.server   = None
         self.running  = False
         self.sessions = []
-        self.received = []
 
     def closeSessions(self):
         for s in self.sessions:
@@ -77,6 +76,7 @@ class MockSession(threading.Thread):
         self.recvlen = 1000
         self.running     = 0
         self.running_max = 10
+        self.received = []
 
     def run(self):
         input = [self.client]
@@ -99,7 +99,7 @@ class MockSession(threading.Thread):
 
                     if data and len(data) > 0:
                         self.latest()
-                        self.server.received.append(data)
+                        self.received.append(data)
                     else:
                         debug("MockSession recv no data")
                         self.close()
@@ -158,49 +158,63 @@ class TestProxy(unittest.TestCase):
         self.clients[idx] = c
 
     def client_send(self, what, idx=0):
-        w = string.strip(what, '^')
-        w = string.replace(w, '$', "\r\n")
         debug("client sending " + what)
         self.clients[idx].send(what)
 
-    def mock_send(self, what):
-        w = string.strip(what, '^')
-        w = string.replace(w, '$', "\r\n")
+    def mock_send(self, what, session=None):
         debug("mock sending " + what)
-        self.mock_server().sessions[0].client.send(w)
+
+        if session is None:
+            session = self.mock_server().sessions[0]
+
+        self.assertTrue(session.client is not None)
+
+        session.client.send(what)
 
     def client_recv(self, what, idx=0):
-        debug("client_recv: " + what)
+        debug("client_recv expect: " + what)
 
         s = self.clients[idx].recv(1024)
 
-        debug("client_recv expect: " + what);
         debug("client_recv actual: " + s);
 
         self.assertTrue(what == s or re.match(what, s) is not None)
 
-    def mock_recv(self, what):
-        debug("mock_recv: " + what)
+    def mock_recv(self, what, session=None):
+        debug("mock_recv expect: " + what)
 
         wait_max = 5
+        message = ""
 
-        s = ""
+        if session is None:
+            i = 1
+            while len(self.mock_server().sessions) <= 0 and i < wait_max:
+                time.sleep(i)
+                i = i * 2
+
+            if len(self.mock_server().sessions) <= 0 and i >= wait_max:
+                debug("waiting too long for mock_recv session " + str(i))
+
+            session = self.mock_server().sessions[0]
+
         i = 1
-        while len(self.mock_server().received) <= 0 and i < wait_max:
+        while len(session.received) <= 0 and i < wait_max:
             debug("sleeping waiting for mock_recv " + str(i))
             time.sleep(i)
-            i = i + 1
+            i = i * 2
 
-        if len(self.mock_server().received) <= 0 and i >= wait_max:
+        if len(session.received) <= 0 and i >= wait_max:
             debug("waiting too long for mock_recv " + str(i))
 
-        if len(self.mock_server().received) > 0:
-            s = self.mock_server().received.pop(0)
+        if len(session.received) > 0:
+            message = session.received.pop(0)
 
         debug("mock_recv expect: " + what);
-        debug("mock_recv actual: " + s);
+        debug("mock_recv actual: " + message);
 
-        self.assertTrue(what == s or re.match(what, s) is not None)
+        self.assertTrue(what == message or re.match(what, message) is not None)
+
+        return session
 
     def wait(self, x):
         debug("wait " + str(x))
@@ -215,8 +229,14 @@ class TestProxy(unittest.TestCase):
         if self.mock_server():
             self.mock_server().closeSessions()
 
-    def mock_quiet(self):
-        return len(self.mock_server().received) <= 0
+    def mock_quiet(self, session=None):
+        if len(self.mock_server().sessions) <= 0:
+            return True
+
+        if session is None:
+            session = self.mock_server().sessions[0]
+
+        return len(session.received) <= 0
 
     # -------------------------------------------------
 
@@ -231,7 +251,7 @@ class TestProxy(unittest.TestCase):
         self.client_recv("VERSION .*\r\n")
         self.assertTrue(self.mock_quiet())
 
-    def testBasicGet(self):
+    def testBasicSerialGet(self):
         """Test quit command does reach mock server"""
         self.client_connect()
         self.client_send("get keyNotThere\r\n")
