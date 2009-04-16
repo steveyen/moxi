@@ -413,8 +413,10 @@ struct conn {
     LIBEVENT_THREAD *thread; /* Pointer to the thread object serving this connection */
 
     conn_funcs *funcs;
-    char *cmd_ascii; // Pointer into rbuf, snapshot of rcurr.
     void *extra;
+
+    char *cmd_ascii; // Pointer into rbuf, snapshot of rcurr.
+    int   cmd_retries;
 };
 
 extern conn *listen_conn;

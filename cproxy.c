@@ -325,14 +325,13 @@ void cproxy_on_close_downstream_conn(conn *c) {
         // ending up here.  That is, drive_machine only
         // seems to move to conn_closing from conn_read.
         //
-        // TODO: Need a retry counter on the upstream conn?
-        //
         if (c->rcurr != NULL &&
             c->rbytes == 0 &&
             d->downstream_used_start == d->downstream_used &&
-            d->downstream_used_start == 1) {
+            d->downstream_used_start == 1 &&
+            d->upstream_conn->cmd_retries < 1) {
+            d->upstream_conn->cmd_retries++;
             uc_retry = d->upstream_conn;
-
             d->upstream_suffix = NULL;
         }
     }
