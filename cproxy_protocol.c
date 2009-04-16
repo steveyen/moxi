@@ -120,6 +120,7 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
  */
 void cproxy_process_upstream_ascii_nread(conn *c) {
     assert(c != NULL);
+    assert(c->next == NULL);
 
     item *it = c->item;
 
@@ -158,7 +159,6 @@ void cproxy_process_downstream_ascii(conn *c, char *line) {
 
     assert(d != NULL);
     assert(d->ptd != NULL);
-    assert(d->next == NULL);
 
     if (strncmp(line, "VALUE ", 6) == 0) {
         token_t      tokens[MAX_TOKENS];
