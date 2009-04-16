@@ -16,7 +16,7 @@ import unittest
 # S means connection on fake, mock memcached server.
 #
 def debug(x):
-    if False:
+    if True:
         print(x)
 
 class MockServer(threading.Thread):
@@ -324,8 +324,27 @@ class TestProxy(unittest.TestCase):
         self.mock_close()
         self.client_recv('.*ERROR .*\r\n')
 
-# Test chopped up responses from server.
-# Test chopped up responses from client.
+    def testGetValue(self):
+        """Test chop the VALUE response with a server close"""
+        self.client_connect()
+        self.client_send('get someVal\r\n')
+        self.mock_recv("get someVal\r\n")
+        self.mock_send('VALUE someVal 0 10\r\n')
+        self.mock_send('0123456789\r\n')
+        self.client_recv('VALUE someVal 0 10\r\n0123456789\r\n')
+
+    def testTerminateResponseWithServerCloseInValue(self):
+        """Test chop the VALUE response with a server close"""
+        self.client_connect()
+        self.client_send('get someChoppedVal\r\n')
+        self.mock_recv("get someChoppedVal\r\n")
+        self.mock_send('VALUE someChoppedVal 0 10\r\n')
+        self.mock_send('012345')
+        self.mock_close()
+        self.client_recv('END\r\n')
+
+# Test chopped up responses from multiple mock servers.
+# Test chopped up requests from multiple clients.
 # Test servers going down during multiget write.
 # Test chopped up server responses during multiget.
 # Test if one server goes down during a broadcast/scatter-gather.
