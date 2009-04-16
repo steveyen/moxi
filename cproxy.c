@@ -800,8 +800,8 @@ void cproxy_assign_downstream(proxy_td *ptd) {
                 // Send an END on get/gets instead of generic SERVER_ERROR.
                 //
                 if (uc->cmd == -1 &&
-                    uc->rcurr != NULL &&
-                    strncmp(uc->rcurr, "get", 3) == 0)
+                    uc->cmd_ascii != NULL &&
+                    strncmp(uc->cmd_ascii, "get", 3) == 0)
                     out_string(uc, "END");
                 else
                     out_string(uc, "SERVER_ERROR proxy write to downstream");

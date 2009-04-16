@@ -32,6 +32,10 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
         fprintf(stderr, "<%d cproxy_process_upstream_ascii %s\n",
                 c->sfd, line);
 
+    // Snapshot rcurr, because the caller, try_read_command(), changes it.
+    //
+    c->cmd_ascii = c->rcurr;
+
     /* For commands set/add/replace, we build an item and read the data
      * directly into it, then continue in nread_complete().
      */
@@ -371,7 +375,7 @@ bool cproxy_forward_downstream(downstream *d) {
 
     assert(uc != NULL);
     assert(uc->state == conn_pause);
-    assert(uc->rcurr != NULL);
+    assert(uc->cmd_ascii != NULL);
     assert(uc->thread != NULL);
     assert(uc->thread->base != NULL);
     assert(IS_ASCII(uc->protocol));
@@ -381,7 +385,7 @@ bool cproxy_forward_downstream(downstream *d) {
         assert(d->downstream_conns != NULL);
 
         if (uc->cmd == -1) {
-            return cproxy_forward_simple_downstream(d, uc->rcurr, uc);
+            return cproxy_forward_simple_downstream(d, uc->cmd_ascii, uc);
         } else {
             return cproxy_forward_item_downstream(d, uc->cmd, uc->item, uc);
         }
