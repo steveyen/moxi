@@ -23,6 +23,7 @@ void             memcached_quit_server(memcached_server_st *ptr,
 // Internal forward declarations.
 //
 downstream *downstream_list_remove(downstream *head, downstream *d);
+void        upstream_retry(void *data0, void *data1);
 
 // Function tables.
 //
@@ -293,6 +294,12 @@ void cproxy_on_close_downstream_conn(conn *c) {
     for (int i = 0; i < n; i++) {
         if (d->downstream_conns[i] == c) {
             d->downstream_conns[i] = NULL;
+
+            if (settings.verbose > 1)
+                fprintf(stderr,
+                        "<%d cproxy_on_close_downstream_conn quit_server\n",
+                        c->sfd);
+
             assert(d->mst.hosts[i].fd == c->sfd);
             memcached_quit_server(&d->mst.hosts[i], 1);
             assert(d->mst.hosts[i].fd == -1);
@@ -347,12 +354,31 @@ void cproxy_on_close_downstream_conn(conn *c) {
     //
     cproxy_release_downstream_conn(d, c);
 
+    // We have to retry after unwinding the call stack.
+    // So, use the work_queue, because our caller, conn_close(),
+    // is likely to blow away our fd if we try to reconnect
+    // right now.
+    //
     if (uc_retry != NULL) {
         if (settings.verbose > 1)
             fprintf(stderr, "No reply received, retrying\n");
 
-        cproxy_pause_upstream_for_downstream(ptd, uc_retry);
+        assert(uc_retry->thread);
+        assert(uc_retry->thread->work_queue);
+
+        work_send(uc_retry->thread->work_queue,
+                  upstream_retry, ptd, uc_retry);
     }
+}
+
+void upstream_retry(void *data0, void *data1) {
+    proxy_td *ptd = data0;
+    assert(ptd);
+
+    conn *uc = data1;
+    assert(uc);
+
+    cproxy_pause_upstream_for_downstream(ptd, uc);
 }
 
 void cproxy_add_downstream(proxy_td *ptd) {
