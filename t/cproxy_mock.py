@@ -110,7 +110,7 @@ class MockSession(threading.Thread):
             1
 
         if self.running >= self.running_max:
-            print "MockSession running too long, shutting down"
+            debug("MockSession running too long, shutting down")
 
         debug("MockSession closing")
         self.close()
@@ -393,34 +393,34 @@ class TestProxy(unittest.TestCase):
         self.client_connect()
         self.client_send('get someWholeVal someChoppedVal\r\n')
         self.mock_recv("get someWholeVal someChoppedVal\r\n")
-        self.mock_send('VALUE someWhole 0 10\r\n')
+        self.mock_send('VALUE someWholeVal 0 10\r\n')
         self.mock_send('0123456789\r\n')
         self.mock_send('VALUE someChoppedVal 0')
         self.mock_close()
-        self.client_recv('VALUE someWhole 0 10\r\n0123456789\r\nEND\r\n')
+        self.client_recv('VALUE someWholeVal 0 10\r\n0123456789\r\nEND\r\n')
 
     def testTerminateResponseWithServerCloseIn2ndValueData(self):
         """Test chop the 2nd VALUE data response with a server close"""
         self.client_connect()
         self.client_send('get someWholeVal someChoppedVal\r\n')
         self.mock_recv("get someWholeVal someChoppedVal\r\n")
-        self.mock_send('VALUE someWhole 0 10\r\n')
+        self.mock_send('VALUE someWholeVal 0 10\r\n')
         self.mock_send('0123456789\r\n')
         self.mock_send('VALUE someChoppedVal 0 10\r\n')
         self.mock_send('012345')
         self.mock_close()
-        self.client_recv('VALUE someWhole 0 10\r\n0123456789\r\nEND\r\n')
+        self.client_recv('VALUE someWholeVal 0 10\r\n0123456789\r\nEND\r\n')
 
     def testTerminateResponseWithServerCloseAfterValueHeader(self):
         """Test chop response after VALUE header"""
         self.client_connect()
         self.client_send('get someWholeVal someChoppedVal\r\n')
         self.mock_recv("get someWholeVal someChoppedVal\r\n")
-        self.mock_send('VALUE someWhole 0 10\r\n')
+        self.mock_send('VALUE someWholeVal 0 10\r\n')
         self.mock_send('0123456789\r\n')
         self.mock_send('VALUE someChoppedVal 0 10\r\n')
         self.mock_close()
-        self.client_recv('VALUE someWhole 0 10\r\n0123456789\r\nEND\r\n')
+        self.client_recv('VALUE someWholeVal 0 10\r\n0123456789\r\nEND\r\n')
 
 # Test chopped up responses from multiple mock servers.
 # Test chopped up requests from multiple clients.
