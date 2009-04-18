@@ -474,6 +474,8 @@ bool cproxy_release_downstream(downstream *d, bool force) {
 
     if (d->upstream_conn != NULL &&
         d->upstream_suffix != NULL) {
+        assert(d->upstream_conn->next == NULL);
+
         // Do a last write on the upstream_conn.  For example,
         // the upstream_suffix might be "END\r\n" or other
         // way to mark the end of a scatter-gather or
@@ -786,6 +788,8 @@ void cproxy_assign_downstream(proxy_td *ptd) {
             //
             conn *uc = d->upstream_conn;
             if (uc != NULL) {
+                assert(uc->next == NULL);
+
                 if (settings.verbose > 1)
                     fprintf(stderr,
                             "%d could not forward upstream to downstream\n",

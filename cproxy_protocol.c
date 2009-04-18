@@ -229,6 +229,8 @@ void cproxy_process_downstream_ascii(conn *c, char *line) {
                strncmp(line, "PREFIX ", 7) == 0) {
         conn *uc = d->upstream_conn;
         if (uc != NULL) {
+            assert(uc->next == NULL);
+
             // TODO: This only works for simple, single-target proxies.
             //
             int nline = strlen(line);
@@ -258,6 +260,8 @@ void cproxy_process_downstream_ascii(conn *c, char *line) {
         //
         conn *uc = d->upstream_conn;
         if (uc != NULL) {
+            assert(uc->next == NULL);
+
             out_string(uc, line);
 
             if (!update_event(uc, EV_WRITE | EV_PERSIST)) {
@@ -302,6 +306,7 @@ void cproxy_process_downstream_ascii_nread(conn *c) {
     conn *uc = d->upstream_conn;
     if (uc != NULL) {
         assert(uc->funcs != NULL);
+        assert(uc->next == NULL);
         assert(IS_ASCII(uc->protocol));
         assert(IS_PROXY(uc->protocol));
 
@@ -376,6 +381,7 @@ bool cproxy_forward_downstream(downstream *d) {
 
     assert(uc != NULL);
     assert(uc->state == conn_pause);
+    assert(uc->next == NULL);
     assert(uc->cmd_ascii != NULL);
     assert(uc->thread != NULL);
     assert(uc->thread->base != NULL);
