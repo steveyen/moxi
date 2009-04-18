@@ -318,10 +318,12 @@ void cproxy_on_close_downstream_conn(conn *c) {
         // If we haven't received any reply yet, we retry.
         //
         // We sometimes see drive_machine/transmit not see a
-        // closed connection error during conn_mwrite.  Instead,
-        // it moves the state forward trying to read from the
-        // downstream conn (conn_new_cmd, conn_read, etc), and
-        // only then do we see the conn close situation,
+        // closed connection error during conn_mwrite, possibly
+        // due to non-blocking sockets.  Because of this, drive_machine
+        // thinks it has a successful downstream request send and
+        // moves the state forward trying to read a response from
+        // the downstream conn (conn_new_cmd, conn_read, etc), and
+        // only then do we finally see the conn close situation,
         // ending up here.  That is, drive_machine only
         // seems to move to conn_closing from conn_read.
         //
@@ -360,7 +362,7 @@ void cproxy_on_close_downstream_conn(conn *c) {
     //
     if (uc_retry != NULL) {
         if (settings.verbose > 1)
-            fprintf(stderr, "No reply received, retrying\n");
+            fprintf(stderr, "%d cproxy retrying\n", uc_retry->sfd);
 
         assert(uc_retry->thread);
         assert(uc_retry->thread->work_queue);
