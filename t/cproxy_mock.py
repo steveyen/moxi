@@ -447,6 +447,49 @@ class TestProxy(unittest.TestCase):
         self.mock_send('END\r\n')
         self.client_recv('VALUE someUp 0 10\r\n0123456789\r\nEND\r\n')
 
+    def testTwoSerialClients(self):
+        """Test two serial clients"""
+        self.client_connect(0)
+        self.client_send('get client0\r\n', 0)
+        self.mock_recv("get client0\r\n", 0)
+        self.mock_send('VALUE client0 0 10\r\n', 0)
+        self.mock_send('0123456789\r\n', 0)
+        self.mock_send('END\r\n', 0)
+        self.client_recv('VALUE client0 0 10\r\n0123456789\r\nEND\r\n', 0)
+
+        # Note that mock server sees 1 session that's reused
+        # even though two clients are connected.
+
+        self.client_connect(1)
+        self.client_send('get client1\r\n', 1)
+        self.mock_recv("get client1\r\n", 0)
+        self.mock_send('VALUE client1 0 10\r\n', 0)
+        self.mock_send('0123456789\r\n', 0)
+        self.mock_send('END\r\n', 0)
+        self.client_recv('VALUE client1 0 10\r\n0123456789\r\nEND\r\n', 1)
+
+    def testTwoSerialClientsConnectingUpfront(self):
+        """Test two serial clients that both connect upfront"""
+        self.client_connect(0)
+        self.client_connect(1)
+
+        self.client_send('get client0\r\n', 0)
+        self.mock_recv("get client0\r\n", 0)
+        self.mock_send('VALUE client0 0 10\r\n', 0)
+        self.mock_send('0123456789\r\n', 0)
+        self.mock_send('END\r\n', 0)
+        self.client_recv('VALUE client0 0 10\r\n0123456789\r\nEND\r\n', 0)
+
+        # Note that mock server sees 1 session that's reused
+        # even though two clients are connected.
+
+        self.client_send('get client1\r\n', 1)
+        self.mock_recv("get client1\r\n", 0)
+        self.mock_send('VALUE client1 0 10\r\n', 0)
+        self.mock_send('0123456789\r\n', 0)
+        self.mock_send('END\r\n', 0)
+        self.client_recv('VALUE client1 0 10\r\n0123456789\r\nEND\r\n', 1)
+
 # Test chopped up responses from multiple mock servers.
 # Test chopped up requests from multiple clients.
 # Test servers going down during multiget write.
