@@ -8,7 +8,7 @@ import time
 import re
 
 def debug(x):
-    if False:
+    if True:
         print(x)
 
 class MockServer(threading.Thread):
@@ -19,12 +19,12 @@ class MockServer(threading.Thread):
         self.backlog  = 5
         self.server   = None
         self.running  = False
-        self.sessions = []
+        self.sessions = {}
 
     def closeSessions(self):
-        for s in self.sessions:
-            s.close()
-        self.sessions = []
+        for k in self.sessions:
+            self.sessions[k].close()
+        self.sessions = {}
 
     def close(self):
         self.running = False
@@ -46,7 +46,7 @@ class MockServer(threading.Thread):
                 client, address = self.server.accept()
                 c = MockSession(client, address, self)
                 debug("MockServer accepted " + str(self.port))
-                self.sessions.insert(0, c)
+                self.sessions[len(self.sessions)] = c
                 c.start()
 
         except KeyboardInterrupt:
@@ -90,7 +90,6 @@ class MockSession(threading.Thread):
                     debug("MockSession recv done:" + data)
 
                     if data and len(data) > 0:
-                        self.latest()
                         self.received.append(data)
                     else:
                         debug("MockSession recv no data")
@@ -106,11 +105,6 @@ class MockSession(threading.Thread):
 
         debug("MockSession closing")
         self.close()
-
-    def latest(self):
-        if self in self.server.sessions:
-            self.server.sessions.remove(self)
-        self.server.sessions.insert(0, self)
 
     def close(self):
         debug("MockSession close")
@@ -148,16 +142,16 @@ class TestProxy(unittest.TestCase):
         c = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         c.connect(("127.0.0.1", self.proxy_port))
         self.clients[idx] = c
+        return c
 
     def client_send(self, what, idx=0):
         debug("client sending " + what)
         self.clients[idx].send(what)
 
-    def mock_send(self, what, session=None):
+    def mock_send(self, what, session_idx=0):
         debug("mock sending " + what)
 
-        if session is None:
-            session = self.mock_server().sessions[0]
+        session = self.mock_server().sessions[session_idx]
 
         self.assertTrue(session.client is not None)
 
@@ -172,23 +166,25 @@ class TestProxy(unittest.TestCase):
 
         self.assertTrue(what == s or re.match(what, s) is not None)
 
-    def mock_recv(self, what, session=None):
+    def mock_session(self, session_idx=0):
+        wait_max = 5
+
+        i = 1
+        while len(self.mock_server().sessions) <= session_idx and i < wait_max:
+            time.sleep(i)
+            i = i * 2
+
+        if len(self.mock_server().sessions) <= session_idx and i >= wait_max:
+            debug("waiting too long for mock_session " + str(i))
+
+        return self.mock_server().sessions[session_idx]
+
+    def mock_recv(self, what, session_idx=0):
         debug("mock_recv expect: " + what)
 
+        session = self.mock_session(session_idx)
+
         wait_max = 5
-        message = ""
-
-        if session is None:
-            i = 1
-            while len(self.mock_server().sessions) <= 0 and i < wait_max:
-                time.sleep(i)
-                i = i * 2
-
-            if len(self.mock_server().sessions) <= 0 and i >= wait_max:
-                debug("waiting too long for mock_recv session " + str(i))
-
-            session = self.mock_server().sessions[0]
-
         i = 1
         while len(session.received) <= 0 and i < wait_max:
             debug("sleeping waiting for mock_recv " + str(i))
@@ -198,15 +194,14 @@ class TestProxy(unittest.TestCase):
         if len(session.received) <= 0 and i >= wait_max:
             debug("waiting too long for mock_recv " + str(i))
 
+        message = ""
+
         if len(session.received) > 0:
             message = session.received.pop(0)
 
-        debug("mock_recv expect: " + what);
         debug("mock_recv actual: " + message);
 
         self.assertTrue(what == message or re.match(what, message) is not None)
-
-        return session
 
     def wait(self, x):
         debug("wait " + str(x))
@@ -221,12 +216,11 @@ class TestProxy(unittest.TestCase):
         if self.mock_server():
             self.mock_server().closeSessions()
 
-    def mock_quiet(self, session=None):
-        if len(self.mock_server().sessions) <= 0:
+    def mock_quiet(self, session_idx=0):
+        if len(self.mock_server().sessions) <= session_idx:
             return True
 
-        if session is None:
-            session = self.mock_server().sessions[0]
+        session = self.mock_server().sessions[session_idx]
 
         return len(session.received) <= 0
 
@@ -417,17 +411,40 @@ class TestProxy(unittest.TestCase):
     def testServerGoingDownAndUp(self):
         """Test server going up and down with no client impact"""
         self.client_connect()
-        self.client_send('get someDown\r\n')
-        self.mock_recv("get someDown\r\n")
-        self.mock_send('VALUE someDown 0 10\r\n')
-        self.mock_close()
-        self.client_recv('END\r\n')
         self.client_send('get someUp\r\n')
         self.mock_recv("get someUp\r\n")
         self.mock_send('VALUE someUp 0 10\r\n')
         self.mock_send('0123456789\r\n')
         self.mock_send('END\r\n')
+        self.client_recv('VALUE someUp 0 10\r\n0123456789\r\nEND\r\n')
+
         self.mock_close()
+
+        self.client_send('get someUp\r\n')
+        self.mock_recv("get someUp\r\n")
+        self.mock_send('VALUE someUp 0 10\r\n')
+        self.mock_send('0123456789\r\n')
+        self.mock_send('END\r\n')
+        self.client_recv('VALUE someUp 0 10\r\n0123456789\r\nEND\r\n')
+
+    def testServerGoingDownAndUpAfterEND(self):
+        """Test server going up and down after END with no client impact"""
+        self.client_connect()
+        self.client_send('get someUp\r\n')
+        self.mock_recv("get someUp\r\n")
+        self.mock_send('VALUE someUp 0 10\r\n')
+        self.mock_send('0123456789\r\n')
+        self.mock_send('END\r\n')
+
+        self.mock_close() # Try close before client_recv().
+
+        self.client_recv('VALUE someUp 0 10\r\n0123456789\r\nEND\r\n')
+
+        self.client_send('get someUp\r\n')
+        self.mock_recv("get someUp\r\n")
+        self.mock_send('VALUE someUp 0 10\r\n')
+        self.mock_send('0123456789\r\n')
+        self.mock_send('END\r\n')
         self.client_recv('VALUE someUp 0 10\r\n0123456789\r\nEND\r\n')
 
 # Test chopped up responses from multiple mock servers.
