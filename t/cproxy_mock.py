@@ -2,19 +2,11 @@ import sys
 import string
 import socket
 import select
+import unittest
 import threading
 import time
 import re
 
-import unittest
-
-# The dollar ($) char adds implicit carriage-return/newline (\r\n).
-#
-# c means client connection.
-# P means proxy upstream connection.
-# d means proxy downstream connection.
-# S means connection on fake, mock memcached server.
-#
 def debug(x):
     if False:
         print(x)
