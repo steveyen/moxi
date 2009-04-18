@@ -374,7 +374,7 @@ void cproxy_process_downstream_ascii_nread(conn *c) {
 /* Do the actual work of forwarding the command from an
  * upstream conn to its assigned downstream.
  */
-bool cproxy_forward_downstream(downstream *d) {
+bool cproxy_forward_ascii_downstream(downstream *d) {
     assert(d != NULL);
 
     conn *uc = d->upstream_conn;
@@ -392,9 +392,9 @@ bool cproxy_forward_downstream(downstream *d) {
         assert(d->downstream_conns != NULL);
 
         if (uc->cmd == -1) {
-            return cproxy_forward_simple_downstream(d, uc->cmd_ascii, uc);
+            return cproxy_forward_ascii_simple_downstream(d, uc->cmd_ascii, uc);
         } else {
-            return cproxy_forward_item_downstream(d, uc->cmd, uc->item, uc);
+            return cproxy_forward_ascii_item_downstream(d, uc->cmd, uc->item, uc);
         }
     }
 
@@ -406,8 +406,8 @@ bool cproxy_forward_downstream(downstream *d) {
  * The response, though, might be a simple line or
  * multiple VALUE+END lines.
  */
-bool cproxy_forward_simple_downstream(downstream *d,
-                                      char *command, conn *uc) {
+bool cproxy_forward_ascii_simple_downstream(downstream *d,
+                                            char *command, conn *uc) {
     assert(d != NULL);
     assert(d->downstream_conns != NULL);
     assert(command != NULL);
@@ -415,16 +415,19 @@ bool cproxy_forward_simple_downstream(downstream *d,
     assert(uc->item == NULL);
 
     if (strncmp(command, "get", 3) == 0)
-        return cproxy_forward_multiget_downstream(d, command, uc);
+        return cproxy_forward_ascii_multiget_downstream(d, command, uc);
 
     if (strncmp(command, "flush_all", 9) == 0)
-        return cproxy_broadcast_downstream(d, command, uc, "OK\r\n");
+        return cproxy_broadcast_ascii_downstream(d, command, uc,
+                                                 "OK\r\n");
 
     if (strncmp(command, "stats", 5) == 0) {
         if (strncmp(command + 5, " reset", 6) == 0)
-            return cproxy_broadcast_downstream(d, command, uc, "RESET\r\n");
+            return cproxy_broadcast_ascii_downstream(d, command, uc,
+                                                     "RESET\r\n");
 
-        return cproxy_broadcast_downstream(d, command, uc, "END\r\n");
+        return cproxy_broadcast_ascii_downstream(d, command, uc,
+                                                 "END\r\n");
     }
 
     token_t  tokens[MAX_TOKENS];
@@ -469,8 +472,8 @@ bool cproxy_forward_simple_downstream(downstream *d,
     return false;
 }
 
-bool cproxy_forward_multiget_downstream(downstream *d,
-                                        char *command, conn *uc) {
+bool cproxy_forward_ascii_multiget_downstream(downstream *d,
+                                              char *command, conn *uc) {
     assert(d != NULL);
     assert(d->downstream_conns != NULL);
     assert(command != NULL);
@@ -578,8 +581,10 @@ bool cproxy_forward_multiget_downstream(downstream *d,
 
 /* Used for broadcast commands, like flush_all or stats.
  */
-bool cproxy_broadcast_downstream(downstream *d, char *command, conn *uc,
-                                 char *suffix) {
+bool cproxy_broadcast_ascii_downstream(downstream *d,
+                                       char *command,
+                                       conn *uc,
+                                       char *suffix) {
     assert(d != NULL);
     assert(d->downstream_conns != NULL);
     assert(command != NULL);
@@ -629,8 +634,8 @@ bool cproxy_broadcast_downstream(downstream *d, char *command, conn *uc,
 /* Forward an upstream command that came with item data,
  * like set/add/replace/etc.
  */
-bool cproxy_forward_item_downstream(downstream *d, short cmd,
-                                    item *it, conn *uc) {
+bool cproxy_forward_ascii_item_downstream(downstream *d, short cmd,
+                                          item *it, conn *uc) {
     assert(d != NULL);
     assert(d->downstream_conns != NULL);
     assert(it != NULL);

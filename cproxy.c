@@ -783,7 +783,7 @@ void cproxy_assign_downstream(proxy_td *ptd) {
             fprintf(stderr, "assign_downstream, matched to upstream %d\n",
                     d->upstream_conn->sfd);
 
-        if (!cproxy_forward_downstream(d)) {
+        if (!cproxy_forward_ascii_downstream(d)) {
             // We reach here on error, so send error upstream.
             //
             conn *uc = d->upstream_conn;

@@ -490,6 +490,23 @@ class TestProxy(unittest.TestCase):
         self.mock_send('END\r\n', 0)
         self.client_recv('VALUE client1 0 10\r\n0123456789\r\nEND\r\n', 1)
 
+    def TODO_testServerSeesRetry(self):
+        """Test server going down sees a retry"""
+        return "TODO: we're currently getting nondeterministic behavior"
+
+        self.client_connect()
+        self.client_send('get someDown\r\n')
+        self.mock_recv("get someDown\r\n")
+        self.mock_send('VALUE someDown 0 10\r\n')
+
+        self.mock_close() # Go down before full reply, we should see retry.
+
+        self.mock_recv("get someDown\r\n")
+        self.mock_send('VALUE someDown 0 10\r\n')
+        self.mock_send('0123456789\r\n')
+        self.mock_send('END\r\n')
+        self.client_recv('VALUE someDown 0 10\r\n0123456789\r\nEND\r\n')
+
 # Test chopped up responses from multiple mock servers.
 # Test chopped up requests from multiple clients.
 # Test servers going down during multiget write.

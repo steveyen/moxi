@@ -135,15 +135,15 @@ int   cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread);
 void  cproxy_wait_any_downstream(proxy_td *ptd, conn *c);
 void  cproxy_assign_downstream(proxy_td *ptd);
 
-bool  cproxy_forward_downstream(downstream *d);
-bool  cproxy_forward_multiget_downstream(downstream *d, char *command,
-                                         conn *uc);
-bool  cproxy_forward_simple_downstream(downstream *d, char *command,
-                                       conn *uc);
-bool  cproxy_forward_item_downstream(downstream *d, short cmd, item *it,
-                                     conn *uc);
-bool  cproxy_broadcast_downstream(downstream *d, char *command, conn *uc,
-                                  char *suffix);
+bool  cproxy_forward_ascii_downstream(downstream *d);
+bool  cproxy_forward_ascii_multiget_downstream(downstream *d, char *command,
+                                               conn *uc);
+bool  cproxy_forward_ascii_simple_downstream(downstream *d, char *command,
+                                             conn *uc);
+bool  cproxy_forward_ascii_item_downstream(downstream *d, short cmd,
+                                           item *it, conn *uc);
+bool  cproxy_broadcast_ascii_downstream(downstream *d, char *command,
+                                        conn *uc, char *suffix);
 
 void  cproxy_pause_upstream_for_downstream(proxy_td *ptd, conn *upstream);
 conn *cproxy_find_downstream_conn(downstream *d, char *key, int key_length);
