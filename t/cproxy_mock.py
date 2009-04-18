@@ -414,6 +414,22 @@ class TestProxy(unittest.TestCase):
         self.mock_close()
         self.client_recv('VALUE someWholeVal 0 10\r\n0123456789\r\nEND\r\n')
 
+    def testServerGoingDownAndUp(self):
+        """Test server going up and down with no client impact"""
+        self.client_connect()
+        self.client_send('get someDown\r\n')
+        self.mock_recv("get someDown\r\n")
+        self.mock_send('VALUE someDown 0 10\r\n')
+        self.mock_close()
+        self.client_recv('END\r\n')
+        self.client_send('get someUp\r\n')
+        self.mock_recv("get someUp\r\n")
+        self.mock_send('VALUE someUp 0 10\r\n')
+        self.mock_send('0123456789\r\n')
+        self.mock_send('END\r\n')
+        self.mock_close()
+        self.client_recv('VALUE someUp 0 10\r\n0123456789\r\nEND\r\n')
+
 # Test chopped up responses from multiple mock servers.
 # Test chopped up requests from multiple clients.
 # Test servers going down during multiget write.
