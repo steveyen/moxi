@@ -37,6 +37,8 @@ guint    multiget_key_hash(gconstpointer v);
 gboolean multiget_key_equal(gconstpointer v1, gconstpointer v2);
 void     multiget_entry_free(multiget_entry *entry);
 
+multiget_entry multiget_entry_remove(multiget_entry *head, conn *c);
+
 void cproxy_ascii_item_response(item *it, conn *uc);
 
 void cproxy_process_upstream_ascii(conn *c, char *line) {
@@ -628,6 +630,28 @@ void multiget_entry_free(multiget_entry *entry) {
         multiget_entry *curr = entry;
         entry = entry->next;
         free(curr);
+    }
+}
+
+void multiget_remove_upstream(gpointer key,
+                              gpointer value,
+                              gpointer user_data) {
+    multiget_entry *entry = value;
+    assert(entry != NULL);
+
+    conn *uc = user_data;
+    assert(uc != NULL);
+
+    while (entry != NULL) {
+        // Just clear the slots, because glib hash table API
+        // doesn't allow modifications during iteration.
+        //
+        if (entry->upstream_conn == uc) {
+            entry->upstream_conn = NULL;
+            entry->opaque = 0;
+        }
+
+        entry = entry ->next;
     }
 }
 

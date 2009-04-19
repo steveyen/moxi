@@ -23,7 +23,7 @@ void             memcached_quit_server(memcached_server_st *ptr,
 // Internal forward declarations.
 //
 downstream *downstream_list_remove(downstream *head, downstream *d);
-conn       *conn_list_remove(conn *head, conn *c);
+conn       *conn_list_remove(conn *head, conn *c, bool *found);
 void        upstream_retry(void *data0, void *data1);
 bool        is_compatible_request(conn *existing, conn *candidate);
 
@@ -236,7 +236,9 @@ void cproxy_on_close_upstream_conn(conn *c) {
     // Delink from any reserved downstream.
     //
     for (downstream *d = ptd->downstream_reserved; d != NULL; d = d->next) {
-        d->upstream_conn = conn_list_remove(d->upstream_conn, c);
+        bool found = false;
+
+        d->upstream_conn = conn_list_remove(d->upstream_conn, c, &found);
         if (d->upstream_conn == NULL) {
             d->upstream_suffix = NULL;
 
@@ -244,9 +246,18 @@ void cproxy_on_close_upstream_conn(conn *c) {
             // read and drop any remaining inflight downstream replies.
             // Eventually, the downstream will be released.
         }
+
+        // If the downstream was reserved for this upstream conn,
+        // also clear the upstream from any multiget de-duplication
+        // tracking structures.
+        //
+        if (found &&
+            d->multiget != NULL) {
+            g_hash_table_foreach(d->multiget, multiget_remove_upstream, c);
+        }
     }
 
-    // Delink from any wait queue.
+    // Delink from wait queue.
     //
     conn *prev = NULL;
     conn *curr = ptd->waiting_any_downstream_head;
@@ -1132,12 +1143,18 @@ size_t scan_tokens(char *command, token_t *tokens,
 
 /* Returns the new head of the list.
  */
-conn *conn_list_remove(conn *head, conn *c) {
+conn *conn_list_remove(conn *head, conn *c, bool *found) {
     conn *prev = NULL;
     conn *curr = head;
 
+    if (found != NULL)
+        *found = false;
+
     while (curr != NULL) {
         if (curr == c) {
+            if (found != NULL)
+                *found = true;
+
             if (prev != NULL) {
                 assert(curr != head);
                 prev->next = curr->next;

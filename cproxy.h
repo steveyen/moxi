@@ -165,6 +165,10 @@ rel_time_t cproxy_realtime(const time_t exptime);
 
 void cproxy_close_conn(conn *c);
 
+void multiget_remove_upstream(gpointer key,
+                              gpointer value,
+                              gpointer user_data);
+
 // Integration with memagent.
 //
 void on_memagent_new_config(void *userdata, kvpair_t *config);
