@@ -24,6 +24,7 @@ void             memcached_quit_server(memcached_server_st *ptr,
 //
 downstream *downstream_list_remove(downstream *head, downstream *d);
 void        upstream_retry(void *data0, void *data1);
+bool        is_compatible_request(conn *existing, conn *candidate);
 
 // Function tables.
 //
@@ -779,6 +780,25 @@ void cproxy_assign_downstream(proxy_td *ptd) {
             ptd->waiting_any_downstream_tail = NULL;
         d->upstream_conn->next = NULL;
 
+        // Add any compatible upstream conns to the downstream.
+        // By compatible, for example, we mean multi-gets from
+        // different upstreams so we can de-deplicate get keys.
+        //
+        conn *uc_last = d->upstream_conn;
+
+        while (is_compatible_request(uc_last,
+                                     ptd->waiting_any_downstream_head)) {
+            uc_last->next = ptd->waiting_any_downstream_head;
+
+            ptd->waiting_any_downstream_head =
+                ptd->waiting_any_downstream_head->next;
+            if (ptd->waiting_any_downstream_head == NULL)
+                ptd->waiting_any_downstream_tail = NULL;
+
+            uc_last = uc_last->next;
+            uc_last->next = NULL;
+        }
+
         if (settings.verbose > 1)
             fprintf(stderr, "assign_downstream, matched to upstream %d\n",
                     d->upstream_conn->sfd);
@@ -1117,5 +1137,35 @@ downstream *downstream_list_remove(downstream *head, downstream *d) {
     }
 
     return head;
+}
+
+/* Returns true if a candidate request is squashable
+ * or de-duplicatable with an existing request, to
+ * save on network hops.
+ */
+bool is_compatible_request(conn *existing, conn *candidate) {
+    assert(existing);
+    assert(IS_ASCII(existing->protocol));
+    assert(IS_PROXY(existing->protocol));
+    assert(existing->state == conn_pause);
+
+    if (candidate != NULL) {
+        assert(IS_ASCII(candidate->protocol));
+        assert(IS_PROXY(candidate->protocol));
+        assert(candidate->state == conn_pause);
+
+        // TODO: Allow gets (CAS) for de-duplication.
+        //
+        if (existing->cmd == -1 &&
+            candidate->cmd == -1 &&
+            existing->cmd_retries <= 0 &&
+            candidate->cmd_retries <= 0 &&
+            strncmp(existing->cmd_ascii, "get ", 4) == 0 &&
+            strncmp(candidate->cmd_ascii, "get ", 4) == 0) {
+            return true;
+        }
+    }
+
+    return false;
 }
 

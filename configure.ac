@@ -374,7 +374,9 @@ then
   CFLAGS="$CFLAGS -errfmt=error -errwarn -errshort=tags"
 fi
 
-LIBS="$LIBS -lmemcached -lmemagent -lsqlite3 -lstrophe -lexpat -lresolv"
+LIBS="$LIBS -lmemcached"
+LIBS="$LIBS -lmemagent -lsqlite3 -lstrophe -lexpat -lresolv"
+LIBS="$LIBS -lglib-2.0"
 LIBS="$LIBS -L\$(HOME)/lib"
 CPPFLAGS="$CPPFLAGS -I\$(HOME)/include"
 

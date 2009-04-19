@@ -381,7 +381,6 @@ bool cproxy_forward_ascii_downstream(downstream *d) {
 
     assert(uc != NULL);
     assert(uc->state == conn_pause);
-    assert(uc->next == NULL);
     assert(uc->cmd_ascii != NULL);
     assert(uc->thread != NULL);
     assert(uc->thread->base != NULL);
@@ -589,6 +588,7 @@ bool cproxy_broadcast_ascii_downstream(downstream *d,
     assert(d->downstream_conns != NULL);
     assert(command != NULL);
     assert(uc != NULL);
+    assert(uc->next == NULL);
     assert(uc->item == NULL);
 
     int nwrite = 0;
@@ -640,6 +640,7 @@ bool cproxy_forward_ascii_item_downstream(downstream *d, short cmd,
     assert(d->downstream_conns != NULL);
     assert(it != NULL);
     assert(uc != NULL);
+    assert(uc->next == NULL);
 
     // Assuming we're already connected to downstream.
     //
