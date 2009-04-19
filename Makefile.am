@@ -19,6 +19,7 @@ memcached_SOURCES = memcached.c memcached.h \
                     cproxy.c cproxy.h \
                     cproxy_config.c \
                     cproxy_protocol.c \
+                    cproxy_multiget.c \
                     cproxy_stats.c
 
 if BUILD_CACHE

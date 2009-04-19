@@ -165,6 +165,21 @@ rel_time_t cproxy_realtime(const time_t exptime);
 
 void cproxy_close_conn(conn *c);
 
+// Multiget key de-duplication.
+//
+typedef struct multiget_entry multiget_entry;
+
+struct multiget_entry {
+    conn           *upstream_conn;
+    uint32_t        opaque; // For binary protocol.
+    multiget_entry *next;
+};
+
+size_t   multiget_key_len(const char *key);
+guint    multiget_key_hash(gconstpointer v);
+gboolean multiget_key_equal(gconstpointer v1, gconstpointer v2);
+void     multiget_entry_free(multiget_entry *entry);
+
 void multiget_remove_upstream(gpointer key,
                               gpointer value,
                               gpointer user_data);
