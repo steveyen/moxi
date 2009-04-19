@@ -22,9 +22,11 @@ class MockServer(threading.Thread):
         self.sessions = {}
 
     def closeSessions(self):
-        for k in self.sessions:
-            self.sessions[k].close()
+        sessions = self.sessions # Snapshot to avoid concurrent iteration mods.
         self.sessions = {}
+
+        for k in sessions:
+            sessions[k].close()
 
     def close(self):
         self.running = False
@@ -489,6 +491,20 @@ class TestProxy(unittest.TestCase):
         self.mock_send('0123456789\r\n', 0)
         self.mock_send('END\r\n', 0)
         self.client_recv('VALUE client1 0 10\r\n0123456789\r\nEND\r\n', 1)
+
+    def testSharedServerConns(self):
+        """Test proxy only uses a few server conns"""
+        self.assertEqual(len(self.clients), 0)
+
+        large_num_clients = 30
+        for i in range(0, large_num_clients):
+            self.client_connect(i)
+            self.client_send('get fromClient' + str(i) + '\r\n', i)
+
+        self.assertEqual(len(self.clients), large_num_clients)
+
+        self.wait(1)
+        self.assertTrue(len(self.mock_server().sessions) < large_num_clients)
 
     def TODO_testServerSeesRetry(self):
         """Test server going down sees a retry"""
