@@ -824,22 +824,14 @@ void cproxy_assign_downstream(proxy_td *ptd) {
         if (!cproxy_forward_ascii_downstream(d)) {
             // We reach here on error, so send error upstream.
             //
-            conn *uc = d->upstream_conn;
-            if (uc != NULL) {
-                assert(uc->next == NULL);
+            while (d->upstream_conn != NULL) {
+                conn *uc = d->upstream_conn;
 
                 if (settings.verbose > 1)
                     fprintf(stderr,
                             "%d could not forward upstream to downstream\n",
                             uc->sfd);
-            }
 
-            cproxy_release_downstream(d, false);
-
-            if (uc != NULL) {
-                // TOOD: Count retrying instead of error, but need counter.
-                //       cproxy_wait_any_downstream(ptd, uc);
-                //
                 // Send an END on get/gets instead of generic SERVER_ERROR.
                 //
                 if (uc->cmd == -1 &&
@@ -850,7 +842,13 @@ void cproxy_assign_downstream(proxy_td *ptd) {
                     out_string(uc, "SERVER_ERROR proxy write to downstream");
 
                 update_event(uc, EV_WRITE | EV_PERSIST);
+
+                conn *curr = d->upstream_conn;
+                d->upstream_conn = d->upstream_conn->next;
+                curr->next = NULL;
             }
+
+            cproxy_release_downstream(d, false);
         }
     }
 
