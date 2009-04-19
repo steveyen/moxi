@@ -178,7 +178,10 @@ struct multiget_entry {
 size_t   multiget_key_len(const char *key);
 guint    multiget_key_hash(gconstpointer v);
 gboolean multiget_key_equal(gconstpointer v1, gconstpointer v2);
-void     multiget_entry_free(multiget_entry *entry);
+
+void multiget_foreach_free(gpointer key,
+                           gpointer value,
+                           gpointer user_data);
 
 void multiget_remove_upstream(gpointer key,
                               gpointer value,

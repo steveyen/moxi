@@ -49,7 +49,14 @@ gboolean multiget_key_equal(gconstpointer v1, gconstpointer v2) {
     return (n1 == n2 && strncmp(k1, k2, n1) == 0);
 }
 
-void multiget_entry_free(multiget_entry *entry) {
+/* Callback to g_hash_table_foreach that frees the multiget_entry list.
+ */
+void multiget_foreach_free(gpointer key,
+                           gpointer value,
+                           gpointer user_data) {
+    multiget_entry *entry = value;
+    assert(entry != NULL);
+
     while (entry != NULL) {
         multiget_entry *curr = entry;
         entry = entry->next;
@@ -57,6 +64,9 @@ void multiget_entry_free(multiget_entry *entry) {
     }
 }
 
+/* Callback to g_hash_table_foreach that clears out multiget_entries
+ * which have the given upstream conn (passed as user_data).
+ */
 void multiget_remove_upstream(gpointer key,
                               gpointer value,
                               gpointer user_data) {
