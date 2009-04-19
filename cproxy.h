@@ -136,8 +136,7 @@ void  cproxy_wait_any_downstream(proxy_td *ptd, conn *c);
 void  cproxy_assign_downstream(proxy_td *ptd);
 
 bool  cproxy_forward_ascii_downstream(downstream *d);
-bool  cproxy_forward_ascii_multiget_downstream(downstream *d, char *command,
-                                               conn *uc);
+bool  cproxy_forward_ascii_multiget_downstream(downstream *d, conn *uc);
 bool  cproxy_forward_ascii_simple_downstream(downstream *d, char *command,
                                              conn *uc);
 bool  cproxy_forward_ascii_item_downstream(downstream *d, short cmd,

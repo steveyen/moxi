@@ -414,7 +414,7 @@ bool cproxy_forward_ascii_simple_downstream(downstream *d,
     assert(uc->item == NULL);
 
     if (strncmp(command, "get", 3) == 0)
-        return cproxy_forward_ascii_multiget_downstream(d, command, uc);
+        return cproxy_forward_ascii_multiget_downstream(d, uc);
 
     if (strncmp(command, "flush_all", 9) == 0)
         return cproxy_broadcast_ascii_downstream(d, command, uc,
@@ -471,11 +471,9 @@ bool cproxy_forward_ascii_simple_downstream(downstream *d,
     return false;
 }
 
-bool cproxy_forward_ascii_multiget_downstream(downstream *d,
-                                              char *command, conn *uc) {
+bool cproxy_forward_ascii_multiget_downstream(downstream *d, conn *uc) {
     assert(d != NULL);
     assert(d->downstream_conns != NULL);
-    assert(command != NULL);
     assert(uc != NULL);
     assert(uc->item == NULL);
 
@@ -489,54 +487,67 @@ bool cproxy_forward_ascii_multiget_downstream(downstream *d,
         }
     }
 
-    char *space = strchr(command, ' ');
-    assert(space > command);
+    int   uc_num = 0;
+    conn *uc_cur = uc;
 
-    int cmd_len = space - command;
-    assert(cmd_len == 3 || cmd_len == 4); // Either get or gets.
+    while (uc_cur != NULL) {
+        char *command = uc_cur->cmd_ascii;
+        assert(command != NULL);
 
-    if (settings.verbose > 1)
-        fprintf(stderr, "forward multiget %s (%d)\n", command, cmd_len);
+        char *space = strchr(command, ' ');
+        assert(space > command);
 
-    while (space != NULL) {
-        char *key = space + 1;
-        char *next_space = strchr(key, ' ');
-        int   key_len;
+        int cmd_len = space - command;
+        assert(cmd_len == 3 || cmd_len == 4); // Either get or gets.
 
-        if (next_space != NULL)
-            key_len = next_space - key;
-        else
-            key_len = strlen(key);
+        if (settings.verbose > 1)
+            fprintf(stderr, "forward multiget %s (%d %d)\n",
+                    command, cmd_len, uc_num);
 
-        // This key_len check helps skips consecutive spaces.
-        //
-        if (key_len > 0) {
-            conn *c = cproxy_find_downstream_conn(d, key, key_len);
-            if (c != NULL) {
-                assert(c->item == NULL);
-                assert(c->state == conn_pause);
-                assert(IS_ASCII(c->protocol));
-                assert(IS_PROXY(c->protocol));
-                assert(c->ilist != NULL);
-                assert(c->isize > 0);
+        while (space != NULL) {
+            char *key = space + 1;
+            char *next_space = strchr(key, ' ');
+            int   key_len;
 
-                c->icurr = c->ilist;
-                c->ileft = 0;
+            if (next_space != NULL)
+                key_len = next_space - key;
+            else
+                key_len = strlen(key);
 
-                if (c->msgused <= 1 &&
-                    c->msgbytes <= 0) {
-                    add_iov(c, command, cmd_len);
+            // This key_len check helps skips consecutive spaces.
+            //
+            if (key_len > 0) {
+                conn *c = cproxy_find_downstream_conn(d, key, key_len);
+                if (c != NULL) {
+                    assert(c->item == NULL);
+                    assert(c->state == conn_pause);
+                    assert(IS_ASCII(c->protocol));
+                    assert(IS_PROXY(c->protocol));
+                    assert(c->ilist != NULL);
+                    assert(c->isize > 0);
+
+                    c->icurr = c->ilist;
+                    c->ileft = 0;
+
+                    if (uc_num <= 0 &&
+                        c->msgused <= 1 &&
+                        c->msgbytes <= 0) {
+                        add_iov(c, command, cmd_len);
+                    }
+
+                    // Write the key, including the preceding space.
+                    //
+                    add_iov(c, key - 1, key_len + 1);
+                } else {
+                    // TODO: Handle when downstream conn is down.
                 }
-
-                // Write the key, including the preceding space.
-                //
-                add_iov(c, key - 1, key_len + 1);
-            } else {
-                // TODO: Handle when downstream conn is down.
             }
+
+            space = next_space;
         }
 
-        space = next_space;
+        uc_num++;
+        uc_cur = uc_cur->next;
     }
 
     for (int i = 0; i < nconns; i++) {

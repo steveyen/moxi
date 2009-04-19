@@ -1160,8 +1160,13 @@ bool is_compatible_request(conn *existing, conn *candidate) {
             candidate->cmd == -1 &&
             existing->cmd_retries <= 0 &&
             candidate->cmd_retries <= 0 &&
+            !existing->noreply &&
+            !candidate->noreply &&
             strncmp(existing->cmd_ascii, "get ", 4) == 0 &&
             strncmp(candidate->cmd_ascii, "get ", 4) == 0) {
+            assert(existing->item == NULL);
+            assert(candidate->item == NULL);
+
             return true;
         }
     }
