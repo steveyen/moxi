@@ -23,6 +23,7 @@ void             memcached_quit_server(memcached_server_st *ptr,
 // Internal forward declarations.
 //
 downstream *downstream_list_remove(downstream *head, downstream *d);
+conn       *conn_list_remove(conn *head, conn *c);
 void        upstream_retry(void *data0, void *data1);
 bool        is_compatible_request(conn *existing, conn *candidate);
 
@@ -235,8 +236,8 @@ void cproxy_on_close_upstream_conn(conn *c) {
     // Delink from any reserved downstream.
     //
     for (downstream *d = ptd->downstream_reserved; d != NULL; d = d->next) {
-        if (d->upstream_conn == c) {
-            d->upstream_conn = NULL;
+        d->upstream_conn = conn_list_remove(d->upstream_conn, c);
+        if (d->upstream_conn == NULL) {
             d->upstream_suffix = NULL;
 
             // Don't need to do anything else, as we'll now just
@@ -312,7 +313,12 @@ void cproxy_on_close_downstream_conn(conn *c) {
 
     conn *uc_retry = NULL;
 
-    if (d->upstream_conn != NULL) {
+    if (d->upstream_conn != NULL &&
+        d->downstream_used_start == d->downstream_used &&
+        d->downstream_used_start == 1) {
+        // TODO: Revisit downstream close error handling.
+        //       The above check might be too tight.
+        //
         if (d->upstream_suffix == NULL)
             d->upstream_suffix = "SERVER_ERROR proxy downstream closed\r\n";
 
@@ -473,27 +479,32 @@ bool cproxy_release_downstream(downstream *d, bool force) {
     assert(d != NULL);
     assert(d->ptd != NULL);
 
-    if (d->upstream_conn != NULL &&
-        d->upstream_suffix != NULL) {
-        assert(d->upstream_conn->next == NULL);
-
-        // Do a last write on the upstream_conn.  For example,
-        // the upstream_suffix might be "END\r\n" or other
-        // way to mark the end of a scatter-gather or
-        // multiline response.
-        //
-        if (add_iov(d->upstream_conn,
-                    d->upstream_suffix,
-                    strlen(d->upstream_suffix)) == 0 &&
-            update_event(d->upstream_conn, EV_WRITE | EV_PERSIST)) {
-            conn_set_state(d->upstream_conn, conn_mwrite);
-        } else {
-            if (settings.verbose > 1)
-                fprintf(stderr,
+    // Delink upstream conns.
+    //
+    while (d->upstream_conn != NULL) {
+        if (d->upstream_suffix != NULL) {
+            // Do a last write on the upstream.  For example,
+            // the upstream_suffix might be "END\r\n" or other
+            // way to mark the end of a scatter-gather or
+            // multiline response.
+            //
+            if (add_iov(d->upstream_conn,
+                        d->upstream_suffix,
+                        strlen(d->upstream_suffix)) == 0 &&
+                update_event(d->upstream_conn, EV_WRITE | EV_PERSIST)) {
+                conn_set_state(d->upstream_conn, conn_mwrite);
+            } else {
+                if (settings.verbose > 1)
+                    fprintf(stderr,
                         "Could not update upstream write event\n");
 
-            cproxy_close_conn(d->upstream_conn);
+                cproxy_close_conn(d->upstream_conn);
+            }
         }
+
+        conn *curr = d->upstream_conn;
+        d->upstream_conn = d->upstream_conn->next;
+        curr->next = NULL;
     }
 
     d->upstream_conn = NULL;
@@ -803,6 +814,8 @@ void cproxy_assign_downstream(proxy_td *ptd) {
             fprintf(stderr, "assign_downstream, matched to upstream %d\n",
                     d->upstream_conn->sfd);
 
+        // TODO: Handle downstream binary protocol.
+        //
         if (!cproxy_forward_ascii_downstream(d)) {
             // We reach here on error, so send error upstream.
             //
@@ -922,13 +935,13 @@ void cproxy_release_downstream_conn(downstream *d, conn *c) {
 
 void cproxy_on_pause_downstream_conn(conn *c) {
     assert(c != NULL);
-    assert(c->extra != NULL);
 
     if (settings.verbose > 1)
         fprintf(stderr, "<%d cproxy_on_pause_downstream_conn\n",
                 c->sfd);
 
     downstream *d = c->extra;
+    assert(d != NULL);
 
     // Must update_event() before releasing the downstream conn,
     // because the release might call udpate_event(), too,
@@ -1112,6 +1125,31 @@ size_t scan_tokens(char *command, token_t *tokens,
     ntokens++;
 
     return ntokens;
+}
+
+/* Returns the new head of the list.
+ */
+conn *conn_list_remove(conn *head, conn *c) {
+    conn *prev = NULL;
+    conn *curr = head;
+
+    while (curr != NULL) {
+        if (curr == c) {
+            if (prev != NULL) {
+                assert(curr != head);
+                prev->next = curr->next;
+                return head;
+            }
+
+            assert(curr == head);
+            return curr->next;
+        }
+
+        prev = curr;
+        curr = curr ->next;
+    }
+
+    return head;
 }
 
 /* Returns the new head of the list.
