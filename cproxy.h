@@ -109,7 +109,7 @@ struct downstream {
     conn  *upstream_conn;     // Non-NULL when downstream is reserved.
     char  *upstream_suffix;   // Last bit to write when downstreams are done.
 
-    GHashTable *multiget;
+    GHashTable *multiget; // Keyed by string.
 };
 
 // Functions.

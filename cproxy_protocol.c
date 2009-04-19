@@ -12,11 +12,30 @@
 #include "cproxy.h"
 #include "work.h"
 
+// From libmemcached.
+//
+uint32_t murmur_hash(const char *key, size_t length);
+
+// Internal declarations.
+//
+typedef struct multiget_entry multiget_entry;
+
+struct multiget_entry {
+    conn           *upstream_conn;
+    uint32_t        opaque; // For binary protocol.
+    multiget_entry *next;
+};
+
 #define NOT_CAS -1
 
-#define COMMAND_TOKEN    0
-#define KEY_TOKEN        1
-#define MAX_TOKENS       8
+#define COMMAND_TOKEN 0
+#define KEY_TOKEN     1
+#define MAX_TOKENS    8
+
+size_t   multiget_key_len(const char *key);
+guint    multiget_key_hash(gconstpointer v);
+gboolean multiget_key_equal(gconstpointer v1, gconstpointer v2);
+void     multiget_entry_free(multiget_entry *entry);
 
 void cproxy_ascii_item_response(item *it, conn *uc);
 
@@ -418,6 +437,7 @@ bool cproxy_forward_ascii_simple_downstream(downstream *d,
 bool cproxy_forward_ascii_multiget_downstream(downstream *d, conn *uc) {
     assert(d != NULL);
     assert(d->downstream_conns != NULL);
+    assert(d->multiget == NULL);
     assert(uc != NULL);
 
     int nwrite = 0;
@@ -428,6 +448,14 @@ bool cproxy_forward_ascii_multiget_downstream(downstream *d, conn *uc) {
             cproxy_prep_conn_for_write(d->downstream_conns[i]);
             assert(d->downstream_conns[i]->state == conn_pause);
         }
+    }
+
+    if (uc->next != NULL) {
+        // More than one upstream conn, so we need a hashtable
+        // to track keys for de-deplication.
+        //
+        d->multiget = g_hash_table_new(multiget_key_hash,
+                                       multiget_key_equal);
     }
 
     int   uc_num = 0;
@@ -466,29 +494,54 @@ bool cproxy_forward_ascii_multiget_downstream(downstream *d, conn *uc) {
             // This key_len check helps skips consecutive spaces.
             //
             if (key_len > 0) {
-                conn *c = cproxy_find_downstream_conn(d, key, key_len);
-                if (c != NULL) {
-                    assert(c->item == NULL);
-                    assert(c->state == conn_pause);
-                    assert(IS_ASCII(c->protocol));
-                    assert(IS_PROXY(c->protocol));
-                    assert(c->ilist != NULL);
-                    assert(c->isize > 0);
+                // See if we've already requested this key via
+                // the multiget hash table, in order to
+                // de-deplicate repeated keys.
+                //
+                bool first_request = true;
 
-                    c->icurr = c->ilist;
-                    c->ileft = 0;
+                if (d->multiget != NULL) {
+                    multiget_entry *entry = calloc(1, sizeof(multiget_entry));
+                    if (entry != NULL) {
+                        entry->upstream_conn = uc_cur;
+                        entry->next = g_hash_table_lookup(d->multiget, key);
 
-                    if (uc_num <= 0 &&
-                        c->msgused <= 1 &&
-                        c->msgbytes <= 0) {
-                        add_iov(c, command, cmd_len);
+                        g_hash_table_insert(d->multiget, key, entry);
+
+                        if (entry->next == NULL)
+                            first_request = false;
+                    } else {
+                        // TODO: Handle out of multiget entry memory.
                     }
+                }
 
-                    // Write the key, including the preceding space.
-                    //
-                    add_iov(c, key - 1, key_len + 1);
-                } else {
-                    // TODO: Handle when downstream conn is down.
+                if (first_request) {
+                    conn *c = cproxy_find_downstream_conn(d, key, key_len);
+                    if (c != NULL) {
+                        assert(c->item == NULL);
+                        assert(c->state == conn_pause);
+                        assert(IS_ASCII(c->protocol));
+                        assert(IS_PROXY(c->protocol));
+                        assert(c->ilist != NULL);
+                        assert(c->isize > 0);
+
+                        c->icurr = c->ilist;
+                        c->ileft = 0;
+
+                        if (uc_num <= 0 &&
+                            c->msgused <= 1 &&
+                            c->msgbytes <= 0) {
+                            add_iov(c, command, cmd_len);
+
+                            // TODO: Handle out of iov memory.
+                        }
+
+                        // Write the key, including the preceding space.
+                        //
+                        add_iov(c, key - 1, key_len + 1);
+                    } else {
+                        // TODO: Handle when downstream conn is down.
+                    }
                 }
             }
 
@@ -536,6 +589,46 @@ bool cproxy_forward_ascii_multiget_downstream(downstream *d, conn *uc) {
         d->upstream_suffix = "END\r\n";
 
     return nwrite > 0;
+}
+
+size_t multiget_key_len(const char *key) {
+    assert(key);
+
+    char *x = (char *) key;
+    while (*x != ' ' && *x != '\0')
+        x++;
+
+    return x - key;
+}
+
+guint multiget_key_hash(gconstpointer v) {
+    assert(v);
+
+    const char *key = v;
+    size_t      len = multiget_key_len(key);
+
+    return murmur_hash(key, len);
+}
+
+gboolean multiget_key_equal(gconstpointer v1, gconstpointer v2) {
+    assert(v1);
+    assert(v2);
+
+    const char *k1 = v1;
+    const char *k2 = v2;
+
+    size_t n1 = multiget_key_len(k1);
+    size_t n2 = multiget_key_len(k2);
+
+    return (n1 == n2 && strncmp(k1, k2, n1) == 0);
+}
+
+void multiget_entry_free(multiget_entry *entry) {
+    while (entry != NULL) {
+        multiget_entry *curr = entry;
+        entry = entry->next;
+        free(curr);
+    }
 }
 
 /* Used for broadcast commands, like flush_all or stats.
