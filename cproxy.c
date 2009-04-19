@@ -314,15 +314,19 @@ void cproxy_on_close_downstream_conn(conn *c) {
     conn *uc_retry = NULL;
 
     if (d->upstream_conn != NULL &&
-        d->downstream_used_start == d->downstream_used &&
-        d->downstream_used_start == 1) {
+        d->downstream_used == 1) {
         // TODO: Revisit downstream close error handling.
-        //       The above check might be too tight.
+        //       Should we propagate error when...
+        //       - any downstream conn closes?
+        //       - all downstream conns closes?
+        //       - last downstream conn closes?  Current bevhavior.
         //
         if (d->upstream_suffix == NULL)
             d->upstream_suffix = "SERVER_ERROR proxy downstream closed\r\n";
 
-        // If we haven't received any reply yet, we retry.
+        // If we haven't received any reply yet, we retry once.
+        //
+        // TODO: Reconsider retry behavior, is it right in all situations?
         //
         // We sometimes see drive_machine/transmit not see a
         // closed connection error during conn_mwrite, possibly
