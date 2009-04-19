@@ -3,6 +3,7 @@
 #ifndef CPROXY_H
 #define CPROXY_H
 
+#include <glib.h>
 #include <libmemcached/memcached.h>
 #include "memagent.h"
 #include "work.h"
@@ -107,6 +108,8 @@ struct downstream {
     int    downstream_used_start;
     conn  *upstream_conn;     // Non-NULL when downstream is reserved.
     char  *upstream_suffix;   // Last bit to write when downstreams are done.
+
+    GHashTable *multiget;
 };
 
 // Functions.

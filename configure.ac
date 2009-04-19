@@ -376,9 +376,13 @@ fi
 
 LIBS="$LIBS -lmemcached"
 LIBS="$LIBS -lmemagent -lsqlite3 -lstrophe -lexpat -lresolv"
-LIBS="$LIBS -lglib-2.0"
+LIBS="$LIBS -lglib-2.0 -lintl -liconv"
+LIBS="$LIBS -L/opt/local/lib"
 LIBS="$LIBS -L\$(HOME)/lib"
 CPPFLAGS="$CPPFLAGS -I\$(HOME)/include"
+CPPFLAGS="$CPPFLAGS -I/opt/local/include/glib-2.0"
+CPPFLAGS="$CPPFLAGS -I/opt/local/lib/glib-2.0/include"
+CPPFLAGS="$CPPFLAGS -I/opt/local/include"
 
 AC_SEARCH_LIBS(memcached_create, memcached)
 
