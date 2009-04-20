@@ -12,10 +12,39 @@
 #include "cproxy.h"
 #include "work.h"
 
+// From libmemcached.
+//
+uint32_t murmur_hash(const char *key, size_t length);
+
+// Local declarations.
+//
 static void add_proxy_stats(proxy_stats *agg, proxy_stats *x);
 
 static void request_stats(void *data0, void *data1);
 static void collect_stats(void *data0, void *data1);
+
+// Protocol STATS command handling.
+//
+static GHashTable *protocol_stats_rules = NULL;
+
+enum protocol_stat_rule {
+    merge_first,
+    merge_smallest
+};
+
+bool protocol_stats_merge_sum(char *v1, int v1len,
+                              char *v2, int v2len,
+                              char *out, int outlen);
+bool protocol_stats_merge_first(char *v1, int v1len,
+                                char *v2, int v2len,
+                                char *out, int outlen);
+bool protocol_stats_merge_smallest(char *v1, int v1len,
+                                   char *v2, int v2len,
+                                   char *out, int outlen);
+
+size_t   protocol_stats_key_len(const char *key);
+guint    protocol_stats_key_hash(gconstpointer v);
+gboolean protocol_stats_key_equal(gconstpointer v1, gconstpointer v2);
 
 /* This callback is invoked by memagent on a memagent thread
  * when it wants proxy stats.
@@ -168,3 +197,77 @@ static void add_proxy_stats(proxy_stats *agg, proxy_stats *x) {
     agg->tot_downstream_released += x->tot_downstream_released;
     agg->tot_downstream_reserved += x->tot_downstream_reserved;
 }
+
+// Special STATS value merging rules, instead of the
+// default to just sum the values.
+//
+void cproxy_protocol_stats_init(void) {
+    assert(protocol_stats_rules == NULL);
+
+    protocol_stats_rules = g_hash_table_new(protocol_stats_key_hash,
+                                            protocol_stats_key_equal);
+
+#define RULE(key, rule) \
+    g_hash_table_insert(protocol_stats_rules, (gpointer) key, (gpointer) rule);
+
+    RULE("pid", merge_first);
+    RULE("uptime", merge_smallest);
+    RULE("time", merge_smallest);
+    RULE("version", merge_smallest);
+    RULE("pointer_size", merge_smallest);
+    RULE("limit_maxbytes", merge_smallest);
+    RULE(":chunk_size", merge_smallest);
+    RULE(":chunk_per_page", merge_smallest);
+    RULE(":age", merge_smallest); // TODO: Should this be largest?
+}
+
+bool protocol_stats_merge_sum(char *v1, int v1len,
+                              char *v2, int v2len,
+                              char *out, int outlen) {
+    return false;
+}
+
+bool protocol_stats_merge_first(char *v1, int v1len,
+                                char *v2, int v2len,
+                                char *out, int outlen) {
+    return false;
+}
+
+bool protocol_stats_merge_smallest(char *v1, int v1len,
+                                   char *v2, int v2len,
+                                   char *out, int outlen) {
+    return false;
+}
+
+size_t protocol_stats_key_len(const char *key) {
+    assert(key);
+
+    char *x = (char *) key;
+    while (*x != ' ' && *x != '\0')
+        x++;
+
+    return x - key;
+}
+
+guint protocol_stats_key_hash(gconstpointer v) {
+    assert(v);
+
+    const char *key = v;
+    size_t      len = protocol_stats_key_len(key);
+
+    return murmur_hash(key, len);
+}
+
+gboolean protocol_stats_key_equal(gconstpointer v1, gconstpointer v2) {
+    assert(v1);
+    assert(v2);
+
+    const char *k1 = v1;
+    const char *k2 = v2;
+
+    size_t n1 = protocol_stats_key_len(k1);
+    size_t n2 = protocol_stats_key_len(k2);
+
+    return (n1 == n2 && strncmp(k1, k2, n1) == 0);
+}
+

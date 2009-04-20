@@ -187,6 +187,10 @@ void multiget_remove_upstream(gpointer key,
                               gpointer value,
                               gpointer user_data);
 
+// Stats handling.
+//
+void cproxy_protocol_stats_init(void);
+
 // Integration with memagent.
 //
 void on_memagent_new_config(void *userdata, kvpair_t *config);
