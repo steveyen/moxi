@@ -533,6 +533,48 @@ class TestProxy(unittest.TestCase):
                          'VALUE d 0 1\r\nd\r\n' +
                          'END\r\n', 2)
 
+    def testGetSquash2(self):
+        """Test multiget by multiple clients are deduped"""
+
+        # Assuming proxy's max_downstream is 1,
+        # and number of threads is 1.
+
+        self.client_connect(0)
+        self.client_connect(1)
+        self.client_connect(2)
+        self.client_connect(3)
+        self.client_connect(4)
+
+        self.client_send('get wait0\r\n', 0)
+        self.mock_recv('get wait0\r\n', 0)
+
+        # Mock server is 'busy' at this point, so
+        # any client sends should be able to be
+        # de-duplicated by the proxy.
+
+        self.client_send('get a\r\n', 1)
+        self.client_send('get a\r\n', 2)
+        self.client_send('get a\r\n', 3)
+        self.client_send('get a\r\n', 4)
+
+        self.wait(100)
+
+        self.mock_send('END\r\n', 0)
+        self.client_recv('END\r\n', 0)
+
+        self.mock_recv('get a\r\n', 0)
+        self.mock_send('VALUE a 0 1\r\na\r\n', 0)
+        self.mock_send('END\r\n', 0)
+
+        self.client_recv('VALUE a 0 1\r\na\r\n' +
+                         'END\r\n', 1)
+        self.client_recv('VALUE a 0 1\r\na\r\n' +
+                         'END\r\n', 2)
+        self.client_recv('VALUE a 0 1\r\na\r\n' +
+                         'END\r\n', 3)
+        self.client_recv('VALUE a 0 1\r\na\r\n' +
+                         'END\r\n', 4)
+
     def TODO_testSharedServerConns(self):
         """Test proxy only uses a few server conns"""
         return "TODO: getting random behavior here"
