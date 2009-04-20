@@ -494,9 +494,10 @@ class TestProxy(unittest.TestCase):
 
     def TODO_testSharedServerConns(self):
         """Test proxy only uses a few server conns"""
-        return "TODO: temporarily off"
+        return "TODO: getting random behavior here"
 
         self.assertEqual(len(self.clients), 0)
+        self.assertEqual(len(self.mock_server().sessions), 0)
 
         large_num_clients = 30
         for i in range(0, large_num_clients):
@@ -505,12 +506,14 @@ class TestProxy(unittest.TestCase):
 
         self.assertEqual(len(self.clients), large_num_clients)
 
-        self.wait(1)
+        self.wait(10)
+
         self.assertTrue(len(self.mock_server().sessions) < large_num_clients)
+        self.assertTrue(len(self.mock_server().sessions) > 0)
 
     def TODO_testServerSeesRetry(self):
         """Test server going down sees a retry"""
-        return "TODO: we're currently getting nondeterministic behavior"
+        return "TODO: getting random behavior here"
 
         self.client_connect()
         self.client_send('get someDown\r\n')
