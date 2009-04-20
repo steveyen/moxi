@@ -33,7 +33,7 @@ int cproxy_init(const char *cfg, int nthreads,
         strlen(cfg) <= 0)
         return 0;
 
-    if (cfg[0] >= '1' && cfg[0] <= '9')
+    if (strchr(cfg, '@') == NULL) // Not jid format.
         return cproxy_init_string(cfg, nthreads, default_downstream_max);
 
     if (settings.verbose > 1)
