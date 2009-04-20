@@ -16,8 +16,8 @@ char **get_key_values(kvpair_t *kvs, char *key);
 
 kvpair_t *copy_kvpairs(kvpair_t *orig);
 
-static int old_init(const char *cfg, int nthreads,
-                    int default_downstream_max);
+static int cproxy_init_string(const char *cfg, int nthreads,
+                              int default_downstream_max);
 
 static int cproxy_init_agent(char *jid, char *jpw,
                              char *config, char *host,
@@ -34,7 +34,7 @@ int cproxy_init(const char *cfg, int nthreads,
         return 0;
 
     if (cfg[0] >= '1' && cfg[0] <= '9')
-        return old_init(cfg, nthreads, default_downstream_max);
+        return cproxy_init_string(cfg, nthreads, default_downstream_max);
 
     if (settings.verbose > 1)
         fprintf(stderr, "cproxy_init %s\n", cfg);
@@ -396,8 +396,8 @@ void cproxy_on_new_serverlist(proxy_main *m,
 
 // ----------------------------------------------------------
 
-static int old_init(const char *cfg, int nthreads,
-                    int default_downstream_max) {
+static int cproxy_init_string(const char *cfg, int nthreads,
+                              int default_downstream_max) {
     /* cfg should look like "local_port=host:port,host:port;local_port=host:port"
      * like "11222=memcached1.foo.net:11211"  This means local port 11222
      * will be a proxy to downstream memcached server running at
