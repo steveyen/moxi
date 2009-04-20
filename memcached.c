@@ -4229,7 +4229,7 @@ int main (int argc, char **argv) {
      * we can be a proxy to ourselves for testing.
      */
     if (cproxy_cfg) {
-        cproxy_init(cproxy_cfg, settings.num_threads, 2);
+        cproxy_init(cproxy_cfg, settings.num_threads, 1);
         free(cproxy_cfg);
     }
 

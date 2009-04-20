@@ -453,6 +453,8 @@ bool cproxy_forward_ascii_multiget_downstream(downstream *d, conn *uc) {
         //
         d->multiget = g_hash_table_new(multiget_key_hash,
                                        multiget_key_equal);
+        if (settings.verbose > 1)
+            fprintf(stderr, "cproxy multiget hash table new\n");
     }
 
     int   uc_num = 0;
@@ -505,7 +507,7 @@ bool cproxy_forward_ascii_multiget_downstream(downstream *d, conn *uc) {
 
                         g_hash_table_insert(d->multiget, key, entry);
 
-                        if (entry->next == NULL)
+                        if (entry->next != NULL)
                             first_request = false;
                     } else {
                         // TODO: Handle out of multiget entry memory.
@@ -538,6 +540,15 @@ bool cproxy_forward_ascii_multiget_downstream(downstream *d, conn *uc) {
                         add_iov(c, key - 1, key_len + 1);
                     } else {
                         // TODO: Handle when downstream conn is down.
+                    }
+                } else {
+                    if (settings.verbose > 1) {
+                        char buf[KEY_MAX_LENGTH + 10];
+                        memcpy(buf, key, key_len);
+                        buf[key_len] = '\0';
+
+                        fprintf(stderr, "%d cproxy multiget squash: %s\n",
+                                uc_cur->sfd, buf);
                     }
                 }
             }
