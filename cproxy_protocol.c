@@ -308,10 +308,24 @@ void cproxy_process_downstream_ascii_nread(conn *c) {
     // c->thread->stats.slab_stats[it->slabs_clsid].set_cmds++;
     // pthread_mutex_unlock(&c->thread->stats.mutex);
 
-    conn *uc = d->upstream_conn;
-    while (uc != NULL) {
-        cproxy_ascii_item_response(it, uc);
-        uc = uc->next;
+    if (d->multiget != NULL) {
+        char key_buf[KEY_MAX_LENGTH + 10];
+
+        memcpy(key_buf, ITEM_key(it), it->nkey);
+        key_buf[it->nkey] = '\0';
+
+        multiget_entry *entry =
+            g_hash_table_lookup(d->multiget, key_buf);
+        while (entry != NULL) {
+            cproxy_ascii_item_response(it, entry->upstream_conn);
+            entry = entry->next;
+        }
+    } else {
+        conn *uc = d->upstream_conn;
+        while (uc != NULL) {
+            cproxy_ascii_item_response(it, uc);
+            uc = uc->next;
+        }
     }
 
     item_remove(it);
