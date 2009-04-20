@@ -533,8 +533,8 @@ class TestProxy(unittest.TestCase):
                          'VALUE d 0 1\r\nd\r\n' +
                          'END\r\n', 2)
 
-    def testGetSquash2(self):
-        """Test multiget by multiple clients are deduped"""
+    def testGetSquashOneKey(self):
+        """Test multiget of one key by multiple clients are deduped"""
 
         # Assuming proxy's max_downstream is 1,
         # and number of threads is 1.
