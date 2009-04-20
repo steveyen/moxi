@@ -25,12 +25,16 @@ static void collect_stats(void *data0, void *data1);
 
 // Protocol STATS command handling.
 //
-static GHashTable *protocol_stats_rules = NULL;
-
-enum protocol_stat_rule {
-    merge_first,
-    merge_smallest
-};
+char *protocol_stats_merge_by_first = "pid ";
+char *protocol_stats_merge_by_smallest =
+    "uptime "
+    "time "
+    "version "
+    "pointer_size "
+    "limit_maxbytes "
+    ":chunk_size "
+    ":chunk_per_page "
+    ":age "; // TODO: Should age merge be largest, not smallest?
 
 bool protocol_stats_merge_sum(char *v1, int v1len,
                               char *v2, int v2len,
@@ -45,6 +49,9 @@ bool protocol_stats_merge_smallest(char *v1, int v1len,
 size_t   protocol_stats_key_len(const char *key);
 guint    protocol_stats_key_hash(gconstpointer v);
 gboolean protocol_stats_key_equal(gconstpointer v1, gconstpointer v2);
+
+int count_dot_pair(char *x, int xlen, char *y, int ylen);
+int count_dot(char *x, int len);
 
 /* This callback is invoked by memagent on a memagent thread
  * when it wants proxy stats.
@@ -199,44 +206,81 @@ static void add_proxy_stats(proxy_stats *agg, proxy_stats *x) {
 }
 
 // Special STATS value merging rules, instead of the
-// default to just sum the values.
+// default to just sum the values.  Note the trailing space.
 //
-void cproxy_protocol_stats_init(void) {
-    assert(protocol_stats_rules == NULL);
-
-    protocol_stats_rules = g_hash_table_new(protocol_stats_key_hash,
-                                            protocol_stats_key_equal);
-
-#define RULE(key, rule) \
-    g_hash_table_insert(protocol_stats_rules, (gpointer) key, (gpointer) rule);
-
-    RULE("pid", merge_first);
-    RULE("uptime", merge_smallest);
-    RULE("time", merge_smallest);
-    RULE("version", merge_smallest);
-    RULE("pointer_size", merge_smallest);
-    RULE("limit_maxbytes", merge_smallest);
-    RULE(":chunk_size", merge_smallest);
-    RULE(":chunk_per_page", merge_smallest);
-    RULE(":age", merge_smallest); // TODO: Should this be largest?
-}
-
 bool protocol_stats_merge_sum(char *v1, int v1len,
                               char *v2, int v2len,
                               char *out, int outlen) {
+    int dot = count_dot_pair(v1, v1len, v2, v2len);
+    if (dot > 0) {
+        float v1f = strtof(v1, NULL);
+        float v2f = strtof(v2, NULL);
+        sprintf(out, "%f", v1f + v2f);
+        return true;
+    } else {
+        int32_t v1i;
+        int32_t v2i;
+
+        if (safe_strtol(v1, &v1i) &&
+            safe_strtol(v2, &v2i)) {
+            sprintf(out, "%d", v1i + v2i);
+            return true;
+        }
+    }
+
     return false;
 }
 
 bool protocol_stats_merge_first(char *v1, int v1len,
                                 char *v2, int v2len,
                                 char *out, int outlen) {
+    char *v    = v1;
+    int   vlen = v1len;
+
+    if (v1 == NULL ||
+        v1len <= 0) {
+        v    = v2;
+        vlen = v2len;
+    }
+
+    if (v != NULL &&
+        vlen <= outlen) {
+        memcpy(out, v, vlen);
+        return true;
+    }
+
     return false;
 }
 
 bool protocol_stats_merge_smallest(char *v1, int v1len,
                                    char *v2, int v2len,
                                    char *out, int outlen) {
+    int dot = count_dot_pair(v1, v1len, v2, v2len);
+    if (dot > 0) {
+    } else {
+    }
+
     return false;
+}
+
+int count_dot_pair(char *x, int xlen, char *y, int ylen) {
+    int xdot = count_dot(x, xlen);
+    int ydot = count_dot(y, ylen);
+
+    assert(xdot == ydot);
+
+    return (xdot > ydot ? xdot : ydot);
+}
+
+int count_dot(char *x, int len) { // Number of '.' chars in a string.
+    int dot = 0;
+
+    for (char *end = x + len; x < end; x++) {
+        if (*x == '.')
+            dot++;
+    }
+
+    return dot;
 }
 
 size_t protocol_stats_key_len(const char *key) {
