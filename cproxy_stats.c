@@ -32,6 +32,7 @@ char *protocol_stats_keys_smallest =
     "version "
     "pointer_size "
     "limit_maxbytes "
+    "accepting_conns "
     ":chunk_size "
     ":chunk_per_page "
     ":age "; // TODO: Should age merge be largest, not smallest?
@@ -261,7 +262,7 @@ bool protocol_stats_merge(GHashTable *merger, char *line) {
         size_t  prev_ntokens = scan_tokens(prev, prev_tokens, MAX_TOKENS);
 
         if (prev_ntokens != 4)
-            return false;
+            return true;
 
         bool ok;
 
@@ -283,8 +284,7 @@ bool protocol_stats_merge(GHashTable *merger, char *line) {
             int prefix_len = tokens[VALUE_TOKEN].value - line;
 
             strncpy(buf_end, line, prefix_len);
-            buf_end[prefix_len] = ' ';
-            strcpy(buf_end + prefix_len + 1, buf_val);
+            strcpy(buf_end + prefix_len, buf_val);
 
             char *hval = strdup(buf_end);
             g_hash_table_insert(merger,
@@ -292,9 +292,12 @@ bool protocol_stats_merge(GHashTable *merger, char *line) {
                                 hval);
 
             free(prev);
-
-            return true;
         }
+
+        // Note, if we couldn't merge, then just keep
+        // the previous value.
+        //
+        return true;
     }
 
     return false;
