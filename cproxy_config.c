@@ -332,10 +332,6 @@ void cproxy_on_new_pool(proxy_main *m,
         p = p->next;
 
     if (p == NULL) {
-        if (settings.verbose > 1)
-            fprintf(stderr, "cproxy main creating new proxy for %s on %d\n",
-                    config, port);
-
         p = cproxy_create(name, port, config, config_ver,
                           m->nthreads, m->downstream_max);
         if (p != NULL) {
@@ -346,8 +342,8 @@ void cproxy_on_new_pool(proxy_main *m,
             if (n > 0) {
                 if (settings.verbose > 1)
                     fprintf(stderr,
-                            "cproxy listening on %d conns for %s on %d\n",
-                            n, p->config, p->port);
+                            "cproxy_listen success on %u to %s with %d conns\n",
+                            p->port, p->config, n);
                 m->stat_proxy_starts++;
             } else {
                 if (settings.verbose > 1)

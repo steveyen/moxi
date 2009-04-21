@@ -60,10 +60,11 @@ struct proxy {
     //
     pthread_mutex_t proxy_lock;
 
-    // Immutable number of listening conn's acting as a proxy,
+    // Number of listening conn's acting as a proxy,
     // where (((proxy *) conn->extra) == this).
     //
-    int listening;
+    uint64_t listening;
+    uint64_t listening_failed; // When server_socket() failed.
 
     proxy *next; // Modified/accessed only by main listener thread.
 
@@ -72,11 +73,20 @@ struct proxy {
 };
 
 struct proxy_stats {
+    // Naming convention is that num_xxx's go up and down,
+    // while tot_xxx's only increase.
+    //
     uint64_t num_upstream; // Current # of upstreams conns using this proxy.
     uint64_t tot_upstream; // Total # upstream conns that used this proxy.
 
+    uint64_t num_downstream_conn;
+    uint64_t tot_downstream_conn;
     uint64_t tot_downstream_released;
     uint64_t tot_downstream_reserved;
+    uint64_t tot_downstream_quit_server;
+    uint64_t tot_downstream_max_reached;
+
+    uint64_t tot_retry;
 };
 
 /* Owned by worker thread.

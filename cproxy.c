@@ -78,7 +78,9 @@ proxy *cproxy_create(char *name, int port,
         p->port       = port;
         p->config     = strdup(config);
         p->config_ver = config_ver;
-        p->listening  = 0;
+
+        p->listening        = 0;
+        p->listening_failed = 0;
 
         pthread_mutex_init(&p->proxy_lock, NULL);
 
@@ -100,8 +102,14 @@ proxy *cproxy_create(char *name, int port,
                 ptd->downstream_tot = 0;
                 ptd->downstream_num = 0;
                 ptd->downstream_max = downstream_max;
+
                 ptd->stats.num_upstream = 0;
                 ptd->stats.tot_upstream = 0;
+                ptd->stats.num_downstream_conn = 0;
+                ptd->stats.tot_downstream_conn = 0;
+                ptd->stats.tot_downstream_quit_server = 0;
+                ptd->stats.tot_downstream_max_reached = 0;
+                ptd->stats.tot_retry = 0;
             }
 
             return p;
@@ -120,6 +128,7 @@ proxy *cproxy_create(char *name, int port,
  */
 int cproxy_listen(proxy *p) {
     assert(p != NULL);
+    assert(is_listen_thread());
 
     if (settings.verbose > 1)
         fprintf(stderr, "cproxy_listen on port %d, downstream %s\n",
@@ -129,35 +138,38 @@ int cproxy_listen(proxy *p) {
 
     // Idempotent, remembers if it already created listening socket(s).
     //
-    if (p->listening == 0 &&
-        server_socket(p->port, proxy_upstream_ascii_prot) == 0) {
-        assert(listen_conn != NULL);
+    if (p->listening == 0) {
+        if (server_socket(p->port, proxy_upstream_ascii_prot) == 0) {
+            assert(listen_conn != NULL);
 
-        // The listen_conn global list is changed by server_socket(),
-        // which adds a new listening conn on p->port for each bindable
-        // host address.
-        //
-        // For example, after the call to server_socket(), there
-        // might be two new listening conn's -- one for localhost,
-        // another for 127.0.0.1.
-        //
-        conn *c = listen_conn;
-        while (c != NULL &&
-               c != listen_conn_orig) {
-            if (settings.verbose > 1)
-                fprintf(stderr,
-                        "<%d cproxy listening on port %d, downstream %s\n",
-                        c->sfd, p->port, p->config);
-
-            p->listening++;
-
-            // TODO: Listening conn's never seem to close,
-            //       but need to handle cleanup if they do,
-            //       such as if we handle graceful shutdown one day.
+            // The listen_conn global list is changed by server_socket(),
+            // which adds a new listening conn on p->port for each bindable
+            // host address.
             //
-            c->extra = p;
-            c->funcs = &cproxy_listen_funcs;
-            c = c->next;
+            // For example, after the call to server_socket(), there
+            // might be two new listening conn's -- one for localhost,
+            // another for 127.0.0.1.
+            //
+            conn *c = listen_conn;
+            while (c != NULL &&
+                   c != listen_conn_orig) {
+                if (settings.verbose > 1)
+                    fprintf(stderr,
+                            "<%d cproxy listening on port %d, downstream %s\n",
+                            c->sfd, p->port, p->config);
+
+                p->listening++;
+
+                // TODO: Listening conn's never seem to close,
+                //       but need to handle cleanup if they do,
+                //       such as if we handle graceful shutdown one day.
+                //
+                c->extra = p;
+                c->funcs = &cproxy_listen_funcs;
+                c = c->next;
+            }
+        } else {
+            p->listening_failed++;
         }
     }
 
@@ -191,12 +203,6 @@ void cproxy_init_upstream_conn(conn *c) {
     proxy *p = c->extra;
     assert(p != NULL);
 
-    if (settings.verbose > 1)
-        fprintf(stderr,
-                "<%d cproxy_init_upstream_conn (%s)"
-                " for %d, downstream %s\n",
-                c->sfd, state_text(c->state), p->port, p->config);
-
     proxy_td *ptd = cproxy_find_thread_data(p, pthread_self());
     assert(ptd != NULL);
 
@@ -208,16 +214,11 @@ void cproxy_init_upstream_conn(conn *c) {
 }
 
 void cproxy_init_downstream_conn(conn *c) {
-    assert(c->extra != NULL);
-
     downstream *d = c->extra;
-    if (d != NULL) {
-        if (settings.verbose > 1)
-            fprintf(stderr,
-                    "<%d cproxy_init_downstream_conn (%s)"
-                    " to downstream %s\n",
-                    c->sfd, state_text(c->state), d->ptd->proxy->config);
-    }
+    assert(d != NULL);
+
+    d->ptd->stats.num_downstream_conn++;
+    d->ptd->stats.tot_downstream_conn++;
 }
 
 void cproxy_on_close_upstream_conn(conn *c) {
@@ -313,6 +314,8 @@ void cproxy_on_close_downstream_conn(conn *c) {
                         "<%d cproxy_on_close_downstream_conn quit_server\n",
                         c->sfd);
 
+            d->ptd->stats.tot_downstream_quit_server++;
+
             assert(d->mst.hosts[i].fd == c->sfd);
             memcached_quit_server(&d->mst.hosts[i], 1);
             assert(d->mst.hosts[i].fd == -1);
@@ -321,6 +324,9 @@ void cproxy_on_close_downstream_conn(conn *c) {
 
     proxy_td *ptd = d->ptd;
     assert(ptd);
+
+    ptd->stats.num_downstream_conn--;
+    assert(ptd->stats.num_downstream_conn >= 0);
 
     conn *uc_retry = NULL;
 
@@ -387,6 +393,8 @@ void cproxy_on_close_downstream_conn(conn *c) {
         if (settings.verbose > 1)
             fprintf(stderr, "%d cproxy retrying\n", uc_retry->sfd);
 
+        ptd->stats.tot_retry++;
+
         assert(uc_retry->thread);
         assert(uc_retry->thread->work_queue);
 
@@ -409,8 +417,7 @@ void cproxy_add_downstream(proxy_td *ptd) {
     assert(ptd != NULL);
     assert(ptd->proxy != NULL);
 
-    if (ptd != NULL &&
-        ptd->downstream_num < ptd->downstream_max) {
+    if (ptd->downstream_num < ptd->downstream_max) {
         if (settings.verbose > 1)
             fprintf(stderr, "cproxy_add_downstream %d %d\n",
                     ptd->downstream_num,
@@ -440,6 +447,8 @@ void cproxy_add_downstream(proxy_td *ptd) {
 
             free(config);
         }
+    } else {
+        ptd->stats.tot_downstream_max_reached++;
     }
 }
 
