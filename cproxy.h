@@ -34,7 +34,12 @@ struct proxy_main {
     //
     proxy *proxy_head;
 
-    uint32_t stat_reconfigs;
+    uint64_t stat_configs;
+    uint64_t stat_config_fails;
+    uint64_t stat_proxy_starts;
+    uint64_t stat_proxy_start_fails;
+    uint64_t stat_proxy_existings;
+    uint64_t stat_proxy_shutdowns;
 };
 
 /* Owned by main listener thread.

@@ -119,7 +119,13 @@ static int cproxy_init_agent(char *jid, char *jpw, char *config, char *host,
         m->proxy_head     = NULL;
         m->nthreads       = nthreads;
         m->downstream_max = downstream_max;
-        m->stat_reconfigs = 0;
+
+        m->stat_configs      = 0;
+        m->stat_config_fails = 0;
+        m->stat_proxy_starts      = 0;
+        m->stat_proxy_start_fails = 0;
+        m->stat_proxy_existings   = 0;
+        m->stat_proxy_shutdowns   = 0;
 
         // Different jid's for production, staging, etc.
         m->config.jid  = jid;  // "customer@stevenmb.local"
@@ -172,7 +178,7 @@ void cproxy_on_new_config(void *data0, void *data1) {
     assert(kvs);
     assert(is_listen_thread());
 
-    m->stat_reconfigs++;
+    m->stat_configs++;
 
     uint32_t max_config_ver = 0;
 
@@ -201,11 +207,11 @@ void cproxy_on_new_config(void *data0, void *data1) {
     //
     char **pools = get_key_values(kvs, "-pools-");
     if (pools == NULL)
-        return;
+        goto fail;
 
     char **bindings = get_key_values(kvs, "-bindings-");
     if (bindings == NULL)
-        return;
+        goto fail;
 
     int npools = 0;
     while (pools[npools])
@@ -218,7 +224,7 @@ void cproxy_on_new_config(void *data0, void *data1) {
     if (nbindings != npools) {
         if (settings.verbose > 1)
             fprintf(stderr, "npools does not match nbindings\n");
-        return;
+        goto fail;
     }
 
     for (int i = 0; i < npools; i++) {
@@ -309,6 +315,11 @@ void cproxy_on_new_config(void *data0, void *data1) {
     }
 
     free_kvpair(kvs);
+    return;
+
+ fail:
+    m->stat_config_fails++;
+    free_kvpair(kvs);
 }
 
 void cproxy_on_new_pool(proxy_main *m,
@@ -345,9 +356,11 @@ void cproxy_on_new_pool(proxy_main *m,
             if (n > 0) {
                 if (settings.verbose > 1)
                     fprintf(stderr, "cproxy listening on %d conns\n", n);
+                m->stat_proxy_starts++;
             } else {
                 if (settings.verbose > 1)
                     fprintf(stderr, "cproxy_listen failed on %u\n", p->port);
+                m->stat_proxy_start_fails++;
             }
         }
     } else {
@@ -362,7 +375,7 @@ void cproxy_on_new_pool(proxy_main *m,
                 strcmp(p->name, name) != 0)
                 fprintf(stderr,
                         "cproxy main name changed from %s to %s\n",
-                    p->name, name);
+                        p->name, name);
 
             if (p->config && config &&
                 strcmp(p->config, config) != 0)
@@ -388,6 +401,12 @@ void cproxy_on_new_pool(proxy_main *m,
         }
         if (p->config == NULL && config != NULL)
             p->config = strdup(config);
+
+        if (p->name != NULL &&
+            p->config != NULL)
+            m->stat_proxy_existings++;
+        else
+            m->stat_proxy_shutdowns++;
 
         assert(config_ver != p->config_ver);
 
