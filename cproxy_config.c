@@ -33,11 +33,11 @@ int cproxy_init(const char *cfg, int nthreads,
         strlen(cfg) <= 0)
         return 0;
 
-    if (strchr(cfg, '@') == NULL) // Not jid format.
-        return cproxy_init_string(cfg, nthreads, downstream_max);
-
     if (settings.verbose > 1)
         fprintf(stderr, "cproxy_init %s\n", cfg);
+
+    if (strchr(cfg, '@') == NULL) // Not jid format.
+        return cproxy_init_string(cfg, nthreads, downstream_max);
 
     char *buff = strdup(cfg);
     char *next = buff;
@@ -83,6 +83,8 @@ int cproxy_init(const char *cfg, int nthreads,
             }
         }
 
+        // TODO: Better config/init error handling.
+        //
         if (jid == NULL) {
             if (settings.verbose > 1)
                 fprintf(stderr, "cproxy_init missing jid\n");
@@ -94,7 +96,7 @@ int cproxy_init(const char *cfg, int nthreads,
                 fprintf(stderr, "cproxy_init missing config\n");
         } else if (host == NULL) {
             if (settings.verbose > 1)
-                fprintf(stderr, "cproxy_init missing verbose\n");
+                fprintf(stderr, "cproxy_init missing host\n");
         } else {
             if (cproxy_init_agent(jid, jpw, config, host,
                                   nthreads, downstream_max) == 0)
@@ -127,7 +129,7 @@ static int cproxy_init_agent(char *jid, char *jpw, char *config, char *host,
         m->stat_proxy_existings   = 0;
         m->stat_proxy_shutdowns   = 0;
 
-        // Different jid's for production, staging, etc.
+        // Different jid's possible for production, staging, etc.
         m->config.jid  = jid;  // "customer@stevenmb.local"
         m->config.pass = jpw;  // "password"
         m->config.host = host; // "localhost" // TODO: XMPP server, for dev.
@@ -160,9 +162,6 @@ void on_memagent_new_config(void *userdata, kvpair_t *config) {
 
     LIBEVENT_THREAD *mthread = thread_by_index(0);
     assert(mthread != NULL);
-
-    if (settings.verbose > 1)
-        fprintf(stderr, "on_memagent_new_serverlist\n");
 
     kvpair_t *copy = copy_kvpairs(config);
     if (copy != NULL) {
@@ -299,13 +298,8 @@ void cproxy_on_new_config(void *data0, void *data1) {
 
         pthread_mutex_unlock(&p->proxy_lock);
 
-        if (down) {
-            if (settings.verbose > 1)
-                fprintf(stderr, "shutting down proxy %s:%d to %s\n",
-                        name, port, config);
-
+        if (down)
             cproxy_on_new_pool(m, NULL, port, NULL, new_config_ver);
-        }
 
         if (name != NULL)
             free(name);
@@ -329,10 +323,6 @@ void cproxy_on_new_pool(proxy_main *m,
     assert(port >= 0);
     assert(is_listen_thread());
 
-    if (settings.verbose > 1)
-        fprintf(stderr, "cproxy main has new cfg: %s (bound to %d) %u\n",
-                config, port, config_ver);
-
     // See if we've already got a proxy running on the port,
     // and create one if needed.
     //
@@ -355,17 +345,21 @@ void cproxy_on_new_pool(proxy_main *m,
             int n = cproxy_listen(p);
             if (n > 0) {
                 if (settings.verbose > 1)
-                    fprintf(stderr, "cproxy listening on %d conns\n", n);
+                    fprintf(stderr,
+                            "cproxy listening on %d conns for %s on %d\n",
+                            n, p->config, p->port);
                 m->stat_proxy_starts++;
             } else {
                 if (settings.verbose > 1)
-                    fprintf(stderr, "cproxy_listen failed on %u\n", p->port);
+                    fprintf(stderr,
+                            "cproxy_listen failed on %u to %s\n",
+                            p->port, p->config);
                 m->stat_proxy_start_fails++;
             }
         }
     } else {
         if (settings.verbose > 1)
-            fprintf(stderr, "cproxy main handling existing config change %u\n",
+            fprintf(stderr, "cproxy main existing config change %u\n",
                     p->port);
 
         pthread_mutex_lock(&p->proxy_lock);
@@ -470,9 +464,6 @@ static int cproxy_init_string(const char *cfg, int nthreads,
         }
     }
     free(buff);
-
-    if (settings.verbose > 1)
-        fprintf(stderr, "cproxy_init done\n");
 
     return 0;
 }
