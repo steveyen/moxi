@@ -467,12 +467,14 @@ downstream *cproxy_reserve_downstream(proxy_td *ptd) {
         assert(d->downstream_used == 0);
         assert(d->downstream_used_start == 0);
         assert(d->multiget == NULL);
+        assert(d->merger == NULL);
 
         d->upstream_conn = NULL;
         d->upstream_suffix = NULL;
         d->downstream_used = 0;
         d->downstream_used_start = 0;
         d->multiget = NULL;
+        d->merger = NULL;
 
         if (cproxy_check_downstream_config(d)) {
             ptd->downstream_reserved =
@@ -525,7 +527,7 @@ bool cproxy_release_downstream(downstream *d, bool force) {
         curr->next = NULL;
     }
 
-    // Free the multiget hash table.
+    // Free extra hash tables.
     //
     if (d->multiget != NULL) {
         g_hash_table_foreach(d->multiget, multiget_foreach_free, NULL);
@@ -533,11 +535,17 @@ bool cproxy_release_downstream(downstream *d, bool force) {
         d->multiget = NULL;
     }
 
+    if (d->merger != NULL) {
+        g_hash_table_destroy(d->merger);
+        d->merger = NULL;
+    }
+
     d->upstream_conn = NULL;
     d->upstream_suffix = NULL; // No free(), expecting a static string.
     d->downstream_used = 0;
     d->downstream_used_start = 0;
     d->multiget = NULL;
+    d->merger = NULL;
 
     // If this downstream still has the same configuration as our top-level
     // proxy config, go back onto the available, released downstream list.
@@ -567,6 +575,7 @@ void cproxy_free_downstream(downstream *d) {
     assert(d->ptd != NULL);
     assert(d->upstream_conn == NULL);
     assert(d->multiget == NULL);
+    assert(d->merger == NULL);
 
     if (settings.verbose > 1)
         fprintf(stderr, "cproxy_free_downstream\n");
@@ -809,6 +818,7 @@ void cproxy_assign_downstream(proxy_td *ptd) {
         assert(d->downstream_used == 0);
         assert(d->downstream_used_start == 0);
         assert(d->multiget == NULL);
+        assert(d->merger == NULL);
 
         // We have a downstream reserved, so assign the first
         // waiting upstream conn to it.

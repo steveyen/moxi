@@ -110,6 +110,7 @@ struct downstream {
     char  *upstream_suffix;   // Last bit to write when downstreams are done.
 
     GHashTable *multiget; // Keyed by string.
+    GHashTable *merger;   // Keyed by string, for merging replies like STATS.
 };
 
 // Functions.
