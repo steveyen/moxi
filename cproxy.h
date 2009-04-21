@@ -33,6 +33,8 @@ struct proxy_main {
     // should access or modify this field.
     //
     proxy *proxy_head;
+
+    uint32_t stat_reconfigs;
 };
 
 /* Owned by main listener thread.
@@ -210,11 +212,11 @@ void on_memagent_new_config(void *userdata, kvpair_t *config);
 void on_memagent_get_stats(void *userdata, void *opaque,
                            agent_add_stat add_stat);
 
-void cproxy_on_new_serverlists(void *data0, void *data1);
+void cproxy_on_new_config(void *data0, void *data1);
 
-void cproxy_on_new_serverlist(proxy_main *m,
-                              char *name, int port,
-                              char *config, uint32_t config_ver);
+void cproxy_on_new_pool(proxy_main *m,
+                        char *name, int port,
+                        char *config, uint32_t config_ver);
 
 // TODO: The following generic items should be broken out into util file.
 //

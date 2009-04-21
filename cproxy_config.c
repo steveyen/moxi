@@ -119,6 +119,7 @@ static int cproxy_init_agent(char *jid, char *jpw, char *config, char *host,
         m->proxy_head             = NULL;
         m->nthreads               = nthreads;
         m->default_downstream_max = default_downstream_max;
+        m->stat_reconfigs         = 0;
 
         // Different jid's for production, staging, etc.
         m->config.jid  = jid;  // "customer@stevenmb.local"
@@ -159,17 +160,19 @@ void on_memagent_new_config(void *userdata, kvpair_t *config) {
 
     kvpair_t *copy = copy_kvpairs(config);
     if (copy != NULL) {
-        work_send(mthread->work_queue, cproxy_on_new_serverlists, m, copy);
+        work_send(mthread->work_queue, cproxy_on_new_config, m, copy);
     }
 }
 
-void cproxy_on_new_serverlists(void *data0, void *data1) {
+void cproxy_on_new_config(void *data0, void *data1) {
     proxy_main *m = data0;
     assert(m);
 
     kvpair_t *kvs = data1;
     assert(kvs);
     assert(is_listen_thread());
+
+    m->stat_reconfigs++;
 
     uint32_t max_config_ver = 0;
 
@@ -251,8 +254,8 @@ void cproxy_on_new_serverlists(void *data0, void *data1) {
                         sprintf(cur, ",%s", servers[j]);
                 }
 
-                cproxy_on_new_serverlist(m, pool_name, pool_port,
-                                         config, new_config_ver);
+                cproxy_on_new_pool(m, pool_name, pool_port,
+                                   config, new_config_ver);
 
                 free(config);
             }
@@ -295,7 +298,7 @@ void cproxy_on_new_serverlists(void *data0, void *data1) {
                 fprintf(stderr, "shutting down proxy %s:%d to %s\n",
                         name, port, config);
 
-            cproxy_on_new_serverlist(m, NULL, port, NULL, new_config_ver);
+            cproxy_on_new_pool(m, NULL, port, NULL, new_config_ver);
         }
 
         if (name != NULL)
@@ -308,9 +311,9 @@ void cproxy_on_new_serverlists(void *data0, void *data1) {
     free_kvpair(kvs);
 }
 
-void cproxy_on_new_serverlist(proxy_main *m,
-                              char *name, int port,
-                              char *config, uint32_t config_ver) {
+void cproxy_on_new_pool(proxy_main *m,
+                        char *name, int port,
+                        char *config, uint32_t config_ver) {
     assert(m);
     assert(port >= 0);
     assert(is_listen_thread());
