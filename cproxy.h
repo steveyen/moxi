@@ -190,7 +190,19 @@ void multiget_remove_upstream(gpointer key,
 
 // Stats handling.
 //
-void cproxy_protocol_stats_init(void);
+bool protocol_stats_merge(GHashTable *merger, char *line);
+
+size_t   protocol_stats_key_len(const char *key);
+guint    protocol_stats_key_hash(gconstpointer v);
+gboolean protocol_stats_key_equal(gconstpointer v1, gconstpointer v2);
+
+void protocol_stats_foreach_free(gpointer key,
+                                 gpointer value,
+                                 gpointer user_data);
+
+void protocol_stats_foreach_write(gpointer key,
+                                  gpointer value,
+                                  gpointer user_data);
 
 // Integration with memagent.
 //

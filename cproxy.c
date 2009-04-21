@@ -502,6 +502,17 @@ bool cproxy_release_downstream(downstream *d, bool force) {
     // Delink upstream conns.
     //
     while (d->upstream_conn != NULL) {
+        if (d->merger != NULL) {
+            g_hash_table_foreach(d->merger,
+                                 protocol_stats_foreach_write,
+                                 d->upstream_conn);
+
+            // TODO: Handle errors on following.
+            //
+            update_event(d->upstream_conn, EV_WRITE | EV_PERSIST);
+            conn_set_state(d->upstream_conn, conn_mwrite);
+        }
+
         if (d->upstream_suffix != NULL) {
             // Do a last write on the upstream.  For example,
             // the upstream_suffix might be "END\r\n" or other
@@ -536,6 +547,7 @@ bool cproxy_release_downstream(downstream *d, bool force) {
     }
 
     if (d->merger != NULL) {
+        g_hash_table_foreach(d->merger, protocol_stats_foreach_free, NULL);
         g_hash_table_destroy(d->merger);
         d->merger = NULL;
     }

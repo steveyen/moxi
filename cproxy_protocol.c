@@ -232,27 +232,31 @@ void cproxy_process_downstream_ascii(conn *c, char *line) {
     } else if (strncmp(line, "STAT ", 5) == 0 ||
                strncmp(line, "ITEM ", 5) == 0 ||
                strncmp(line, "PREFIX ", 7) == 0) {
+        assert(d->merger != NULL);
+
         conn *uc = d->upstream_conn;
         if (uc != NULL) {
             assert(uc->next == NULL);
 
-            // TODO: This only works for simple, single-target proxies.
-            //
-            int nline = strlen(line);
+            if (protocol_stats_merge(d->merger, line) == false) {
+                // Forward the line as-is if we couldn't merge it.
+                //
+                int nline = strlen(line);
 
-            item *it = item_alloc("s", 1, 0, 0, nline + 2);
-            if (it != NULL) {
-                strncpy(ITEM_data(it), line, nline);
-                strncpy(ITEM_data(it) + nline, "\r\n", 2);
+                item *it = item_alloc("s", 1, 0, 0, nline + 2);
+                if (it != NULL) {
+                    strncpy(ITEM_data(it), line, nline);
+                    strncpy(ITEM_data(it) + nline, "\r\n", 2);
 
-                if (add_conn_item(uc, it)) {
-                    add_iov(uc, ITEM_data(it), nline + 2);
+                    if (add_conn_item(uc, it)) {
+                        add_iov(uc, ITEM_data(it), nline + 2);
 
-                    it = NULL;
+                        it = NULL;
+                    }
+
+                    if (it != NULL)
+                        item_remove(it);
                 }
-
-                if (it != NULL)
-                    item_remove(it);
             }
         }
 
@@ -316,8 +320,13 @@ void cproxy_process_downstream_ascii_nread(conn *c) {
 
         multiget_entry *entry =
             g_hash_table_lookup(d->multiget, key_buf);
+
         while (entry != NULL) {
-            cproxy_ascii_item_response(it, entry->upstream_conn);
+            // The upstream might be NULL if it was closed mid-request.
+            //
+            if (entry->upstream_conn != NULL)
+                cproxy_ascii_item_response(it, entry->upstream_conn);
+
             entry = entry->next;
         }
     } else {
@@ -372,6 +381,8 @@ bool cproxy_forward_ascii_simple_downstream(downstream *d,
     assert(command != NULL);
     assert(uc != NULL);
     assert(uc->item == NULL);
+    assert(d->multiget == NULL);
+    assert(d->merger == NULL);
 
     if (strncmp(command, "get", 3) == 0)
         return cproxy_forward_ascii_multiget_downstream(d, uc);
@@ -385,8 +396,14 @@ bool cproxy_forward_ascii_simple_downstream(downstream *d,
             return cproxy_broadcast_ascii_downstream(d, command, uc,
                                                      "RESET\r\n");
 
-        return cproxy_broadcast_ascii_downstream(d, command, uc,
-                                                 "END\r\n");
+        if (cproxy_broadcast_ascii_downstream(d, command, uc,
+                                              "END\r\n")) {
+            d->merger = g_hash_table_new(protocol_stats_key_hash,
+                                         protocol_stats_key_equal);
+            return true;
+        } else {
+            return false;
+        }
     }
 
     token_t  tokens[MAX_TOKENS];
