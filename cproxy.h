@@ -26,8 +26,8 @@ typedef struct downstream  downstream;
 struct proxy_main {
     agent_config_t config; // Immutable.
 
-    int nthreads;               // Immutable.
-    int default_downstream_max; // Immutable.
+    int nthreads;       // Immutable.
+    int downstream_max; // Immutable.
 
     // Start of proxy list.  Only the main listener thread
     // should access or modify this field.

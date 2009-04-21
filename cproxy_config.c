@@ -17,24 +17,24 @@ char **get_key_values(kvpair_t *kvs, char *key);
 kvpair_t *copy_kvpairs(kvpair_t *orig);
 
 static int cproxy_init_string(const char *cfg, int nthreads,
-                              int default_downstream_max);
+                              int downstream_max);
 
 static int cproxy_init_agent(char *jid, char *jpw,
                              char *config, char *host,
-                             int nthreads, int default_downstream_max);
+                             int nthreads, int downstream_max);
 
 int cproxy_init(const char *cfg, int nthreads,
-                int default_downstream_max) {
+                int downstream_max) {
     assert(nthreads > 1); // Main + at least one worker.
     assert(nthreads == settings.num_threads);
-    assert(default_downstream_max > 0);
+    assert(downstream_max > 0);
 
     if (cfg == NULL ||
         strlen(cfg) <= 0)
         return 0;
 
     if (strchr(cfg, '@') == NULL) // Not jid format.
-        return cproxy_init_string(cfg, nthreads, default_downstream_max);
+        return cproxy_init_string(cfg, nthreads, downstream_max);
 
     if (settings.verbose > 1)
         fprintf(stderr, "cproxy_init %s\n", cfg);
@@ -97,7 +97,7 @@ int cproxy_init(const char *cfg, int nthreads,
                 fprintf(stderr, "cproxy_init missing verbose\n");
         } else {
             if (cproxy_init_agent(jid, jpw, config, host,
-                                  nthreads, default_downstream_max) == 0)
+                                  nthreads, downstream_max) == 0)
                 rv++;
         }
     }
@@ -108,7 +108,7 @@ int cproxy_init(const char *cfg, int nthreads,
 }
 
 static int cproxy_init_agent(char *jid, char *jpw, char *config, char *host,
-                             int nthreads, int default_downstream_max) {
+                             int nthreads, int downstream_max) {
     assert(jid);
     assert(jpw);
     assert(config);
@@ -116,10 +116,10 @@ static int cproxy_init_agent(char *jid, char *jpw, char *config, char *host,
 
     proxy_main *m = calloc(1, sizeof(proxy_main));
     if (m != NULL) {
-        m->proxy_head             = NULL;
-        m->nthreads               = nthreads;
-        m->default_downstream_max = default_downstream_max;
-        m->stat_reconfigs         = 0;
+        m->proxy_head     = NULL;
+        m->nthreads       = nthreads;
+        m->downstream_max = downstream_max;
+        m->stat_reconfigs = 0;
 
         // Different jid's for production, staging, etc.
         m->config.jid  = jid;  // "customer@stevenmb.local"
@@ -336,7 +336,7 @@ void cproxy_on_new_pool(proxy_main *m,
                     config, port);
 
         p = cproxy_create(name, port, config, config_ver,
-                          m->nthreads, m->default_downstream_max);
+                          m->nthreads, m->downstream_max);
         if (p != NULL) {
             p->next = m->proxy_head;
             m->proxy_head = p;
@@ -400,7 +400,7 @@ void cproxy_on_new_pool(proxy_main *m,
 // ----------------------------------------------------------
 
 static int cproxy_init_string(const char *cfg, int nthreads,
-                              int default_downstream_max) {
+                              int downstream_max) {
     /* cfg should look like "local_port=host:port,host:port;local_port=host:port"
      * like "11222=memcached1.foo.net:11211"  This means local port 11222
      * will be a proxy to downstream memcached server running at
@@ -408,7 +408,7 @@ static int cproxy_init_string(const char *cfg, int nthreads,
      */
     assert(nthreads > 1); // Main + at least one worker.
     assert(nthreads == settings.num_threads);
-    assert(default_downstream_max > 0);
+    assert(downstream_max > 0);
 
     if (cfg == NULL ||
         strlen(cfg) <= 0)
@@ -438,7 +438,7 @@ static int cproxy_init_string(const char *cfg, int nthreads,
         }
 
         proxy *p = cproxy_create(proxy_name, proxy_port, proxy_sect, 0,
-                                 nthreads, default_downstream_max);
+                                 nthreads, downstream_max);
         if (p != NULL) {
             int n = cproxy_listen(p);
             if (n > 0) {

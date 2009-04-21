@@ -100,8 +100,8 @@ void on_memagent_get_stats(void *userdata, void *opaque,
     sprintf(buf1, "%u:%s", thread_id, key);         \
     more_stat(spec, buf1, val);
 
-            more_stat("%u", "nthreads",               m->nthreads);
-            more_stat("%u", "default_downstream_max", m->default_downstream_max);
+            more_stat("%u", "nthreads",       m->nthreads);
+            more_stat("%u", "downstream_max", m->downstream_max);
 
             for (i = 1; i < m->nthreads; i++) {
                 more_thread_stat(i, "%u", "hello", 100);
