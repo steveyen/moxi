@@ -278,6 +278,7 @@ void cproxy_process_downstream_ascii(conn *c, char *line) {
                     fprintf(stderr,
                             "Can't update upstream write event\n");
 
+                d->ptd->stats.tot_oom++;
                 cproxy_close_conn(uc);
             }
         }
@@ -377,6 +378,7 @@ bool cproxy_forward_ascii_downstream(downstream *d) {
 bool cproxy_forward_ascii_simple_downstream(downstream *d,
                                             char *command, conn *uc) {
     assert(d != NULL);
+    assert(d->ptd != NULL);
     assert(d->downstream_conns != NULL);
     assert(command != NULL);
     assert(uc != NULL);
@@ -442,6 +444,7 @@ bool cproxy_forward_ascii_simple_downstream(downstream *d,
         if (settings.verbose > 1)
             fprintf(stderr, "Couldn't update cproxy write event\n");
 
+        d->ptd->stats.tot_oom++;
         cproxy_close_conn(c);
     }
 
@@ -450,6 +453,7 @@ bool cproxy_forward_ascii_simple_downstream(downstream *d,
 
 bool cproxy_forward_ascii_multiget_downstream(downstream *d, conn *uc) {
     assert(d != NULL);
+    assert(d->ptd != NULL);
     assert(d->downstream_conns != NULL);
     assert(d->multiget == NULL);
     assert(uc != NULL);
@@ -598,6 +602,7 @@ bool cproxy_forward_ascii_multiget_downstream(downstream *d, conn *uc) {
                     fprintf(stderr,
                             "Couldn't update cproxy write event\n");
 
+                d->ptd->stats.tot_oom++;
                 cproxy_close_conn(c);
             }
         }
@@ -623,6 +628,7 @@ bool cproxy_broadcast_ascii_downstream(downstream *d,
                                        conn *uc,
                                        char *suffix) {
     assert(d != NULL);
+    assert(d->ptd != NULL);
     assert(d->downstream_conns != NULL);
     assert(command != NULL);
     assert(uc != NULL);
@@ -651,6 +657,7 @@ bool cproxy_broadcast_ascii_downstream(downstream *d,
                     fprintf(stderr,
                             "Update cproxy write event failed\n");
 
+                d->ptd->stats.tot_oom++;
                 cproxy_close_conn(c);
             }
         }
@@ -675,6 +682,7 @@ bool cproxy_broadcast_ascii_downstream(downstream *d,
 bool cproxy_forward_ascii_item_downstream(downstream *d, short cmd,
                                           item *it, conn *uc) {
     assert(d != NULL);
+    assert(d->ptd != NULL);
     assert(d->downstream_conns != NULL);
     assert(it != NULL);
     assert(uc != NULL);
@@ -733,6 +741,9 @@ bool cproxy_forward_ascii_item_downstream(downstream *d, short cmd,
 
                     return true;
                 }
+
+                d->ptd->stats.tot_oom++;
+                cproxy_close_conn(c);
             }
         }
 

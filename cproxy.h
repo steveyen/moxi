@@ -83,9 +83,14 @@ struct proxy_stats {
     uint64_t tot_downstream_conn;
     uint64_t tot_downstream_released;
     uint64_t tot_downstream_reserved;
+    uint64_t tot_downstream_freed;
     uint64_t tot_downstream_quit_server;
     uint64_t tot_downstream_max_reached;
-
+    uint64_t tot_downstream_create_failed;
+    uint64_t tot_assign_downstream;
+    uint64_t tot_assign_upstream;
+    uint64_t tot_reset_upstream_avail;
+    uint64_t tot_oom;
     uint64_t tot_retry;
 };
 

@@ -107,8 +107,16 @@ proxy *cproxy_create(char *name, int port,
                 ptd->stats.tot_upstream = 0;
                 ptd->stats.num_downstream_conn = 0;
                 ptd->stats.tot_downstream_conn = 0;
+                ptd->stats.tot_downstream_released = 0;
+                ptd->stats.tot_downstream_reserved = 0;
+                ptd->stats.tot_downstream_freed = 0;
                 ptd->stats.tot_downstream_quit_server = 0;
                 ptd->stats.tot_downstream_max_reached = 0;
+                ptd->stats.tot_downstream_create_failed = 0;
+                ptd->stats.tot_assign_downstream = 0;
+                ptd->stats.tot_assign_upstream = 0;
+                ptd->stats.tot_reset_upstream_avail = 0;
+                ptd->stats.tot_oom = 0;
                 ptd->stats.tot_retry = 0;
             }
 
@@ -443,6 +451,8 @@ void cproxy_add_downstream(proxy_td *ptd) {
                 ptd->downstream_tot++;
                 ptd->downstream_num++;
                 cproxy_release_downstream(d, true);
+            } else {
+                ptd->stats.tot_downstream_create_failed++;
             }
 
             free(config);
@@ -494,6 +504,8 @@ downstream *cproxy_reserve_downstream(proxy_td *ptd) {
             d->next = ptd->downstream_reserved;
             ptd->downstream_reserved = d;
 
+            ptd->stats.tot_downstream_reserved++;
+
             return d;
         }
 
@@ -502,11 +514,13 @@ downstream *cproxy_reserve_downstream(proxy_td *ptd) {
 }
 
 bool cproxy_release_downstream(downstream *d, bool force) {
+    assert(d != NULL);
+    assert(d->ptd != NULL);
+
     if (settings.verbose > 1)
         fprintf(stderr, "release_downstream\n");
 
-    assert(d != NULL);
-    assert(d->ptd != NULL);
+    d->ptd->stats.tot_downstream_released++;
 
     // Delink upstream conns.
     //
@@ -516,10 +530,12 @@ bool cproxy_release_downstream(downstream *d, bool force) {
                                  protocol_stats_foreach_write,
                                  d->upstream_conn);
 
-            // TODO: Handle errors on following.
-            //
-            update_event(d->upstream_conn, EV_WRITE | EV_PERSIST);
-            conn_set_state(d->upstream_conn, conn_mwrite);
+            if (update_event(d->upstream_conn, EV_WRITE | EV_PERSIST)) {
+                conn_set_state(d->upstream_conn, conn_mwrite);
+            } else {
+                d->ptd->stats.tot_oom++;
+                cproxy_close_conn(d->upstream_conn);
+            }
         }
 
         if (d->upstream_suffix != NULL) {
@@ -534,10 +550,7 @@ bool cproxy_release_downstream(downstream *d, bool force) {
                 update_event(d->upstream_conn, EV_WRITE | EV_PERSIST)) {
                 conn_set_state(d->upstream_conn, conn_mwrite);
             } else {
-                if (settings.verbose > 1)
-                    fprintf(stderr,
-                        "Could not update upstream write event\n");
-
+                d->ptd->stats.tot_oom++;
                 cproxy_close_conn(d->upstream_conn);
             }
         }
@@ -600,6 +613,8 @@ void cproxy_free_downstream(downstream *d) {
 
     if (settings.verbose > 1)
         fprintf(stderr, "cproxy_free_downstream\n");
+
+    d->ptd->stats.tot_downstream_freed++;
 
     d->ptd->downstream_reserved =
         downstream_list_remove(d->ptd->downstream_reserved, d);
@@ -851,6 +866,9 @@ void cproxy_assign_downstream(proxy_td *ptd) {
             ptd->waiting_any_downstream_tail = NULL;
         d->upstream_conn->next = NULL;
 
+        ptd->stats.tot_assign_downstream++;
+        ptd->stats.tot_assign_upstream++;
+
         // Add any compatible upstream conns to the downstream.
         // By compatible, for example, we mean multi-gets from
         // different upstreams so we can de-deplicate get keys.
@@ -868,6 +886,8 @@ void cproxy_assign_downstream(proxy_td *ptd) {
 
             uc_last = uc_last->next;
             uc_last->next = NULL;
+
+            ptd->stats.tot_assign_upstream++;
         }
 
         if (settings.verbose > 1)
@@ -896,7 +916,10 @@ void cproxy_assign_downstream(proxy_td *ptd) {
                 else
                     out_string(uc, "SERVER_ERROR proxy write to downstream");
 
-                update_event(uc, EV_WRITE | EV_PERSIST);
+                if (!update_event(uc, EV_WRITE | EV_PERSIST)) {
+                    ptd->stats.tot_oom++;
+                    cproxy_close_conn(uc);
+                }
 
                 conn *curr = d->upstream_conn;
                 d->upstream_conn = d->upstream_conn->next;
@@ -914,19 +937,18 @@ void cproxy_assign_downstream(proxy_td *ptd) {
 void cproxy_reset_upstream(conn *uc) {
     assert(uc != NULL);
 
+    proxy_td *ptd = uc->extra;
+    assert(ptd != NULL);
+
     conn_set_state(uc, conn_new_cmd);
 
     if (uc->rbytes <= 0) {
-        if (update_event(uc, EV_READ | EV_PERSIST)) {
-            return;
-        } else {
-            if (settings.verbose > 1)
-                fprintf(stderr, "Couldn't update uc READ event\n");
-
+        if (!update_event(uc, EV_READ | EV_PERSIST)) {
+            ptd->stats.tot_oom++;
             cproxy_close_conn(uc);
-
-            return;
         }
+
+        return; // Return either way.
     }
 
     // TODO: Subtle potential bug, where we may have already
@@ -940,6 +962,8 @@ void cproxy_reset_upstream(conn *uc) {
     //
     if (settings.verbose > 1)
         fprintf(stderr, "cproxy_reset_upstream with bytes available\n");
+
+    ptd->stats.tot_reset_upstream_avail++;
 }
 
 bool cproxy_dettach_if_noreply(downstream *d, conn *uc) {
