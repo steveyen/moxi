@@ -20,7 +20,8 @@ memcached_SOURCES = memcached.c memcached.h \
                     cproxy_config.c \
                     cproxy_protocol.c \
                     cproxy_multiget.c \
-                    cproxy_stats.c
+                    agent_config.c \
+                    agent_stats.c
 
 if BUILD_CACHE
 memcached_SOURCES += cache.c
