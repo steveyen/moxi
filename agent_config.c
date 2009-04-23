@@ -19,7 +19,8 @@ void on_memagent_new_config(void *userdata, kvpair_t *config);
 void on_memagent_get_stats(void *userdata, void *opaque,
                            agent_add_stat add_stat);
 
-int cproxy_init_agent(char *cfg, int nthreads, int downstream_max);
+int cproxy_init_agent(const char *cfg, int nthreads,
+                      int downstream_max);
 
 int cproxy_init_agent_attrs(char *jid, char *jpw,
                             char *config, char *host,
@@ -35,7 +36,9 @@ char **get_key_values(kvpair_t *kvs, char *key);
 
 kvpair_t *copy_kvpairs(kvpair_t *orig);
 
-int cproxy_init_agent(char *cfg, int nthreads, int downstream_max) {
+int cproxy_init_agent(const char *cfg,
+                      int nthreads,
+                      int downstream_max) {
     char *buff = strdup(cfg);
     char *next = buff;
 

@@ -14,9 +14,8 @@
 int cproxy_init_string(const char *cfg, int nthreads,
                        int downstream_max);
 
-int cproxy_init_agent(char *jid, char *jpw,
-                      char *config, char *host,
-                      int nthreads, int downstream_max);
+int cproxy_init_agent(const char *cfg, int nthreads,
+                      int downstream_max);
 
 int cproxy_init(const char *cfg, int nthreads,
                 int downstream_max) {
@@ -34,74 +33,7 @@ int cproxy_init(const char *cfg, int nthreads,
     if (strchr(cfg, '@') == NULL) // Not jid format.
         return cproxy_init_string(cfg, nthreads, downstream_max);
 
-    char *buff = strdup(cfg);
-    char *next = buff;
-
-    // Each sec (or section) looks like...
-    //
-    //   apikey=jidname@jhostname%jpassword,config=config,host=host
-    //
-    // Only the apikey is needed.
-    //
-    int rv = 0;
-
-    while (next != NULL) {
-        char *jid    = NULL;
-        char *jpw    = NULL;
-        char *config = "/tmp/memscale.cfg"; // TODO: Revisit.
-        char *host   = "localhost";         // TODO: Revisit.
-
-        char *cur = strsep(&next, ";");
-        while (cur != NULL) {
-            char *key_val = strsep(&cur, ",");
-            if (key_val != NULL) {
-                char *key = strsep(&key_val, "=");
-                char *val = key_val;
-
-                if (settings.verbose > 1)
-                    fprintf(stderr, "cproxy_init kv %s %s\n", key, val);
-
-                if (val != NULL) {
-                    if (strcmp(key, "apikey") == 0) {
-                        jid = strsep(&val, "%");
-                        jpw = val;
-
-                        if (settings.verbose > 1)
-                            fprintf(stderr, "cproxy_init apikey %s %s\n",
-                                    jid, jpw);
-                    }
-                    if (strcmp(key, "config") == 0)
-                        config = val;
-                    if (strcmp(key, "host") == 0)
-                        host = val;
-                }
-            }
-        }
-
-        // TODO: Better config/init error handling.
-        //
-        if (jid == NULL) {
-            if (settings.verbose > 1)
-                fprintf(stderr, "cproxy_init missing jid\n");
-        } else if (jpw == NULL) {
-            if (settings.verbose > 1)
-                fprintf(stderr, "cproxy_init missing jpw\n");
-        } else if (config == NULL) {
-            if (settings.verbose > 1)
-                fprintf(stderr, "cproxy_init missing config\n");
-        } else if (host == NULL) {
-            if (settings.verbose > 1)
-                fprintf(stderr, "cproxy_init missing host\n");
-        } else {
-            if (cproxy_init_agent(jid, jpw, config, host,
-                                  nthreads, downstream_max) == 0)
-                rv++;
-        }
-    }
-
-    free(buff);
-
-    return rv;
+    return cproxy_init_agent(cfg, nthreads, downstream_max);
 }
 
 int cproxy_init_string(const char *cfg, int nthreads,
