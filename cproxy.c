@@ -1125,7 +1125,7 @@ char *add_conn_suffix(conn *c) {
     }
 
     if (c->suffixleft < c->suffixsize) {
-        char *suffix = suffix_from_freelist();
+        char *suffix = cache_alloc(c->thread->suffix_cache);
         if (suffix != NULL) {
             c->suffixlist[c->suffixleft] = suffix;
             c->suffixleft++;
