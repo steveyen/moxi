@@ -12,6 +12,18 @@
 #include "cproxy.h"
 #include "work.h"
 
+// Integration with memagent.
+//
+void on_memagent_new_config(void *userdata, kvpair_t *config);
+void on_memagent_get_stats(void *userdata, void *opaque,
+                           agent_add_stat add_stat);
+
+void cproxy_on_new_config(void *data0, void *data1);
+
+void cproxy_on_new_pool(proxy_main *m,
+                        char *name, int port,
+                        char *config, uint32_t config_ver);
+
 char **get_key_values(kvpair_t *kvs, char *key);
 
 kvpair_t *copy_kvpairs(kvpair_t *orig);
@@ -109,11 +121,12 @@ int cproxy_init(const char *cfg, int nthreads,
     return rv;
 }
 
-static int cproxy_init_agent(char *jid, char *jpw, char *config, char *host,
+static int cproxy_init_agent(char *jid, char *jpw,
+                             char *config_path, char *host,
                              int nthreads, int downstream_max) {
     assert(jid);
     assert(jpw);
-    assert(config);
+    assert(config_path);
     assert(host);
 
     proxy_main *m = calloc(1, sizeof(proxy_main));
@@ -129,18 +142,22 @@ static int cproxy_init_agent(char *jid, char *jpw, char *config, char *host,
         m->stat_proxy_existings   = 0;
         m->stat_proxy_shutdowns   = 0;
 
-        // Different jid's possible for production, staging, etc.
-        m->config.jid  = jid;  // "customer@stevenmb.local"
-        m->config.pass = jpw;  // "password"
-        m->config.host = host; // "localhost" // TODO: XMPP server, for dev.
-        m->config.software   = "memscale";
-        m->config.version    = "0.1";   // TODO: Version.
-        m->config.save_path  = config; // "/tmp/memscale.cfg"
-        m->config.userdata   = m;
-        m->config.new_config = on_memagent_new_config;
-        m->config.get_stats  = on_memagent_get_stats;
+        agent_config_t config; // Immutable.
 
-        if (start_agent(m->config)) {
+        memset(&config, 0, sizeof(config));
+
+        // Different jid's possible for production, staging, etc.
+        config.jid  = jid;  // "customer@stevenmb.local"
+        config.pass = jpw;  // "password"
+        config.host = host; // "localhost" // TODO: XMPP server, for dev.
+        config.software   = "memscale";
+        config.version    = "0.1";       // TODO: Version.
+        config.save_path  = config_path; // "/tmp/memscale.cfg"
+        config.userdata   = m;
+        config.new_config = on_memagent_new_config;
+        config.get_stats  = on_memagent_get_stats;
+
+        if (start_agent(config)) {
             if (settings.verbose > 1)
                 fprintf(stderr, "cproxy_init done\n");
 

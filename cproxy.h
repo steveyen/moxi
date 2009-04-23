@@ -5,7 +5,6 @@
 
 #include <glib.h>
 #include <libmemcached/memcached.h>
-#include "memagent.h"
 #include "work.h"
 
 int cproxy_init(const char *cfg, int nthreads, int downstream_max);
@@ -24,8 +23,6 @@ typedef struct downstream  downstream;
 /* Owned by main listener thread.
  */
 struct proxy_main {
-    agent_config_t config; // Immutable.
-
     int nthreads;       // Immutable.
     int downstream_max; // Immutable.
 
@@ -225,18 +222,6 @@ void protocol_stats_foreach_free(gpointer key,
 void protocol_stats_foreach_write(gpointer key,
                                   gpointer value,
                                   gpointer user_data);
-
-// Integration with memagent.
-//
-void on_memagent_new_config(void *userdata, kvpair_t *config);
-void on_memagent_get_stats(void *userdata, void *opaque,
-                           agent_add_stat add_stat);
-
-void cproxy_on_new_config(void *data0, void *data1);
-
-void cproxy_on_new_pool(proxy_main *m,
-                        char *name, int port,
-                        char *config, uint32_t config_ver);
 
 // TODO: The following generic items should be broken out into util file.
 //

@@ -18,6 +18,10 @@ uint32_t murmur_hash(const char *key, size_t length);
 
 // Local declarations.
 //
+void on_memagent_get_stats(void *userdata,
+                           void *opaque,
+                           agent_add_stat add_stat);
+
 static void add_proxy_stats(proxy_stats *agg, proxy_stats *x);
 
 static void request_stats(void *data0, void *data1);
