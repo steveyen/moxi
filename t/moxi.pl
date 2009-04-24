@@ -49,7 +49,7 @@ my $file;
 foreach $file (<./t/*.t>) {
   if ($is_good_test{$file}) {
     print $file . "\n";
-    my $result = `./t/cproxy_one.pl $file $topology_name`;
+    my $result = `./t/moxi_one.pl $file $topology_name`;
     while ($result =~ m/^fail /g) {
       print "$&\n";
     }
