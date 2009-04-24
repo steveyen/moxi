@@ -32,11 +32,13 @@ static void collect_stats(void *data0, void *data1);
  *
  * We use the work_queues to retrieve the info, so that normal
  * runtime has fewer locks, at the cost of scatter/gather
- * complexity.
+ * complexity to handle the proxy stats request.
  *
  * TODO: We're currently gathering the reverse of what we
  *       probably want -- thread-based stats rather than
- *       proxy-based stats.  Need to flip it over.
+ *       proxy-based stats.  Need to flip it over,
+ *       possibly in addition to what we're doing here,
+ *       as thread-based stats could be interesting too.
  */
 void on_memagent_get_stats(void *userdata, void *opaque,
                            agent_add_stat add_stat) {
@@ -80,8 +82,22 @@ void on_memagent_get_stats(void *userdata, void *opaque,
     sprintf(buf1, "%u:%s", thread_id, key);         \
     more_stat(spec, buf1, val);
 
-            more_stat("%u", "nthreads",       m->nthreads);
-            more_stat("%u", "downstream_max", m->downstream_max);
+            more_stat("%u", "nthreads",
+                      m->nthreads);
+            more_stat("%u", "downstream_max",
+                      m->downstream_max);
+            more_stat("%llu", "configs",
+                      m->stat_configs);
+            more_stat("%llu", "config_fails",
+                      m->stat_config_fails);
+            more_stat("%llu", "proxy_starts",
+                      m->stat_proxy_starts);
+            more_stat("%llu", "proxy_start_fails",
+                      m->stat_proxy_start_fails);
+            more_stat("%llu", "proxy_existings",
+                      m->stat_proxy_existings);
+            more_stat("%llu", "proxy_shutdowns",
+                      m->stat_proxy_shutdowns);
 
             for (i = 1; i < m->nthreads; i++) {
                 more_thread_stat(i, "%u", "hello", 100);
@@ -175,7 +191,19 @@ static void add_proxy_stats(proxy_stats *agg, proxy_stats *x) {
 
     agg->num_upstream += x->num_upstream;
     agg->tot_upstream += x->tot_upstream;
+
+    agg->num_downstream_conn += x->num_downstream_conn;
+    agg->tot_downstream_conn += x->tot_downstream_conn;
     agg->tot_downstream_released += x->tot_downstream_released;
     agg->tot_downstream_reserved += x->tot_downstream_reserved;
+    agg->tot_downstream_freed    += x->tot_downstream_freed;
+    agg->tot_downstream_quit_server   += x->tot_downstream_quit_server;
+    agg->tot_downstream_max_reached   += x->tot_downstream_max_reached;
+    agg->tot_downstream_create_failed += x->tot_downstream_create_failed;
+    agg->tot_assign_downstream    += x->tot_assign_downstream;
+    agg->tot_assign_upstream      += x->tot_assign_upstream;
+    agg->tot_reset_upstream_avail += x->tot_reset_upstream_avail;
+    agg->tot_oom   += x->tot_oom;
+    agg->tot_retry += x->tot_retry;
 }
 
