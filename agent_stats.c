@@ -78,9 +78,9 @@ void on_memagent_get_stats(void *userdata, void *opaque,
     sprintf(buf0, spec, val);     \
     add_stat(opaque, key, buf0);
 
-#define more_thread_stat(thread_id, spec, key, val) \
-    sprintf(buf1, "%u:%s", thread_id, key);         \
-    more_stat(spec, buf1, val);
+#define more_thread_stat(thread_id, key, val) \
+    sprintf(buf1, "%u:%s", thread_id, key);   \
+    more_stat("%llu", buf1, val);
 
             more_stat("%u", "nthreads",
                       m->nthreads);
@@ -100,7 +100,39 @@ void on_memagent_get_stats(void *userdata, void *opaque,
                       m->stat_proxy_shutdowns);
 
             for (i = 1; i < m->nthreads; i++) {
-                more_thread_stat(i, "%u", "hello", 100);
+                proxy_stats *ps = ca[i].data;
+
+                more_thread_stat(i, "num_upstream",
+                                 ps->num_upstream);
+                more_thread_stat(i, "tot_upstream",
+                                 ps->tot_upstream);
+                more_thread_stat(i, "num_downstream_conn",
+                                 ps->num_downstream_conn);
+                more_thread_stat(i, "tot_downstream_conn",
+                                 ps->tot_downstream_conn);
+                more_thread_stat(i, "tot_downstream_released",
+                                 ps->tot_downstream_released);
+                more_thread_stat(i, "tot_downstream_reserved",
+                                 ps->tot_downstream_reserved);
+                more_thread_stat(i, "tot_downstream_freed",
+                                 ps->tot_downstream_freed);
+                more_thread_stat(i, "tot_downstream_quit_server",
+                                 ps->tot_downstream_quit_server);
+                more_thread_stat(i, "tot_downstream_max_reached",
+                                 ps->tot_downstream_max_reached);
+                more_thread_stat(i, "tot_downstream_create_failed",
+                                 ps->tot_downstream_create_failed);
+                more_thread_stat(i, "tot_assign_downstream",
+                                 ps->tot_assign_downstream);
+                more_thread_stat(i, "tot_assign_upstream",
+                                 ps->tot_assign_upstream);
+                more_thread_stat(i, "tot_reset_upstream_avail",
+                                 ps->tot_reset_upstream_avail);
+                more_thread_stat(i, "tot_oom",
+                                 ps->tot_oom);
+                more_thread_stat(i, "tot_retry",
+                                 ps->tot_retry);
+
             }
         }
 
