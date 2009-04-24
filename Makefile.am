@@ -77,7 +77,10 @@ EXTRA_DIST = doc scripts TODO t memcached.spec memcached_dtrace.d version.m4
 
 MOSTLYCLEANFILES = *.gcov *.gcno *.gcda *.tcov
 
-test:	moxi-debug sizes testapp
+memcached-debug: moxi-debug
+	cp moxi-debug memcached-debug
+
+test: memcached-debug sizes testapp
 	$(srcdir)/sizes
 	$(srcdir)/testapp
 	prove $(srcdir)/t
