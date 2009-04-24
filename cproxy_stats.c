@@ -8,7 +8,6 @@
 #include <assert.h>
 #include <libmemcached/memcached.h>
 #include "memcached.h"
-#include "memagent.h"
 #include "cproxy.h"
 #include "work.h"
 

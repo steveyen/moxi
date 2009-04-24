@@ -349,8 +349,8 @@ AM_CONDITIONAL([BUILD_CACHE], [test "x$build_cache" = "xyes"])
 AC_CHECK_HEADER(memagent.h, [
    AC_DEFINE([HAVE_MEMAGENT_H], 1,
          [Define this if you have memagent.h])
-   build_memagent=no
-], [build_memagent=yes])
+   build_memagent=yes
+], [build_memagent=no])
 
 AM_CONDITIONAL([BUILD_MEMAGENT], [test "x$build_memagent" = "xyes"])
 
@@ -383,16 +383,21 @@ then
 fi
 
 LIBS="$LIBS -lmemcached"
-LIBS="$LIBS -lmemagent -lsqlite3 -lstrophe -lexpat -lresolv"
 LIBS="$LIBS -lglib-2.0 -lintl -liconv"
 LIBS="$LIBS -L/opt/local/lib"
-LIBS="$LIBS -L\$(HOME)/lib"
-CPPFLAGS="$CPPFLAGS -I\$(HOME)/include"
+
 CPPFLAGS="$CPPFLAGS -I/opt/local/include/glib-2.0"
 CPPFLAGS="$CPPFLAGS -I/opt/local/lib/glib-2.0/include"
 CPPFLAGS="$CPPFLAGS -I/opt/local/include"
 
 AC_SEARCH_LIBS(memcached_create, memcached)
+
+if test build_memagent = yes
+then
+   LIBS="$LIBS -lmemagent -lsqlite3 -lstrophe -lexpat -lresolv"
+   LIBS="$LIBS -L\$(HOME)/lib"
+   CPPFLAGS="$CPPFLAGS -I\$(HOME)/include"
+fi
 
 AC_CONFIG_FILES(Makefile doc/Makefile)
 AC_OUTPUT

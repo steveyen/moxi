@@ -33,7 +33,11 @@ int cproxy_init(const char *cfg, int nthreads,
     if (strchr(cfg, '@') == NULL) // Not jid format.
         return cproxy_init_string(cfg, nthreads, downstream_max);
 
+#ifdef BUILD_MEMAGENT
     return cproxy_init_agent(cfg, nthreads, downstream_max);
+#else
+    return 1;
+#endif
 }
 
 int cproxy_init_string(const char *cfg, int nthreads,
