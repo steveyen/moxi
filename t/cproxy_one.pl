@@ -27,7 +27,7 @@ sub new_memcached_proxy {
 
     TOPOLOGY
 
-    print("new_memcached_proxy $args\n");
+    print("new moxi $args\n");
 
     my $udpport = free_port("udp");
     if (supports_udp()) {
@@ -38,9 +38,9 @@ sub new_memcached_proxy {
     }
     my $childpid = fork();
 
-    my $exe = "$builddir/memcached-debug";
-    croak("memcached binary doesn't exist.  Haven't run 'make' ?\n") unless -e $exe;
-    croak("memcached binary not executable\n") unless -x _;
+    my $exe = "$builddir/moxi-debug";
+    croak("moxi binary doesn't exist.  Haven't run 'make' ?\n") unless -e $exe;
+    croak("moxi binary not executable\n") unless -x _;
 
     unless ($childpid) {
         exec "$exe $args";
@@ -73,11 +73,11 @@ sub new_memcached_proxy {
 	}
 	select undef, undef, undef, 0.10;
     }
-    croak("Failed to startup/connect to memcached server.");
+    croak("Failed to startup/connect to moxi server.");
 }
 
 sub supports_udp {
-    my $output = `$builddir/memcached-debug -h`;
+    my $output = `$builddir/moxi-debug -h`;
     return 0 if $output =~ /^memcached 1\.1\./;
     return 1;
 }

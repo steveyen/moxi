@@ -22,6 +22,9 @@ install-sh
 memcached
 memcached-debug
 memcached-debug.profile
+moxi
+moxi-debug
+moxi-debug.profile
 missing
 stamp-h1
 tags
@@ -30,6 +33,7 @@ cscope.out
 memcached_dtrace.h
 *~
 memcached-*.tar.gz
+moxi-*.tar.gz
 doc/protocol-binary-range.txt
 doc/protocol-binary.txt
 /sizes

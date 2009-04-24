@@ -1,12 +1,12 @@
-bin_PROGRAMS = memcached
+bin_PROGRAMS = moxi
 pkginclude_HEADERS = protocol_binary.h
-noinst_PROGRAMS = memcached-debug sizes testapp
+noinst_PROGRAMS = moxi-debug sizes testapp
 
 BUILT_SOURCES=
 
 testapp_SOURCES = testapp.c util.c util.h
 
-memcached_SOURCES = memcached.c memcached.h \
+moxi_SOURCES = memcached.c memcached.h \
                     hash.c hash.h \
                     slabs.c slabs.h \
                     items.c items.h \
@@ -20,27 +20,29 @@ memcached_SOURCES = memcached.c memcached.h \
                     cproxy_config.c \
                     cproxy_protocol.c \
                     cproxy_multiget.c \
-                    cproxy_stats.c \
-                    agent_config.c \
-                    agent_stats.c
+                    cproxy_stats.c
 
 if BUILD_CACHE
-memcached_SOURCES += cache.c
+moxi_SOURCES += cache.c
 testapp_SOURCES += cache.c
 endif
 
-if BUILD_SOLARIS_PRIVS
-memcached_SOURCES += solaris_priv.c
+if BUILD_MEMAGENT
+moxi_SOURCES += agent_config.c agent_stats.c
 endif
 
-memcached_debug_SOURCES = $(memcached_SOURCES)
-memcached_CPPFLAGS = -DNDEBUG
-memcached_debug_LDADD = @PROFILER_LDFLAGS@
-memcached_debug_CFLAGS = @PROFILER_FLAGS@
+if BUILD_SOLARIS_PRIVS
+moxi_SOURCES += solaris_priv.c
+endif
 
-memcached_LDADD = 
-memcached_DEPENDENCIES =
-memcached_debug_DEPENDENCIES = 
+moxi_debug_SOURCES = $(moxi_SOURCES)
+moxi_CPPFLAGS = -DNDEBUG
+moxi_debug_LDADD = @PROFILER_LDFLAGS@
+moxi_debug_CFLAGS = @PROFILER_FLAGS@
+
+moxi_LDADD =
+moxi_DEPENDENCIES =
+moxi_debug_DEPENDENCIES =
 CLEANFILES=
 
 if BUILD_DTRACE
@@ -49,10 +51,10 @@ CLEANFILES += memcached_dtrace.h
 endif
 
 if DTRACE_INSTRUMENT_OBJ
-memcached_LDADD += memcached_dtrace.o
-memcached_DEPENDENCIES += memcached_dtrace.o
-memcached_debug_LDADD += memcached_debug_dtrace.o
-memcached_debug_DEPENDENCIES += memcached_debug_dtrace.o
+moxi_LDADD += memcached_dtrace.o
+moxi_DEPENDENCIES += memcached_dtrace.o
+moxi_debug_LDADD += memcached_debug_dtrace.o
+moxi_debug_DEPENDENCIES += memcached_debug_dtrace.o
 CLEANFILES += memcached_dtrace.o memcached_debug_dtrace.o
 endif
 
@@ -62,11 +64,11 @@ memcached_dtrace.h: memcached_dtrace.d
             sed -e 's,char \*,const char \*,g' | tr '\t' ' ' > mmc_dtrace.tmp
 	mv mmc_dtrace.tmp memcached_dtrace.h
 
-memcached_dtrace.o: $(memcached_OBJECTS)
-	$(DTRACE) $(DTRACEFLAGS) -G -o memcached_dtrace.o -s ${srcdir}/memcached_dtrace.d $(memcached_OBJECTS)
+memcached_dtrace.o: $(moxi_OBJECTS)
+	$(DTRACE) $(DTRACEFLAGS) -G -o memcached_dtrace.o -s ${srcdir}/memcached_dtrace.d $(moxi_OBJECTS)
 
-memcached_debug_dtrace.o: $(memcached_debug_OBJECTS)
-	$(DTRACE) $(DTRACEFLAGS) -G -o memcached_debug_dtrace.o -s ${srcdir}/memcached_dtrace.d $(memcached_debug_OBJECTS)
+memcached_debug_dtrace.o: $(moxi_debug_OBJECTS)
+	$(DTRACE) $(DTRACEFLAGS) -G -o memcached_debug_dtrace.o -s ${srcdir}/memcached_dtrace.d $(moxi_debug_OBJECTS)
 
 
 SUBDIRS = doc
@@ -75,26 +77,26 @@ EXTRA_DIST = doc scripts TODO t memcached.spec memcached_dtrace.d version.m4
 
 MOSTLYCLEANFILES = *.gcov *.gcno *.gcda *.tcov
 
-test:	memcached-debug sizes testapp
+test:	moxi-debug sizes testapp
 	$(srcdir)/sizes
 	$(srcdir)/testapp
 	prove $(srcdir)/t
 	@if test `basename $(PROFILER)` = "gcov"; then \
-	  for file in memcached_debug-*.gc??; do \
-	    mv -f $$file `echo $$file | sed 's/memcached_debug-//'`; \
+	  for file in moxi_debug-*.gc??; do \
+	    mv -f $$file `echo $$file | sed 's/moxi_debug-//'`; \
 	  done && \
 	  for file in *.gcda; do \
 	    srcfile=`echo $$file | sed 's/.gcda/.c/'`; \
-	    if test -n "`echo $(memcached_debug_SOURCES) | grep $$srcfile`"; then \
+	    if test -n "`echo $(moxi_debug_SOURCES) | grep $$srcfile`"; then \
 	      echo `$(PROFILER) $$srcfile` | sed 's/'$$srcfile':.*//'; \
 	    fi \
 	  done \
 	elif test `basename $(PROFILER)` = "tcov"; then \
-	  files=`grep SRCFILE memcached-debug.profile/tcovd | sed 's/SRCFILE://' | sort | uniq` && \
-	  $(PROFILER) -x memcached-debug.profile $$files 2>&1; \
+	  files=`grep SRCFILE moxi-debug.profile/tcovd | sed 's/SRCFILE://' | sort | uniq` && \
+	  $(PROFILER) -x moxi-debug.profile $$files 2>&1; \
 	  for file in *.tcov; do \
 	    srcfile=`echo $$file | sed 's/.tcov//'`; \
-	    if test -n "`echo $(memcached_debug_SOURCES) | grep $$srcfile`"; then \
+	    if test -n "`echo $(moxi_debug_SOURCES) | grep $$srcfile`"; then \
 	      echo $$srcfile : `grep 'Percent of the file executed' $$file`; \
 	    fi \
 	  done \
