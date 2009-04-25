@@ -1,6 +1,6 @@
 AC_PREREQ(2.52)
 m4_include([version.m4])
-AC_INIT(memcached, VERSION_NUMBER, brad@danga.com)
+AC_INIT(moxi, VERSION_NUMBER, moxi@googlegroups.com)
 AC_CANONICAL_SYSTEM
 AC_CONFIG_SRCDIR(memcached.c)
 AM_INIT_AUTOMAKE(AC_PACKAGE_NAME, AC_PACKAGE_VERSION)
@@ -322,11 +322,11 @@ fi
 
 AC_C_ALIGNMENT
 
-dnl Check for the requirements for running memcached with less privileges
+dnl Check for the requirements for running moxi with less privileges
 dnl than the default privilege set. On Solaris we need setppriv and priv.h
 dnl If you want to add support for other platforms you should check for
 dnl your requirements, define HAVE_DROP_PRIVILEGES, and make sure you add
-dnl the source file containing the implementation into memcached_SOURCE
+dnl the source file containing the implementation into moxi_SOURCE
 dnl in Makefile.am
 AC_CHECK_FUNCS(setppriv, [
    AC_CHECK_HEADER(priv.h, [
