@@ -90,7 +90,7 @@ my $simple_topology = <<'SIMPLE_TOPOLOGY';
     my $portA = free_port();
     my $portC = $portA;
     my $topology =
-      " -W \"".
+      " -z \"".
         "$port=".
           "localhost:$portA\"".
       " -p $portC";
@@ -105,7 +105,7 @@ my $chain_topology = <<'CHAIN_TOPOLOGY';
     my $portA4 = free_port();
     my $portC = $portA4;
     my $topology =
-      " -W \"".
+      " -z \"".
         "$port=".
           "localhost:$portA0;".
         "$portA0=".
@@ -124,7 +124,7 @@ my $fanout_topology = <<'FANOUT_TOPOLOGY';
     my $portA = free_port();
     my $portC = $portA;
     my $topology =
-      " -W \"".
+      " -z \"".
         "$port=".
           "localhost:$portA,".
           "localhost:$portA,".
@@ -139,7 +139,7 @@ my $fanoutin_topology = <<'FANOUTIN_TOPOLOGY';
     my $portB = free_port();
     my $portC = $portB;
     my $topology =
-      " -W \"".
+      " -z \"".
         "$port=".
           "localhost:$portA,".
           "localhost:$portA,".

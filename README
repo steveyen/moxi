@@ -17,6 +17,34 @@ For example, if libevent is installed in /opt/local, you'd do...
   ./configure --with-libevent=/opt/local
   make
 
+Using moxi:
+
+In moxi terminology, "upstream" are the memcached clients,
+and "downstream" are the memcached servers.
+
+  moxi -z <port=<memcached_host:memcached_port(,*)>>
+
+moxi will listen and accept connections on the given port,
+and will forward traffic to downstream memcached servers
+running on memcached_host:memcached_port.  For example...
+
+  moxi -z 11211=my_memcached_server:11211
+
+You can list more than one memcached_host:memcached_port,
+separated by commas.  For example...
+
+  moxi -z 11211=memcached_1:11211,memcached_2:11211
+
+If you have some memcached servers running on the same server,
+but on different ports, you can put moxi in front of them
+with something like...
+
+  moxi -z 11211=server:11222,server:11233
+
+To get usage info:
+
+  moxi -h
+
 Tests:
 
   # Tests that moxi still behaves like memcached,
@@ -52,6 +80,7 @@ Tests:
 
   # To test moxi proxy cases...
   #
+  ./moxi -z 11333=localhost:11311
   python ./t/moxi_mock.py
 
 More notes:

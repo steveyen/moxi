@@ -19,15 +19,17 @@ my @good_tests = qw(
 );
 
 my @skip_tests = qw(
-  # TODO: The noreply test fails because we use concurrent
-  # downstream connections rather than respecting
-  # the serial expectations of the noreply test.
+  # TODO: The noreply test fails because moxi uses
+  # a pool of multiple concurrent downstream
+  # connections rather than respecting the
+  # serial expectations of the noreply test.
   #
   noreply.t
 
   # TODO: The getset test fails because the failed set
-  # of a huge >1MB value does not delete the item from
-  # the downstream memcached server.
+  # of a huge >1MB value or failed item_alloc() does
+  # not currently delete the item from the downstream
+  # memcached server.
   #
   getset.t
 

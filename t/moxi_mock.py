@@ -8,9 +8,11 @@ import time
 import re
 
 def debug(x):
-    if True:
+    if False:
         print(x)
 
+# A fake memcached server.
+#
 class MockServer(threading.Thread):
     def __init__(self, port):
         threading.Thread.__init__(self)
@@ -61,6 +63,8 @@ class MockServer(threading.Thread):
 
         self.close()
 
+# A session in the fake memcached server.
+#
 class MockSession(threading.Thread):
     def __init__(self, client, address, server):
         threading.Thread.__init__(self)
@@ -115,6 +119,8 @@ class MockSession(threading.Thread):
             self.client.close()
         self.client = None
 
+# Start a fake memcached server...
+#
 sys.setcheckinterval(0)
 g_mock_server_port = 11311
 g_mock_server = MockServer(g_mock_server_port)
@@ -124,6 +130,13 @@ time.sleep(1)
 class TestProxy(unittest.TestCase):
     def __init__(self, x):
         unittest.TestCase.__init__(self, x)
+
+        # These tests assume a moxi proxy is running at
+        # the self.proxy_port and is forwarding requests
+        # to our fake memcached server.
+        #
+        # TODO: Fork a moxi proxy like the perl tests.
+        #
         self.proxy_port = 11333
         self.clients = {}
 
@@ -577,7 +590,7 @@ class TestProxy(unittest.TestCase):
 
     def TODO_testSharedServerConns(self):
         """Test proxy only uses a few server conns"""
-        return "TODO: getting random behavior here"
+        return "TODO: getting nondetermistic behavior here due to retry feature"
 
         self.assertEqual(len(self.clients), 0)
         self.assertEqual(len(self.mock_server().sessions), 0)
@@ -596,7 +609,7 @@ class TestProxy(unittest.TestCase):
 
     def TODO_testServerSeesRetry(self):
         """Test server going down sees a retry"""
-        return "TODO: getting random behavior here"
+        return "TODO: getting nondetermistic behavior here due to retry feature"
 
         self.client_connect()
         self.client_send('get someDown\r\n')
@@ -611,6 +624,8 @@ class TestProxy(unittest.TestCase):
         self.mock_send('END\r\n')
         self.client_recv('VALUE someDown 0 10\r\n0123456789\r\nEND\r\n')
 
+# More test ideas...
+#
 # Test chopped up responses from multiple mock servers.
 # Test chopped up requests from multiple clients.
 # Test servers going down during multiget write.

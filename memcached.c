@@ -3698,8 +3698,16 @@ static void clock_handler(const int fd, const short which, void *arg) {
 
 static void usage(void) {
     printf(PACKAGE " " VERSION "\n");
-    printf("-p <num>      TCP port number to listen on (default: 11211)\n"
+    printf("-z <port=<mc_host:mc_port(,*)>>\n"
+           "              moxi listens on the given port and forwards to\n"
+           "              downstream memcached servers running at\n"
+           "              mc_host:mc_port.  More than one mc_host:mc_port\n"
+           "              can be listed, separated by commas.\n"
+           "              For example, -z 11211=server1:11211,server2:11211\n"
+           "-p <num>      TCP port number to listen on (default: 11211)\n"
+           "              to have moxi be a memcached server\n"
            "-U <num>      UDP port number to listen on (default: 11211, 0 is off)\n"
+           "              to have moxi be a memcached server\n"
            "-s <file>     unix socket path to listen on (disables network support)\n"
            "-a <mask>     access mask for unix socket, in octal (default 0700)\n"
            "-l <ip_addr>  interface to listen on, default is INADDR_ANY\n"
@@ -3954,7 +3962,7 @@ int main (int argc, char **argv) {
           "R:"  /* max requests per event */
           "C"   /* Disable use of CAS */
           "b:"  /* backlog queue limit */
-          "W:"  /* cproxy configuration */
+          "z:"  /* cproxy configuration */
         ))) {
         switch (c) {
         case 'a':
@@ -4056,7 +4064,7 @@ int main (int argc, char **argv) {
         case 'b' :
             settings.backlog = atoi(optarg);
             break;
-        case 'W' :
+        case 'z' :
             cproxy_cfg = strdup(optarg);
             break;
         default:
