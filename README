@@ -1,6 +1,60 @@
+moxi - a memcached proxy with spunk and gumption
+
 Dependencies:
 
    -- libevent, http://www.monkey.org/~provos/libevent/ (libevent-dev)
+   -- libmemcached, http://tangent.org/552/libmemcached.html
+
+To compile moxi, after you got the dependencies:
+
+  ./autogen.sh
+  ./configure
+  make
+
+For example, if libevent is installed in /opt/local, you'd do...
+
+  ./autogen.sh
+  ./configure --with-libevent=/opt/local
+  make
+
+Tests:
+
+  # Tests that moxi still behaves like memcached,
+  # by passing all the tests that memcached passes...
+  #
+  make test
+
+  # Tests moxi in a simple proxy topology of...
+  #  client <-> moxi <-> memcached
+  #
+  ./t/moxi.pl
+
+  # Tests moxi in a chained proxy topology of...
+  #   client <-> moxi <-> moxi <-> moxi <-> memcached
+  #
+  ./t/moxi.pl chain
+
+  # Tests moxi in a fanout topology of...
+  #   client <---> moxi <---> memcached
+  #                       |-> memcached
+  #                       |-> memcached
+  #                       |-> memcached
+  #
+  ./t/moxi.pl fanout
+
+  # Tests moxi in a fanout and back in again topology of...
+  #   client <---> moxi <---> moxi <-> memcached
+  #            |-> moxi <-|
+  #            |-> moxi <-|
+  #            |-> moxi <-|
+  #
+  ./t/moxi.pl fanoutin
+
+  # To test moxi proxy cases...
+  #
+  python ./t/moxi_mock.py
+
+More notes:
 
 If using Linux, you need a kernel with epoll.  Sure, libevent will
 work with normal select, but it sucks.
@@ -8,10 +62,10 @@ work with normal select, but it sucks.
 epoll isn't in Linux 2.4 yet, but there's a backport at:
 
     http://www.xmailserver.org/linux-patches/nio-improve.html
-     
+
 You want the epoll-lt patch (level-triggered).
 
-If you're using MacOS, you'll want libevent 1.1 or higher to deal with 
+If you're using MacOS, you'll want libevent 1.1 or higher to deal with
 a kqueue bug.
 
 Also, be warned that the -k (mlockall) option to memcached might be
