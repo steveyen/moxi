@@ -24,16 +24,26 @@ and "downstream" are the memcached servers.
 
   moxi -z <port=<memcached_host:memcached_port(,*)>>
 
-moxi will listen and accept connections on the given port,
-and will forward traffic to downstream memcached servers
-running on memcached_host:memcached_port.  For example...
+moxi will listen on the given port and accept connections from
+upstream memcached clients.  It will forward requests to downstream
+memcached servers running on memcached_host:memcached_port.  For
+example...
 
-  moxi -z 11211=my_memcached_server:11211
+  moxi -z 11211=my_memcached_server:11222
+
+Above, moxi will listen on port 11211 and forward requests
+to the memcached running on my_memcached_server that's listening
+on port 11222.
 
 You can list more than one memcached_host:memcached_port,
 separated by commas.  For example...
 
   moxi -z 11211=memcached_1:11211,memcached_2:11211
+
+The default downstream port is 11211, so you can also
+just use...
+
+  moxi -z 11211=memcached_1,memcached_2
 
 If you have some memcached servers running on the same server,
 but on different ports, you can put moxi in front of them
@@ -41,28 +51,28 @@ with something like...
 
   moxi -z 11211=server:11222,server:11233
 
-To get usage info:
+To get more command line usage info:
 
   moxi -h
 
 Tests:
 
-  # Tests that moxi still behaves like memcached,
-  # by passing all the tests that memcached passes...
+  # To test that moxi still behaves like memcached
+  # and passes all the tests that memcached passes...
   #
   make test
 
-  # Tests moxi in a simple proxy topology of...
+  # To test moxi in a simple proxy topology of...
   #  client <-> moxi <-> memcached
   #
   ./t/moxi.pl
 
-  # Tests moxi in a chained proxy topology of...
+  # To test moxi in a chained proxy topology of...
   #   client <-> moxi <-> moxi <-> moxi <-> memcached
   #
   ./t/moxi.pl chain
 
-  # Tests moxi in a fanout topology of...
+  # To test moxi in a fanout topology of...
   #   client <---> moxi <---> memcached
   #                       |-> memcached
   #                       |-> memcached
@@ -70,7 +80,7 @@ Tests:
   #
   ./t/moxi.pl fanout
 
-  # Tests moxi in a fanout and back in again topology of...
+  # To test moxi in a fanout and back in again topology of...
   #   client <---> moxi <---> moxi <-> memcached
   #            |-> moxi <-|
   #            |-> moxi <-|
@@ -80,8 +90,8 @@ Tests:
 
   # To test moxi proxy cases...
   #
-  ./moxi -z 11333=localhost:11311
-  python ./t/moxi_mock.py
+  ./moxi -z 11333=localhost:11311 -t 1
+  python t/moxi_mock.py
 
 More notes:
 
