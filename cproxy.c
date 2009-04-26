@@ -353,17 +353,13 @@ void cproxy_on_close_downstream_conn(conn *c) {
         //       Should we propagate error when...
         //       - any downstream conn closes?
         //       - all downstream conns closes?
-        //       - last downstream conn closes?  Current bevhavior.
+        //       - last downstream conn closes?  Current behavior.
         //
         if (d->upstream_suffix == NULL)
             d->upstream_suffix = "SERVER_ERROR proxy downstream closed\r\n";
 
-        // If we haven't received any reply yet, we retry once.
-        //
-        // TODO: Reconsider retry behavior, is it right in all situations?
-        //
-        // We sometimes see drive_machine/transmit not see a
-        // closed connection error during conn_mwrite, possibly
+        // We sometimes see that drive_machine/transmit will not see
+        // a closed connection error during conn_mwrite, possibly
         // due to non-blocking sockets.  Because of this, drive_machine
         // thinks it has a successful downstream request send and
         // moves the state forward trying to read a response from
@@ -371,6 +367,10 @@ void cproxy_on_close_downstream_conn(conn *c) {
         // only then do we finally see the conn close situation,
         // ending up here.  That is, drive_machine only
         // seems to move to conn_closing from conn_read.
+        //
+        // If we haven't received any reply yet, we retry once.
+        //
+        // TODO: Reconsider retry behavior, is it right in all situations?
         //
         if (c->rcurr != NULL &&
             c->rbytes == 0 &&
@@ -401,8 +401,8 @@ void cproxy_on_close_downstream_conn(conn *c) {
     //
     cproxy_release_downstream_conn(d, c);
 
-    // We have to retry after unwinding the call stack.
-    // So, use the work_queue, because our caller, conn_close(),
+    // Setup a retry after unwinding the call stack.
+    // We use the work_queue, because our caller, conn_close(),
     // is likely to blow away our fd if we try to reconnect
     // right now.
     //
