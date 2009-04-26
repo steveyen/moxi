@@ -27,18 +27,18 @@ static void add_proxy_stats(proxy_stats *agg, proxy_stats *x);
 static void request_stats(void *data0, void *data1);
 static void collect_stats(void *data0, void *data1);
 
+struct add_stat_emit {
+    agent_add_stat  add_stat;
+    void           *opaque;
+    int             thread;
+};
+
 /* This callback is invoked by memagent on a memagent thread
  * when it wants proxy stats.
  *
  * We use the work_queues to retrieve the info, so that normal
  * runtime has fewer locks, at the cost of scatter/gather
  * complexity to handle the proxy stats request.
- *
- * TODO: We're currently gathering the reverse of what we
- *       probably want -- thread-based stats rather than
- *       proxy-based stats.  Need to flip it over,
- *       possibly in addition to what we're doing here,
- *       as thread-based stats could be interesting too.
  */
 void on_memagent_get_stats(void *userdata, void *opaque,
                            agent_add_stat add_stat) {
@@ -50,14 +50,41 @@ void on_memagent_get_stats(void *userdata, void *opaque,
     assert(mthread);
     assert(mthread->work_queue);
 
+    char buf[100];
+
+#define more_stat(spec, key, val) \
+    sprintf(buf, spec, val);      \
+    add_stat(opaque, key, buf);
+
+    more_stat("%u", "nthreads",
+              m->nthreads);
+    more_stat("%u", "downstream_max",
+              m->downstream_max);
+    more_stat("%llu", "configs",
+              m->stat_configs);
+    more_stat("%llu", "config_fails",
+              m->stat_config_fails);
+    more_stat("%llu", "proxy_starts",
+              m->stat_proxy_starts);
+    more_stat("%llu", "proxy_start_fails",
+              m->stat_proxy_start_fails);
+    more_stat("%llu", "proxy_existings",
+              m->stat_proxy_existings);
+    more_stat("%llu", "proxy_shutdowns",
+              m->stat_proxy_shutdowns);
+
+    // Alloc here so the main listener thread has less work.
+    //
     work_collect *ca = calloc(m->nthreads, sizeof(work_collect));
     if (ca != NULL) {
         int i;
 
         for (i = 1; i < m->nthreads; i++) {
-            proxy_stats *ps = calloc(1, sizeof(proxy_stats));
-            if (ps != NULL)
-                work_collect_init(&ca[i], -1, ps);
+            GHashTable *map_proxy_stats =
+                g_hash_table_new(g_str_hash,
+                                 g_str_equal);
+            if (map_proxy_stats != NULL)
+                work_collect_init(&ca[i], -1, map_proxy_stats);
             else
                 break;
         }
@@ -68,77 +95,32 @@ void on_memagent_get_stats(void *userdata, void *opaque,
             work_send(mthread->work_queue, request_stats, m, ca)) {
             // Wait for all the stats collecting to finish.
             //
-            for (i = 1; i < m->nthreads; i++)
+            for (i = 1; i < m->nthreads; i++) {
                 work_collect_wait(&ca[i]);
 
-            char buf0[100];
-            char buf1[100];
+                GHashTable *map_proxy_stats = ca[i].data;
+                if (map_proxy_stats != NULL) {
+                    struct add_stat_emit emit;
 
-#define more_stat(spec, key, val) \
-    sprintf(buf0, spec, val);     \
-    add_stat(opaque, key, buf0);
+                    emit.add_stat  = add_stat;
+                    emit.opaque    = opaque;
+                    emit.thread    = i;
 
-#define more_thread_stat(thread_id, key, val) \
-    sprintf(buf1, "%u:%s", thread_id, key);   \
-    more_stat("%llu", buf1, val);
-
-            more_stat("%u", "nthreads",
-                      m->nthreads);
-            more_stat("%u", "downstream_max",
-                      m->downstream_max);
-            more_stat("%llu", "configs",
-                      m->stat_configs);
-            more_stat("%llu", "config_fails",
-                      m->stat_config_fails);
-            more_stat("%llu", "proxy_starts",
-                      m->stat_proxy_starts);
-            more_stat("%llu", "proxy_start_fails",
-                      m->stat_proxy_start_fails);
-            more_stat("%llu", "proxy_existings",
-                      m->stat_proxy_existings);
-            more_stat("%llu", "proxy_shutdowns",
-                      m->stat_proxy_shutdowns);
-
-            for (i = 1; i < m->nthreads; i++) {
-                proxy_stats *ps = ca[i].data;
-
-                more_thread_stat(i, "num_upstream",
-                                 ps->num_upstream);
-                more_thread_stat(i, "tot_upstream",
-                                 ps->tot_upstream);
-                more_thread_stat(i, "num_downstream_conn",
-                                 ps->num_downstream_conn);
-                more_thread_stat(i, "tot_downstream_conn",
-                                 ps->tot_downstream_conn);
-                more_thread_stat(i, "tot_downstream_released",
-                                 ps->tot_downstream_released);
-                more_thread_stat(i, "tot_downstream_reserved",
-                                 ps->tot_downstream_reserved);
-                more_thread_stat(i, "tot_downstream_freed",
-                                 ps->tot_downstream_freed);
-                more_thread_stat(i, "tot_downstream_quit_server",
-                                 ps->tot_downstream_quit_server);
-                more_thread_stat(i, "tot_downstream_max_reached",
-                                 ps->tot_downstream_max_reached);
-                more_thread_stat(i, "tot_downstream_create_failed",
-                                 ps->tot_downstream_create_failed);
-                more_thread_stat(i, "tot_assign_downstream",
-                                 ps->tot_assign_downstream);
-                more_thread_stat(i, "tot_assign_upstream",
-                                 ps->tot_assign_upstream);
-                more_thread_stat(i, "tot_reset_upstream_avail",
-                                 ps->tot_reset_upstream_avail);
-                more_thread_stat(i, "tot_oom",
-                                 ps->tot_oom);
-                more_thread_stat(i, "tot_retry",
-                                 ps->tot_retry);
-
+                    g_hash_table_foreach(map_proxy_stats,
+                                         map_proxy_stats_foreach_emit,
+                                         &emit);
+                }
             }
         }
 
         for (i = 1; i < m->nthreads; i++) {
-            if (ca[i].data != NULL)
-                free(ca[i].data);
+            GHashTable *map_proxy_stats = ca[i].data;
+            if (map_proxy_stats != NULL) {
+                g_hash_table_foreach(map_proxy_stats,
+                                     map_proxy_stats_foreach_free,
+                                     NULL);
+                g_hash_table_destroy(map_proxy_stats);
+            }
         }
 
         free(ca);
@@ -212,7 +194,30 @@ static void collect_stats(void *data0, void *data1) {
 
     assert(is_listen_thread() == false); // Expecting a worker thread.
 
-    add_proxy_stats((proxy_stats *) c->data, &ptd->stats);
+    GHashTable *map_proxy_stats = c->data;
+    assert(map_proxy_stats != NULL);
+
+    if (ptd->name != NULL) {
+        char *key = malloc(strlen(ptd->name) + 50);
+        if (key != NULL) {
+            sprintf(key, "%d:%s", ptd->port, ptd->name);
+
+            proxy_stats *ps = g_hash_table_lookup(map_proxy_stats, key);
+            if (ps == NULL) {
+                ps = calloc(1, sizeof(proxy_stats));
+                if (ps != NULL) {
+                    g_hash_table_insert(map_proxy_stats, key, ps);
+                    key = NULL;
+                }
+            }
+
+            if (ps != NULL)
+                add_proxy_stats(ps, &ptd->stats);
+
+            if (key != NULL)
+                free(key);
+        }
+    }
 
     work_collect_one(c);
 }
@@ -239,3 +244,64 @@ static void add_proxy_stats(proxy_stats *agg, proxy_stats *x) {
     agg->tot_retry += x->tot_retry;
 }
 
+void map_proxy_stats_foreach_free(gpointer key,
+                                  gpointer value,
+                                  gpointer user_data) {
+    assert(key != NULL);
+    free(key);
+
+    assert(value != NULL);
+    free(value);
+}
+
+void map_proxy_stats_foreach_emit(gpointer key,
+                                  gpointer value,
+                                  gpointer user_data) {
+    char *name = key;
+    assert(name != NULL);
+
+    proxy_stats *ps = value;
+    assert(ps != NULL);
+
+    struct add_stat_emit *emit = user_data;
+    assert(user_data != NULL);
+
+    char buf_key[200];
+    char buf_val[100];
+
+#define more_thread_stat(key, val)                        \
+    sprintf(buf_key, "%u:%s-%s", emit.thread, name, key); \
+    sprintf(buf_val, "%llu", val);                        \
+    emit.add_stat(emit.opaque, buf_key, buf_val);
+
+    more_thread_stat("num_upstream",
+                     ps->num_upstream);
+    more_thread_stat("tot_upstream",
+                     ps->tot_upstream);
+    more_thread_stat("num_downstream_conn",
+                     ps->num_downstream_conn);
+    more_thread_stat("tot_downstream_conn",
+                     ps->tot_downstream_conn);
+    more_thread_stat("tot_downstream_released",
+                     ps->tot_downstream_released);
+    more_thread_stat("tot_downstream_reserved",
+                     ps->tot_downstream_reserved);
+    more_thread_stat("tot_downstream_freed",
+                     ps->tot_downstream_freed);
+    more_thread_stat("tot_downstream_quit_server",
+                     ps->tot_downstream_quit_server);
+    more_thread_stat("tot_downstream_max_reached",
+                     ps->tot_downstream_max_reached);
+    more_thread_stat("tot_downstream_create_failed",
+                     ps->tot_downstream_create_failed);
+    more_thread_stat("tot_assign_downstream",
+                     ps->tot_assign_downstream);
+    more_thread_stat("tot_assign_upstream",
+                     ps->tot_assign_upstream);
+    more_thread_stat("tot_reset_upstream_avail",
+                     ps->tot_reset_upstream_avail);
+    more_thread_stat("tot_oom",
+                     ps->tot_oom);
+    more_thread_stat("tot_retry",
+                     ps->tot_retry);
+}
