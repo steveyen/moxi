@@ -130,6 +130,11 @@ struct downstream {
 
     GHashTable *multiget; // Keyed by string.
     GHashTable *merger;   // Keyed by string, for merging replies like STATS.
+
+    // Timeout is in use when timeout_tv fields are non-zero.
+    //
+    struct timeval timeout_tv;
+    struct event   timeout_event;
 };
 
 // Functions.

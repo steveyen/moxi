@@ -23,6 +23,9 @@ void             memcached_quit_server(memcached_server_st *ptr,
 // Internal forward declarations.
 //
 downstream *downstream_list_remove(downstream *head, downstream *d);
+void        downstream_timeout(const int fd,
+                               const short which,
+                               void *arg);
 conn       *conn_list_remove(conn *head, conn *c, bool *found);
 void        upstream_retry(void *data0, void *data1);
 bool        is_compatible_request(conn *existing, conn *candidate);
@@ -496,6 +499,8 @@ downstream *cproxy_reserve_downstream(proxy_td *ptd) {
         assert(d->downstream_used_start == 0);
         assert(d->multiget == NULL);
         assert(d->merger == NULL);
+        assert(d->timeout_tv.tv_sec == 0);
+        assert(d->timeout_tv.tv_usec == 0);
 
         d->upstream_conn = NULL;
         d->upstream_suffix = NULL;
@@ -503,6 +508,8 @@ downstream *cproxy_reserve_downstream(proxy_td *ptd) {
         d->downstream_used_start = 0;
         d->multiget = NULL;
         d->merger = NULL;
+        d->timeout_tv.tv_sec = 0;
+        d->timeout_tv.tv_usec = 0;
 
         if (cproxy_check_downstream_config(d)) {
             ptd->downstream_reserved =
@@ -535,6 +542,8 @@ bool cproxy_release_downstream(downstream *d, bool force) {
     //
     while (d->upstream_conn != NULL) {
         if (d->merger != NULL) {
+            // TODO: Allow merger callback to be func pointer.
+            //
             g_hash_table_foreach(d->merger,
                                  protocol_stats_foreach_write,
                                  d->upstream_conn);
@@ -583,6 +592,13 @@ bool cproxy_release_downstream(downstream *d, bool force) {
         d->merger = NULL;
     }
 
+    if (d->timeout_tv.tv_sec != 0 ||
+        d->timeout_tv.tv_usec != 0)
+        evtimer_del(&d->timeout_event);
+
+    d->timeout_tv.tv_sec = 0;
+    d->timeout_tv.tv_usec = 0;
+
     d->upstream_conn = NULL;
     d->upstream_suffix = NULL; // No free(), expecting a static string.
     d->downstream_used = 0;
@@ -619,6 +635,8 @@ void cproxy_free_downstream(downstream *d) {
     assert(d->upstream_conn == NULL);
     assert(d->multiget == NULL);
     assert(d->merger == NULL);
+    assert(d->timeout_tv.tv_sec == 0);
+    assert(d->timeout_tv.tv_usec == 0);
 
     if (settings.verbose > 1)
         fprintf(stderr, "cproxy_free_downstream\n");
@@ -643,6 +661,13 @@ void cproxy_free_downstream(downstream *d) {
     // the conn->extra pointers, there's no extra release/free.
     //
     memcached_free(&d->mst);
+
+    if (d->timeout_tv.tv_sec != 0 ||
+        d->timeout_tv.tv_usec != 0)
+        evtimer_del(&d->timeout_event);
+
+    d->timeout_tv.tv_sec = 0;
+    d->timeout_tv.tv_usec = 0;
 
     if (d->downstream_conns != NULL)
         free(d->downstream_conns);
@@ -864,6 +889,8 @@ void cproxy_assign_downstream(proxy_td *ptd) {
         assert(d->downstream_used_start == 0);
         assert(d->multiget == NULL);
         assert(d->merger == NULL);
+        assert(d->timeout_tv.tv_sec == 0);
+        assert(d->timeout_tv.tv_usec == 0);
 
         // We have a downstream reserved, so assign the first
         // waiting upstream conn to it.
@@ -1307,5 +1334,24 @@ bool is_compatible_request(conn *existing, conn *candidate) {
     }
 
     return false;
+}
+
+void downstream_timeout(const int fd,
+                        const short which,
+                        void *arg) {
+    downstream *d = arg;
+    assert(d != NULL);
+
+    // This timer callback is invoked when one or more of
+    // the downstream conns must be really slow.  Treat it
+    // as if the downstream conns were closed.
+    //
+    if (d->timeout_tv.tv_sec != 0 ||
+        d->timeout_tv.tv_usec != 0) {
+        evtimer_del(&d->timeout_event);
+    }
+
+    d->timeout_tv.tv_sec = 0;
+    d->timeout_tv.tv_usec = 0;
 }
 
