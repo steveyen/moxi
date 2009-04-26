@@ -104,20 +104,9 @@ proxy *cproxy_create(char *name, int port,
                 ptd->downstream_max = downstream_max;
 
                 ptd->stats.num_upstream = 0;
-                ptd->stats.tot_upstream = 0;
                 ptd->stats.num_downstream_conn = 0;
-                ptd->stats.tot_downstream_conn = 0;
-                ptd->stats.tot_downstream_released = 0;
-                ptd->stats.tot_downstream_reserved = 0;
-                ptd->stats.tot_downstream_freed = 0;
-                ptd->stats.tot_downstream_quit_server = 0;
-                ptd->stats.tot_downstream_max_reached = 0;
-                ptd->stats.tot_downstream_create_failed = 0;
-                ptd->stats.tot_assign_downstream = 0;
-                ptd->stats.tot_assign_upstream = 0;
-                ptd->stats.tot_reset_upstream_avail = 0;
-                ptd->stats.tot_oom = 0;
-                ptd->stats.tot_retry = 0;
+
+                cproxy_reset_stats(&ptd->stats);
             }
 
             return p;
@@ -130,6 +119,26 @@ proxy *cproxy_create(char *name, int port,
     free(p);
 
     return NULL;
+}
+
+void cproxy_reset_stats(proxy_stats *ps) {
+    assert(ps);
+
+    // Only clear the tot_xxx stats, not the num_xxx ones.
+    //
+    ps->tot_upstream = 0;
+    ps->tot_downstream_conn = 0;
+    ps->tot_downstream_released = 0;
+    ps->tot_downstream_reserved = 0;
+    ps->tot_downstream_freed = 0;
+    ps->tot_downstream_quit_server = 0;
+    ps->tot_downstream_max_reached = 0;
+    ps->tot_downstream_create_failed = 0;
+    ps->tot_assign_downstream = 0;
+    ps->tot_assign_upstream = 0;
+    ps->tot_reset_upstream_avail = 0;
+    ps->tot_oom = 0;
+    ps->tot_retry = 0;
 }
 
 /* Must be called on the main listener thread.

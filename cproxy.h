@@ -185,6 +185,8 @@ rel_time_t cproxy_realtime(const time_t exptime);
 
 void cproxy_close_conn(conn *c);
 
+void cproxy_reset_stats(proxy_stats *ps);
+
 // Multiget key de-duplication.
 //
 typedef struct multiget_entry multiget_entry;
