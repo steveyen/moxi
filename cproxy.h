@@ -186,6 +186,8 @@ void cproxy_process_upstream_ascii_nread(conn *c);
 void cproxy_process_downstream_ascii(conn *c, char *line);
 void cproxy_process_downstream_ascii_nread(conn *c);
 
+bool cproxy_start_downstream_timeout(downstream *d);
+
 rel_time_t cproxy_realtime(const time_t exptime);
 
 void cproxy_close_conn(conn *c);

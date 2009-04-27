@@ -1342,6 +1342,8 @@ void downstream_timeout(const int fd,
     downstream *d = arg;
     assert(d != NULL);
 
+    fprintf(stderr, "downstream_timeout\n");
+
     // This timer callback is invoked when one or more of
     // the downstream conns must be really slow.  Treat it
     // as if the downstream conns were closed.
@@ -1355,3 +1357,30 @@ void downstream_timeout(const int fd,
     d->timeout_tv.tv_usec = 0;
 }
 
+bool cproxy_start_downstream_timeout(downstream *d) {
+    assert(d != NULL);
+    assert(d->timeout_tv.tv_sec == 0);
+    assert(d->timeout_tv.tv_usec == 0);
+
+    conn *uc = d->upstream_conn;
+
+    assert(uc != NULL);
+    assert(uc->state == conn_pause);
+    assert(uc->thread != NULL);
+    assert(uc->thread->base != NULL);
+    assert(IS_PROXY(uc->protocol));
+
+    if (settings.verbose > 1)
+        fprintf(stderr, "cproxy_start_downstream_timeout\n");
+
+    evtimer_set(&d->timeout_event, downstream_timeout, d);
+
+    event_base_set(uc->thread->base, &d->timeout_event);
+
+    // TODO: Remove hardcoded timeout.
+    //
+    d->timeout_tv.tv_sec = 2;
+    d->timeout_tv.tv_usec = 0;
+
+    return (evtimer_add(&d->timeout_event, &d->timeout_tv) == 0);
+}

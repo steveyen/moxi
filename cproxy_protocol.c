@@ -437,8 +437,11 @@ bool cproxy_forward_ascii_simple_downstream(downstream *d,
             d->downstream_used_start = 1; // TODO: Need timeout?
             d->downstream_used       = 1;
 
-            if (cproxy_dettach_if_noreply(d, uc))
+            if (cproxy_dettach_if_noreply(d, uc) == false) {
+                cproxy_start_downstream_timeout(d);
+            } else {
                 c->write_and_go = conn_pause;
+            }
 
             return true;
         }
@@ -618,8 +621,11 @@ bool cproxy_forward_ascii_multiget_downstream(downstream *d, conn *uc) {
     d->downstream_used_start = nwrite; // TODO: Need timeout?
     d->downstream_used       = nwrite;
 
-    if (cproxy_dettach_if_noreply(d, uc) == false)
+    if (cproxy_dettach_if_noreply(d, uc) == false) {
         d->upstream_suffix = "END\r\n";
+
+        cproxy_start_downstream_timeout(d);
+    }
 
     return nwrite > 0;
 }
@@ -673,8 +679,11 @@ bool cproxy_broadcast_ascii_downstream(downstream *d,
     d->downstream_used_start = nwrite; // TODO: Need timeout?
     d->downstream_used       = nwrite;
 
-    if (cproxy_dettach_if_noreply(d, uc) == false)
+    if (cproxy_dettach_if_noreply(d, uc) == false) {
         d->upstream_suffix = suffix;
+
+        cproxy_start_downstream_timeout(d);
+    }
 
     return nwrite > 0;
 }
@@ -739,8 +748,11 @@ bool cproxy_forward_ascii_item_downstream(downstream *d, short cmd,
                     d->downstream_used_start = 1; // TODO: Need timeout?
                     d->downstream_used       = 1;
 
-                    if (cproxy_dettach_if_noreply(d, uc))
+                    if (cproxy_dettach_if_noreply(d, uc) == false) {
+                        cproxy_start_downstream_timeout(d);
+                    } else {
                         c->write_and_go = conn_pause;
+                    }
 
                     return true;
                 }
