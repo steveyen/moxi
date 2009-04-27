@@ -1342,7 +1342,8 @@ void downstream_timeout(const int fd,
     downstream *d = arg;
     assert(d != NULL);
 
-    fprintf(stderr, "downstream_timeout\n");
+    if (settings.verbose > 1)
+        fprintf(stderr, "downstream_timeout\n");
 
     // This timer callback is invoked when one or more of
     // the downstream conns must be really slow.  Treat it

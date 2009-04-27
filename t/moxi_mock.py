@@ -8,7 +8,7 @@ import time
 import re
 
 def debug(x):
-    if False:
+    if True:
         print(x)
 
 # A fake memcached server.
@@ -587,6 +587,27 @@ class TestProxy(unittest.TestCase):
                          'END\r\n', 3)
         self.client_recv('VALUE a 0 1\r\na\r\n' +
                          'END\r\n', 4)
+
+    def TODO_testTimeout(self):
+        """Test downstream timeout handling"""
+        return "TODO: depends incorrectly on hardcoded 2 sec timeout"
+
+        # Assuming proxy's max_downstream is 1,
+        # and number of threads is 1.
+
+        self.client_connect(0)
+
+        self.client_send('get time0\r\n', 0)
+        self.mock_recv('get time0\r\n', 0)
+
+        # Mock server is 'busy' at this point, so
+        # any client sends should be able to be
+        # de-duplicated by the proxy.
+
+        self.wait(210)
+
+        self.mock_send('END\r\n', 0)
+        self.client_recv('END\r\n', 0)
 
     def TODO_testSharedServerConns(self):
         """Test proxy only uses a few server conns"""
