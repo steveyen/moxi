@@ -389,6 +389,8 @@ bool cproxy_forward_ascii_simple_downstream(downstream *d,
     if (strncmp(command, "get", 3) == 0)
         return cproxy_forward_ascii_multiget_downstream(d, uc);
 
+    assert(uc->next == NULL);
+
     if (strncmp(command, "flush_all", 9) == 0)
         return cproxy_broadcast_ascii_downstream(d, command, uc,
                                                  "OK\r\n");
@@ -457,6 +459,7 @@ bool cproxy_forward_ascii_multiget_downstream(downstream *d, conn *uc) {
     assert(d->downstream_conns != NULL);
     assert(d->multiget == NULL);
     assert(uc != NULL);
+    assert(uc->noreply == false);
 
     int nwrite = 0;
     int nconns = memcached_server_count(&d->mst);
