@@ -52,6 +52,8 @@ struct proxy {
     //
     uint32_t config_ver;
 
+    uint32_t timeout; // Mutable, covered by proxy_lock, in usec.
+
     // Any thread that accesses the mutable fields should
     // first acquire the proxy_lock.
     //
@@ -117,6 +119,7 @@ struct downstream {
     proxy_td     *ptd;        // Immutable parent pointer.
     char         *config;     // Immutable, mem owned by downstream.
     uint32_t      config_ver; // Immutable, snapshot of proxy->config_ver.
+    uint32_t      timeout;    // Immutable, snapshot of proxy->timeout.
     memcached_st  mst;        // Immutable, from libmemcached.
 
     downstream *next;         // To track reserved/free lists.
@@ -140,8 +143,11 @@ struct downstream {
 // Functions.
 //
 proxy *cproxy_create(char *name, int port,
-                     char *config, uint32_t config_ver,
-                     int nthreads, int downstream_max);
+                     char *config,
+                     uint32_t config_ver,
+                     uint32_t timeout,
+                     int nthreads,
+                     int downstream_max);
 int    cproxy_listen(proxy *p);
 
 proxy_td *cproxy_find_thread_data(proxy *p, pthread_t thread_id);
@@ -153,7 +159,9 @@ void      cproxy_on_pause_downstream_conn(conn *c);
 
 void        cproxy_add_downstream(proxy_td *ptd);
 void        cproxy_free_downstream(downstream *d);
-downstream *cproxy_create_downstream(char *config, uint32_t config_ver);
+downstream *cproxy_create_downstream(char *config,
+                                     uint32_t config_ver,
+                                     uint32_t timeout);
 downstream *cproxy_reserve_downstream(proxy_td *ptd);
 bool        cproxy_release_downstream(downstream *d, bool force);
 void        cproxy_release_downstream_conn(downstream *d, conn *c);

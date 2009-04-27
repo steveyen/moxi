@@ -40,7 +40,8 @@ int cproxy_init(const char *cfg, int nthreads,
 #endif
 }
 
-int cproxy_init_string(const char *cfg, int nthreads,
+int cproxy_init_string(const char *cfg,
+                       int nthreads,
                        int downstream_max) {
     /* cfg should look like "local_port=host:port,host:port;local_port=host:port"
      * like "11222=memcached1.foo.net:11211"  This means local port 11222
@@ -78,7 +79,7 @@ int cproxy_init_string(const char *cfg, int nthreads,
             exit(EXIT_FAILURE);
         }
 
-        proxy *p = cproxy_create(proxy_name, proxy_port, proxy_sect, 0,
+        proxy *p = cproxy_create(proxy_name, proxy_port, proxy_sect, 0, 0,
                                  nthreads, downstream_max);
         if (p != NULL) {
             int n = cproxy_listen(p);

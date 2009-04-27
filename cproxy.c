@@ -65,8 +65,11 @@ conn_funcs cproxy_downstream_funcs = {
 /* Main function to create a proxy struct.
  */
 proxy *cproxy_create(char *name, int port,
-                     char *config, uint32_t config_ver,
-                     int nthreads, int downstream_max) {
+                     char *config,
+                     uint32_t config_ver,
+                     uint32_t timeout,
+                     int nthreads,
+                     int downstream_max) {
     assert(name != NULL);
     assert(port > 0);
     assert(config != NULL);
@@ -81,6 +84,7 @@ proxy *cproxy_create(char *name, int port,
         p->port       = port;
         p->config     = strdup(config);
         p->config_ver = config_ver;
+        p->timeout    = timeout;
 
         p->listening        = 0;
         p->listening_failed = 0;
@@ -451,13 +455,16 @@ void cproxy_add_downstream(proxy_td *ptd) {
             config = strdup(ptd->proxy->config);
 
         uint32_t config_ver = ptd->proxy->config_ver;
+        uint32_t timeout    = ptd->proxy->timeout;
 
         pthread_mutex_unlock(&ptd->proxy->proxy_lock);
 
         // The config will be NULL if the proxy is shutting down.
         //
         if (config != NULL) {
-            downstream *d = cproxy_create_downstream(config, config_ver);
+            downstream *d = cproxy_create_downstream(config,
+                                                     config_ver,
+                                                     timeout);
             if (d != NULL) {
                 d->ptd = ptd;
                 ptd->downstream_tot++;
@@ -681,17 +688,20 @@ void cproxy_free_downstream(downstream *d) {
 /* The config input is something libmemcached can parse.
  * See memcached_servers_parse().
  */
-downstream *cproxy_create_downstream(char *config, uint32_t config_ver) {
+downstream *cproxy_create_downstream(char *config,
+                                     uint32_t config_ver,
+                                     uint32_t timeout) {
     assert(config != NULL);
 
     downstream *d = (downstream *) calloc(1, sizeof(downstream));
     if (d != NULL) {
         d->config     = strdup(config);
         d->config_ver = config_ver;
+        d->timeout    = timeout;
 
         if (settings.verbose > 1)
-            fprintf(stderr, "cproxy_create_downstream: %s, %u\n",
-                    config, config_ver);
+            fprintf(stderr, "cproxy_create_downstream: %s, %u, %u\n",
+                    config, config_ver, timeout);
 
         if (memcached_create(&d->mst) != NULL) {
             memcached_behavior_set(&d->mst, MEMCACHED_BEHAVIOR_NO_BLOCK, 1);
@@ -747,6 +757,7 @@ bool cproxy_check_downstream_config(downstream *d) {
                d->ptd->proxy->config != NULL &&
                strcmp(d->config, d->ptd->proxy->config) == 0) {
         d->config_ver = d->ptd->proxy->config_ver;
+        d->timeout    = d->ptd->proxy->timeout;
         rv = true;
     }
 
@@ -1357,11 +1368,7 @@ void downstream_timeout(const int fd,
         int n = memcached_server_count(&d->mst);
 
         for (int i = 0; i < n; i++) {
-            // TODO: Off for now until we better understand
-            //       the consequences, which seem to lock tests.
-            //
-            if (FALSE &&
-                d->downstream_conns[i] != NULL) {
+            if (d->downstream_conns[i] != NULL) {
                 cproxy_close_conn(d->downstream_conns[i]);
             }
         }
@@ -1375,6 +1382,9 @@ bool cproxy_start_downstream_timeout(downstream *d) {
     assert(d != NULL);
     assert(d->timeout_tv.tv_sec == 0);
     assert(d->timeout_tv.tv_usec == 0);
+
+    if (d->timeout == 0)
+        return true;
 
     conn *uc = d->upstream_conn;
 
@@ -1393,8 +1403,8 @@ bool cproxy_start_downstream_timeout(downstream *d) {
 
     // TODO: Remove hardcoded timeout.
     //
-    d->timeout_tv.tv_sec = 2;
-    d->timeout_tv.tv_usec = 0;
+    d->timeout_tv.tv_sec = 0;
+    d->timeout_tv.tv_usec = d->timeout;
 
     return (evtimer_add(&d->timeout_event, &d->timeout_tv) == 0);
 }

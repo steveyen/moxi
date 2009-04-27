@@ -22,7 +22,7 @@ void on_memagent_get_stats(void *userdata, void *opaque,
 int cproxy_init_agent(const char *cfg, int nthreads,
                       int downstream_max);
 
-int cproxy_init_agent_attrs(char *jid, char *jpw,
+int cproxy_init_agent_start(char *jid, char *jpw,
                             char *config, char *host,
                             int nthreads, int downstream_max);
 
@@ -98,7 +98,7 @@ int cproxy_init_agent(const char *cfg,
             if (settings.verbose > 1)
                 fprintf(stderr, "cproxy_init missing host\n");
         } else {
-            if (cproxy_init_agent_attrs(jid, jpw, config, host,
+            if (cproxy_init_agent_start(jid, jpw, config, host,
                                         nthreads, downstream_max) == 0)
                 rv++;
         }
@@ -109,7 +109,7 @@ int cproxy_init_agent(const char *cfg,
     return rv;
 }
 
-int cproxy_init_agent_attrs(char *jid, char *jpw,
+int cproxy_init_agent_start(char *jid, char *jpw,
                             char *config_path, char *host,
                             int nthreads, int downstream_max) {
     assert(jid);
@@ -337,7 +337,7 @@ void cproxy_on_new_pool(proxy_main *m,
         p = p->next;
 
     if (p == NULL) {
-        p = cproxy_create(name, port, config, config_ver,
+        p = cproxy_create(name, port, config, config_ver, 0,
                           m->nthreads, m->downstream_max);
         if (p != NULL) {
             p->next = m->proxy_head;
