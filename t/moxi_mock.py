@@ -590,7 +590,6 @@ class TestProxy(unittest.TestCase):
 
     def TODO_testTimeout(self):
         """Test downstream timeout handling"""
-        return "TODO: depends incorrectly on hardcoded 2 sec timeout"
 
         # Assuming proxy's max_downstream is 1,
         # and number of threads is 1.

@@ -1346,12 +1346,25 @@ void downstream_timeout(const int fd,
         fprintf(stderr, "downstream_timeout\n");
 
     // This timer callback is invoked when one or more of
-    // the downstream conns must be really slow.  Treat it
-    // as if the downstream conns were closed.
+    // the downstream conns must be really slow.  Handle by
+    // closing downstream conns, which might help by
+    // freeing up downstream resources.
     //
     if (d->timeout_tv.tv_sec != 0 ||
         d->timeout_tv.tv_usec != 0) {
         evtimer_del(&d->timeout_event);
+
+        int n = memcached_server_count(&d->mst);
+
+        for (int i = 0; i < n; i++) {
+            // TODO: Off for now until we better understand
+            //       the consequences, which seem to lock tests.
+            //
+            if (FALSE &&
+                d->downstream_conns[i] != NULL) {
+                cproxy_close_conn(d->downstream_conns[i]);
+            }
+        }
     }
 
     d->timeout_tv.tv_sec = 0;
