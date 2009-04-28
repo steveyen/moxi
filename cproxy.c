@@ -67,7 +67,7 @@ conn_funcs cproxy_downstream_funcs = {
 proxy *cproxy_create(char *name, int port,
                      char *config,
                      uint32_t config_ver,
-                     uint32_t timeout,
+                     struct timeval config_tv,
                      int nthreads,
                      int downstream_max) {
     assert(name != NULL);
@@ -84,7 +84,7 @@ proxy *cproxy_create(char *name, int port,
         p->port       = port;
         p->config     = strdup(config);
         p->config_ver = config_ver;
-        p->timeout    = timeout;
+        p->config_tv  = config_tv;
 
         p->listening        = 0;
         p->listening_failed = 0;
@@ -454,8 +454,8 @@ void cproxy_add_downstream(proxy_td *ptd) {
         if (ptd->proxy->config != NULL)
             config = strdup(ptd->proxy->config);
 
-        uint32_t config_ver = ptd->proxy->config_ver;
-        uint32_t timeout    = ptd->proxy->timeout;
+        uint32_t       config_ver = ptd->proxy->config_ver;
+        struct timeval config_tv  = ptd->proxy->config_tv;
 
         pthread_mutex_unlock(&ptd->proxy->proxy_lock);
 
@@ -464,7 +464,7 @@ void cproxy_add_downstream(proxy_td *ptd) {
         if (config != NULL) {
             downstream *d = cproxy_create_downstream(config,
                                                      config_ver,
-                                                     timeout);
+                                                     config_tv);
             if (d != NULL) {
                 d->ptd = ptd;
                 ptd->downstream_tot++;
@@ -690,18 +690,19 @@ void cproxy_free_downstream(downstream *d) {
  */
 downstream *cproxy_create_downstream(char *config,
                                      uint32_t config_ver,
-                                     uint32_t timeout) {
+                                     struct timeval config_tv) {
     assert(config != NULL);
 
     downstream *d = (downstream *) calloc(1, sizeof(downstream));
     if (d != NULL) {
         d->config     = strdup(config);
         d->config_ver = config_ver;
-        d->timeout    = timeout;
+        d->config_tv  = config_tv;
 
         if (settings.verbose > 1)
-            fprintf(stderr, "cproxy_create_downstream: %s, %u, %u\n",
-                    config, config_ver, timeout);
+            fprintf(stderr,
+                    "cproxy_create_downstream: %s, %u\n",
+                    config, config_ver);
 
         if (memcached_create(&d->mst) != NULL) {
             memcached_behavior_set(&d->mst, MEMCACHED_BEHAVIOR_NO_BLOCK, 1);
@@ -757,7 +758,7 @@ bool cproxy_check_downstream_config(downstream *d) {
                d->ptd->proxy->config != NULL &&
                strcmp(d->config, d->ptd->proxy->config) == 0) {
         d->config_ver = d->ptd->proxy->config_ver;
-        d->timeout    = d->ptd->proxy->timeout;
+        d->config_tv  = d->ptd->proxy->config_tv;
         rv = true;
     }
 
@@ -1388,7 +1389,8 @@ bool cproxy_start_downstream_timeout(downstream *d) {
     assert(d->timeout_tv.tv_sec == 0);
     assert(d->timeout_tv.tv_usec == 0);
 
-    if (d->timeout == 0)
+    if (d->config_tv.tv_sec == 0 &&
+        d->config_tv.tv_usec == 0)
         return true;
 
     conn *uc = d->upstream_conn;
@@ -1406,10 +1408,8 @@ bool cproxy_start_downstream_timeout(downstream *d) {
 
     event_base_set(uc->thread->base, &d->timeout_event);
 
-    // TODO: Remove hardcoded timeout.
-    //
-    d->timeout_tv.tv_sec = 0;
-    d->timeout_tv.tv_usec = d->timeout;
+    d->timeout_tv.tv_sec  = d->config_tv.tv_sec;
+    d->timeout_tv.tv_usec = d->config_tv.tv_usec;
 
     return (evtimer_add(&d->timeout_event, &d->timeout_tv) == 0);
 }

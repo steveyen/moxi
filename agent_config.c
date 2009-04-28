@@ -30,7 +30,8 @@ void cproxy_on_new_config(void *data0, void *data1);
 
 void cproxy_on_new_pool(proxy_main *m,
                         char *name, int port,
-                        char *config, uint32_t config_ver);
+                        char *config, uint32_t config_ver,
+                        struct timeval config_tv);
 
 char **get_key_values(kvpair_t *kvs, char *key);
 
@@ -231,6 +232,11 @@ void cproxy_on_new_config(void *data0, void *data1) {
         goto fail;
     }
 
+    struct timeval downstream_timeout = {
+        .tv_sec  = 0,
+        .tv_usec = 0
+    };
+
     for (int i = 0; i < npools; i++) {
         assert(pools[i]);
         assert(bindings[i]);
@@ -265,7 +271,8 @@ void cproxy_on_new_config(void *data0, void *data1) {
                 }
 
                 cproxy_on_new_pool(m, pool_name, pool_port,
-                                   config, new_config_ver);
+                                   config, new_config_ver,
+                                   downstream_timeout);
 
                 free(config);
             }
@@ -283,6 +290,11 @@ void cproxy_on_new_config(void *data0, void *data1) {
     //       proxy_td's and downstreams are closed, and no more
     //       upstreams are pointed at the proxy.
     //
+    struct timeval downstream_timeout_zero = {
+        .tv_sec  = 0,
+        .tv_usec = 0
+    };
+
     for (proxy *p = m->proxy_head; p != NULL; p = p->next) {
         bool  down   = false;
         int   port   = 0;
@@ -304,7 +316,8 @@ void cproxy_on_new_config(void *data0, void *data1) {
         pthread_mutex_unlock(&p->proxy_lock);
 
         if (down)
-            cproxy_on_new_pool(m, NULL, port, NULL, new_config_ver);
+            cproxy_on_new_pool(m, NULL, port, NULL, new_config_ver,
+                               downstream_timeout_zero);
 
         if (name != NULL)
             free(name);
@@ -323,7 +336,8 @@ void cproxy_on_new_config(void *data0, void *data1) {
 
 void cproxy_on_new_pool(proxy_main *m,
                         char *name, int port,
-                        char *config, uint32_t config_ver) {
+                        char *config, uint32_t config_ver,
+                        struct timeval config_tv) {
     assert(m);
     assert(port >= 0);
     assert(is_listen_thread());
@@ -337,7 +351,11 @@ void cproxy_on_new_pool(proxy_main *m,
         p = p->next;
 
     if (p == NULL) {
-        p = cproxy_create(name, port, config, config_ver, 0,
+        p = cproxy_create(name, port,
+                          config,
+                          config_ver,
+                          0,
+                          config_tv,
                           m->nthreads, m->downstream_max);
         if (p != NULL) {
             p->next = m->proxy_head;
@@ -406,6 +424,7 @@ void cproxy_on_new_pool(proxy_main *m,
         assert(config_ver != p->config_ver);
 
         p->config_ver = config_ver;
+        p->config_tv  = config_tv
 
         pthread_mutex_unlock(&p->proxy_lock);
     }

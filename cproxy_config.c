@@ -79,11 +79,16 @@ int cproxy_init_string(const char *cfg,
             exit(EXIT_FAILURE);
         }
 
+        struct timeval downstream_timeout = {
+            .tv_sec = 10,
+            .tv_usec = 0
+        };
+
         proxy *p = cproxy_create(proxy_name,
                                  proxy_port,
                                  proxy_sect,
-                                 0,
-                                 0,
+                                 0, // config_ver.
+                                 downstream_timeout,
                                  nthreads,
                                  downstream_max);
         if (p != NULL) {

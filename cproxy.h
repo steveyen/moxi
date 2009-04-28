@@ -52,7 +52,9 @@ struct proxy {
     //
     uint32_t config_ver;
 
-    uint32_t timeout; // Mutable, covered by proxy_lock, in usec.
+    // Mutable, covered by proxy_lock, downstream timeout value.
+    //
+    struct timeval config_tv;
 
     // Any thread that accesses the mutable fields should
     // first acquire the proxy_lock.
@@ -116,13 +118,13 @@ struct proxy_td { // Per proxy, per worker-thread data struct.
 /* Owned by worker thread.
  */
 struct downstream {
-    proxy_td     *ptd;        // Immutable parent pointer.
-    char         *config;     // Immutable, mem owned by downstream.
-    uint32_t      config_ver; // Immutable, snapshot of proxy->config_ver.
-    uint32_t      timeout;    // Immutable, snapshot of proxy->timeout.
-    memcached_st  mst;        // Immutable, from libmemcached.
+    proxy_td      *ptd;        // Immutable parent pointer.
+    char          *config;     // Immutable, mem owned by downstream.
+    uint32_t       config_ver; // Immutable, snapshot of proxy->config_ver.
+    struct timeval config_tv;  // Immutable, snapshot of proxy->config_tv.
+    memcached_st   mst;        // Immutable, from libmemcached.
 
-    downstream *next;         // To track reserved/free lists.
+    downstream *next;          // To track reserved/free lists.
 
     conn **downstream_conns;  // Wraps the fd's of mst with conns.
     int    downstream_used;   // Number of in-use downstream conns, might
@@ -145,7 +147,7 @@ struct downstream {
 proxy *cproxy_create(char *name, int port,
                      char *config,
                      uint32_t config_ver,
-                     uint32_t timeout,
+                     struct timeval config_tv,
                      int nthreads,
                      int downstream_max);
 int    cproxy_listen(proxy *p);
@@ -161,7 +163,7 @@ void        cproxy_add_downstream(proxy_td *ptd);
 void        cproxy_free_downstream(downstream *d);
 downstream *cproxy_create_downstream(char *config,
                                      uint32_t config_ver,
-                                     uint32_t timeout);
+                                     struct timeval config_tv);
 downstream *cproxy_reserve_downstream(proxy_td *ptd);
 bool        cproxy_release_downstream(downstream *d, bool force);
 void        cproxy_release_downstream_conn(downstream *d, conn *c);
