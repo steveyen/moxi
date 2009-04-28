@@ -590,6 +590,7 @@ class TestProxy(unittest.TestCase):
 
     def TODO_testTimeout(self):
         """Test downstream timeout handling"""
+        return """TODO: Highly dependent on hardcoded downstream timeout val"""
 
         # Assuming proxy's max_downstream is 1,
         # and number of threads is 1.
@@ -600,13 +601,15 @@ class TestProxy(unittest.TestCase):
         self.mock_recv('get time0\r\n', 0)
 
         # Mock server is 'busy' at this point, so
-        # any client sends should be able to be
-        # de-duplicated by the proxy.
+        # downstream timeout logic should kick in,
+        # without our mock server having to send anything.
 
         self.wait(210)
 
-        self.mock_send('END\r\n', 0)
         self.client_recv('END\r\n', 0)
+
+        # TODO: The number of server sessions should be 0,
+        # except the close might not have propagated.
 
     def TODO_testSharedServerConns(self):
         """Test proxy only uses a few server conns"""

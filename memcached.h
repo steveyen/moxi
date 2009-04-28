@@ -462,6 +462,8 @@ extern int daemonize(int nochdir, int noclose);
 
 int server_socket(const int port, enum protocol prot);
 
+void drive_machine(conn *c);
+
 #include "stats.h"
 #include "slabs.h"
 #include "assoc.h"

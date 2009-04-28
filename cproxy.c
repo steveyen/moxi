@@ -1365,17 +1365,22 @@ void downstream_timeout(const int fd,
         d->timeout_tv.tv_usec != 0) {
         evtimer_del(&d->timeout_event);
 
+        d->timeout_tv.tv_sec = 0;
+        d->timeout_tv.tv_usec = 0;
+
         int n = memcached_server_count(&d->mst);
 
         for (int i = 0; i < n; i++) {
             if (d->downstream_conns[i] != NULL) {
-                cproxy_close_conn(d->downstream_conns[i]);
+                // Doing drive_machine(), which should only loop once,
+                // to get to the connection closing logic.
+                //
+                update_event(d->downstream_conns[i], 0);
+                conn_set_state(d->downstream_conns[i], conn_closing);
+                drive_machine(d->downstream_conns[i]);
             }
         }
     }
-
-    d->timeout_tv.tv_sec = 0;
-    d->timeout_tv.tv_usec = 0;
 }
 
 bool cproxy_start_downstream_timeout(downstream *d) {

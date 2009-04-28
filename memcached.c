@@ -58,7 +58,6 @@
 /*
  * forward declarations
  */
-static void drive_machine(conn *c);
 static int new_socket(struct addrinfo *ai);
 
 enum try_read_result {
@@ -3115,7 +3114,7 @@ static enum transmit_result transmit(conn *c) {
     }
 }
 
-static void drive_machine(conn *c) {
+void drive_machine(conn *c) {
     bool stop = false;
     int sfd, flags = 1;
     socklen_t addrlen;

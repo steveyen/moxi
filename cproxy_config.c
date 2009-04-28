@@ -79,8 +79,13 @@ int cproxy_init_string(const char *cfg,
             exit(EXIT_FAILURE);
         }
 
-        proxy *p = cproxy_create(proxy_name, proxy_port, proxy_sect, 0, 0,
-                                 nthreads, downstream_max);
+        proxy *p = cproxy_create(proxy_name,
+                                 proxy_port,
+                                 proxy_sect,
+                                 0,
+                                 0,
+                                 nthreads,
+                                 downstream_max);
         if (p != NULL) {
             int n = cproxy_listen(p);
             if (n > 0) {
