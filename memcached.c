@@ -114,13 +114,13 @@ enum transmit_result {
 static enum transmit_result transmit(conn *c);
 
 conn_funcs conn_funcs_default = {
-    NULL,
-    NULL,
-    process_command,
-    dispatch_bin_command,
-    complete_nread,
-    NULL,
-    realtime
+    .conn_init                   = NULL,
+    .conn_close                  = NULL,
+    .conn_process_ascii_command  = process_command,
+    .conn_process_binary_command = dispatch_bin_command,
+    .conn_complete_nread         = complete_nread,
+    .conn_pause                  = NULL,
+    .conn_realtime               = realtime
 };
 
 /*

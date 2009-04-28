@@ -33,33 +33,33 @@ bool        is_compatible_request(conn *existing, conn *candidate);
 // Function tables.
 //
 conn_funcs cproxy_listen_funcs = {
-    cproxy_init_upstream_conn,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    NULL
+    .conn_init                   = cproxy_init_upstream_conn,
+    .conn_close                  = NULL,
+    .conn_process_ascii_command  = NULL,
+    .conn_process_binary_command = NULL,
+    .conn_complete_nread         = NULL,
+    .conn_pause                  = NULL,
+    .conn_realtime               = NULL
 };
 
 conn_funcs cproxy_upstream_funcs = {
-    NULL,
-    cproxy_on_close_upstream_conn,
-    cproxy_process_upstream_ascii,
-    NULL,
-    cproxy_process_upstream_ascii_nread,
-    NULL,
-    cproxy_realtime
+    .conn_init                   = NULL,
+    .conn_close                  = cproxy_on_close_upstream_conn,
+    .conn_process_ascii_command  = cproxy_process_upstream_ascii,
+    .conn_process_binary_command = NULL,
+    .conn_complete_nread         = cproxy_process_upstream_ascii_nread,
+    .conn_pause                  = NULL,
+    .conn_realtime               = cproxy_realtime
 };
 
 conn_funcs cproxy_downstream_funcs = {
-    cproxy_init_downstream_conn,
-    cproxy_on_close_downstream_conn,
-    cproxy_process_downstream_ascii,
-    NULL,
-    cproxy_process_downstream_ascii_nread,
-    cproxy_on_pause_downstream_conn,
-    cproxy_realtime
+    .conn_init                   = cproxy_init_downstream_conn,
+    .conn_close                  = cproxy_on_close_downstream_conn,
+    .conn_process_ascii_command  = cproxy_process_downstream_ascii,
+    .conn_process_binary_command = NULL,
+    .conn_complete_nread         = cproxy_process_downstream_ascii_nread,
+    .conn_pause                  = cproxy_on_pause_downstream_conn,
+    .conn_realtime               = cproxy_realtime
 };
 
 /* Main function to create a proxy struct.
