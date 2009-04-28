@@ -8,7 +8,7 @@
 #include <assert.h>
 #include <libmemcached/memcached.h>
 #include "memcached.h"
-#include "memagent.h"
+#include "conflate.h"
 #include "cproxy.h"
 #include "work.h"
 
@@ -18,11 +18,11 @@ uint32_t murmur_hash(const char *key, size_t length);
 
 // Local declarations.
 //
-void on_memagent_get_stats(void *userdata,
+void on_conflate_get_stats(void *userdata,
                            void *opaque,
-                           agent_add_stat add_stat);
+                           conflate_add_stat add_stat);
 
-void on_memagent_reset_stats(void *userdata);
+void on_conflate_reset_stats(void *userdata);
 
 static void request_stats(void *data0, void *data1);
 static void request_stats_reset(void *data0, void *data1);
@@ -41,20 +41,20 @@ void map_proxy_stats_foreach_emit(gpointer key,
                                   gpointer user_data);
 
 struct add_stat_emit {
-    agent_add_stat  add_stat;
+    conflate_add_stat  add_stat;
     void           *opaque;
     int             thread;
 };
 
-/* This callback is invoked by memagent on a memagent thread
+/* This callback is invoked by conflate on a conflate thread
  * when it wants proxy stats.
  *
  * We use the work_queues to retrieve the info, so that normal
  * runtime has fewer locks, at the cost of scatter/gather
  * complexity to handle the proxy stats request.
  */
-void on_memagent_get_stats(void *userdata, void *opaque,
-                           agent_add_stat add_stat) {
+void on_conflate_get_stats(void *userdata, void *opaque,
+                           conflate_add_stat add_stat) {
     proxy_main *m = userdata;
     assert(m);
     assert(m->behavior.nthreads > 1);
@@ -320,14 +320,14 @@ void map_proxy_stats_foreach_emit(gpointer key,
                      ps->tot_retry);
 }
 
-/* This callback is invoked by memagent on a memagent thread
+/* This callback is invoked by conflate on a conflate thread
  * when it wants proxy stats.
  *
  * We use the work_queues to retrieve the info, so that normal
  * runtime has fewer locks, at the cost of scatter/gather
  * complexity to handle the proxy stats request.
  */
-void on_memagent_reset_stats(void *userdata) {
+void on_conflate_reset_stats(void *userdata) {
     proxy_main *m = userdata;
     assert(m);
     assert(m->behavior.nthreads > 1);

@@ -11,13 +11,13 @@
 #include "cproxy.h"
 #include "work.h"
 
-// Integration with memagent.
+// Integration with libconflate.
 //
-#include "memagent.h"
+#include "conflate.h"
 
-void on_memagent_new_config(void *userdata, kvpair_t *config);
-void on_memagent_get_stats(void *userdata, void *opaque,
-                           agent_add_stat add_stat);
+void on_conflate_new_config(void *userdata, kvpair_t *config);
+void on_conflate_get_stats(void *userdata, void *opaque,
+                           conflate_add_stat add_stat);
 
 int cproxy_init_agent(const char *cfg, proxy_behavior behavior);
 
@@ -126,7 +126,7 @@ int cproxy_init_agent_start(char *jid, char *jpw,
         m->stat_proxy_existings   = 0;
         m->stat_proxy_shutdowns   = 0;
 
-        agent_config_t config;
+        conflate_config_t config;
 
         memset(&config, 0, sizeof(config));
 
@@ -138,10 +138,10 @@ int cproxy_init_agent_start(char *jid, char *jpw,
         config.version    = "0.1";       // TODO: Version.
         config.save_path  = config_path; // "/tmp/memscale.cfg"
         config.userdata   = m;
-        config.new_config = on_memagent_new_config;
-        config.get_stats  = on_memagent_get_stats;
+        config.new_config = on_conflate_new_config;
+        config.get_stats  = on_conflate_get_stats;
 
-        if (start_agent(config)) {
+        if (start_conflate(config)) {
             if (settings.verbose > 1)
                 fprintf(stderr, "cproxy_init done\n");
 
@@ -150,12 +150,12 @@ int cproxy_init_agent_start(char *jid, char *jpw,
     }
 
     if (settings.verbose > 1)
-        fprintf(stderr, "cproxy could not start memagent\n");
+        fprintf(stderr, "cproxy could not start conflate\n");
 
     return 1;
 }
 
-void on_memagent_new_config(void *userdata, kvpair_t *config) {
+void on_conflate_new_config(void *userdata, kvpair_t *config) {
     assert(config != NULL);
 
     proxy_main *m = userdata;

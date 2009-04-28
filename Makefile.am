@@ -29,7 +29,7 @@ moxi_SOURCES += cache.c
 testapp_SOURCES += cache.c
 endif
 
-if BUILD_MEMAGENT
+if BUILD_CONFLATE
 moxi_SOURCES += agent_config.c agent_stats.c
 endif
 

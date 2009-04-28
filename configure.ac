@@ -346,13 +346,13 @@ AC_CHECK_HEADER(umem.h, [
 
 AM_CONDITIONAL([BUILD_CACHE], [test "x$build_cache" = "xyes"])
 
-AC_CHECK_HEADER(memagent.h, [
-   AC_DEFINE([HAVE_MEMAGENT_H], 1,
-         [Define this if you have memagent.h])
-   build_memagent=yes
-], [build_memagent=no])
+AC_CHECK_HEADER(conflate.h, [
+   AC_DEFINE([HAVE_CONFLATE_H], 1,
+         [Define this if you have conflate.h])
+   build_conflate=yes
+], [build_conflate=no])
 
-AM_CONDITIONAL([BUILD_MEMAGENT], [test "x$build_memagent" = "xyes"])
+AM_CONDITIONAL([BUILD_CONFLATE], [test "x$build_conflate" = "xyes"])
 
 AC_ARG_ENABLE(docs,
   [AS_HELP_STRING([--disable-docs],[Disable documentation generation])])
@@ -392,9 +392,9 @@ CPPFLAGS="$CPPFLAGS -I/opt/local/include"
 
 AC_SEARCH_LIBS(memcached_create, memcached)
 
-if test build_memagent = yes
+if test $build_conflate = yes
 then
-   LIBS="$LIBS -lmemagent -lsqlite3 -lstrophe -lexpat -lresolv"
+   LIBS="$LIBS -lconflate -lsqlite3 -lstrophe -lexpat -lresolv"
    LIBS="$LIBS -L\$(HOME)/lib"
    CPPFLAGS="$CPPFLAGS -I\$(HOME)/include"
 fi
