@@ -20,7 +20,8 @@ void on_memagent_get_stats(void *userdata, void *opaque,
                            agent_add_stat add_stat);
 
 int cproxy_init_agent(const char *cfg, int nthreads,
-                      int downstream_max);
+                      int downstream_max,
+                      struct timeval downstream_timeout);
 
 int cproxy_init_agent_start(char *jid, char *jpw,
                             char *config, char *host,
@@ -39,7 +40,8 @@ kvpair_t *copy_kvpairs(kvpair_t *orig);
 
 int cproxy_init_agent(const char *cfg,
                       int nthreads,
-                      int downstream_max) {
+                      int downstream_max,
+                      struct timeval downstream_timeout) {
     char *buff = strdup(cfg);
     char *next = buff;
 

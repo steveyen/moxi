@@ -7,7 +7,10 @@
 #include <libmemcached/memcached.h>
 #include "work.h"
 
-int cproxy_init(const char *cfg, int nthreads, int downstream_max);
+int cproxy_init(const char *cfg,
+                int nthreads,
+                int downstream_max,
+                struct timeval downstream_timeout);
 
 #define IS_PROXY(x) (x == proxy_upstream_ascii_prot || \
                      x == proxy_downstream_ascii_prot)

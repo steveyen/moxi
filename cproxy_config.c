@@ -12,13 +12,16 @@
 #include "work.h"
 
 int cproxy_init_string(const char *cfg, int nthreads,
-                       int downstream_max);
+                       int downstream_max,
+                       struct timeval downstream_timeout);
 
 int cproxy_init_agent(const char *cfg, int nthreads,
-                      int downstream_max);
+                      int downstream_max,
+                      struct timeval downstream_timeout);
 
 int cproxy_init(const char *cfg, int nthreads,
-                int downstream_max) {
+                int downstream_max,
+                struct timeval downstream_timeout) {
     assert(nthreads > 1); // Main + at least one worker.
     assert(nthreads == settings.num_threads);
     assert(downstream_max > 0);
@@ -31,10 +34,14 @@ int cproxy_init(const char *cfg, int nthreads,
         fprintf(stderr, "cproxy_init %s\n", cfg);
 
     if (strchr(cfg, '@') == NULL) // Not jid format.
-        return cproxy_init_string(cfg, nthreads, downstream_max);
+        return cproxy_init_string(cfg, nthreads,
+                                  downstream_max,
+                                  downstream_timeout);
 
 #ifdef BUILD_MEMAGENT
-    return cproxy_init_agent(cfg, nthreads, downstream_max);
+    return cproxy_init_agent(cfg, nthreads,
+                             downstream_max,
+                             downstream_timeout);
 #else
     return 1;
 #endif
@@ -42,7 +49,8 @@ int cproxy_init(const char *cfg, int nthreads,
 
 int cproxy_init_string(const char *cfg,
                        int nthreads,
-                       int downstream_max) {
+                       int downstream_max,
+                       struct timeval downstream_timeout) {
     /* cfg should look like "local_port=host:port,host:port;local_port=host:port"
      * like "11222=memcached1.foo.net:11211"  This means local port 11222
      * will be a proxy to downstream memcached server running at
@@ -78,11 +86,6 @@ int cproxy_init_string(const char *cfg,
             fprintf(stderr, "bad cproxy config, bad proxy port\n");
             exit(EXIT_FAILURE);
         }
-
-        struct timeval downstream_timeout = {
-            .tv_sec = 10,
-            .tv_usec = 0
-        };
 
         proxy *p = cproxy_create(proxy_name,
                                  proxy_port,
