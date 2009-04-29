@@ -4236,13 +4236,7 @@ int main (int argc, char **argv) {
      * we can be a proxy to ourselves for testing.
      */
     if (cproxy_cfg) {
-        struct timeval downstream_timeout = {
-            .tv_sec  = 10,
-            .tv_usec = 0
-        };
-
-        cproxy_init(cproxy_cfg, settings.num_threads,
-                    1, downstream_timeout);
+        cproxy_init(cproxy_cfg, NULL, settings.num_threads);
         free(cproxy_cfg);
     }
 

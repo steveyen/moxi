@@ -356,9 +356,9 @@ void cproxy_on_new_pool(proxy_main *m,
         p = cproxy_create(name, port,
                           config,
                           config_ver,
-                          0,
                           config_tv,
-                          m->nthreads, m->downstream_max);
+                          m->nthreads,
+                          m->downstream_max);
         if (p != NULL) {
             p->next = m->proxy_head;
             m->proxy_head = p;

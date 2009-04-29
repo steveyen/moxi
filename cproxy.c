@@ -64,12 +64,11 @@ conn_funcs cproxy_downstream_funcs = {
 
 /* Main function to create a proxy struct.
  */
-proxy *cproxy_create(char *name, int port,
-                     char *config,
+proxy *cproxy_create(char    *name,
+                     int      port,
+                     char    *config,
                      uint32_t config_ver,
-                     struct timeval config_tv,
-                     int nthreads,
-                     int downstream_max) {
+                     proxy_behavior behavior) {
     assert(name != NULL);
     assert(port > 0);
     assert(config != NULL);
@@ -84,14 +83,14 @@ proxy *cproxy_create(char *name, int port,
         p->port       = port;
         p->config     = strdup(config);
         p->config_ver = config_ver;
-        p->config_tv  = config_tv;
+        p->behavior   = behavior;
 
         p->listening        = 0;
         p->listening_failed = 0;
 
         pthread_mutex_init(&p->proxy_lock, NULL);
 
-        p->thread_data_num = nthreads;
+        p->thread_data_num = behavior.nthreads;
         p->thread_data = (proxy_td *) calloc(p->thread_data_num,
                                              sizeof(proxy_td));
         if (p->thread_data != NULL) {
@@ -108,7 +107,7 @@ proxy *cproxy_create(char *name, int port,
                 ptd->downstream_released = NULL;
                 ptd->downstream_tot = 0;
                 ptd->downstream_num = 0;
-                ptd->downstream_max = downstream_max;
+                ptd->downstream_max = p->behavior.downstream_max;
 
                 ptd->stats.num_upstream = 0;
                 ptd->stats.num_downstream_conn = 0;
@@ -455,16 +454,17 @@ void cproxy_add_downstream(proxy_td *ptd) {
             config = strdup(ptd->proxy->config);
 
         uint32_t       config_ver = ptd->proxy->config_ver;
-        struct timeval config_tv  = ptd->proxy->config_tv;
+        proxy_behavior behavior   = ptd->proxy->behavior;
 
         pthread_mutex_unlock(&ptd->proxy->proxy_lock);
 
         // The config will be NULL if the proxy is shutting down.
         //
         if (config != NULL) {
-            downstream *d = cproxy_create_downstream(config,
-                                                     config_ver,
-                                                     config_tv);
+            downstream *d =
+                cproxy_create_downstream(config,
+                                         config_ver,
+                                         behavior);
             if (d != NULL) {
                 d->ptd = ptd;
                 ptd->downstream_tot++;
@@ -690,14 +690,14 @@ void cproxy_free_downstream(downstream *d) {
  */
 downstream *cproxy_create_downstream(char *config,
                                      uint32_t config_ver,
-                                     struct timeval config_tv) {
+                                     proxy_behavior behavior) {
     assert(config != NULL);
 
     downstream *d = (downstream *) calloc(1, sizeof(downstream));
     if (d != NULL) {
         d->config     = strdup(config);
         d->config_ver = config_ver;
-        d->config_tv  = config_tv;
+        d->behavior   = behavior;
 
         if (settings.verbose > 1)
             fprintf(stderr,
@@ -758,7 +758,7 @@ bool cproxy_check_downstream_config(downstream *d) {
                d->ptd->proxy->config != NULL &&
                strcmp(d->config, d->ptd->proxy->config) == 0) {
         d->config_ver = d->ptd->proxy->config_ver;
-        d->config_tv  = d->ptd->proxy->config_tv;
+        d->behavior   = d->ptd->proxy->behavior;
         rv = true;
     }
 
@@ -1389,8 +1389,8 @@ bool cproxy_start_downstream_timeout(downstream *d) {
     assert(d->timeout_tv.tv_sec == 0);
     assert(d->timeout_tv.tv_usec == 0);
 
-    if (d->config_tv.tv_sec == 0 &&
-        d->config_tv.tv_usec == 0)
+    if (d->behavior.downstream_timeout.tv_sec == 0 &&
+        d->behavior.downstream_timeout.tv_usec == 0)
         return true;
 
     conn *uc = d->upstream_conn;
@@ -1408,8 +1408,8 @@ bool cproxy_start_downstream_timeout(downstream *d) {
 
     event_base_set(uc->thread->base, &d->timeout_event);
 
-    d->timeout_tv.tv_sec  = d->config_tv.tv_sec;
-    d->timeout_tv.tv_usec = d->config_tv.tv_usec;
+    d->timeout_tv.tv_sec  = d->behavior.downstream_timeout.tv_sec;
+    d->timeout_tv.tv_usec = d->behavior.downstream_timeout.tv_usec;
 
     return (evtimer_add(&d->timeout_event, &d->timeout_tv) == 0);
 }
