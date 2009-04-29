@@ -57,7 +57,7 @@ void on_memagent_get_stats(void *userdata, void *opaque,
                            agent_add_stat add_stat) {
     proxy_main *m = userdata;
     assert(m);
-    assert(m->nthreads > 1);
+    assert(m->behavior.nthreads > 1);
 
     LIBEVENT_THREAD *mthread = thread_by_index(0);
     assert(mthread);
@@ -70,9 +70,9 @@ void on_memagent_get_stats(void *userdata, void *opaque,
     add_stat(opaque, key, buf);
 
     more_stat("%u", "nthreads",
-              m->nthreads);
+              m->behavior.nthreads);
     more_stat("%u", "downstream_max",
-              m->downstream_max);
+              m->behavior.downstream_max);
     more_stat("%llu", "configs",
               m->stat_configs);
     more_stat("%llu", "config_fails",
@@ -88,11 +88,11 @@ void on_memagent_get_stats(void *userdata, void *opaque,
 
     // Alloc here so the main listener thread has less work.
     //
-    work_collect *ca = calloc(m->nthreads, sizeof(work_collect));
+    work_collect *ca = calloc(m->behavior.nthreads, sizeof(work_collect));
     if (ca != NULL) {
         int i;
 
-        for (i = 1; i < m->nthreads; i++) {
+        for (i = 1; i < m->behavior.nthreads; i++) {
             GHashTable *map_proxy_stats =
                 g_hash_table_new(g_str_hash,
                                  g_str_equal);
@@ -104,11 +104,11 @@ void on_memagent_get_stats(void *userdata, void *opaque,
 
         // Continue on the main listener thread.
         //
-        if (i >= m->nthreads &&
+        if (i >= m->behavior.nthreads &&
             work_send(mthread->work_queue, request_stats, m, ca)) {
             // Wait for all the stats collecting to finish.
             //
-            for (i = 1; i < m->nthreads; i++) {
+            for (i = 1; i < m->behavior.nthreads; i++) {
                 work_collect_wait(&ca[i]);
 
                 GHashTable *map_proxy_stats = ca[i].data;
@@ -126,7 +126,7 @@ void on_memagent_get_stats(void *userdata, void *opaque,
             }
         }
 
-        for (i = 1; i < m->nthreads; i++) {
+        for (i = 1; i < m->behavior.nthreads; i++) {
             GHashTable *map_proxy_stats = ca[i].data;
             if (map_proxy_stats != NULL) {
                 g_hash_table_foreach(map_proxy_stats,
@@ -149,7 +149,7 @@ void on_memagent_get_stats(void *userdata, void *opaque,
 static void request_stats(void *data0, void *data1) {
     proxy_main *m = data0;
     assert(m);
-    assert(m->nthreads > 1);
+    assert(m->behavior.nthreads > 1);
 
     work_collect *ca = data1;
     assert(ca);
@@ -164,7 +164,7 @@ static void request_stats(void *data0, void *data1) {
 
     // Starting at 1 because 0 is the main listen thread.
     //
-    for (int i = 1; i < m->nthreads; i++) {
+    for (int i = 1; i < m->behavior.nthreads; i++) {
         work_collect *c = &ca[i];
 
         work_collect_count(c, nproxy);
@@ -330,7 +330,7 @@ void map_proxy_stats_foreach_emit(gpointer key,
 void on_memagent_reset_stats(void *userdata) {
     proxy_main *m = userdata;
     assert(m);
-    assert(m->nthreads > 1);
+    assert(m->behavior.nthreads > 1);
 
     LIBEVENT_THREAD *mthread = thread_by_index(0);
     assert(mthread);
@@ -338,21 +338,21 @@ void on_memagent_reset_stats(void *userdata) {
 
     // Alloc here so the main listener thread has less work.
     //
-    work_collect *ca = calloc(m->nthreads, sizeof(work_collect));
+    work_collect *ca = calloc(m->behavior.nthreads, sizeof(work_collect));
     if (ca != NULL) {
         int i;
 
-        for (i = 1; i < m->nthreads; i++) {
+        for (i = 1; i < m->behavior.nthreads; i++) {
             work_collect_init(&ca[i], -1, NULL);
         }
 
         // Continue on the main listener thread.
         //
-        if (i >= m->nthreads &&
+        if (i >= m->behavior.nthreads &&
             work_send(mthread->work_queue, request_stats_reset, m, ca)) {
             // Wait for all resets to finish.
             //
-            for (i = 1; i < m->nthreads; i++) {
+            for (i = 1; i < m->behavior.nthreads; i++) {
                 work_collect_wait(&ca[i]);
             }
         }
@@ -368,7 +368,7 @@ void on_memagent_reset_stats(void *userdata) {
 static void request_stats_reset(void *data0, void *data1) {
     proxy_main *m = data0;
     assert(m);
-    assert(m->nthreads > 1);
+    assert(m->behavior.nthreads > 1);
 
     work_collect *ca = data1;
     assert(ca);
@@ -383,7 +383,7 @@ static void request_stats_reset(void *data0, void *data1) {
 
     // Starting at 1 because 0 is the main listen thread.
     //
-    for (int i = 1; i < m->nthreads; i++) {
+    for (int i = 1; i < m->behavior.nthreads; i++) {
         work_collect *c = &ca[i];
 
         work_collect_count(c, nproxy);

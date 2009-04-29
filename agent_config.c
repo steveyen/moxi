@@ -19,29 +19,23 @@ void on_memagent_new_config(void *userdata, kvpair_t *config);
 void on_memagent_get_stats(void *userdata, void *opaque,
                            agent_add_stat add_stat);
 
-int cproxy_init_agent(const char *cfg, int nthreads,
-                      int downstream_max,
-                      struct timeval downstream_timeout);
+int cproxy_init_agent(const char *cfg, proxy_behavior behavior);
 
 int cproxy_init_agent_start(char *jid, char *jpw,
                             char *config, char *host,
-                            int nthreads, int downstream_max);
+                            proxy_behavior behavior);
 
 void cproxy_on_new_config(void *data0, void *data1);
 
 void cproxy_on_new_pool(proxy_main *m,
                         char *name, int port,
-                        char *config, uint32_t config_ver,
-                        struct timeval config_tv);
+                        char *config, uint32_t config_ver);
 
 char **get_key_values(kvpair_t *kvs, char *key);
 
 kvpair_t *copy_kvpairs(kvpair_t *orig);
 
-int cproxy_init_agent(const char *cfg,
-                      int nthreads,
-                      int downstream_max,
-                      struct timeval downstream_timeout) {
+int cproxy_init_agent(const char *cfg, proxy_behavior behavior) {
     char *buff = strdup(cfg);
     char *next = buff;
 
@@ -102,7 +96,7 @@ int cproxy_init_agent(const char *cfg,
                 fprintf(stderr, "cproxy_init missing host\n");
         } else {
             if (cproxy_init_agent_start(jid, jpw, config, host,
-                                        nthreads, downstream_max) == 0)
+                                        behavior) == 0)
                 rv++;
         }
     }
@@ -114,7 +108,7 @@ int cproxy_init_agent(const char *cfg,
 
 int cproxy_init_agent_start(char *jid, char *jpw,
                             char *config_path, char *host,
-                            int nthreads, int downstream_max) {
+                            proxy_behavior behavior) {
     assert(jid);
     assert(jpw);
     assert(config_path);
@@ -122,9 +116,8 @@ int cproxy_init_agent_start(char *jid, char *jpw,
 
     proxy_main *m = calloc(1, sizeof(proxy_main));
     if (m != NULL) {
-        m->proxy_head     = NULL;
-        m->nthreads       = nthreads;
-        m->downstream_max = downstream_max;
+        m->proxy_head = NULL;
+        m->behavior   = behavior;
 
         m->stat_configs      = 0;
         m->stat_config_fails = 0;
@@ -234,11 +227,6 @@ void cproxy_on_new_config(void *data0, void *data1) {
         goto fail;
     }
 
-    struct timeval downstream_timeout = {
-        .tv_sec  = 0,
-        .tv_usec = 0
-    };
-
     for (int i = 0; i < npools; i++) {
         assert(pools[i]);
         assert(bindings[i]);
@@ -273,8 +261,7 @@ void cproxy_on_new_config(void *data0, void *data1) {
                 }
 
                 cproxy_on_new_pool(m, pool_name, pool_port,
-                                   config, new_config_ver,
-                                   downstream_timeout);
+                                   config, new_config_ver);
 
                 free(config);
             }
@@ -292,11 +279,6 @@ void cproxy_on_new_config(void *data0, void *data1) {
     //       proxy_td's and downstreams are closed, and no more
     //       upstreams are pointed at the proxy.
     //
-    struct timeval downstream_timeout_zero = {
-        .tv_sec  = 0,
-        .tv_usec = 0
-    };
-
     for (proxy *p = m->proxy_head; p != NULL; p = p->next) {
         bool  down   = false;
         int   port   = 0;
@@ -318,8 +300,7 @@ void cproxy_on_new_config(void *data0, void *data1) {
         pthread_mutex_unlock(&p->proxy_lock);
 
         if (down)
-            cproxy_on_new_pool(m, NULL, port, NULL, new_config_ver,
-                               downstream_timeout_zero);
+            cproxy_on_new_pool(m, NULL, port, NULL, new_config_ver);
 
         if (name != NULL)
             free(name);
@@ -338,8 +319,7 @@ void cproxy_on_new_config(void *data0, void *data1) {
 
 void cproxy_on_new_pool(proxy_main *m,
                         char *name, int port,
-                        char *config, uint32_t config_ver,
-                        struct timeval config_tv) {
+                        char *config, uint32_t config_ver) {
     assert(m);
     assert(port >= 0);
     assert(is_listen_thread());
@@ -356,9 +336,7 @@ void cproxy_on_new_pool(proxy_main *m,
         p = cproxy_create(name, port,
                           config,
                           config_ver,
-                          config_tv,
-                          m->nthreads,
-                          m->downstream_max);
+                          m->behavior);
         if (p != NULL) {
             p->next = m->proxy_head;
             m->proxy_head = p;
@@ -426,7 +404,7 @@ void cproxy_on_new_pool(proxy_main *m,
         assert(config_ver != p->config_ver);
 
         p->config_ver = config_ver;
-        p->config_tv  = config_tv
+        p->behavior   = m->behavior;
 
         pthread_mutex_unlock(&p->proxy_lock);
     }
