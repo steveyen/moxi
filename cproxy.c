@@ -90,6 +90,8 @@ proxy *cproxy_create(char    *name,
 
         pthread_mutex_init(&p->proxy_lock, NULL);
 
+        assert(behavior.nthreads == settings.num_threads);
+
         p->thread_data_num = behavior.nthreads;
         p->thread_data = (proxy_td *) calloc(p->thread_data_num,
                                              sizeof(proxy_td));
