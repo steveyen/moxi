@@ -160,6 +160,8 @@ proxy_behavior cproxy_parse_behavior(const char *behavior_str,
 
     free(buff);
 
+    assert(IS_PROXY(behavior.downstream_prot));
+
     return behavior;
 }
 
