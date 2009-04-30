@@ -4,6 +4,8 @@ moxi used to be called "cproxy".
 
 TODO ideas...
 
+- submodules, easy low-dependency build steps.
+
 - retry SET's and DELETE's, so that upstream can continue fast.
 - failover/drain mode
   - sort of an edge case of replication
