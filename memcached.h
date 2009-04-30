@@ -278,6 +278,7 @@ enum protocol {
     binary_prot,
     proxy_upstream_ascii_prot,
     proxy_downstream_ascii_prot,
+    proxy_downstream_binary_prot,
     negotiating_prot /* Discovering the protocol */
 };
 
@@ -285,7 +286,8 @@ enum protocol {
 #define IS_ASCII(x) (x == ascii_prot || x == ascii_udp_prot || \
                      x == proxy_upstream_ascii_prot || \
                      x == proxy_downstream_ascii_prot)
-#define IS_BINARY(x) (x == binary_prot)
+#define IS_BINARY(x) (x == binary_prot || \
+                      x == proxy_downstream_binary_prot)
 
 #define NREAD_ADD 1
 #define NREAD_SET 2

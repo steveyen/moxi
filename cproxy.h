@@ -12,7 +12,8 @@ int cproxy_init(const char *cfg_str,
                 int nthreads);
 
 #define IS_PROXY(x) (x == proxy_upstream_ascii_prot || \
-                     x == proxy_downstream_ascii_prot)
+                     x == proxy_downstream_ascii_prot || \
+                     x == proxy_downstream_binary_prot)
 
 // -------------------------------
 
@@ -27,6 +28,7 @@ struct proxy_behavior {
     int            nthreads;
     int            downstream_max;
     struct timeval downstream_timeout;
+    enum protocol  downstream_prot;
 };
 
 /* Owned by main listener thread.

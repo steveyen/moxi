@@ -779,6 +779,7 @@ int cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread) {
     assert(d->ptd != NULL);
     assert(d->ptd->downstream_released != d); // Should not be in free list.
     assert(d->downstream_conns != NULL);
+    assert(IS_PROXY(d->behavior.downstream_prot));
     assert(memcached_server_count(&d->mst) > 0);
     assert(thread != NULL);
     assert(thread->base != NULL);
@@ -796,7 +797,7 @@ int cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread) {
                 if (fd >= 0) {
                     d->downstream_conns[i] =
                         conn_new(fd, conn_pause, 0, DATA_BUFFER_SIZE,
-                                 proxy_downstream_ascii_prot,
+                                 d->behavior.downstream_prot,
                                  thread->base,
                                  &cproxy_downstream_funcs, d);
                     if (d->downstream_conns[i] != NULL)

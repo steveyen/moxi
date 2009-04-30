@@ -111,7 +111,8 @@ proxy_behavior cproxy_parse_behavior(const char *behavior_str,
         .downstream_timeout = {
             .tv_sec  = 0,
             .tv_usec = 0
-        }
+        },
+        .downstream_prot = proxy_downstream_ascii_prot
     };
 
     if (behavior_str == NULL ||

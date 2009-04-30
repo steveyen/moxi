@@ -8,6 +8,7 @@ TODO ideas...
 
 - retry SET's and DELETE's
   - so that upstream can continue fast and just fire-&-forget.
+    - but, need to respect serializability, similar to noreply bug?
   - log and replay these?
     - possibly in separate datacenter?
 
