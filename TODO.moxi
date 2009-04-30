@@ -5,6 +5,8 @@ moxi used to be called "cproxy".
 TODO ideas...
 
 - submodules, easy low-dependency build steps.
+  - talked to Dustin about this, and he knows the
+    git submodule and script magic to make the right metaproject.
 
 - retry SET's and DELETE's
   - so that upstream can continue fast and just fire-&-forget.
