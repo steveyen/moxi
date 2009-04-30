@@ -464,6 +464,10 @@ class TestProxy(unittest.TestCase):
 
     def testTwoSerialClients(self):
         """Test two serial clients"""
+
+        # Assuming proxy's max_downstream is 1,
+        # and number of threads is 1.
+
         self.client_connect(0)
         self.client_send('get client0\r\n', 0)
         self.mock_recv("get client0\r\n", 0)
@@ -485,6 +489,10 @@ class TestProxy(unittest.TestCase):
 
     def testTwoSerialClientsConnectingUpfront(self):
         """Test two serial clients that both connect upfront"""
+
+        # Assuming proxy's max_downstream is 1,
+        # and number of threads is 1.
+
         self.client_connect(0)
         self.client_connect(1)
 
