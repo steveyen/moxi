@@ -3919,6 +3919,7 @@ int main (int argc, char **argv) {
     char *username = NULL;
     char *pid_file = NULL;
     char *cproxy_cfg = NULL;
+    char *cproxy_behavior = NULL;
     struct passwd *pw;
     struct rlimit rlim;
     /* listening sockets */
@@ -3962,6 +3963,7 @@ int main (int argc, char **argv) {
           "C"   /* Disable use of CAS */
           "b:"  /* backlog queue limit */
           "z:"  /* cproxy configuration */
+          "Z:"  /* cproxy behavior */
         ))) {
         switch (c) {
         case 'a':
@@ -4065,6 +4067,9 @@ int main (int argc, char **argv) {
             break;
         case 'z' :
             cproxy_cfg = strdup(optarg);
+            break;
+        case 'Z' :
+            cproxy_behavior = strdup(optarg);
             break;
         default:
             fprintf(stderr, "Illegal argument \"%c\"\n", c);
@@ -4236,9 +4241,11 @@ int main (int argc, char **argv) {
      * we can be a proxy to ourselves for testing.
      */
     if (cproxy_cfg) {
-        cproxy_init(cproxy_cfg, NULL, settings.num_threads);
+        cproxy_init(cproxy_cfg, cproxy_behavior, settings.num_threads);
         free(cproxy_cfg);
     }
+    if (cproxy_behavior)
+        free(cproxy_behavior);
 
     /* Drop privileges no longer needed */
     drop_privileges();
