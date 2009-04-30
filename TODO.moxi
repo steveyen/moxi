@@ -1,0 +1,202 @@
+moxi ideas, internals, notes...
+
+moxi used to be called "cproxy".
+
+TODO ideas...
+
+- retry SET's and DELETE's, so that upstream can continue fast.
+- failover/drain mode
+  - sort of an edge case of replication
+  - if we know a server's going to be going down in the future
+    and we know where keys should end up, do simple cooling/warming-up
+    replication.
+- auth/bucket select.
+- 1000 customers per box -- php hosting scenario.
+- optimized connection to self, where moxi is running
+  as a memcached server.
+
+- handling binary protocol
+  - on upstream
+  - on downstream
+  - when downstreams are not uniform protocol
+    - some ascii, some binary
+  - easiest - binary upstream and binary downstream
+    - binary quiet commands are similar to ascii noreply?
+      - there are state assumptions so we can't just
+        jump to another downstream.
+    - need to associate upstream with a favored downstream
+
+- message aggregation
+  - aka, get key squashing or key-dedupe.
+  - take popular get keys in wait queue and only get them once.
+  - think through binary get/getq,getk,getkq issues before
+      building this.
+    - because we want one codebase/logic that handles both
+      ascii and binary situations.
+    - might need to convert get/getq's into getk/getkq's
+      on the downstream.
+    - also think through protocol conversions,
+      with ascii on the front and binary on the back,
+      and vice versa.
+  - idea: if num(upstream_conn's) > 0 or need a inflight hashmap
+  - what if conn goes down during scatter/gather
+
+==========================================================
+below, "a2b" means ascii upstream to binary downstream...
+
+      scatter/gather-multiget
+----------------------------------------------------------
+a2a   done
+a2b   easy, because we have all keys and can just
+      use getq+noop pattern.  we don't need to use opaque
+      on the downstream conns.
+a2ab  need track the allowed protocols of downstream servers.
+
+b2a   need multiple read/nreads, so we can gather all
+      keys first until final upstream no-op or non-quiet get,
+      or see an upstream conn_closing.
+      then we can do a downstream multiget.
+b2b   need multiple read/nreads, so we can gather all
+      keys first until final upstream no-op or non-quiet get
+      or see an upstream conn_closing.
+      or, need noreply-style soft/hard affinity between
+      upstream and downstream with timeouts.
+b2ab
+
+      key-squashing, when upstream protocols are uniform
+----------------------------------------------------------
+a2a   easy, with inflight hashtable
+a2b   easy, with inflight hashtable
+a2ab
+
+b2a   ascii has no opaques, so need to remember and match them.
+b2b   can't squash opaques, so need to remember them and rematch.
+b2ab  the inflight hashtable value shoul have...
+        upstream conns, and their opaques
+
+- key squashing inflight hashtable might have bitfield values
+  that tell us which upstream conns are interested in
+  a particular key.  (NO, too tricky, just use memory like
+  a normal person.)
+
+- timeouts
+  - request is taking longer than 50ms -- must be a failure.
+  - need timeout for upstream conns waiting in the queue
+    for an available downstream.
+    - if no downstreams are available, then upstream conn
+      might wait forever, if there's no timeout.
+  - need timeout for downstream requests -- DONE
+    - on timeout, closes the downstream connection
+  - revisit timeout/retry logic.
+
+- better stats
+  - hot keys
+
+- ping timings
+  - time between request and response on each downstream conn.
+
+- login/auth/bucket-selection after creating downstream conn.
+
+failure modes...
+
+- downstream conn closes or in weird state (just close).
+  - normally, downstream *wants* to get to released state.
+    - it should end up there even when its upstream closes,
+      or when there are swallowable bytes that can
+      return the downstream conn to a conn_pause state.
+  - goal: no deadlock
+  - goal: no leak
+  - upstream sees what?
+    - depends on config?
+    - depends on the command that was inflight?
+    - depends on when the downstream failure was noticed?
+      - while reserving?
+      - while writing?
+      - while mwriting?
+      - while reading?
+      - while nreading?
+      - while alloc'ing?
+    - borrow failure recovery modes from spymemcached
+    - ISSUE: we don't see downstream conn close until we actually
+      try to read from the downstream conn, very late in state
+      machine.
+      - see the retry logic in on_close_downstream_conn().
+  - upstream *wants* to get to conn_new_cmd state,
+    after swallowing bad downstream data and sending an ERROR.
+
+- when to reconnect?
+  - backoff period?
+    - borrowing from libmemcached to handle connects.
+  - when to failover?
+  - when to failback?
+  - when to report?
+
+known bugs
+- t/getset.t fails
+  - during a process_update_command(), when handling
+    a "set" that is too big (>1MB), the key is not
+    deleted on downstream server.
+
+- noreply.t fails
+  - happens because we're using multiple downstreams for concurrency,
+    which is ok when using synchronous, request/response commands.
+    but, this breaks the serialized assumptions of noreplies.
+  - the same pattern here is needed for binary getq/getkq handling.
+  - solution 1 <<< this path needs timeout experimentation.
+    - keep upstream assigned to a downstream even after
+      the downstream write is done and the downstream
+      goes into conn_pause state.  The upstream goes
+      into conn_new_cmd state.
+      also, put a timer to wake up so we can release
+      an unused downstream.
+    - negatives: a bunch of upstreams whose last action
+      was a noreply can really reduce throughput by
+      keeping their downstreams reserved and unavailable
+      to other clients.
+      - might never see this, depending on on the upstream
+        usage pattern.  if the last thing upstream does
+        is fire off some noreply updates, it could be bad.
+      - also, the upstream conn will need a pointer to the
+        downstream its assigned to.
+    - also, more complexity when downstreams and upstreams go down.
+  - solution 2
+    - never use noreply for downstreams.  always use
+      synchronous request/reply commands.
+    - negatives: this is always slow, rather than
+      just sometimes slow.
+    - positives: simpler.  and, upstream conns don't
+      need pointer to downstream.
+  - solution 3
+    - keep upstream assigned to a preferred downstream,
+      but in a soft fashion.
+    - add a waiting_for_downstream_head/tail slot to downstream.
+    - allow downstream to be stealable on concurrency pressure.
+    - could really slow down an upstream that uses noreply,
+      if it has to wait for a specific downstream.
+    - but also keep others connects good.
+    - also, more complexity when downstreams and upstreams go down.
+    - also, need more pointers to track the assignment preference?
+
+------------------------------------------------------------
+
+- FIXED: multiversioning.t fails / deadlocks
+  - when the cproxy is the final downstream.
+  - does not deadlock when a real memcached server
+    running in a separate process is the final downstream.
+  - FIXED: by putting libmemcached in noblock mode.
+
+- DONE: upstream conn closes
+  - goal: any reserved downstreams do not leak
+    and, downstreams ideally go back into the free,
+    released list.
+  - upstream conn needs way to find its attached, reserved downstream.
+    - solution 1
+      - add an extra2 pointer to the conn?
+    - solution 2 << we choose this path.
+      - walk the reserved downstreams, comparing upstream_conn values.
+      - since upstream conn close is infrequent, this might be ok.
+      - need to see why else we'd need this.
+      - need to keep a reserved downstreams list?  yes, we do this.
+  - also, need to remove the closing upstream conn from the wait list.
+    - done
+
