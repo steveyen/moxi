@@ -324,7 +324,8 @@ struct conn_funcs {
     void (*conn_close)(conn *c);
     void (*conn_process_ascii_command)(conn *c, char *command);
     void (*conn_process_binary_command)(conn *c);
-    void (*conn_complete_nread)(conn *c);
+    void (*conn_complete_nread_ascii)(conn *c);
+    void (*conn_complete_nread_binary)(conn *c);
     void (*conn_pause)(conn *c);
     rel_time_t (*conn_realtime)(const time_t exptime);
 };

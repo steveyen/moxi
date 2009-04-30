@@ -37,7 +37,8 @@ conn_funcs cproxy_listen_funcs = {
     .conn_close                  = NULL,
     .conn_process_ascii_command  = NULL,
     .conn_process_binary_command = NULL,
-    .conn_complete_nread         = NULL,
+    .conn_complete_nread_ascii   = NULL,
+    .conn_complete_nread_binary  = NULL,
     .conn_pause                  = NULL,
     .conn_realtime               = NULL
 };
@@ -47,7 +48,8 @@ conn_funcs cproxy_upstream_funcs = {
     .conn_close                  = cproxy_on_close_upstream_conn,
     .conn_process_ascii_command  = cproxy_process_upstream_ascii,
     .conn_process_binary_command = NULL,
-    .conn_complete_nread         = cproxy_process_upstream_ascii_nread,
+    .conn_complete_nread_ascii   = cproxy_process_upstream_ascii_nread,
+    .conn_complete_nread_binary  = NULL,
     .conn_pause                  = NULL,
     .conn_realtime               = cproxy_realtime
 };
@@ -57,7 +59,8 @@ conn_funcs cproxy_downstream_funcs = {
     .conn_close                  = cproxy_on_close_downstream_conn,
     .conn_process_ascii_command  = cproxy_process_downstream_ascii,
     .conn_process_binary_command = NULL,
-    .conn_complete_nread         = cproxy_process_downstream_ascii_nread,
+    .conn_complete_nread_ascii   = cproxy_process_downstream_ascii_nread,
+    .conn_complete_nread_binary  = NULL,
     .conn_pause                  = cproxy_on_pause_downstream_conn,
     .conn_realtime               = cproxy_realtime
 };

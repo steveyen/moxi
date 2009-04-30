@@ -112,12 +112,16 @@ enum transmit_result {
 
 static enum transmit_result transmit(conn *c);
 
+static void complete_nread_binary(conn *c);
+static void complete_nread_ascii(conn *c);
+
 conn_funcs conn_funcs_default = {
     .conn_init                   = NULL,
     .conn_close                  = NULL,
     .conn_process_ascii_command  = process_command,
     .conn_process_binary_command = dispatch_bin_command,
-    .conn_complete_nread         = complete_nread,
+    .conn_complete_nread_ascii   = complete_nread_ascii,
+    .conn_complete_nread_binary  = complete_nread_binary,
     .conn_pause                  = NULL,
     .conn_realtime               = realtime
 };
@@ -1814,14 +1818,12 @@ void reset_cmd_handler(conn *c) {
 
 void complete_nread(conn *c) {
     assert(c != NULL);
-    assert(c->protocol == ascii_udp_prot
-           || c->protocol == ascii_prot
-           || c->protocol == binary_prot);
+    assert(c->funcs != NULL);
 
     if (IS_ASCII(c->protocol)) {
-        complete_nread_ascii(c);
+        c->funcs->conn_complete_nread_ascii(c);
     } else if (IS_BINARY(c->protocol)) {
-        complete_nread_binary(c);
+        c->funcs->conn_complete_nread_binary(c);
     }
 }
 
@@ -3208,7 +3210,7 @@ void drive_machine(conn *c) {
 
         case conn_nread:
             if (c->rlbytes == 0) {
-                c->funcs->conn_complete_nread(c);
+                complete_nread(c);
                 break;
             }
             /* first check if we have leftovers in the conn_read buffer */
