@@ -109,6 +109,11 @@ proxy *cproxy_create(char    *name,
                 ptd->downstream_num = 0;
                 ptd->downstream_max = p->behavior.downstream_max;
 
+                // TODO: Handle ascii-to-binary protocol.
+                //
+                ptd->propagate_downstream =
+                    cproxy_forward_ascii_downstream;
+
                 ptd->stats.num_upstream = 0;
                 ptd->stats.num_downstream_conn = 0;
 
@@ -873,6 +878,7 @@ int cproxy_server_index(downstream *d, char *key, size_t key_length) {
 
 void cproxy_assign_downstream(proxy_td *ptd) {
     assert(ptd != NULL);
+    assert(ptd->propagate_downstream != NULL);
 
     if (settings.verbose > 1)
         fprintf(stderr, "assign_downstream\n");
@@ -944,7 +950,7 @@ void cproxy_assign_downstream(proxy_td *ptd) {
 
         // TODO: Handle downstream binary protocol.
         //
-        if (!cproxy_forward_ascii_downstream(d)) {
+        if (!ptd->propagate_downstream(d)) {
             // We reach here on error, so send error upstream.
             //
             while (d->upstream_conn != NULL) {

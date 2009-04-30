@@ -120,6 +120,12 @@ struct proxy_td { // Per proxy, per worker-thread data struct.
     int         downstream_num;      // Number downstreams existing.
     int         downstream_max;      // Max downstream concurrency number.
 
+    // Function pointer changes depending on how we propagate
+    // an upstream request to a downstream.  Eg, ascii vs binary,
+    // replicating or not, etc.
+    //
+    bool (*propagate_downstream)(downstream *d);
+
     proxy_stats stats;
 };
 
