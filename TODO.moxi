@@ -6,14 +6,27 @@ TODO ideas...
 
 - submodules, easy low-dependency build steps.
 
-- retry SET's and DELETE's, so that upstream can continue fast.
+- retry SET's and DELETE's
+  - so that upstream can continue fast and just fire-&-forget.
+  - log and replay these?
+    - possibly in separate datacenter?
+
 - failover/drain mode
   - sort of an edge case of replication
   - if we know a server's going to be going down in the future
-    and we know where keys should end up, do simple cooling/warming-up
-    replication.
+    and we know where keys should end up, do "simple"
+    cooling/warming-up replication.
+    - not so simple when new server goes down.
+    - or when old/new servers are flapping.
+    - or net-split.
+    - or different moxi/clients see different old/new servers.
+
 - auth/bucket select.
+
 - 1000 customers per box -- php hosting scenario.
+  - fall back to set-password approach.
+  - use unix-domain-sockets, and filesystem security/access control.
+
 - optimized connection to self, where moxi is running
   as a memcached server.
 
