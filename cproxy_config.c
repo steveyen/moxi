@@ -105,6 +105,8 @@ proxy_behavior cproxy_parse_behavior(const char *behavior_str,
     assert(nthreads > 1); // Main + at least one worker.
     assert(nthreads == settings.num_threads);
 
+    // These are the default proxy behaviors.
+    //
     struct proxy_behavior behavior = {
         .nthreads = nthreads,
         .downstream_max = 1,
@@ -119,6 +121,8 @@ proxy_behavior cproxy_parse_behavior(const char *behavior_str,
         strlen(behavior_str) <= 0)
         return behavior;
 
+    // Parse the key-value behavior_str, to override the defaults.
+    //
     char *buff = strdup(behavior_str);
     char *next = buff;
 
@@ -137,6 +141,18 @@ proxy_behavior cproxy_parse_behavior(const char *behavior_str,
                     int ms = strtol(val, NULL, 10);
                     behavior.downstream_timeout.tv_sec  = floor(ms / 1000.0);
                     behavior.downstream_timeout.tv_usec = (ms % 1000) * 1000;
+                } else if (strcmp(key, "downstream_prot") == 0) {
+                    if (strcmp(val, "ascii") == 0)
+                        behavior.downstream_prot =
+                            proxy_downstream_ascii_prot;
+                    else if (strcmp(val, "binary") == 0)
+                        behavior.downstream_prot =
+                            proxy_downstream_binary_prot;
+                    else {
+                        // TODO: Error in behavior config string.
+                    }
+                } else {
+                    // TODO: Error in behavior config string.
                 }
             }
         }
