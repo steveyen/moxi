@@ -28,9 +28,11 @@ struct A2BSpec { // A2B means ascii-to-binary.
 
     token_t tokens[MAX_TOKENS];
     int     ntokens;
+    bool    noreply_allowed;
+    int     num_optional;
 };
 
-struct A2BSpec specs[] = {
+struct A2BSpec a2b_specs[] = {
     { .line = "set <key> <flags> <expiration> <bytes> [noreply]" },
     { .line = "add <key> <flags> <expiration> <bytes> [noreply]" },
     { .line = "replace <key> <flags> <expiration> <bytes> [noreply]" },
@@ -47,17 +49,19 @@ struct A2BSpec specs[] = {
     { 0 }
 };
 
-GHashTable *spec_map = NULL;
+GHashTable *a2b_spec_map = NULL; // Key: command string, value: A2BSpec.
 
 void cproxy_init_a2b() {
-    if (spec_map == NULL) {
-        spec_map = g_hash_table_new(g_str_hash, g_str_equal);
-        if (spec_map == NULL)
+    if (a2b_spec_map == NULL) {
+        a2b_spec_map = g_hash_table_new(g_str_hash, g_str_equal);
+        if (a2b_spec_map == NULL)
             return; // TODO: Better oom error handling.
 
+        // Run through the a2b_specs to populate the a2b_spec_map.
+        //
         int i = 0;
         while (true) {
-            struct A2BSpec *spec = &specs[i];
+            struct A2BSpec *spec = &a2b_specs[i];
             if (spec->line == NULL)
                 break;
 
@@ -70,9 +74,25 @@ void cproxy_init_a2b() {
             spec->ntokens = tokenize_command(spec->buff,
                                              spec->tokens,
                                              MAX_TOKENS);
-            assert(spec->ntokens > 1);
+            assert(spec->ntokens > 2);
 
-            g_hash_table_insert(spec_map,
+            int noreply_index = spec->ntokens - 2;
+            if (spec->tokens[noreply_index].value &&
+                strcmp(spec->tokens[noreply_index].value,
+                       "[noreply]") == 0) {
+                spec->noreply_allowed = true;
+            } else {
+                spec->noreply_allowed = false;
+            }
+
+            spec->num_optional = 0;
+            for (int j = 0; j < spec->ntokens; j++) {
+                if (spec->tokens[j].value &&
+                    spec->tokens[j].value[0] == '[')
+                    spec->num_optional++;
+            }
+
+            g_hash_table_insert(a2b_spec_map,
                                 spec->tokens[CMD_TOKEN].value,
                                 spec);
 
