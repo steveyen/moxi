@@ -38,27 +38,27 @@ struct A2BSpec {
 };
 
 struct A2BSpec a2b_specs[] = {
-    { .line = "set <key> <flags> <expiration> <bytes> [noreply]",
+    { .line = "set <key> <flags> <exptime> <bytes> [noreply]",
       .cmd  = PROTOCOL_BINARY_CMD_SET,
       .cmdq = PROTOCOL_BINARY_CMD_SETQ
     },
-    { .line = "add <key> <flags> <expiration> <bytes> [noreply]",
+    { .line = "add <key> <flags> <exptime> <bytes> [noreply]",
       .cmd  = PROTOCOL_BINARY_CMD_ADD,
       .cmdq = PROTOCOL_BINARY_CMD_ADDQ
     },
-    { .line = "replace <key> <flags> <expiration> <bytes> [noreply]",
+    { .line = "replace <key> <flags> <exptime> <bytes> [noreply]",
       .cmd  = PROTOCOL_BINARY_CMD_REPLACE,
       .cmdq = PROTOCOL_BINARY_CMD_REPLACEQ
     },
-    { .line = "append <key> <flags> <expiration> <bytes> [noreply]",
+    { .line = "append <key> <skip_flags> <skip_exptime> <bytes> [noreply]",
       .cmd  = PROTOCOL_BINARY_CMD_APPEND,
       .cmdq = PROTOCOL_BINARY_CMD_APPENDQ
     },
-    { .line = "prepend <key> <flags> <expiration> <bytes> [noreply]" ,
+    { .line = "prepend <key> <skip_flags> <skip_exptime> <bytes> [noreply]" ,
       .cmd  = PROTOCOL_BINARY_CMD_PREPEND,
       .cmdq = PROTOCOL_BINARY_CMD_PREPENDQ
     },
-    { .line = "cas <key> <flags> <expiration> <bytes> <cas> [noreply]",
+    { .line = "cas <key> <flags> <exptime> <bytes> <cas> [noreply]",
       .cmd  = PROTOCOL_BINARY_CMD_SET,
       .cmdq = PROTOCOL_BINARY_CMD_SETQ
     },
@@ -74,7 +74,7 @@ struct A2BSpec a2b_specs[] = {
       .cmd  = PROTOCOL_BINARY_CMD_DECREMENT,
       .cmdq = PROTOCOL_BINARY_CMD_DECREMENTQ
     },
-    { .line = "flush_all [expiration] [noreply]",
+    { .line = "flush_all [exptime] [noreply]",
       .cmd  = PROTOCOL_BINARY_CMD_FLUSH,
       .cmdq = PROTOCOL_BINARY_CMD_FLUSHQ
     },
