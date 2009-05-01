@@ -22,7 +22,12 @@
 
 void cproxy_a2b_item_response(item *it, conn *uc);
 
-struct A2BSpec { // A2B means ascii-to-binary.
+// A2B means ascii-to-binary (or, ascii upstream and binary downstream).
+//
+struct A2BSpec {
+    protocol_binary_command cmd;
+    protocol_binary_command cmdq;
+
     char *line;
     char *buff;
 
@@ -33,20 +38,59 @@ struct A2BSpec { // A2B means ascii-to-binary.
 };
 
 struct A2BSpec a2b_specs[] = {
-    { .line = "set <key> <flags> <expiration> <bytes> [noreply]" },
-    { .line = "add <key> <flags> <expiration> <bytes> [noreply]" },
-    { .line = "replace <key> <flags> <expiration> <bytes> [noreply]" },
-    { .line = "append <key> <flags> <expiration> <bytes> [noreply]" },
-    { .line = "prepend <key> <flags> <expiration> <bytes> [noreply]" },
-    { .line = "cas <key> <flags> <expiration> <bytes> <cas> [noreply]" },
-    { .line = "delete <key> [noreply]" },
-    { .line = "incr <key> <value> [noreply]" },
-    { .line = "decr <key> <value> [noreply]" },
-    { .line = "flush_all [expiration]" },
-    { .line = "get <key>*" },
-    { .line = "gets <key>*" },
-    { .line = "stats [args]*" },
-    { 0 }
+    { .line = "set <key> <flags> <expiration> <bytes> [noreply]",
+      .cmd  = PROTOCOL_BINARY_CMD_SET,
+      .cmdq = PROTOCOL_BINARY_CMD_SETQ
+    },
+    { .line = "add <key> <flags> <expiration> <bytes> [noreply]",
+      .cmd  = PROTOCOL_BINARY_CMD_ADD,
+      .cmdq = PROTOCOL_BINARY_CMD_ADDQ
+    },
+    { .line = "replace <key> <flags> <expiration> <bytes> [noreply]",
+      .cmd  = PROTOCOL_BINARY_CMD_REPLACE,
+      .cmdq = PROTOCOL_BINARY_CMD_REPLACEQ
+    },
+    { .line = "append <key> <flags> <expiration> <bytes> [noreply]",
+      .cmd  = PROTOCOL_BINARY_CMD_APPEND,
+      .cmdq = PROTOCOL_BINARY_CMD_APPENDQ
+    },
+    { .line = "prepend <key> <flags> <expiration> <bytes> [noreply]" ,
+      .cmd  = PROTOCOL_BINARY_CMD_PREPEND,
+      .cmdq = PROTOCOL_BINARY_CMD_PREPENDQ
+    },
+    { .line = "cas <key> <flags> <expiration> <bytes> <cas> [noreply]",
+      .cmd  = PROTOCOL_BINARY_CMD_SET,
+      .cmdq = PROTOCOL_BINARY_CMD_SETQ
+    },
+    { .line = "delete <key> [noreply]",
+      .cmd  = PROTOCOL_BINARY_CMD_DELETE,
+      .cmdq = PROTOCOL_BINARY_CMD_DELETEQ
+    },
+    { .line = "incr <key> <value> [noreply]",
+      .cmd  = PROTOCOL_BINARY_CMD_INCREMENT,
+      .cmdq = PROTOCOL_BINARY_CMD_INCREMENTQ
+    },
+    { .line = "decr <key> <value> [noreply]",
+      .cmd  = PROTOCOL_BINARY_CMD_DECREMENT,
+      .cmdq = PROTOCOL_BINARY_CMD_DECREMENTQ
+    },
+    { .line = "flush_all [expiration] [noreply]",
+      .cmd  = PROTOCOL_BINARY_CMD_FLUSH,
+      .cmdq = PROTOCOL_BINARY_CMD_FLUSHQ
+    },
+    { .line = "get <key>*",
+      .cmd  = PROTOCOL_BINARY_CMD_GETK,
+      .cmdq = PROTOCOL_BINARY_CMD_GETKQ
+    },
+    { .line = "gets <key>*",
+      .cmd  = PROTOCOL_BINARY_CMD_GETK,
+      .cmdq = PROTOCOL_BINARY_CMD_GETKQ
+    },
+    { .line = "stats [args]*",
+      .cmd  = PROTOCOL_BINARY_CMD_STAT,
+      .cmdq = PROTOCOL_BINARY_CMD_NOOP
+    },
+    { 0 } // NULL sentinel.
 };
 
 GHashTable *a2b_spec_map = NULL; // Key: command string, value: A2BSpec.
