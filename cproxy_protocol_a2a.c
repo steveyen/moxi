@@ -21,6 +21,10 @@
 
 void cproxy_a2a_item_response(item *it, conn *uc);
 
+void cproxy_init_a2a() {
+    // Nothing right now.
+}
+
 void cproxy_process_a2a_downstream(conn *c, char *line) {
     assert(c != NULL);
     assert(c->next == NULL);
@@ -213,7 +217,7 @@ void cproxy_process_a2a_downstream_nread(conn *c) {
 }
 
 /* Do the actual work of forwarding the command from an
- * upstream conn to its assigned downstream.
+ * upstream ascii conn to its assigned ascii downstream.
  */
 bool cproxy_forward_a2a_downstream(downstream *d) {
     assert(d != NULL);

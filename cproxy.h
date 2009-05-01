@@ -201,6 +201,7 @@ void cproxy_process_upstream_ascii_nread(conn *c);
 
 // a2a means ascii upstream, ascii downstream.
 //
+void cproxy_init_a2a(void);
 void cproxy_process_a2a_downstream(conn *c, char *line);
 void cproxy_process_a2a_downstream_nread(conn *c);
 
@@ -215,6 +216,7 @@ bool cproxy_broadcast_a2a_downstream(downstream *d, char *command,
 
 // a2b means ascii upstream, binary downstream.
 //
+void cproxy_init_a2b(void);
 void cproxy_process_a2b_downstream(conn *c, char *line);
 void cproxy_process_a2b_downstream_nread(conn *c);
 

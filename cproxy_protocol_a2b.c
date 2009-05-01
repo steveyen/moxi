@@ -16,10 +16,70 @@
 //
 #define NOT_CAS -1
 
+#define CMD_TOKEN  0
 #define KEY_TOKEN  1
-#define MAX_TOKENS 8
+#define MAX_TOKENS 9
 
 void cproxy_a2b_item_response(item *it, conn *uc);
+
+struct A2BSpec { // A2B means ascii-to-binary.
+    char *line;
+    char *buff;
+
+    token_t tokens[MAX_TOKENS];
+    int     ntokens;
+};
+
+struct A2BSpec specs[] = {
+    { .line = "set <key> <flags> <expiration> <bytes> [noreply]" },
+    { .line = "add <key> <flags> <expiration> <bytes> [noreply]" },
+    { .line = "replace <key> <flags> <expiration> <bytes> [noreply]" },
+    { .line = "append <key> <flags> <expiration> <bytes> [noreply]" },
+    { .line = "prepend <key> <flags> <expiration> <bytes> [noreply]" },
+    { .line = "cas <key> <flags> <expiration> <bytes> <cas> [noreply]" },
+    { .line = "delete <key> [noreply]" },
+    { .line = "incr <key> <value> [noreply]" },
+    { .line = "decr <key> <value> [noreply]" },
+    { .line = "flush_all [expiration]" },
+    { .line = "get <key>*" },
+    { .line = "gets <key>*" },
+    { .line = "stats [args]*" },
+    { 0 }
+};
+
+GHashTable *spec_map = NULL;
+
+void cproxy_init_a2b() {
+    if (spec_map == NULL) {
+        spec_map = g_hash_table_new(g_str_hash, g_str_equal);
+        if (spec_map == NULL)
+            return; // TODO: Better oom error handling.
+
+        int i = 0;
+        while (true) {
+            struct A2BSpec *spec = &specs[i];
+            if (spec->line == NULL)
+                break;
+
+            // Make mutable, tokenizable copy of line.
+            //
+            spec->buff = strdup(spec->line);
+            if (spec->buff == NULL)
+                return; // TODO: Better oom error handling.
+
+            spec->ntokens = tokenize_command(spec->buff,
+                                             spec->tokens,
+                                             MAX_TOKENS);
+            assert(spec->ntokens > 1);
+
+            g_hash_table_insert(spec_map,
+                                spec->tokens[CMD_TOKEN].value,
+                                spec);
+
+            i = i + 1;
+        }
+    }
+}
 
 void cproxy_process_a2b_downstream(conn *c, char *line) {
     assert(c != NULL);
@@ -29,7 +89,7 @@ void cproxy_process_a2b_downstream(conn *c, char *line) {
     assert(c->item == NULL);
     assert(line != NULL);
     assert(line == c->rcurr);
-    assert(IS_ASCII(c->protocol));
+    assert(IS_BINARY(c->protocol));
     assert(IS_PROXY(c->protocol));
 
     if (settings.verbose > 1)
@@ -213,7 +273,7 @@ void cproxy_process_a2b_downstream_nread(conn *c) {
 }
 
 /* Do the actual work of forwarding the command from an
- * upstream conn to its assigned downstream.
+ * upstream ascii conn to its assigned binary downstream.
  */
 bool cproxy_forward_a2b_downstream(downstream *d) {
     assert(d != NULL);
@@ -241,7 +301,7 @@ bool cproxy_forward_a2b_downstream(downstream *d) {
     return false;
 }
 
-/* Forward a simple one-liner command downstream.
+/* Forward a simple one-liner ascii command to a binary downstream.
  * For example, get, incr/decr, delete, etc.
  * The response, though, might be a simple line or
  * multiple VALUE+END lines.
@@ -417,7 +477,7 @@ bool cproxy_forward_a2b_multiget_downstream(downstream *d, conn *uc) {
                     if (c != NULL) {
                         assert(c->item == NULL);
                         assert(c->state == conn_pause);
-                        assert(IS_ASCII(c->protocol));
+                        assert(IS_BINARY(c->protocol));
                         assert(IS_PROXY(c->protocol));
                         assert(c->ilist != NULL);
                         assert(c->isize > 0);

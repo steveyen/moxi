@@ -429,6 +429,9 @@ typedef struct token_s {
     size_t length;
 } token_t;
 
+size_t tokenize_command(char *command, token_t *tokens,
+                        const size_t max_tokens);
+
 /* current time of day (updated periodically) */
 extern volatile rel_time_t current_time;
 
