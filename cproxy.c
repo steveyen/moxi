@@ -57,9 +57,9 @@ conn_funcs cproxy_upstream_funcs = {
 conn_funcs cproxy_downstream_funcs = {
     .conn_init                   = cproxy_init_downstream_conn,
     .conn_close                  = cproxy_on_close_downstream_conn,
-    .conn_process_ascii_command  = cproxy_process_downstream_ascii,
+    .conn_process_ascii_command  = cproxy_process_a2a_downstream,
     .conn_process_binary_command = NULL,
-    .conn_complete_nread_ascii   = cproxy_process_downstream_ascii_nread,
+    .conn_complete_nread_ascii   = cproxy_process_a2a_downstream_nread,
     .conn_complete_nread_binary  = NULL,
     .conn_pause                  = cproxy_on_pause_downstream_conn,
     .conn_realtime               = cproxy_realtime
@@ -93,9 +93,9 @@ proxy *cproxy_create(char    *name,
 
         pthread_mutex_init(&p->proxy_lock, NULL);
 
-        assert(behavior.nthreads == settings.num_threads);
+        assert(p->behavior.nthreads == settings.num_threads);
 
-        p->thread_data_num = behavior.nthreads;
+        p->thread_data_num = p->behavior.nthreads;
         p->thread_data = (proxy_td *) calloc(p->thread_data_num,
                                              sizeof(proxy_td));
         if (p->thread_data != NULL) {
@@ -116,8 +116,14 @@ proxy *cproxy_create(char    *name,
 
                 // TODO: Handle ascii-to-binary protocol.
                 //
-                ptd->propagate_downstream =
-                    cproxy_forward_ascii_downstream;
+                assert(IS_PROXY(p->behavior.downstream_prot));
+
+                if (IS_BINARY(p->behavior.downstream_prot))
+                    ptd->propagate_downstream =
+                        cproxy_forward_a2b_downstream;
+                else
+                    ptd->propagate_downstream =
+                        cproxy_forward_a2a_downstream;
 
                 ptd->stats.num_upstream = 0;
                 ptd->stats.num_downstream_conn = 0;

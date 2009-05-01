@@ -188,15 +188,6 @@ int   cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread);
 void  cproxy_wait_any_downstream(proxy_td *ptd, conn *c);
 void  cproxy_assign_downstream(proxy_td *ptd);
 
-bool  cproxy_forward_ascii_downstream(downstream *d);
-bool  cproxy_forward_ascii_multiget_downstream(downstream *d, conn *uc);
-bool  cproxy_forward_ascii_simple_downstream(downstream *d, char *command,
-                                             conn *uc);
-bool  cproxy_forward_ascii_item_downstream(downstream *d, short cmd,
-                                           item *it, conn *uc);
-bool  cproxy_broadcast_ascii_downstream(downstream *d, char *command,
-                                        conn *uc, char *suffix);
-
 void  cproxy_pause_upstream_for_downstream(proxy_td *ptd, conn *upstream);
 conn *cproxy_find_downstream_conn(downstream *d, char *key, int key_length);
 int   cproxy_server_index(downstream *d, char *key, size_t key_length);
@@ -208,8 +199,33 @@ void cproxy_reset_upstream(conn *uc);
 void cproxy_process_upstream_ascii(conn *c, char *line);
 void cproxy_process_upstream_ascii_nread(conn *c);
 
-void cproxy_process_downstream_ascii(conn *c, char *line);
-void cproxy_process_downstream_ascii_nread(conn *c);
+// a2a means ascii upstream, ascii downstream.
+//
+void cproxy_process_a2a_downstream(conn *c, char *line);
+void cproxy_process_a2a_downstream_nread(conn *c);
+
+bool cproxy_forward_a2a_downstream(downstream *d);
+bool cproxy_forward_a2a_multiget_downstream(downstream *d, conn *uc);
+bool cproxy_forward_a2a_simple_downstream(downstream *d, char *command,
+                                          conn *uc);
+bool cproxy_forward_a2a_item_downstream(downstream *d, short cmd,
+                                        item *it, conn *uc);
+bool cproxy_broadcast_a2a_downstream(downstream *d, char *command,
+                                     conn *uc, char *suffix);
+
+// a2b means ascii upstream, binary downstream.
+//
+void cproxy_process_a2b_downstream(conn *c, char *line);
+void cproxy_process_a2b_downstream_nread(conn *c);
+
+bool cproxy_forward_a2b_downstream(downstream *d);
+bool cproxy_forward_a2b_multiget_downstream(downstream *d, conn *uc);
+bool cproxy_forward_a2b_simple_downstream(downstream *d, char *command,
+                                          conn *uc);
+bool cproxy_forward_a2b_item_downstream(downstream *d, short cmd,
+                                        item *it, conn *uc);
+bool cproxy_broadcast_a2b_downstream(downstream *d, char *command,
+                                     conn *uc, char *suffix);
 
 bool cproxy_start_downstream_timeout(downstream *d);
 

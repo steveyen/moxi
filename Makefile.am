@@ -19,6 +19,8 @@ moxi_SOURCES = memcached.c memcached.h \
                     cproxy.c cproxy.h \
                     cproxy_config.c \
                     cproxy_protocol.c \
+                    cproxy_protocol_a2a.c \
+                    cproxy_protocol_a2b.c \
                     cproxy_multiget.c \
                     cproxy_stats.c
 
