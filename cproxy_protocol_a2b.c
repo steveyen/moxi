@@ -34,61 +34,80 @@ struct A2BSpec {
     token_t tokens[MAX_TOKENS];
     int     ntokens;
     bool    noreply_allowed;
-    int     num_optional;
+    int     num_optional; // Number of optional arguments in cmd.
+    bool    broadcast;    // True if cmd does scatter/gather.
+    int     size;         // Number of bytes in request header.
 };
 
+// The arguments are carefully named with unique first characters.
+//
 struct A2BSpec a2b_specs[] = {
     { .line = "set <key> <flags> <exptime> <bytes> [noreply]",
       .cmd  = PROTOCOL_BINARY_CMD_SET,
-      .cmdq = PROTOCOL_BINARY_CMD_SETQ
+      .cmdq = PROTOCOL_BINARY_CMD_SETQ,
+      .size = sizeof(protocol_binary_request_set)
     },
     { .line = "add <key> <flags> <exptime> <bytes> [noreply]",
       .cmd  = PROTOCOL_BINARY_CMD_ADD,
-      .cmdq = PROTOCOL_BINARY_CMD_ADDQ
+      .cmdq = PROTOCOL_BINARY_CMD_ADDQ,
+      .size = sizeof(protocol_binary_request_add)
     },
     { .line = "replace <key> <flags> <exptime> <bytes> [noreply]",
       .cmd  = PROTOCOL_BINARY_CMD_REPLACE,
-      .cmdq = PROTOCOL_BINARY_CMD_REPLACEQ
+      .cmdq = PROTOCOL_BINARY_CMD_REPLACEQ,
+      .size = sizeof(protocol_binary_request_replace)
     },
     { .line = "append <key> <skip_flags> <skip_exptime> <bytes> [noreply]",
       .cmd  = PROTOCOL_BINARY_CMD_APPEND,
-      .cmdq = PROTOCOL_BINARY_CMD_APPENDQ
+      .cmdq = PROTOCOL_BINARY_CMD_APPENDQ,
+      .size = sizeof(protocol_binary_request_append)
     },
     { .line = "prepend <key> <skip_flags> <skip_exptime> <bytes> [noreply]" ,
       .cmd  = PROTOCOL_BINARY_CMD_PREPEND,
-      .cmdq = PROTOCOL_BINARY_CMD_PREPENDQ
+      .cmdq = PROTOCOL_BINARY_CMD_PREPENDQ,
+      .size = sizeof(protocol_binary_request_prepend)
     },
     { .line = "cas <key> <flags> <exptime> <bytes> <cas> [noreply]",
       .cmd  = PROTOCOL_BINARY_CMD_SET,
-      .cmdq = PROTOCOL_BINARY_CMD_SETQ
+      .cmdq = PROTOCOL_BINARY_CMD_SETQ,
+      .size = sizeof(protocol_binary_request_set)
     },
     { .line = "delete <key> [noreply]",
       .cmd  = PROTOCOL_BINARY_CMD_DELETE,
-      .cmdq = PROTOCOL_BINARY_CMD_DELETEQ
+      .cmdq = PROTOCOL_BINARY_CMD_DELETEQ,
+      .size = sizeof(protocol_binary_request_delete)
     },
     { .line = "incr <key> <value> [noreply]",
       .cmd  = PROTOCOL_BINARY_CMD_INCREMENT,
-      .cmdq = PROTOCOL_BINARY_CMD_INCREMENTQ
+      .cmdq = PROTOCOL_BINARY_CMD_INCREMENTQ,
+      .size = sizeof(protocol_binary_request_incr)
     },
     { .line = "decr <key> <value> [noreply]",
       .cmd  = PROTOCOL_BINARY_CMD_DECREMENT,
-      .cmdq = PROTOCOL_BINARY_CMD_DECREMENTQ
+      .cmdq = PROTOCOL_BINARY_CMD_DECREMENTQ,
+      .size = sizeof(protocol_binary_request_decr)
     },
-    { .line = "flush_all [exptime] [noreply]",
+    { .line = "flush_all [xpiration] [noreply]",
       .cmd  = PROTOCOL_BINARY_CMD_FLUSH,
-      .cmdq = PROTOCOL_BINARY_CMD_FLUSHQ
+      .cmdq = PROTOCOL_BINARY_CMD_FLUSHQ,
+      .size = sizeof(protocol_binary_request_flush),
+      .broadcast = true
     },
     { .line = "get <key>*",
       .cmd  = PROTOCOL_BINARY_CMD_GETK,
-      .cmdq = PROTOCOL_BINARY_CMD_GETKQ
+      .cmdq = PROTOCOL_BINARY_CMD_GETKQ,
+      .size = sizeof(protocol_binary_request_getk)
     },
     { .line = "gets <key>*",
       .cmd  = PROTOCOL_BINARY_CMD_GETK,
-      .cmdq = PROTOCOL_BINARY_CMD_GETKQ
+      .cmdq = PROTOCOL_BINARY_CMD_GETKQ,
+      .size = sizeof(protocol_binary_request_getk)
     },
     { .line = "stats [args]*",
       .cmd  = PROTOCOL_BINARY_CMD_STAT,
-      .cmdq = PROTOCOL_BINARY_CMD_NOOP
+      .cmdq = PROTOCOL_BINARY_CMD_NOOP,
+      .size = sizeof(protocol_binary_request_stats),
+      .broadcast = true
     },
     { 0 } // NULL sentinel.
 };
