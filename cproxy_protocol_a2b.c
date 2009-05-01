@@ -113,6 +113,7 @@ struct A2BSpec a2b_specs[] = {
 };
 
 GHashTable *a2b_spec_map = NULL; // Key: command string, value: A2BSpec.
+int         a2b_size_max = 0;
 
 void cproxy_init_a2b() {
     if (a2b_spec_map == NULL) {
@@ -154,6 +155,9 @@ void cproxy_init_a2b() {
                     spec->tokens[j].value[0] == '[')
                     spec->num_optional++;
             }
+
+            if (a2b_size_max < spec->size)
+                a2b_size_max = spec->size;
 
             g_hash_table_insert(a2b_spec_map,
                                 spec->tokens[CMD_TOKEN].value,
