@@ -296,12 +296,29 @@ void cproxy_on_close_upstream_conn(conn *c) {
                 g_hash_table_foreach(d->multiget,
                                      multiget_remove_upstream, c);
 
-            // TODO: the downstream conn's might have iov's that
-            // point to the upstream conn's buffers.  Need to
-            // clear those out.  The downstream conn might be in
-            // all sorts of states, though (conn_read, write,
-            // mwrite, pause), and we want to be careful about
-            // the downstream channel being half written.
+            // The downstream conn's might have iov's that
+            // point to the upstream conn's buffers.  Also, the
+            // downstream conn might be in all sorts of states
+            // (conn_read, write, mwrite, pause), and we want
+            // to be careful about the downstream channel being
+            // half written.
+            //
+            // The safest, but inefficient, thing to do then is
+            // to close any conn_mwrite downstream conns.
+            //
+            int n = memcached_server_count(&d->mst);
+
+            for (int i = 0; i < n; i++) {
+                conn *c = d->downstream_conns[i];
+                if (c != NULL &&
+                    c->state == conn_mwrite) {
+                    c->msgcurr = 0;
+                    c->msgused = 0;
+                    c->iovused = 0;
+
+                    cproxy_close_conn(c);
+                }
+            }
         }
     }
 
