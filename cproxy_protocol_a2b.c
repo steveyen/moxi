@@ -136,7 +136,7 @@ void cproxy_init_a2b() {
     // TODO: Key might be space terminated strings.
     //
     if (a2b_spec_map == NULL) {
-        a2b_spec_map = g_hash_table_new(g_str_hash, g_str_equal);
+        a2b_spec_map = g_hash_table_new(skey_hash, skey_equal);
         if (a2b_spec_map == NULL)
             return; // TODO: Better oom error handling.
 
@@ -625,8 +625,8 @@ bool cproxy_forward_a2b_multiget_downstream(downstream *d, conn *uc) {
         // More than one upstream conn, so we need a hashtable
         // to track keys for de-deplication.
         //
-        d->multiget = g_hash_table_new(multiget_key_hash,
-                                       multiget_key_equal);
+        d->multiget = g_hash_table_new(skey_hash,
+                                       skey_equal);
         if (settings.verbose > 1)
             fprintf(stderr, "cproxy multiget hash table new\n");
     }

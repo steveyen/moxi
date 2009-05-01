@@ -17,7 +17,7 @@ uint32_t murmur_hash(const char *key, size_t length);
 
 // Key may be zero or space terminated.
 //
-size_t multiget_key_len(const char *key) {
+size_t skey_len(const char *key) {
     assert(key);
 
     char *x = (char *) key;
@@ -27,24 +27,24 @@ size_t multiget_key_len(const char *key) {
     return x - key;
 }
 
-guint multiget_key_hash(gconstpointer v) {
+guint skey_hash(gconstpointer v) {
     assert(v);
 
     const char *key = v;
-    size_t      len = multiget_key_len(key);
+    size_t      len = skey_len(key);
 
     return murmur_hash(key, len);
 }
 
-gboolean multiget_key_equal(gconstpointer v1, gconstpointer v2) {
+gboolean skey_equal(gconstpointer v1, gconstpointer v2) {
     assert(v1);
     assert(v2);
 
     const char *k1 = v1;
     const char *k2 = v2;
 
-    size_t n1 = multiget_key_len(k1);
-    size_t n2 = multiget_key_len(k2);
+    size_t n1 = skey_len(k1);
+    size_t n2 = skey_len(k2);
 
     return (n1 == n2 && strncmp(k1, k2, n1) == 0);
 }

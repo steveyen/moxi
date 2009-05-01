@@ -247,10 +247,6 @@ struct multiget_entry {
     multiget_entry *next;
 };
 
-size_t   multiget_key_len(const char *key);
-guint    multiget_key_hash(gconstpointer v);
-gboolean multiget_key_equal(gconstpointer v1, gconstpointer v2);
-
 void multiget_foreach_free(gpointer key,
                            gpointer value,
                            gpointer user_data);
@@ -258,6 +254,12 @@ void multiget_foreach_free(gpointer key,
 void multiget_remove_upstream(gpointer key,
                               gpointer value,
                               gpointer user_data);
+
+// Space or null terminated key funcs.
+//
+size_t   skey_len(const char *key);
+guint    skey_hash(gconstpointer v);
+gboolean skey_equal(gconstpointer v1, gconstpointer v2);
 
 // Stats handling.
 //

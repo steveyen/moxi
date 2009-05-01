@@ -353,8 +353,8 @@ bool cproxy_forward_a2a_multiget_downstream(downstream *d, conn *uc) {
         // More than one upstream conn, so we need a hashtable
         // to track keys for de-deplication.
         //
-        d->multiget = g_hash_table_new(multiget_key_hash,
-                                       multiget_key_equal);
+        d->multiget = g_hash_table_new(skey_hash,
+                                       skey_equal);
         if (settings.verbose > 1)
             fprintf(stderr, "cproxy multiget hash table new\n");
     }
