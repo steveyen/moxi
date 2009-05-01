@@ -291,9 +291,17 @@ void cproxy_on_close_upstream_conn(conn *c) {
         // also clear the upstream from any multiget de-duplication
         // tracking structures.
         //
-        if (found &&
-            d->multiget != NULL) {
-            g_hash_table_foreach(d->multiget, multiget_remove_upstream, c);
+        if (found) {
+            if (d->multiget != NULL)
+                g_hash_table_foreach(d->multiget,
+                                     multiget_remove_upstream, c);
+
+            // TODO: the downstream conn's might have iov's that
+            // point to the upstream conn's buffers.  Need to
+            // clear those out.  The downstream conn might be in
+            // all sorts of states, though (conn_read, write,
+            // mwrite, pause), and we want to be careful about
+            // the downstream channel being half written.
         }
     }
 

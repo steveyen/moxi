@@ -6,6 +6,7 @@
 #include <sysexits.h>
 #include <pthread.h>
 #include <assert.h>
+#include <math.h>
 #include <glib.h>
 #include <libmemcached/memcached.h>
 #include "memcached.h"
@@ -30,18 +31,17 @@ void cproxy_a2b_item_response(item *it, conn *uc);
 // A2B means ascii-to-binary (or, ascii upstream and binary downstream).
 //
 struct A2BSpec {
+    char *line;
+
     protocol_binary_command cmd;
     protocol_binary_command cmdq;
 
-    char *line;
-    char *buff;
-
+    int     size;         // Number of bytes in request header.
     token_t tokens[MAX_TOKENS];
     int     ntokens;
     bool    noreply_allowed;
     int     num_optional; // Number of optional arguments in cmd.
     bool    broadcast;    // True if cmd does scatter/gather.
-    int     size;         // Number of bytes in request header.
 };
 
 // The arguments are carefully named with unique first characters.
@@ -92,7 +92,7 @@ struct A2BSpec a2b_specs[] = {
       .cmdq = PROTOCOL_BINARY_CMD_DECREMENTQ,
       .size = sizeof(protocol_binary_request_decr)
     },
-    { .line = "flush_all [xpiration] [noreply]",
+    { .line = "flush_all [xpiration] [noreply]", // TODO: noreply tricky here.
       .cmd  = PROTOCOL_BINARY_CMD_FLUSH,
       .cmdq = PROTOCOL_BINARY_CMD_FLUSHQ,
       .size = sizeof(protocol_binary_request_flush),
@@ -120,6 +120,12 @@ struct A2BSpec a2b_specs[] = {
 GHashTable *a2b_spec_map = NULL; // Key: command string, value: A2BSpec.
 int         a2b_size_max = 0;    // Max header + extra frame bytes size.
 
+int a2b_fill_request(token_t *cmd_tokens,
+                     int      cmd_ntokens,
+                     item    *it, // Might be NULL.
+                     protocol_binary_request_header *header,
+                     uint8_t **key);
+
 bool a2b_fill_request_token(struct A2BSpec *spec,
                             int      cur_token,
                             token_t *cmd_tokens,
@@ -127,14 +133,7 @@ bool a2b_fill_request_token(struct A2BSpec *spec,
                             protocol_binary_request_header *header,
                             uint8_t **key);
 
-int a2b_fill_request(token_t *cmd_tokens,
-                     int      cmd_ntokens,
-                     protocol_binary_request_header *header,
-                     uint8_t **key);
-
 void cproxy_init_a2b() {
-    // TODO: Key might be space terminated strings.
-    //
     if (a2b_spec_map == NULL) {
         a2b_spec_map = g_hash_table_new(skey_hash, skey_equal);
         if (a2b_spec_map == NULL)
@@ -148,15 +147,9 @@ void cproxy_init_a2b() {
             if (spec->line == NULL)
                 break;
 
-            // Make mutable, tokenizable copy of line.
-            //
-            spec->buff = strdup(spec->line);
-            if (spec->buff == NULL)
-                return; // TODO: Better oom error handling.
-
-            spec->ntokens = tokenize_command(spec->buff,
-                                             spec->tokens,
-                                             MAX_TOKENS);
+            spec->ntokens = scan_tokens(spec->line,
+                                        spec->tokens,
+                                        MAX_TOKENS);
             assert(spec->ntokens > 2);
 
             int noreply_index = spec->ntokens - 2;
@@ -188,6 +181,7 @@ void cproxy_init_a2b() {
 
 int a2b_fill_request(token_t *cmd_tokens,
                      int      cmd_ntokens,
+                     item    *it, // Might be NULL.
                      protocol_binary_request_header *header,
                      uint8_t **key) {
     assert(header);
@@ -283,14 +277,15 @@ bool a2b_fill_request_token(struct A2BSpec *spec,
         return false;
         break;
 
-    case 'f': // FALLTHRU, flags
-    case 'e': // FALLTHRU, exptime
-    case 'b': // FALLTHRU, bytes
-    case 's': // FALLTHRU, skip_xxx
-    case 'c': // FALLTHRU, cas
+    // The above are handled by looking at the item struct.
+    //
+    // case 'f': // FALLTHRU, flags
+    // case 'e': // FALLTHRU, exptime
+    // case 'b': // FALLTHRU, bytes
+    // case 's': // FALLTHRU, skip_xxx
+    // case 'c': // FALLTHRU, cas
+    //
     default:
-        assert(false); // The above are parsed already as items.
-        return false;
         break;
     }
 
@@ -574,10 +569,35 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
         cproxy_prep_conn_for_write(c)) {
         assert(c->state == conn_pause);
 
+        int rsize = sizeof(protocol_binary_request_header);
+        int asize = ceil(a2b_size_max / (float) rsize);
+
+        assert(asize >= 2);
+
+        protocol_binary_request_header  buffer[asize];
+        protocol_binary_request_header *header  = &buffer[0];
+        uint8_t                        *key_out = NULL;
+
+        memset(buffer, 0, sizeof(buffer));
+
+        int size = a2b_fill_request(tokens, ntokens, NULL,
+                                    header, &key_out);
+        if (size > 0) {
+            assert(key     == (char *) key_out);
+            assert(key_len == header->request.keylen);
+            assert(header->request.bodylen == 0);
+
+            header->request.bodylen =
+                htonl(header->request.keylen +
+                      header->request.extlen);
+
+            // add_iov(c, command, cmd_len);
+        }
+
         out_string(c, command);
 
         if (settings.verbose > 1)
-            fprintf(stderr, "forwarding to %d, noreply %d\n",
+            fprintf(stderr, "forwarding a2b to %d, noreply %d\n",
                     c->sfd, uc->noreply);
 
         if (update_event(c, EV_WRITE | EV_PERSIST)) {
