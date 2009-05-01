@@ -12,6 +12,11 @@
 #include "cproxy.h"
 #include "work.h"
 
+#ifndef HAVE_HTONLL
+extern uint64_t ntohll(uint64_t);
+extern uint64_t htonll(uint64_t);
+#endif
+
 // Internal declarations.
 //
 #define NOT_CAS -1
@@ -113,9 +118,23 @@ struct A2BSpec a2b_specs[] = {
 };
 
 GHashTable *a2b_spec_map = NULL; // Key: command string, value: A2BSpec.
-int         a2b_size_max = 0;
+int         a2b_size_max = 0;    // Max header + extra frame bytes size.
+
+bool a2b_fill_request_token(struct A2BSpec *spec,
+                            int      cur_token,
+                            token_t *cmd_tokens,
+                            int      cmd_ntokens,
+                            protocol_binary_request_header *header,
+                            uint8_t **key);
+
+int a2b_fill_request(token_t *cmd_tokens,
+                     int      cmd_ntokens,
+                     protocol_binary_request_header *header,
+                     uint8_t **key);
 
 void cproxy_init_a2b() {
+    // TODO: Key might be space terminated strings.
+    //
     if (a2b_spec_map == NULL) {
         a2b_spec_map = g_hash_table_new(g_str_hash, g_str_equal);
         if (a2b_spec_map == NULL)
@@ -143,11 +162,10 @@ void cproxy_init_a2b() {
             int noreply_index = spec->ntokens - 2;
             if (spec->tokens[noreply_index].value &&
                 strcmp(spec->tokens[noreply_index].value,
-                       "[noreply]") == 0) {
+                       "[noreply]") == 0)
                 spec->noreply_allowed = true;
-            } else {
+            else
                 spec->noreply_allowed = false;
-            }
 
             spec->num_optional = 0;
             for (int j = 0; j < spec->ntokens; j++) {
@@ -166,6 +184,117 @@ void cproxy_init_a2b() {
             i = i + 1;
         }
     }
+}
+
+int a2b_fill_request(token_t *cmd_tokens,
+                     int      cmd_ntokens,
+                     protocol_binary_request_header *header,
+                     uint8_t **key) {
+    assert(header);
+    assert(cmd_tokens);
+    assert(cmd_ntokens > 1);
+    assert(cmd_tokens[CMD_TOKEN].value);
+    assert(cmd_tokens[CMD_TOKEN].length > 0);
+    assert(key);
+    assert(a2b_spec_map);
+
+    struct A2BSpec *spec = g_hash_table_lookup(a2b_spec_map,
+                                               cmd_tokens[CMD_TOKEN].value);
+    if (spec != NULL) {
+        if (cmd_ntokens >= (spec->ntokens - spec->num_optional) &&
+            cmd_ntokens <= (spec->ntokens)) {
+            header->request.magic  = PROTOCOL_BINARY_REQ;
+            header->request.opcode = spec->cmd;
+
+            // Start at 1 to skip the CMD_TOKEN.
+            //
+            for (int i = 1; i < cmd_ntokens - 1; i++) {
+                if (a2b_fill_request_token(spec, i,
+                                           cmd_tokens, cmd_ntokens,
+                                           header, key) == false)
+                    return 0;
+            }
+
+            return spec->size; // Success.
+        }
+    }
+
+    return 0;
+}
+
+
+bool a2b_fill_request_token(struct A2BSpec *spec,
+                            int      cur_token,
+                            token_t *cmd_tokens,
+                            int      cmd_ntokens,
+                            protocol_binary_request_header *header,
+                            uint8_t **key) {
+    assert(header);
+    assert(spec);
+    assert(spec->tokens);
+    assert(spec->ntokens > 1);
+    assert(spec->tokens[cur_token].value);
+    assert(cur_token > 0);
+    assert(cur_token < cmd_ntokens);
+    assert(cur_token < spec->ntokens);
+    assert(key);
+
+    uint64_t delta;
+
+    char t = spec->tokens[cur_token].value[1];
+    switch (t) {
+    case 'k': // key
+        assert(key);
+        *key = (uint8_t *) cmd_tokens[cur_token].value;
+        header->request.keylen =
+            htons((uint16_t) cmd_tokens[cur_token].length);
+        break;
+    case 'v': // value (for incr/decr)
+        delta = 0;
+        if (safe_strtoull(cmd_tokens[cur_token].value, &delta)) {
+            protocol_binary_request_incr *req =
+                (protocol_binary_request_incr *) header;
+            header->request.extlen   = 20;
+            header->request.datatype = PROTOCOL_BINARY_RAW_BYTES;
+            req->message.body.delta = htonll(delta);
+            req->message.body.initial = 0;
+            req->message.body.expiration = 0;
+        } else {
+            // TODO: Send back better error.
+            return false;
+        }
+        break;
+    case 'n': // noreply
+        if (strncmp("noreply",
+                    cmd_tokens[cur_token].value,
+                    cmd_tokens[cur_token].length) == 0) {
+            header->request.opcode = spec->cmdq;
+        } else {
+            // TODO: Send back better error.
+            return false;
+        }
+        break;
+    case 'x': // xpiration (for flush_all)
+        // TODO.
+        return false;
+        break;
+    case 'a': // args (for stats)
+        // TODO.
+        return false;
+        break;
+
+    case 'f': // FALLTHRU, flags
+    case 'e': // FALLTHRU, exptime
+    case 'b': // FALLTHRU, bytes
+    case 's': // FALLTHRU, skip_xxx
+    case 'c': // FALLTHRU, cas
+    default:
+        assert(false); // The above are parsed already as items.
+        return false;
+        break;
+    }
+
+    return true;
 }
 
 void cproxy_process_a2b_downstream(conn *c, char *line) {
