@@ -58,9 +58,9 @@ conn_funcs cproxy_downstream_funcs = {
     .conn_init                   = cproxy_init_downstream_conn,
     .conn_close                  = cproxy_on_close_downstream_conn,
     .conn_process_ascii_command  = cproxy_process_a2a_downstream,
-    .conn_process_binary_command = NULL,
+    .conn_process_binary_command = cproxy_process_a2b_downstream,
     .conn_complete_nread_ascii   = cproxy_process_a2a_downstream_nread,
-    .conn_complete_nread_binary  = NULL,
+    .conn_complete_nread_binary  = cproxy_process_a2b_downstream_nread,
     .conn_pause                  = cproxy_on_pause_downstream_conn,
     .conn_realtime               = cproxy_realtime
 };

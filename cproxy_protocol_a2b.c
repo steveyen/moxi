@@ -309,7 +309,9 @@ bool a2b_fill_request_token(struct A2BSpec *spec,
     return true;
 }
 
-void cproxy_process_a2b_downstream(conn *c, char *line) {
+void cproxy_process_a2b_downstream(conn *c) {
+    char *line = NULL;
+
     assert(c != NULL);
     assert(c->next == NULL);
     assert(c->extra != NULL);
