@@ -1415,7 +1415,7 @@ static void process_bin_stat(conn *c) {
     }
 }
 
-static void bin_read_key(conn *c, enum bin_substates next_substate, int extra) {
+void bin_read_key(conn *c, enum bin_substates next_substate, int extra) {
     assert(c);
     c->substate = next_substate;
     c->rlbytes = c->keylen + extra;
