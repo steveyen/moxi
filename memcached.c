@@ -123,7 +123,8 @@ conn_funcs conn_funcs_default = {
     .conn_complete_nread_ascii   = complete_nread_ascii,
     .conn_complete_nread_binary  = complete_nread_binary,
     .conn_pause                  = NULL,
-    .conn_realtime               = realtime
+    .conn_realtime               = realtime,
+    .conn_binary_command_magic   = PROTOCOL_BINARY_REQ
 };
 
 /*
@@ -2854,7 +2855,7 @@ int try_read_command(conn *c) {
             c->binary_header.request.bodylen = ntohl(req->request.bodylen);
             c->binary_header.request.cas = swap64(req->request.cas);
 
-            if (c->binary_header.request.magic != PROTOCOL_BINARY_REQ) {
+            if (c->binary_header.request.magic != c->funcs->conn_binary_command_magic) {
                 if (settings.verbose) {
                     fprintf(stderr, "Invalid magic:  %x\n",
                             c->binary_header.request.magic);
