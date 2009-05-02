@@ -44,6 +44,8 @@ struct A2BSpec {
     bool    broadcast;    // True if cmd does scatter/gather.
 };
 
+// The a2b_specs are immutable after init.
+//
 // The arguments are carefully named with unique first characters.
 //
 struct A2BSpec a2b_specs[] = {
@@ -117,6 +119,8 @@ struct A2BSpec a2b_specs[] = {
     { 0 } // NULL sentinel.
 };
 
+// These are immutable after init.
+//
 GHashTable *a2b_spec_map = NULL; // Key: command string, value: A2BSpec.
 int         a2b_size_max = 0;    // Max header + extra frame bytes size.
 
@@ -587,63 +591,61 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
     if (c != NULL &&
         cproxy_prep_conn_for_write(c)) {
         assert(c->state == conn_pause);
+        assert(c->wbuf);
+        assert(c->wsize >= a2b_size_max);
 
-        item *it = item_alloc("b", 1, 0, 0, a2b_size_max);
-        if (it != NULL) {
-            protocol_binary_request_header *header =
-                (protocol_binary_request_header *) ITEM_data(it);
+        protocol_binary_request_header *header =
+            (protocol_binary_request_header *) c->wbuf;
 
-            uint8_t *out_key    = NULL;
-            uint16_t out_keylen = 0;
-            uint8_t  out_extlen = 0;
+        uint8_t *out_key    = NULL;
+        uint16_t out_keylen = 0;
+        uint8_t  out_extlen = 0;
 
-            memset(header, 0, a2b_size_max);
+        memset(header, 0, a2b_size_max);
 
-            int size = a2b_fill_request(tokens, ntokens,
-                                        uc->noreply,
-                                        header,
-                                        &out_key,
-                                        &out_keylen,
-                                        &out_extlen);
-            if (size > 0) {
-                assert(key     == (char *) out_key);
-                assert(key_len == (int)    out_keylen);
-                assert(header->request.bodylen == 0);
+        int size = a2b_fill_request(tokens, ntokens,
+                                    uc->noreply,
+                                    header,
+                                    &out_key,
+                                    &out_keylen,
+                                    &out_extlen);
+        if (size > 0) {
+            assert(size <= a2b_size_max);
+            assert(key     == (char *) out_key);
+            assert(key_len == (int)    out_keylen);
+            assert(header->request.bodylen == 0);
 
-                header->request.bodylen =
-                    htonl(out_keylen + out_extlen);
+            header->request.bodylen =
+                htonl(out_keylen + out_extlen);
 
-                if (add_conn_item(c, it)) {
-                    add_iov(c, header, size);
+            add_iov(c, header, size);
 
-                    if (out_key != NULL &&
-                        out_keylen > 0)
-                        add_iov(c, out_key, out_keylen);
+            if (out_key != NULL &&
+                out_keylen > 0)
+                add_iov(c, out_key, out_keylen);
 
-                    if (settings.verbose > 1)
-                        fprintf(stderr, "forwarding a2b to %d, noreply %d\n",
-                                c->sfd, uc->noreply);
+            if (settings.verbose > 1)
+                fprintf(stderr, "forwarding a2b to %d, noreply %d\n",
+                        c->sfd, uc->noreply);
 
-                    if (update_event(c, EV_WRITE | EV_PERSIST)) {
-                        d->downstream_used_start = 1; // TODO: Need timeout?
-                        d->downstream_used       = 1;
+            if (update_event(c, EV_WRITE | EV_PERSIST)) {
+                d->downstream_used_start = 1; // TODO: Need timeout?
+                d->downstream_used       = 1;
 
-                        if (cproxy_dettach_if_noreply(d, uc) == false) {
-                            cproxy_start_downstream_timeout(d);
-                        } else {
-                            c->write_and_go = conn_pause;
-                        }
-
-                        return true;
-                    }
+                if (cproxy_dettach_if_noreply(d, uc) == false) {
+                    cproxy_start_downstream_timeout(d);
+                } else {
+                    c->write_and_go = conn_pause;
                 }
+
+                return true;
             } else {
                 // TODO: Error handling.
             }
-
-            item_remove(it);
         }
 
+        // TODO: Error handling.
+        //
         if (settings.verbose > 1)
             fprintf(stderr, "Couldn't update cproxy write event\n");
 
