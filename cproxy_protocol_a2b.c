@@ -122,7 +122,6 @@ int         a2b_size_max = 0;    // Max header + extra frame bytes size.
 
 int a2b_fill_request(token_t *cmd_tokens,
                      int      cmd_ntokens,
-                     item    *it, // Might be NULL.
                      bool     noreply,
                      protocol_binary_request_header *header,
                      uint8_t **out_key,
@@ -186,7 +185,6 @@ void cproxy_init_a2b() {
 
 int a2b_fill_request(token_t *cmd_tokens,
                      int      cmd_ntokens,
-                     item    *it, // Might be NULL.
                      bool     noreply,
                      protocol_binary_request_header *header,
                      uint8_t **out_key,
@@ -599,7 +597,7 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
 
             memset(header, 0, a2b_size_max);
 
-            int size = a2b_fill_request(tokens, ntokens, NULL,
+            int size = a2b_fill_request(tokens, ntokens,
                                         uc->noreply,
                                         header,
                                         &out_key,
@@ -637,6 +635,8 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
                         return true;
                     }
                 }
+            } else {
+                // TODO: Error handling.
             }
 
             item_remove(it);
