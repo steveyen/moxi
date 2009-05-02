@@ -1004,8 +1004,8 @@ void cproxy_assign_downstream(proxy_td *ptd) {
                 // Send an END on get/gets instead of generic SERVER_ERROR.
                 //
                 if (uc->cmd == -1 &&
-                    uc->cmd_ascii != NULL &&
-                    strncmp(uc->cmd_ascii, "get", 3) == 0)
+                    uc->cmd_start != NULL &&
+                    strncmp(uc->cmd_start, "get", 3) == 0)
                     out_string(uc, "END");
                 else
                     out_string(uc, "SERVER_ERROR proxy write to downstream");
@@ -1362,6 +1362,8 @@ downstream *downstream_list_remove(downstream *head, downstream *d) {
 /* Returns true if a candidate request is squashable
  * or de-duplicatable with an existing request, to
  * save on network hops.
+ *
+ * TODO: Handle binary upstream protocol.
  */
 bool is_compatible_request(conn *existing, conn *candidate) {
     assert(existing);
@@ -1382,8 +1384,8 @@ bool is_compatible_request(conn *existing, conn *candidate) {
             candidate->cmd_retries <= 0 &&
             !existing->noreply &&
             !candidate->noreply &&
-            strncmp(existing->cmd_ascii, "get ", 4) == 0 &&
-            strncmp(candidate->cmd_ascii, "get ", 4) == 0) {
+            strncmp(existing->cmd_start, "get ", 4) == 0 &&
+            strncmp(candidate->cmd_start, "get ", 4) == 0) {
             assert(existing->item == NULL);
             assert(candidate->item == NULL);
 

@@ -421,7 +421,7 @@ struct conn {
     conn_funcs *funcs;
     void *extra;
 
-    char *cmd_ascii; // Pointer into rbuf, snapshot of rcurr.
+    char *cmd_start; // Pointer into rbuf, snapshot of rcurr.
     int   cmd_retries;
 };
 

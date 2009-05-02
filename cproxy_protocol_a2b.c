@@ -516,7 +516,7 @@ bool cproxy_forward_a2b_downstream(downstream *d) {
 
     assert(uc != NULL);
     assert(uc->state == conn_pause);
-    assert(uc->cmd_ascii != NULL);
+    assert(uc->cmd_start != NULL);
     assert(uc->thread != NULL);
     assert(uc->thread->base != NULL);
     assert(IS_ASCII(uc->protocol));
@@ -526,7 +526,7 @@ bool cproxy_forward_a2b_downstream(downstream *d) {
         assert(d->downstream_conns != NULL);
 
         if (uc->cmd == -1) {
-            return cproxy_forward_a2b_simple_downstream(d, uc->cmd_ascii, uc);
+            return cproxy_forward_a2b_simple_downstream(d, uc->cmd_start, uc);
         } else {
             return cproxy_forward_a2b_item_downstream(d, uc->cmd, uc->item, uc);
         }
@@ -694,7 +694,7 @@ bool cproxy_forward_a2b_multiget_downstream(downstream *d, conn *uc) {
         assert(IS_ASCII(uc_cur->protocol));
         assert(IS_PROXY(uc_cur->protocol));
 
-        char *command = uc_cur->cmd_ascii;
+        char *command = uc_cur->cmd_start;
         assert(command != NULL);
 
         char *space = strchr(command, ' ');
