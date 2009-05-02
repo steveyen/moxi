@@ -123,15 +123,20 @@ int         a2b_size_max = 0;    // Max header + extra frame bytes size.
 int a2b_fill_request(token_t *cmd_tokens,
                      int      cmd_ntokens,
                      item    *it, // Might be NULL.
+                     bool     noreply,
                      protocol_binary_request_header *header,
-                     uint8_t **key);
+                     uint8_t **out_key,
+                     uint16_t *out_keylen,
+                     uint8_t  *out_extlen);
 
 bool a2b_fill_request_token(struct A2BSpec *spec,
                             int      cur_token,
                             token_t *cmd_tokens,
                             int      cmd_ntokens,
                             protocol_binary_request_header *header,
-                            uint8_t **key);
+                            uint8_t **out_key,
+                            uint16_t *out_keylen,
+                            uint8_t  *out_extlen);
 
 void cproxy_init_a2b() {
     if (a2b_spec_map == NULL) {
@@ -182,14 +187,19 @@ void cproxy_init_a2b() {
 int a2b_fill_request(token_t *cmd_tokens,
                      int      cmd_ntokens,
                      item    *it, // Might be NULL.
+                     bool     noreply,
                      protocol_binary_request_header *header,
-                     uint8_t **key) {
+                     uint8_t **out_key,
+                     uint16_t *out_keylen,
+                     uint8_t  *out_extlen) {
     assert(header);
     assert(cmd_tokens);
     assert(cmd_ntokens > 1);
     assert(cmd_tokens[CMD_TOKEN].value);
     assert(cmd_tokens[CMD_TOKEN].length > 0);
-    assert(key);
+    assert(out_key);
+    assert(out_keylen);
+    assert(out_extlen);
     assert(a2b_spec_map);
 
     struct A2BSpec *spec = g_hash_table_lookup(a2b_spec_map,
@@ -198,15 +208,23 @@ int a2b_fill_request(token_t *cmd_tokens,
         if (cmd_ntokens >= (spec->ntokens - spec->num_optional) &&
             cmd_ntokens <= (spec->ntokens)) {
             header->request.magic  = PROTOCOL_BINARY_REQ;
-            header->request.opcode = spec->cmd;
+
+            if (noreply)
+                header->request.opcode = spec->cmdq;
+            else
+                header->request.opcode = spec->cmd;
 
             // Start at 1 to skip the CMD_TOKEN.
             //
             for (int i = 1; i < cmd_ntokens - 1; i++) {
                 if (a2b_fill_request_token(spec, i,
                                            cmd_tokens, cmd_ntokens,
-                                           header, key) == false)
+                                           header,
+                                           out_key,
+                                           out_keylen,
+                                           out_extlen) == false) {
                     return 0;
+                }
             }
 
             return spec->size; // Success.
@@ -216,13 +234,14 @@ int a2b_fill_request(token_t *cmd_tokens,
     return 0;
 }
 
-
 bool a2b_fill_request_token(struct A2BSpec *spec,
                             int      cur_token,
                             token_t *cmd_tokens,
                             int      cmd_ntokens,
                             protocol_binary_request_header *header,
-                            uint8_t **key) {
+                            uint8_t **out_key,
+                            uint16_t *out_keylen,
+                            uint8_t  *out_extlen) {
     assert(header);
     assert(spec);
     assert(spec->tokens);
@@ -231,25 +250,30 @@ bool a2b_fill_request_token(struct A2BSpec *spec,
     assert(cur_token > 0);
     assert(cur_token < cmd_ntokens);
     assert(cur_token < spec->ntokens);
-    assert(key);
 
     uint64_t delta;
 
     char t = spec->tokens[cur_token].value[1];
     switch (t) {
     case 'k': // key
-        assert(key);
-        *key = (uint8_t *) cmd_tokens[cur_token].value;
+        assert(out_key);
+        assert(out_keylen);
+        *out_key    = (uint8_t *) cmd_tokens[cur_token].value;
+        *out_keylen = (uint16_t)  cmd_tokens[cur_token].length;
         header->request.keylen =
             htons((uint16_t) cmd_tokens[cur_token].length);
         break;
     case 'v': // value (for incr/decr)
         delta = 0;
         if (safe_strtoull(cmd_tokens[cur_token].value, &delta)) {
+            assert(out_extlen);
+
+            header->request.extlen   = *out_extlen = 20;
+            header->request.datatype = PROTOCOL_BINARY_RAW_BYTES;
+
             protocol_binary_request_incr *req =
                 (protocol_binary_request_incr *) header;
-            header->request.extlen   = 20;
-            header->request.datatype = PROTOCOL_BINARY_RAW_BYTES;
+
             req->message.body.delta = htonll(delta);
             req->message.body.initial = 0;
             req->message.body.expiration = 0;
@@ -258,16 +282,7 @@ bool a2b_fill_request_token(struct A2BSpec *spec,
             return false;
         }
         break;
-    case 'n': // noreply
-        if (strncmp("noreply",
-                    cmd_tokens[cur_token].value,
-                    cmd_tokens[cur_token].length) == 0) {
-            header->request.opcode = spec->cmdq;
-        } else {
-            // TODO: Send back better error.
-            return false;
-        }
-        break;
+
     case 'x': // xpiration (for flush_all)
         // TODO.
         return false;
@@ -277,6 +292,10 @@ bool a2b_fill_request_token(struct A2BSpec *spec,
         return false;
         break;
 
+    // The noreply was handled in a2b_fill_request().
+    //
+    // case 'n': // noreply
+    //
     // The above are handled by looking at the item struct.
     //
     // case 'f': // FALLTHRU, flags
@@ -574,23 +593,32 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
             protocol_binary_request_header *header =
                 (protocol_binary_request_header *) ITEM_data(it);
 
-            uint8_t *key_out = NULL;
+            uint8_t *out_key    = NULL;
+            uint16_t out_keylen = 0;
+            uint8_t  out_extlen = 0;
 
             memset(header, 0, a2b_size_max);
 
             int size = a2b_fill_request(tokens, ntokens, NULL,
-                                        header, &key_out);
+                                        uc->noreply,
+                                        header,
+                                        &out_key,
+                                        &out_keylen,
+                                        &out_extlen);
             if (size > 0) {
-                assert(key     == (char *) key_out);
-                assert(key_len == header->request.keylen);
+                assert(key     == (char *) out_key);
+                assert(key_len == (int)    out_keylen);
                 assert(header->request.bodylen == 0);
 
                 header->request.bodylen =
-                    htonl(header->request.keylen +
-                          header->request.extlen);
+                    htonl(out_keylen + out_extlen);
 
                 if (add_conn_item(c, it)) {
                     add_iov(c, header, size);
+
+                    if (out_key != NULL &&
+                        out_keylen > 0)
+                        add_iov(c, out_key, out_keylen);
 
                     if (settings.verbose > 1)
                         fprintf(stderr, "forwarding a2b to %d, noreply %d\n",
