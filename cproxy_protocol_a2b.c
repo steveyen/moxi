@@ -569,48 +569,49 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
         cproxy_prep_conn_for_write(c)) {
         assert(c->state == conn_pause);
 
-        int rsize = sizeof(protocol_binary_request_header);
-        int asize = ceil(a2b_size_max / (float) rsize);
+        item *it = item_alloc("b", 1, 0, 0, a2b_size_max);
+        if (it != NULL) {
+            protocol_binary_request_header *header =
+                (protocol_binary_request_header *) ITEM_data(it);
 
-        assert(asize >= 2);
+            uint8_t *key_out = NULL;
 
-        protocol_binary_request_header  buffer[asize];
-        protocol_binary_request_header *header  = &buffer[0];
-        uint8_t                        *key_out = NULL;
+            memset(header, 0, a2b_size_max);
 
-        memset(buffer, 0, sizeof(buffer));
+            int size = a2b_fill_request(tokens, ntokens, NULL,
+                                        header, &key_out);
+            if (size > 0) {
+                assert(key     == (char *) key_out);
+                assert(key_len == header->request.keylen);
+                assert(header->request.bodylen == 0);
 
-        int size = a2b_fill_request(tokens, ntokens, NULL,
-                                    header, &key_out);
-        if (size > 0) {
-            assert(key     == (char *) key_out);
-            assert(key_len == header->request.keylen);
-            assert(header->request.bodylen == 0);
+                header->request.bodylen =
+                    htonl(header->request.keylen +
+                          header->request.extlen);
 
-            header->request.bodylen =
-                htonl(header->request.keylen +
-                      header->request.extlen);
+                if (add_conn_item(c, it)) {
+                    add_iov(c, header, size);
 
-            // add_iov(c, command, cmd_len);
-        }
+                    if (settings.verbose > 1)
+                        fprintf(stderr, "forwarding a2b to %d, noreply %d\n",
+                                c->sfd, uc->noreply);
 
-        out_string(c, command);
+                    if (update_event(c, EV_WRITE | EV_PERSIST)) {
+                        d->downstream_used_start = 1; // TODO: Need timeout?
+                        d->downstream_used       = 1;
 
-        if (settings.verbose > 1)
-            fprintf(stderr, "forwarding a2b to %d, noreply %d\n",
-                    c->sfd, uc->noreply);
+                        if (cproxy_dettach_if_noreply(d, uc) == false) {
+                            cproxy_start_downstream_timeout(d);
+                        } else {
+                            c->write_and_go = conn_pause;
+                        }
 
-        if (update_event(c, EV_WRITE | EV_PERSIST)) {
-            d->downstream_used_start = 1; // TODO: Need timeout?
-            d->downstream_used       = 1;
-
-            if (cproxy_dettach_if_noreply(d, uc) == false) {
-                cproxy_start_downstream_timeout(d);
-            } else {
-                c->write_and_go = conn_pause;
+                        return true;
+                    }
+                }
             }
 
-            return true;
+            item_remove(it);
         }
 
         if (settings.verbose > 1)
