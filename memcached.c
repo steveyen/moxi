@@ -1425,14 +1425,8 @@ void bin_read_key(conn *c, enum bin_substates next_substate, int extra) {
     conn_set_state(c, conn_nread);
 }
 
-void dispatch_bin_command(conn *c) {
-    int protocol_error = 0;
-
-    int extlen = c->binary_header.request.extlen;
-    int keylen = c->binary_header.request.keylen;
-    uint32_t bodylen = c->binary_header.request.bodylen;
-
-    MEMCACHED_PROCESS_COMMAND_START(c->sfd, c->rcurr, c->rbytes);
+void process_bin_noreply(conn *c) {
+    assert(c);
     c->noreply = true;
     switch (c->cmd) {
     case PROTOCOL_BINARY_CMD_SETQ:
@@ -1474,6 +1468,18 @@ void dispatch_bin_command(conn *c) {
     default:
         c->noreply = false;
     }
+}
+
+void dispatch_bin_command(conn *c) {
+    int protocol_error = 0;
+
+    int extlen = c->binary_header.request.extlen;
+    int keylen = c->binary_header.request.keylen;
+    uint32_t bodylen = c->binary_header.request.bodylen;
+
+    MEMCACHED_PROCESS_COMMAND_START(c->sfd, c->rcurr, c->rbytes);
+
+    process_bin_noreply(c);
 
     switch (c->cmd) {
         case PROTOCOL_BINARY_CMD_VERSION:
