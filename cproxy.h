@@ -26,12 +26,13 @@ typedef struct downstream     downstream;
 
 struct proxy_behavior {
     int            nthreads;
-    int            downstream_max;
-    struct timeval downstream_timeout;
-    enum protocol  downstream_prot;
+    int            downstream_max;     // Determines inflight concurrency.
+    struct timeval downstream_timeout; // Fields of 0 mean no timeout.
+    enum protocol  downstream_prot;    // Favored downstream protocol.
 };
 
-/* Owned by main listener thread.
+/* Structure used and owned by main listener thread to
+ * track all the outstanding proxy objects.
  */
 struct proxy_main {
     proxy_behavior behavior; // Proxy default behavior, immutable.
@@ -41,6 +42,9 @@ struct proxy_main {
     //
     proxy *proxy_head;
 
+    // Updated by main listener thread only,
+    // so no extra locking needed.
+    //
     uint64_t stat_configs;
     uint64_t stat_config_fails;
     uint64_t stat_proxy_starts;
@@ -125,6 +129,10 @@ struct proxy_td { // Per proxy, per worker-thread data struct.
     // Function pointer changes depending on how we propagate
     // an upstream request to a downstream.  Eg, ascii vs binary,
     // replicating or not, etc.
+    //
+    // TODO: Move this to a per-downstream-conn level,
+    // so we can have non-uniform downstream conns.
+    // For example, some downstream conn's are ascii, some binary.
     //
     bool (*propagate_downstream)(downstream *d);
 
