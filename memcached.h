@@ -459,6 +459,7 @@ void process_update_command(conn *c, token_t *tokens, const size_t ntokens, int 
 void process_verbosity_command(conn *c, token_t *tokens, const size_t ntokens);
 void dispatch_bin_command(conn *c);
 void bin_read_key(conn *c, enum bin_substates next_substate, int extra);
+char* binary_get_key(conn *c);
 void reset_cmd_handler(conn *c);
 void complete_nread(conn *c);
 int ensure_iov_space(conn *c);
