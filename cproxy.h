@@ -26,7 +26,7 @@ typedef struct downstream     downstream;
 
 struct proxy_behavior {
     int            nthreads;
-    int            downstream_max;     // Determines inflight concurrency.
+    int            downstream_max;     // Determines downstream concurrency.
     struct timeval downstream_timeout; // Fields of 0 mean no timeout.
     enum protocol  downstream_prot;    // Favored downstream protocol.
 };
@@ -77,6 +77,7 @@ struct proxy {
 
     // Number of listening conn's acting as a proxy,
     // where (((proxy *) conn->extra) == this).
+    // Modified/accessed only by main listener thread.
     //
     uint64_t listening;
     uint64_t listening_failed; // When server_socket() failed.
@@ -89,7 +90,8 @@ struct proxy {
 
 struct proxy_stats {
     // Naming convention is that num_xxx's go up and down,
-    // while tot_xxx's only increase.
+    // while tot_xxx's only increase.  Only the tot_xxx's
+    // can be reset to 0.
     //
     uint64_t num_upstream; // Current # of upstreams conns using this proxy.
     uint64_t tot_upstream; // Total # upstream conns that used this proxy.
@@ -109,7 +111,9 @@ struct proxy_stats {
     uint64_t tot_retry;
 };
 
-/* Owned by worker thread.
+/* We mirror memcached's threading model with a separate
+ * proxy_td (td means "thread data") struct owned by each
+ * worker thread.  The idea is to avoid extraneous locks.
  */
 struct proxy_td { // Per proxy, per worker-thread data struct.
     proxy *proxy; // Immutable parent pointer.
