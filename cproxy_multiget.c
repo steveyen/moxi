@@ -183,7 +183,6 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
                     if (c != NULL) {
                         assert(c->item == NULL);
                         assert(c->state == conn_pause);
-                        assert(IS_ASCII(c->protocol));
                         assert(IS_PROXY(c->protocol));
                         assert(c->ilist != NULL);
                         assert(c->isize > 0);

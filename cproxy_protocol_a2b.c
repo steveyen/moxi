@@ -892,17 +892,59 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
 }
 
 void a2b_multiget_start(conn *c, char *cmd, int cmd_len) {
-    add_iov(c, cmd, cmd_len);
+    // No-op.
 }
 
 /* An skey is a space prefixed key string.
  */
 void a2b_multiget_skey(conn *c, char *skey, int skey_len) {
-    add_iov(c, skey, skey_len);
+    char *key     = skey + 1;
+    int   key_len = skey_len - 1;
+
+    item *it = item_alloc("b", 1, 0, 0, sizeof(protocol_binary_request_get));
+    if (it != NULL) {
+        if (add_conn_item(c, it)) {
+            protocol_binary_request_getk *req =
+                (protocol_binary_request_getk *) ITEM_data(it);
+
+            memset(req, 0, sizeof(req->bytes));
+
+            req->message.header.request.magic  = PROTOCOL_BINARY_REQ;
+            req->message.header.request.opcode = PROTOCOL_BINARY_CMD_GETKQ;
+            req->message.header.request.keylen = htons((uint16_t) key_len);
+            req->message.header.request.datatype = PROTOCOL_BINARY_RAW_BYTES;
+            req->message.header.request.bodylen  = htonl(key_len);
+
+            add_iov(c, ITEM_data(it), sizeof(req->bytes));
+            add_iov(c, key, key_len);
+
+            return; // Success.
+        }
+
+        item_remove(it);
+    }
 }
 
 void a2b_multiget_end(conn *c) {
-    add_iov(c, "\r\n", 2);
+    item *it = item_alloc("z", 1, 0, 0, sizeof(protocol_binary_request_noop));
+    if (it != NULL) {
+        if (add_conn_item(c, it)) {
+            protocol_binary_request_noop *req =
+                (protocol_binary_request_noop *) ITEM_data(it);
+
+            memset(req, 0, sizeof(req->bytes));
+
+            req->message.header.request.magic  = PROTOCOL_BINARY_REQ;
+            req->message.header.request.opcode = PROTOCOL_BINARY_CMD_NOOP;
+            req->message.header.request.datatype = PROTOCOL_BINARY_RAW_BYTES;
+
+            add_iov(c, ITEM_data(it), sizeof(req->bytes));
+
+            return; // Success.
+        }
+
+        item_remove(it);
+    }
 }
 
 /* Used for broadcast commands, like flush_all or stats.
