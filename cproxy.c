@@ -1171,18 +1171,8 @@ void cproxy_close_conn(conn *c) {
 
     update_event(c, 0);
 
-    // We need this to handle case when the conn is not the
-    // current conn in the thread's drive_machine() loop.
-    // This should wakeup libevent on the next run to
-    // cleanup the conn.
-    //
-    // The shutdown() should help prevent blocking at close().
-    //
-    shutdown(c->sfd, SHUT_RDWR);
-    close(c->sfd);
-
-    // Rather than waiting for libevent loop, we drive_machine
-    // immediately, just once, to go through close code paths.
+    // Run through drive_machine just once,
+    // to go through close code paths.
     //
     drive_machine(c);
 }

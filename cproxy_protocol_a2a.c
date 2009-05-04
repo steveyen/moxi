@@ -343,6 +343,7 @@ bool cproxy_forward_a2a_multiget_downstream(downstream *d, conn *uc) {
         if (d->downstream_conns[i] != NULL &&
             cproxy_prep_conn_for_write(d->downstream_conns[i]) == false) {
             cproxy_close_conn(d->downstream_conns[i]);
+            return false;
         }
     }
 

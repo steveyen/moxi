@@ -853,6 +853,9 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
                         command);
         }
 
+        if (d->upstream_suffix == NULL)
+            d->upstream_suffix = "SERVER_ERROR a2b simple downstream";
+
         d->ptd->stats.tot_oom++;
         cproxy_close_conn(c);
     }
