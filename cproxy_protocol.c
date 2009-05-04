@@ -145,3 +145,58 @@ void cproxy_process_upstream_ascii_nread(conn *c) {
         out_string(c, "CLIENT_ERROR bad data chunk");
 }
 
+void cproxy_upstream_ascii_item_response(item *it, conn *uc) {
+    assert(it != NULL);
+    assert(uc != NULL);
+    assert(uc->state == conn_pause);
+    assert(uc->funcs != NULL);
+    assert(IS_ASCII(uc->protocol));
+    assert(IS_PROXY(uc->protocol));
+
+    if (strncmp(ITEM_data(it) + it->nbytes - 2, "\r\n", 2) == 0) {
+        // TODO: Need to clean up half-written add_iov()'s.
+        //       Consider closing the upstream_conns?
+        //
+        uint64_t cas = ITEM_get_cas(it);
+        if (cas == CPROXY_NOT_CAS) {
+            if (add_conn_item(uc, it)) {
+                it->refcount++;
+
+                if (add_iov(uc, "VALUE ", 6) == 0 &&
+                    add_iov(uc, ITEM_key(it), it->nkey) == 0 &&
+                    add_iov(uc, ITEM_suffix(it),
+                            it->nsuffix + it->nbytes) == 0) {
+                    if (settings.verbose > 1)
+                        fprintf(stderr,
+                                "<%d cproxy ascii item response success\n",
+                                uc->sfd);
+                }
+            }
+        } else {
+            char *suffix = add_conn_suffix(uc);
+            if (suffix != NULL) {
+                sprintf(suffix, " %llu\r\n", (unsigned long long) cas);
+
+                if (add_conn_item(uc, it)) {
+                    it->refcount++;
+
+                    if (add_iov(uc, "VALUE ", 6) == 0 &&
+                        add_iov(uc, ITEM_key(it), it->nkey) == 0 &&
+                        add_iov(uc, ITEM_suffix(it),
+                                it->nsuffix - 2) == 0 &&
+                        add_iov(uc, suffix, strlen(suffix)) == 0 &&
+                        add_iov(uc, ITEM_data(it), it->nbytes) == 0) {
+                        if (settings.verbose > 1)
+                            fprintf(stderr,
+                                    "<%d cproxy ascii item response ok\n",
+                                    uc->sfd);
+                    }
+                }
+            }
+        }
+    } else {
+        if (settings.verbose > 1)
+            fprintf(stderr, "unexpected downstream data block");
+    }
+}
+

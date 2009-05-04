@@ -15,6 +15,8 @@ int cproxy_init(const char *cfg_str,
                      x == proxy_downstream_ascii_prot || \
                      x == proxy_downstream_binary_prot)
 
+#define CPROXY_NOT_CAS -1
+
 // -------------------------------
 
 typedef struct proxy          proxy;
@@ -211,6 +213,7 @@ void cproxy_reset_upstream(conn *uc);
 void cproxy_process_upstream_ascii(conn *c, char *line);
 void cproxy_process_upstream_ascii_nread(conn *c);
 
+// ---------------------------------------------------------------
 // a2a means ascii upstream, ascii downstream.
 //
 void cproxy_init_a2a(void);
@@ -226,6 +229,7 @@ bool cproxy_forward_a2a_item_downstream(downstream *d, short cmd,
 bool cproxy_broadcast_a2a_downstream(downstream *d, char *command,
                                      conn *uc, char *suffix);
 
+// ---------------------------------------------------------------
 // a2b means ascii upstream, binary downstream.
 //
 void cproxy_init_a2b(void);
@@ -240,6 +244,10 @@ bool cproxy_forward_a2b_item_downstream(downstream *d, short cmd,
                                         item *it, conn *uc);
 bool cproxy_broadcast_a2b_downstream(downstream *d, char *command,
                                      conn *uc, char *suffix);
+
+// ---------------------------------------------------------------
+
+void cproxy_upstream_ascii_item_response(item *it, conn *uc);
 
 bool cproxy_start_downstream_timeout(downstream *d);
 
