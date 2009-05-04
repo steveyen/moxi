@@ -987,10 +987,10 @@ void cproxy_assign_downstream(proxy_td *ptd) {
             fprintf(stderr, "assign_downstream, matched to upstream %d\n",
                     d->upstream_conn->sfd);
 
-        // TODO: Handle downstream binary protocol.
-        //
         if (!ptd->propagate_downstream(d)) {
-            // We reach here on error, so send error upstream.
+            // TODO: During propagate_downstream(), we might have
+            //       recursed, especially in error situation,
+            //       so we cannot rely on d's state anymore.
             //
             while (d->upstream_conn != NULL) {
                 conn *uc = d->upstream_conn;
@@ -1000,6 +1000,8 @@ void cproxy_assign_downstream(proxy_td *ptd) {
                             "%d could not forward upstream to downstream\n",
                             uc->sfd);
 
+                // TODO: Handle upstream binary protocol.
+                //
                 // Send an END on get/gets instead of generic SERVER_ERROR.
                 //
                 if (uc->cmd == -1 &&
