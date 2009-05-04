@@ -461,6 +461,7 @@ void dispatch_bin_command(conn *c);
 void process_bin_noreply(conn *c);
 void bin_read_key(conn *c, enum bin_substates next_substate, int extra);
 char* binary_get_key(conn *c);
+uint64_t swap64(uint64_t in);
 void reset_cmd_handler(conn *c);
 void complete_nread(conn *c);
 int ensure_iov_space(conn *c);

@@ -84,7 +84,6 @@ static void event_handler(const int fd, const short which, void *arg);
 static void conn_close(conn *c);
 static void conn_init(void);
 static void write_and_free(conn *c, char *buf, int bytes);
-static uint64_t swap64(uint64_t in);
 
 /* time handling */
 static rel_time_t realtime(const time_t exptime);
@@ -996,7 +995,7 @@ static void write_bin_response(conn *c, void *d, int hlen, int keylen, int dlen)
 }
 
 /* Byte swap a 64-bit number */
-static uint64_t swap64(uint64_t in) {
+uint64_t swap64(uint64_t in) {
 #ifdef ENDIAN_LITTLE
     /* Little endian, flip the bytes around until someone makes a faster/better
     * way to do this. */

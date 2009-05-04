@@ -425,6 +425,7 @@ void cproxy_process_a2b_downstream_nread(conn *c) {
     assert(c != NULL);
     assert(c->cmd >= 0);
     assert(c->next == NULL);
+    assert(c->cmd_start != NULL);
     assert(IS_BINARY(c->protocol));
     assert(IS_PROXY(c->protocol));
 
@@ -498,6 +499,7 @@ void a2b_process_downstream_response(conn *c) {
     assert(c != NULL);
     assert(c->cmd >= 0);
     assert(c->next == NULL);
+    assert(c->cmd_start != NULL);
     assert(IS_BINARY(c->protocol));
     assert(IS_PROXY(c->protocol));
 
@@ -648,10 +650,25 @@ void a2b_process_downstream_response(conn *c) {
         if (uc != NULL) {
             assert(uc->next == NULL);
 
+            // TODO: Any weird alignment/padding issues on different
+            //       platforms in this cast to worry about here?
+            //
+            protocol_binary_response_incr *response_incr =
+                (protocol_binary_response_incr *) c->cmd_start;
+
             switch (status) {
-            case 0:
-                out_string(uc, "123"); // TODO.
+            case 0: {
+                char *s = add_conn_suffix(uc);
+                if (s != NULL) {
+                    uint64_t v = swap64(response_incr->message.body.value);
+                    sprintf(s, "%llu", v);
+                    out_string(uc, s);
+                } else {
+                    d->ptd->stats.tot_oom++;
+                    cproxy_close_conn(uc);
+                }
                 break;
+            }
             case PROTOCOL_BINARY_RESPONSE_KEY_EEXISTS: // Due to CAS.
                 out_string(uc, "EXISTS");
                 break;
