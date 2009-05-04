@@ -116,6 +116,7 @@ proxy *cproxy_create(char    *name,
                 ptd->downstream_tot = 0;
                 ptd->downstream_num = 0;
                 ptd->downstream_max = p->behavior.downstream_max;
+                ptd->downstream_assigns = 0;
 
                 // TODO: Handle ascii-to-binary protocol.
                 //
@@ -922,6 +923,10 @@ void cproxy_assign_downstream(proxy_td *ptd) {
     if (settings.verbose > 1)
         fprintf(stderr, "assign_downstream\n");
 
+    ptd->downstream_assigns++;
+
+    uint64_t da = ptd->downstream_assigns;
+
     // Key loop that tries to reserve any available, released
     // downstream resources to waiting upstream conns.
     //
@@ -988,10 +993,14 @@ void cproxy_assign_downstream(proxy_td *ptd) {
                     d->upstream_conn->sfd);
 
         if (!ptd->propagate_downstream(d)) {
-            // TODO: During propagate_downstream(), we might have
-            //       recursed, especially in error situation,
-            //       so we cannot rely on d's state anymore.
+            // During propagate_downstream(), we might have
+            // recursed, especially in error situation if
+            // a downstream conn got closed and released.
+            // Check before we touch d anymore.
             //
+            if (da != ptd->downstream_assigns)
+                break;
+
             while (d->upstream_conn != NULL) {
                 conn *uc = d->upstream_conn;
 

@@ -131,6 +131,7 @@ struct proxy_td { // Per proxy, per worker-thread data struct.
     uint64_t    downstream_tot;      // Total lifetime downstreams created.
     int         downstream_num;      // Number downstreams existing.
     int         downstream_max;      // Max downstream concurrency number.
+    uint64_t    downstream_assigns;  // Track recursion.
 
     // Function pointer changes depending on how we propagate
     // an upstream request to a downstream.  Eg, ascii vs binary,
