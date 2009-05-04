@@ -1105,6 +1105,11 @@ void cproxy_release_downstream_conn(downstream *d, conn *c) {
 
     d->downstream_used--;
     if (d->downstream_used <= 0) {
+        // The downstream_used count might go < 0 when if there's
+        // an early error and we decide to close the downstream
+        // conn, before anything gets sent or before the
+        // downstream_used was able to be incremented.
+        //
         cproxy_release_downstream(d, false);
         cproxy_assign_downstream(ptd);
     }
