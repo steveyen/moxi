@@ -141,6 +141,8 @@ bool a2b_fill_request_token(struct A2BSpec *spec,
                             uint16_t *out_keylen,
                             uint8_t  *out_extlen);
 
+void a2b_process_downstream_response(conn *c);
+
 void cproxy_init_a2b() {
     if (a2b_spec_map == NULL) {
         a2b_spec_map = g_hash_table_new(skey_hash, skey_equal);
@@ -313,27 +315,307 @@ bool a2b_fill_request_token(struct A2BSpec *spec,
     return true;
 }
 
+/* Called when we receive a binary response header from
+ * a downstream server, via try_read_command()/drive_machine().
+ */
 void cproxy_process_a2b_downstream(conn *c) {
-    char *line = NULL;
-
     assert(c != NULL);
+    assert(c->cmd >= 0);
     assert(c->next == NULL);
-    assert(c->extra != NULL);
-    assert(c->cmd == -1);
     assert(c->item == NULL);
-    assert(line != NULL);
-    assert(line == c->rcurr);
+    assert(IS_BINARY(c->protocol));
+    assert(IS_PROXY(c->protocol));
+
+    // Snapshot rcurr, because the caller, try_read_command(), changes it.
+    //
+    c->cmd_start = c->rcurr;
+
+    protocol_binary_response_header *header =
+        (protocol_binary_response_header *) &c->binary_header;
+
+    header->response.status = (uint16_t) ntohs(header->response.status);
+
+    assert(header->response.magic == (uint8_t) PROTOCOL_BINARY_RES);
+    assert(header->response.opcode == c->cmd);
+
+    process_bin_noreply(c); // Map quiet c->cmd values into non-quiet.
+
+    int      extlen  = header->response.extlen;
+    int      keylen  = header->response.keylen;
+    uint32_t bodylen = header->response.bodylen;
+
+    // Our approach is to read everything we can before
+    // getting into big switch/case statements for the
+    // actual processing.
+    //
+    // If status is non-zero (an err code), then bodylen should be small.
+    // If status is 0, then bodylen might be for a huge item during
+    // a GET family of response.
+    //
+    // If bodylen > extlen + keylen, then we should nread
+    // then ext+key and set ourselves up for a later item nread.
+    //
+    // We overload the meaning of the conn substates...
+    // - bin_reading_get_key means do nread for ext and key data.
+    // - bin_read_set_value means do nread for item data.
+    //
+    if (settings.verbose > 1)
+        fprintf(stderr, "<%d cproxy_process_a2b_downstream %x\n",
+                c->sfd, c->cmd);
+
+    if (keylen > 0 || extlen > 0) {
+        assert(bodylen >= keylen + extlen);
+
+        // One reason we reach here is during a
+        // GET/GETQ/GETK/GETKQ hit response, because extlen
+        // will be > 0 for the flags.
+        //
+        // Also, we reach here during a GETK miss response, since
+        // keylen will be > 0.  Oddly, a GETK miss response will have
+        // a non-zero status of PROTOCOL_BINARY_RESPONSE_KEY_ENOENT,
+        // but won't have any extra error message string.
+        //
+        // Also, we reach here during a STAT response, with
+        // keylen > 0, extlen == 0, and bodylen == keylen.
+        //
+        assert(c->cmd == PROTOCOL_BINARY_CMD_GET ||
+               c->cmd == PROTOCOL_BINARY_CMD_GETK ||
+               c->cmd == PROTOCOL_BINARY_CMD_STAT);
+
+        bin_read_key(c, bin_reading_get_key, extlen);
+    } else {
+        assert(keylen == 0 && extlen == 0);
+
+        if (bodylen > 0) {
+            // We reach here on error response, version response,
+            // or incr/decr responses, which all have only (relatively
+            // small) body bytes, and with no ext bytes and no key bytes.
+            //
+            // For example, error responses will have 0 keylen,
+            // 0 extlen, with an error message string for the body.
+            //
+            // We'll just reuse the key-reading code path, rather
+            // than allocating an item.
+            //
+            assert(header->response.status != 0 ||
+                   c->cmd == PROTOCOL_BINARY_CMD_VERSION ||
+                   c->cmd == PROTOCOL_BINARY_CMD_INCREMENT ||
+                   c->cmd == PROTOCOL_BINARY_CMD_DECREMENT);
+
+            bin_read_key(c, bin_reading_get_key, bodylen);
+        } else {
+            assert(keylen == 0 && extlen == 0 && bodylen == 0);
+
+            // We have the entire response in the header,
+            // such as due to a general success response,
+            // including a no-op response.
+            //
+            a2b_process_downstream_response(c);
+        }
+    }
+}
+
+/* We reach here after nread'ing a ext+key or item.
+ */
+void cproxy_process_a2b_downstream_nread(conn *c) {
+    assert(c != NULL);
+    assert(c->cmd >= 0);
+    assert(c->next == NULL);
     assert(IS_BINARY(c->protocol));
     assert(IS_PROXY(c->protocol));
 
     if (settings.verbose > 1)
-        fprintf(stderr, "<%d cproxy_process_a2b_downstream %s\n",
-                c->sfd, line);
+        fprintf(stderr,
+                "<%d cproxy_process_a2b_downstream_nread %d %d\n",
+                c->sfd, c->ileft, c->isize);
 
+    protocol_binary_response_header *header =
+        (protocol_binary_response_header *) &c->binary_header;
+
+    int      extlen  = header->response.extlen;
+    int      keylen  = header->response.keylen;
+    uint32_t bodylen = header->response.bodylen;
+
+    if (c->substate == bin_reading_get_key &&
+        header->response.status == 0 &&
+        (c->cmd == PROTOCOL_BINARY_CMD_GET ||
+         c->cmd == PROTOCOL_BINARY_CMD_GETK ||
+         c->cmd == PROTOCOL_BINARY_CMD_STAT)) {
+        assert(c->item == NULL);
+
+        // Alloc an item and continue with an item nread,
+        // even if vlen is 0.
+        //
+        char  *key   = binary_get_key(c);
+        int    vlen  = bodylen - (keylen + extlen);
+        int    flags = 0;
+
+        assert(key);
+        assert(vlen >= 0);
+
+        if (c->cmd == PROTOCOL_BINARY_CMD_GET ||
+            c->cmd == PROTOCOL_BINARY_CMD_GETK) {
+            protocol_binary_response_get *response_get =
+                (protocol_binary_response_get *) header;
+
+            assert(extlen == sizeof(response_get->message.body));
+
+            flags = ntohl(response_get->message.body.flags);
+        }
+
+        item *it = item_alloc(key, keylen, flags, 0, vlen + 2);
+        if (it != NULL) {
+            c->item = it;
+            c->ritem = ITEM_data(it);
+            c->rlbytes = vlen;
+            c->substate = bin_read_set_value;
+
+            conn_set_state(c, conn_nread);
+        } else {
+            // TODO: Error, probably swallow bytes.
+        }
+    } else {
+        a2b_process_downstream_response(c);
+    }
+}
+
+void a2b_process_downstream_response(conn *c) {
+    assert(c != NULL);
+    assert(c->cmd >= 0);
+    assert(c->next == NULL);
+    assert(IS_BINARY(c->protocol));
+    assert(IS_PROXY(c->protocol));
+
+    if (settings.verbose > 1)
+        fprintf(stderr,
+                "<%d cproxy_process_a2b_downstream_response\n",
+                c->sfd);
+
+    protocol_binary_response_header *header =
+        (protocol_binary_response_header *) &c->binary_header;
+
+    int      extlen  = header->response.extlen;
+    int      keylen  = header->response.keylen;
+    uint32_t bodylen = header->response.bodylen;
+
+    // We reach here when we have the entire response,
+    // including header, ext, key, and possibly item data.
+    // Now we can get into big switch/case processing.
+    //
     downstream *d = c->extra;
-
     assert(d != NULL);
-    assert(d->ptd != NULL);
+
+    item *it = c->item;
+
+    // Clear c->item because we either move it to the upstream or
+    // item_remove() it on error.
+    //
+    c->item = NULL;
+
+    bool protocol_error = false;
+
+    switch (c->cmd) {
+    case PROTOCOL_BINARY_CMD_GET:   /* FALLTHROUGH */
+    case PROTOCOL_BINARY_CMD_GETK:
+        if (extlen == 0 && bodylen == keylen && keylen > 0) {
+            bin_read_key(c, bin_reading_get_key, 0);
+
+            *(ITEM_data(it) + it->nbytes - 2) = '\r';
+            *(ITEM_data(it) + it->nbytes - 1) = '\n';
+        } else {
+            protocol_error = true;
+        }
+        break;
+    case PROTOCOL_BINARY_CMD_NOOP:
+        // TODO.
+        break;
+    case PROTOCOL_BINARY_CMD_SET: /* FALLTHROUGH */
+    case PROTOCOL_BINARY_CMD_ADD: /* FALLTHROUGH */
+    case PROTOCOL_BINARY_CMD_REPLACE:
+    case PROTOCOL_BINARY_CMD_DELETE:
+    case PROTOCOL_BINARY_CMD_APPEND:
+    case PROTOCOL_BINARY_CMD_PREPEND:
+        // TODO.
+        break;
+    case PROTOCOL_BINARY_CMD_INCREMENT:
+    case PROTOCOL_BINARY_CMD_DECREMENT:
+        // TODO.
+        break;
+    case PROTOCOL_BINARY_CMD_FLUSH:
+        // TODO.
+        break;
+    case PROTOCOL_BINARY_CMD_STAT:
+        // TODO.
+        assert(it != NULL);
+        break;
+    case PROTOCOL_BINARY_CMD_VERSION:
+    case PROTOCOL_BINARY_CMD_QUIT:
+        // TODO: Handled unexpected responses.
+        break;
+    default:
+        // TODO.
+        break;
+    }
+
+    conn_set_state(c, conn_new_cmd);
+
+    // pthread_mutex_lock(&c->thread->stats.mutex);
+    // c->thread->stats.slab_stats[it->slabs_clsid].set_cmds++;
+    // pthread_mutex_unlock(&c->thread->stats.mutex);
+
+    if (d->multiget != NULL) {
+        char key_buf[KEY_MAX_LENGTH + 10];
+
+        memcpy(key_buf, ITEM_key(it), it->nkey);
+        key_buf[it->nkey] = '\0';
+
+        multiget_entry *entry =
+            g_hash_table_lookup(d->multiget, key_buf);
+
+        while (entry != NULL) {
+            // The upstream might be NULL if it was closed mid-request.
+            //
+            if (entry->upstream_conn != NULL)
+                cproxy_a2b_item_response(it, entry->upstream_conn);
+
+            entry = entry->next;
+        }
+    } else {
+        conn *uc = d->upstream_conn;
+        while (uc != NULL) {
+            cproxy_a2b_item_response(it, uc);
+            uc = uc->next;
+        }
+    }
+
+    item_remove(it);
+
+    /////////
+
+    conn_set_state(c, conn_pause);
+
+    char *line = NULL;
+
+    if (false) {
+        // The upstream conn might be NULL when closed already
+        // or while handling a noreply.
+        //
+        conn *uc = d->upstream_conn;
+        if (uc != NULL) {
+            assert(uc->next == NULL);
+
+            out_string(uc, line); // !!!
+
+            if (!update_event(uc, EV_WRITE | EV_PERSIST)) {
+                if (settings.verbose > 1)
+                    fprintf(stderr,
+                            "Can't write upstream a2b event\n");
+
+                d->ptd->stats.tot_oom++;
+                cproxy_close_conn(uc);
+            }
+        }
+    }
 
     if (strncmp(line, "VALUE ", 6) == 0) {
         token_t      tokens[MAX_TOKENS];
@@ -448,62 +730,6 @@ void cproxy_process_a2b_downstream(conn *c) {
             }
         }
     }
-}
-
-/* We get here after reading the value in a VALUE reply.
- * The item is ready in c->item.
- */
-void cproxy_process_a2b_downstream_nread(conn *c) {
-    assert(c != NULL);
-
-    if (settings.verbose > 1)
-        fprintf(stderr,
-                "<%d cproxy_process_a2b_downstream_nread %d %d\n",
-                c->sfd, c->ileft, c->isize);
-
-    downstream *d = c->extra;
-    assert(d != NULL);
-
-    item *it = c->item;
-    assert(it != NULL);
-
-    // Clear c->item because we either move it to the upstream or
-    // item_remove() it on error.
-    //
-    c->item = NULL;
-
-    conn_set_state(c, conn_new_cmd);
-
-    // pthread_mutex_lock(&c->thread->stats.mutex);
-    // c->thread->stats.slab_stats[it->slabs_clsid].set_cmds++;
-    // pthread_mutex_unlock(&c->thread->stats.mutex);
-
-    if (d->multiget != NULL) {
-        char key_buf[KEY_MAX_LENGTH + 10];
-
-        memcpy(key_buf, ITEM_key(it), it->nkey);
-        key_buf[it->nkey] = '\0';
-
-        multiget_entry *entry =
-            g_hash_table_lookup(d->multiget, key_buf);
-
-        while (entry != NULL) {
-            // The upstream might be NULL if it was closed mid-request.
-            //
-            if (entry->upstream_conn != NULL)
-                cproxy_a2b_item_response(it, entry->upstream_conn);
-
-            entry = entry->next;
-        }
-    } else {
-        conn *uc = d->upstream_conn;
-        while (uc != NULL) {
-            cproxy_a2b_item_response(it, uc);
-            uc = uc->next;
-        }
-    }
-
-    item_remove(it);
 }
 
 /* Do the actual work of forwarding the command from an
