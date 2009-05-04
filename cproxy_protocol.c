@@ -41,7 +41,7 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
      * directly into it, then continue in nread_complete().
      */
     if (!cproxy_prep_conn_for_write(c)) {
-        out_string(c, "SERVER_ERROR out of memory preparing response");
+        conn_set_state(c, conn_closing);
         return;
     }
 

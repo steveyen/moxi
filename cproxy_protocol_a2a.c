@@ -340,9 +340,9 @@ bool cproxy_forward_a2a_multiget_downstream(downstream *d, conn *uc) {
     int nconns = memcached_server_count(&d->mst);
 
     for (int i = 0; i < nconns; i++) {
-        if (d->downstream_conns[i] != NULL) {
-            cproxy_prep_conn_for_write(d->downstream_conns[i]);
-            assert(d->downstream_conns[i]->state == conn_pause);
+        if (d->downstream_conns[i] != NULL &&
+            cproxy_prep_conn_for_write(d->downstream_conns[i]) == false) {
+            cproxy_close_conn(d->downstream_conns[i]);
         }
     }
 

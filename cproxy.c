@@ -867,7 +867,6 @@ conn *cproxy_find_downstream_conn(downstream *d,
 bool cproxy_prep_conn_for_write(conn *c) {
     if (c != NULL) {
         assert(c->item == NULL);
-        assert(IS_ASCII(c->protocol));
         assert(IS_PROXY(c->protocol));
         assert(c->ilist != NULL);
         assert(c->isize > 0);
@@ -1126,7 +1125,7 @@ void cproxy_on_pause_downstream_conn(conn *c) {
     if (update_event(c, 0))
         cproxy_release_downstream_conn(d, c);
     else
-        conn_set_state(c, conn_closing);
+        cproxy_close_conn(c);
 }
 
 void cproxy_pause_upstream_for_downstream(proxy_td *ptd, conn *upstream) {
@@ -1163,6 +1162,8 @@ void cproxy_close_conn(conn *c) {
 
     conn_set_state(c, conn_closing);
 
+    update_event(c, 0);
+
     // We need this to handle case when the conn is not the
     // current conn in the thread's drive_machine() loop.
     // This should wakeup libevent on the next run to
@@ -1172,6 +1173,11 @@ void cproxy_close_conn(conn *c) {
     //
     shutdown(c->sfd, SHUT_RDWR);
     close(c->sfd);
+
+    // Rather than waiting for libevent loop, we drive_machine
+    // immediately, just once, to go through close code paths.
+    //
+    drive_machine(c);
 }
 
 bool add_conn_item(conn *c, item *it) {
@@ -1424,9 +1430,7 @@ void downstream_timeout(const int fd,
                 // Doing drive_machine(), which should only loop once,
                 // to get to the connection closing logic.
                 //
-                update_event(d->downstream_conns[i], 0);
-                conn_set_state(d->downstream_conns[i], conn_closing);
-                drive_machine(d->downstream_conns[i]);
+                cproxy_close_conn(d->downstream_conns[i]);
             }
         }
     }

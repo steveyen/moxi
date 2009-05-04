@@ -253,6 +253,10 @@ bool a2b_fill_request_token(struct A2BSpec *spec,
 
     uint64_t delta;
 
+    if (settings.verbose > 1)
+        fprintf(stderr, "a2b_fill_request_token %s\n",
+                spec->tokens[cur_token].value);
+
     char t = spec->tokens[cur_token].value[1];
     switch (t) {
     case 'k': // key
@@ -276,7 +280,7 @@ bool a2b_fill_request_token(struct A2BSpec *spec,
 
             req->message.body.delta = htonll(delta);
             req->message.body.initial = 0;
-            req->message.body.expiration = 0;
+            req->message.body.expiration = 0xffffffff;
         } else {
             // TODO: Send back better error.
             return false;
@@ -321,6 +325,10 @@ void cproxy_process_a2b_downstream(conn *c) {
     assert(c->item == NULL);
     assert(IS_BINARY(c->protocol));
     assert(IS_PROXY(c->protocol));
+
+    if (settings.verbose > 1)
+        fprintf(stderr, "<%d cproxy_process_a2b_downstream\n",
+                c->sfd);
 
     // Snapshot rcurr, because the caller, try_read_command(), changes it.
     //
@@ -622,7 +630,9 @@ void a2b_process_downstream_response(conn *c) {
                 break;
             }
 
-            if (!update_event(uc, EV_WRITE | EV_PERSIST)) {
+            if (update_event(uc, EV_WRITE | EV_PERSIST)) {
+                conn_set_state(c, conn_pause);
+            } else {
                 if (settings.verbose > 1)
                     fprintf(stderr,
                             "Can't write upstream a2b event\n");
@@ -657,7 +667,9 @@ void a2b_process_downstream_response(conn *c) {
                 break;
             }
 
-            if (!update_event(uc, EV_WRITE | EV_PERSIST)) {
+            if (update_event(uc, EV_WRITE | EV_PERSIST)) {
+                conn_set_state(c, conn_pause);
+            } else {
                 if (settings.verbose > 1)
                     fprintf(stderr,
                             "Can't write upstream a2b arith event\n");
@@ -814,6 +826,9 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
                 fprintf(stderr, "forwarding a2b to %d, noreply %d\n",
                         c->sfd, uc->noreply);
 
+            conn_set_state(c, conn_mwrite);
+            c->write_and_go = conn_new_cmd;
+
             if (update_event(c, EV_WRITE | EV_PERSIST)) {
                 d->downstream_used_start = 1; // TODO: Need timeout?
                 d->downstream_used       = 1;
@@ -827,13 +842,16 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
                 return true;
             } else {
                 // TODO: Error handling.
-            }
+                //
+                if (settings.verbose > 1)
+                    fprintf(stderr, "Couldn't a2b update write event\n");                  }
+        } else {
+            // TODO: Error handling.
+            //
+            if (settings.verbose > 1)
+                fprintf(stderr, "Couldn't a2b fill request: %s\n",
+                        command);
         }
-
-        // TODO: Error handling.
-        //
-        if (settings.verbose > 1)
-            fprintf(stderr, "Couldn't update cproxy write event\n");
 
         d->ptd->stats.tot_oom++;
         cproxy_close_conn(c);

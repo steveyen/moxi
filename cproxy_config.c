@@ -32,6 +32,9 @@ int cproxy_init(const char *cfg_str,
     if (settings.verbose > 1)
         fprintf(stderr, "cproxy_init (%s)\n", cfg_str);
 
+    cproxy_init_a2a();
+    cproxy_init_a2b();
+
     proxy_behavior behavior = cproxy_parse_behavior(behavior_str,
                                                     nthreads);
 
