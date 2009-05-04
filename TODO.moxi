@@ -8,6 +8,12 @@ TODO ideas...
   - talked to Dustin about this, and he knows the
     git submodule and script magic to make the right metaproject.
 
+- test command, described by dustin.
+
+- change from proxy config keyed by port to keyed by name.
+
+- servers owned by others
+
 - retry SET's and DELETE's
   - so that upstream can continue fast and just fire-&-forget.
     - but, need to respect serializability, similar to noreply bug?
