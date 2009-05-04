@@ -313,7 +313,7 @@ bool cproxy_forward_a2a_simple_downstream(downstream *d,
                     c->sfd, uc->noreply);
 
         if (update_event(c, EV_WRITE | EV_PERSIST)) {
-            d->downstream_used_start = 1; // TODO: Need timeout?
+            d->downstream_used_start = 1;
             d->downstream_used       = 1;
 
             if (cproxy_dettach_if_noreply(d, uc) == false) {
@@ -395,7 +395,7 @@ bool cproxy_broadcast_a2a_downstream(downstream *d,
         fprintf(stderr, "forward multiget nwrite %d out of %d\n",
                 nwrite, nconns);
 
-    d->downstream_used_start = nwrite; // TODO: Need timeout?
+    d->downstream_used_start = nwrite;
     d->downstream_used       = nwrite;
 
     if (cproxy_dettach_if_noreply(d, uc) == false) {
@@ -464,7 +464,7 @@ bool cproxy_forward_a2a_item_downstream(downstream *d, short cmd,
                 c->write_and_go = conn_new_cmd;
 
                 if (update_event(c, EV_WRITE | EV_PERSIST)) {
-                    d->downstream_used_start = 1; // TODO: Need timeout?
+                    d->downstream_used_start = 1;
                     d->downstream_used       = 1;
 
                     if (cproxy_dettach_if_noreply(d, uc) == false) {

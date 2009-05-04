@@ -854,7 +854,7 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
             c->write_and_go = conn_new_cmd;
 
             if (update_event(c, EV_WRITE | EV_PERSIST)) {
-                d->downstream_used_start = 1; // TODO: Need timeout?
+                d->downstream_used_start = 1;
                 d->downstream_used       = 1;
 
                 if (cproxy_dettach_if_noreply(d, uc) == false) {
@@ -934,8 +934,8 @@ void a2b_multiget_end(conn *c) {
 
             memset(req, 0, sizeof(req->bytes));
 
-            req->message.header.request.magic  = PROTOCOL_BINARY_REQ;
-            req->message.header.request.opcode = PROTOCOL_BINARY_CMD_NOOP;
+            req->message.header.request.magic    = PROTOCOL_BINARY_REQ;
+            req->message.header.request.opcode   = PROTOCOL_BINARY_CMD_NOOP;
             req->message.header.request.datatype = PROTOCOL_BINARY_RAW_BYTES;
 
             add_iov(c, ITEM_data(it), sizeof(req->bytes));
@@ -993,7 +993,7 @@ bool cproxy_broadcast_a2b_downstream(downstream *d,
         fprintf(stderr, "forward multiget nwrite %d out of %d\n",
                 nwrite, nconns);
 
-    d->downstream_used_start = nwrite; // TODO: Need timeout?
+    d->downstream_used_start = nwrite;
     d->downstream_used       = nwrite;
 
     if (cproxy_dettach_if_noreply(d, uc) == false) {
@@ -1014,8 +1014,10 @@ bool cproxy_forward_a2b_item_downstream(downstream *d, short cmd,
     assert(d->ptd != NULL);
     assert(d->downstream_conns != NULL);
     assert(it != NULL);
+    assert(it->nbytes >= 2);
     assert(uc != NULL);
     assert(uc->next == NULL);
+    assert(cmd > 0);
 
     // Assuming we're already connected to downstream.
     //
@@ -1024,45 +1026,78 @@ bool cproxy_forward_a2b_item_downstream(downstream *d, short cmd,
         cproxy_prep_conn_for_write(c)) {
         assert(c->state == conn_pause);
 
-        char *verb = nread_text(cmd);
+        uint8_t  extlen = (cmd == NREAD_APPEND ||
+                           cmd == NREAD_PREPEND) ? 0 : 8;
+        uint32_t hdrlen = sizeof(protocol_binary_request_header) +
+                          extlen;
 
-        assert(verb != NULL);
+        item *it_hdr = item_alloc("i", 1, 0, 0, hdrlen);
+        if (it_hdr != NULL) {
+            if (add_conn_item(c, it_hdr)) {
+                protocol_binary_request_header *req =
+                    (protocol_binary_request_header *) ITEM_data(it_hdr);
 
-        char *str_flags   = ITEM_suffix(it);
-        char *str_length  = strchr(str_flags + 1, ' ');
-        int   len_flags   = str_length - str_flags;
-        int   len_length  = it->nsuffix - len_flags - 2;
-        char *str_exptime = add_conn_suffix(c);
-        char *str_cas     = (cmd == NREAD_CAS ? add_conn_suffix(c) : NULL);
+                memset(req, 0, hdrlen);
 
-        if (str_flags != NULL &&
-            str_length != NULL &&
-            len_flags > 1 &&
-            len_length > 1 &&
-            str_exptime != NULL &&
-            (cmd != NREAD_CAS ||
-             str_cas != NULL)) {
-            sprintf(str_exptime, " %u", it->exptime);
+                req->request.magic    = PROTOCOL_BINARY_REQ;
+                req->request.datatype = PROTOCOL_BINARY_RAW_BYTES;
+                req->request.keylen   = htons((uint16_t) it->nkey);
+                req->request.extlen   = extlen;
 
-            if (str_cas != NULL)
-                sprintf(str_cas, " %llu",
-                        (unsigned long long) ITEM_get_cas(it));
+                switch (cmd) {
+                case NREAD_SET:
+                    req->request.opcode =
+                        PROTOCOL_BINARY_CMD_SET;
+                    break;
+                case NREAD_CAS: {
+                    uint64_t cas = ITEM_get_cas(it);
+                    req->request.cas = swap64(cas);
+                    req->request.opcode =
+                        PROTOCOL_BINARY_CMD_SET;
+                    break;
+                }
+                case NREAD_ADD:
+                    req->request.opcode =
+                        PROTOCOL_BINARY_CMD_ADD;
+                    break;
+                case NREAD_REPLACE:
+                    req->request.opcode =
+                        PROTOCOL_BINARY_CMD_REPLACE;
+                    break;
+                case NREAD_APPEND:
+                    req->request.opcode =
+                        PROTOCOL_BINARY_CMD_APPEND;
+                    break;
+                case NREAD_PREPEND:
+                    req->request.opcode =
+                        PROTOCOL_BINARY_CMD_PREPEND;
+                    break;
+                default:
+                    assert(false); // TODO.
+                    break;
+                }
 
-            if (add_iov(c, verb, strlen(verb)) == 0 &&
-                add_iov(c, ITEM_key(it), it->nkey) == 0 &&
-                add_iov(c, str_flags, len_flags) == 0 &&
-                add_iov(c, str_exptime, strlen(str_exptime)) == 0 &&
-                add_iov(c, str_length, len_length) == 0 &&
-                (str_cas == NULL ||
-                 add_iov(c, str_cas, strlen(str_cas)) == 0) &&
-                (uc->noreply == false ||
-                 add_iov(c, " noreply", 8) == 0) &&
-                add_iov(c, ITEM_data(it) - 2, it->nbytes + 2) == 0) {
+                if (cmd != NREAD_APPEND &&
+                    cmd != NREAD_PREPEND) {
+                    protocol_binary_request_set *req_set =
+                        (protocol_binary_request_set *) req;
+
+                    req_set->message.body.flags      = htonl(0); // TODO.
+                    req_set->message.body.expiration = htonl(0); // TODO.
+                }
+
+                req->request.bodylen =
+                    htonl(it->nkey + (it->nbytes - 2) + extlen);
+
+                add_iov(c, ITEM_data(it_hdr), hdrlen);
+                add_iov(c, ITEM_key(it),  it->nkey);
+                add_iov(c, ITEM_data(it), it->nbytes - 2);
+
                 conn_set_state(c, conn_mwrite);
                 c->write_and_go = conn_new_cmd;
 
                 if (update_event(c, EV_WRITE | EV_PERSIST)) {
-                    d->downstream_used_start = 1; // TODO: Need timeout?
+                    d->downstream_used_start = 1;
                     d->downstream_used       = 1;
 
                     if (cproxy_dettach_if_noreply(d, uc) == false) {
@@ -1073,16 +1108,15 @@ bool cproxy_forward_a2b_item_downstream(downstream *d, short cmd,
 
                     return true;
                 }
-
-                d->ptd->stats.tot_oom++;
-                cproxy_close_conn(c);
             }
+
+            item_remove(it_hdr);
         }
 
-        if (settings.verbose > 1)
-            fprintf(stderr, "Proxy item write out of memory");
-
         // TODO: Need better out-of-memory behavior.
+        //
+        d->ptd->stats.tot_oom++;
+        cproxy_close_conn(c);
     }
 
     return false;
