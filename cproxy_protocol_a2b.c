@@ -844,19 +844,21 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
                 // TODO: Error handling.
                 //
                 if (settings.verbose > 1)
-                    fprintf(stderr, "Couldn't a2b update write event\n");                  }
+                    fprintf(stderr, "Couldn't a2b update write event\n");
+
+                if (d->upstream_suffix == NULL)
+                    d->upstream_suffix = "SERVER_ERROR a2b event oom\r\n";
+            }
         } else {
             // TODO: Error handling.
             //
             if (settings.verbose > 1)
                 fprintf(stderr, "Couldn't a2b fill request: %s\n",
                         command);
-        }
 
-        // TODO: Better message here.
-        //
-        if (d->upstream_suffix == NULL)
-            d->upstream_suffix = "SERVER_ERROR a2b simple downstream\r\n";
+            if (d->upstream_suffix == NULL)
+                d->upstream_suffix = "CLIENT_ERROR a2b parse request\r\n";
+        }
 
         d->ptd->stats.tot_oom++;
         cproxy_close_conn(c);
