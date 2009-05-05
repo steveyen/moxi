@@ -26,8 +26,11 @@ downstream *downstream_list_remove(downstream *head, downstream *d);
 void        downstream_timeout(const int fd,
                                const short which,
                                void *arg);
-conn       *conn_list_remove(conn *head, conn *c, bool *found);
+void        proxy_td_timeout(const int fd,
+                             const short which,
+                             void *arg);
 void        upstream_retry(void *data0, void *data1);
+conn       *conn_list_remove(conn *head, conn *c, bool *found);
 bool        is_compatible_request(conn *existing, conn *candidate);
 
 // Function tables.
@@ -128,6 +131,9 @@ proxy *cproxy_create(char    *name,
                 else
                     ptd->propagate_downstream =
                         cproxy_forward_a2a_downstream;
+
+                ptd->timeout_tv.tv_sec = 0;
+                ptd->timeout_tv.tv_usec = 0;
 
                 ptd->stats.num_upstream = 0;
                 ptd->stats.num_downstream_conn = 0;
@@ -1153,8 +1159,43 @@ void cproxy_pause_upstream_for_downstream(proxy_td *ptd, conn *upstream) {
                 upstream->sfd);
 
     conn_set_state(upstream, conn_pause);
+
     cproxy_wait_any_downstream(ptd, upstream);
+
+    if (ptd->timeout_tv.tv_sec == 0 &&
+        ptd->timeout_tv.tv_usec == 0) {
+        evtimer_set(&ptd->timeout_event, proxy_td_timeout, ptd);
+
+        event_base_set(upstream->thread->base, &ptd->timeout_event);
+
+        ptd->timeout_tv.tv_sec  = 5; // TODO.
+        ptd->timeout_tv.tv_usec = 0;
+
+        evtimer_add(&ptd->timeout_event, &ptd->timeout_tv);
+    }
+
     cproxy_assign_downstream(ptd);
+}
+
+void proxy_td_timeout(const int fd,
+                      const short which,
+                      void *arg) {
+    proxy_td *ptd = arg;
+    assert(ptd != NULL);
+
+    if (settings.verbose > 1)
+        fprintf(stderr, "proxy_td_timeout\n");
+
+    // This timer callback is invoked when an upstream conn
+    // has been in the wait queue for too long.
+    //
+    if (ptd->timeout_tv.tv_sec != 0 ||
+        ptd->timeout_tv.tv_usec != 0) {
+        evtimer_del(&ptd->timeout_event);
+
+        ptd->timeout_tv.tv_sec = 0;
+        ptd->timeout_tv.tv_usec = 0;
+    }
 }
 
 rel_time_t cproxy_realtime(const time_t exptime) {

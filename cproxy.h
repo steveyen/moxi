@@ -143,6 +143,11 @@ struct proxy_td { // Per proxy, per worker-thread data struct.
     //
     bool (*propagate_downstream)(downstream *d);
 
+    // Timeout is in use when timeout_tv fields are non-zero.
+    //
+    struct timeval timeout_tv;
+    struct event   timeout_event;
+
     proxy_stats stats;
 };
 

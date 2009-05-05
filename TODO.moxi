@@ -15,30 +15,15 @@ TODO ideas...
 - auth/bucket select.
   - login/auth/bucket-selection after creating downstream conn.
 
-- servers owned by others.
-
-- retry SET's and DELETE's
-  - so that upstream can continue fast and just fire-&-forget.
-    - but, need to respect serializability, similar to noreply bug?
-  - log and replay these?
-    - possibly in separate datacenter?
-
-- failover/drain mode
-  - sort of an edge case of replication
-  - if we know a server's going to be going down in the future
-    and we know where keys should end up, do "simple"
-    cooling/warming-up replication.
-    - not so simple when new server goes down.
-    - or when old/new servers are flapping.
-    - or net-split.
-    - or different moxi/clients see different old/new servers.
-
-- 1000 customers per box -- php hosting scenario.
-  - fall back to set-password approach.
-  - use unix-domain-sockets, and filesystem security/access control.
-
-- optimized connection to self, where moxi is running
-  as a memcached server.
+- timeouts
+  - request is taking longer than 50ms -- must be a failure.
+  - need timeout for upstream conns waiting in the queue
+    for an available downstream.
+    - if no downstreams are available, then upstream conn
+      might wait forever, if there's no timeout.
+  - need timeout for downstream requests -- DONE
+    - on timeout, closes the downstream connection
+  - revisit timeout/retry logic.
 
 - handling binary protocol
   - on upstream
@@ -50,6 +35,31 @@ TODO ideas...
       - there are state assumptions so we can't just
         jump to another downstream.
     - need to associate upstream with a favored downstream
+
+- failover/drain mode
+  - sort of an edge case of replication
+  - if we know a server's going to be going down in the future
+    and we know where keys should end up, do "simple"
+    cooling/warming-up replication.
+    - not so simple when new server goes down.
+    - or when old/new servers are flapping.
+    - or net-split.
+    - or different moxi/clients see different old/new servers.
+
+- servers owned by others.
+
+- retry SET's and DELETE's
+  - so that upstream can continue fast and just fire-&-forget.
+    - but, need to respect serializability, similar to noreply bug?
+  - log and replay these?
+    - possibly in separate datacenter?
+
+- 1000 customers per box -- php hosting scenario.
+  - fall back to set-password approach.
+  - use unix-domain-sockets, and filesystem security/access control.
+
+- optimized connection to self, where moxi is running
+  as a memcached server.
 
 - message aggregation
   - aka, get key squashing or key-dedupe.
@@ -103,16 +113,6 @@ b2ab  the inflight hashtable value shoul have...
   that tell us which upstream conns are interested in
   a particular key.  (NO, too tricky, just use memory
   like a normal person vs over-optimizing.)
-
-- timeouts
-  - request is taking longer than 50ms -- must be a failure.
-  - need timeout for upstream conns waiting in the queue
-    for an available downstream.
-    - if no downstreams are available, then upstream conn
-      might wait forever, if there's no timeout.
-  - need timeout for downstream requests -- DONE
-    - on timeout, closes the downstream connection
-  - revisit timeout/retry logic.
 
 - better stats
   - hot keys
@@ -200,6 +200,9 @@ known bugs
 - on proxy config change of a proxy's name, but which keeps the
   same port as an old proxy, we should close any old
   upstream connections.
+
+- proxy shtudown thru agent_config doesn't close the
+  listening port?
 
 ------------------------------------------------------------
 

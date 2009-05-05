@@ -34,8 +34,9 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
 
     // Snapshot rcurr, because the caller, try_read_command(), changes it.
     //
-    c->cmd_start = c->rcurr;
-    c->cmd_retries = 0;
+    c->cmd_start      = c->rcurr;
+    c->cmd_start_time = current_time;
+    c->cmd_retries    = 0;
 
     /* For commands set/add/replace, we build an item and read the data
      * directly into it, then continue in nread_complete().
