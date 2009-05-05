@@ -9,10 +9,13 @@ TODO ideas...
     git submodule and script magic to make the right metaproject.
 
 - test command, described by dustin.
+  - ping timings
+  - time between request and response on each downstream conn.
 
-- change from proxy config keyed by port to keyed by name.
+- auth/bucket select.
+  - login/auth/bucket-selection after creating downstream conn.
 
-- servers owned by others
+- servers owned by others.
 
 - retry SET's and DELETE's
   - so that upstream can continue fast and just fire-&-forget.
@@ -29,8 +32,6 @@ TODO ideas...
     - or when old/new servers are flapping.
     - or net-split.
     - or different moxi/clients see different old/new servers.
-
-- auth/bucket select.
 
 - 1000 customers per box -- php hosting scenario.
   - fall back to set-password approach.
@@ -100,8 +101,8 @@ b2ab  the inflight hashtable value shoul have...
 
 - key squashing inflight hashtable might have bitfield values
   that tell us which upstream conns are interested in
-  a particular key.  (NO, too tricky, just use memory like
-  a normal person.)
+  a particular key.  (NO, too tricky, just use memory
+  like a normal person vs over-optimizing.)
 
 - timeouts
   - request is taking longer than 50ms -- must be a failure.
@@ -115,11 +116,6 @@ b2ab  the inflight hashtable value shoul have...
 
 - better stats
   - hot keys
-
-- ping timings
-  - time between request and response on each downstream conn.
-
-- login/auth/bucket-selection after creating downstream conn.
 
 failure modes...
 
@@ -201,6 +197,10 @@ known bugs
     - also, more complexity when downstreams and upstreams go down.
     - also, need more pointers to track the assignment preference?
 
+- on proxy config change of a proxy's name, but which keeps the
+  same port as an old proxy, we should close any old
+  upstream connections.
+
 ------------------------------------------------------------
 
 - FIXED: multiversioning.t fails / deadlocks
@@ -223,4 +223,7 @@ known bugs
       - need to keep a reserved downstreams list?  yes, we do this.
   - also, need to remove the closing upstream conn from the wait list.
     - done
+
+- WONTFIX: change from proxy config keyed by port to keyed by name.
+  - actually, config algorithm key'ed by port is right.
 
