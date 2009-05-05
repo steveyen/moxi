@@ -113,11 +113,15 @@ proxy_behavior cproxy_parse_behavior(const char *behavior_str,
     struct proxy_behavior behavior = {
         .nthreads = nthreads,
         .downstream_max = 1,
+        .downstream_prot = proxy_downstream_ascii_prot,
         .downstream_timeout = {
             .tv_sec  = 0,
             .tv_usec = 0
         },
-        .downstream_prot = proxy_downstream_ascii_prot
+        .wait_queue_timeout = {
+            .tv_sec  = 0,
+            .tv_usec = 0
+        }
     };
 
     if (behavior_str == NULL ||
@@ -140,10 +144,6 @@ proxy_behavior cproxy_parse_behavior(const char *behavior_str,
                 if (strcmp(key, "downstream_max") == 0) {
                     behavior.downstream_max = strtol(val, NULL, 10);
                     assert(behavior.downstream_max > 0);
-                } else if (strcmp(key, "downstream_timeout") == 0) {
-                    int ms = strtol(val, NULL, 10);
-                    behavior.downstream_timeout.tv_sec  = floor(ms / 1000.0);
-                    behavior.downstream_timeout.tv_usec = (ms % 1000) * 1000;
                 } else if (strcmp(key, "downstream_prot") == 0) {
                     if (strcmp(val, "ascii") == 0)
                         behavior.downstream_prot =
@@ -154,6 +154,14 @@ proxy_behavior cproxy_parse_behavior(const char *behavior_str,
                     else {
                         // TODO: Error in behavior config string.
                     }
+                } else if (strcmp(key, "downstream_timeout") == 0) {
+                    int ms = strtol(val, NULL, 10);
+                    behavior.downstream_timeout.tv_sec  = floor(ms / 1000.0);
+                    behavior.downstream_timeout.tv_usec = (ms % 1000) * 1000;
+                } else if (strcmp(key, "wait_queue_timeout") == 0) {
+                    int ms = strtol(val, NULL, 10);
+                    behavior.wait_queue_timeout.tv_sec  = floor(ms / 1000.0);
+                    behavior.wait_queue_timeout.tv_usec = (ms % 1000) * 1000;
                 } else {
                     // TODO: Error in behavior config string.
                 }

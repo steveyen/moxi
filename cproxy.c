@@ -28,9 +28,9 @@ downstream *downstream_list_remove(downstream *head, downstream *d);
 void        downstream_timeout(const int fd,
                                const short which,
                                void *arg);
-void        proxy_td_timeout(const int fd,
-                             const short which,
-                             void *arg);
+void        wait_queue_timeout(const int fd,
+                               const short which,
+                               void *arg);
 void        upstream_error(conn *uc);
 void        upstream_retry(void *data0, void *data1);
 conn       *conn_list_remove(conn *head, conn **tail,
@@ -1159,30 +1159,39 @@ void cproxy_pause_upstream_for_downstream(proxy_td *ptd, conn *upstream) {
 
     if (ptd->timeout_tv.tv_sec == 0 &&
         ptd->timeout_tv.tv_usec == 0)
-        cproxy_start_upstream_timeout(ptd, upstream);
+        cproxy_start_wait_queue_timeout(ptd, upstream);
 
     cproxy_assign_downstream(ptd);
 }
 
-bool cproxy_start_upstream_timeout(proxy_td *ptd, conn *uc) {
+bool cproxy_start_wait_queue_timeout(proxy_td *ptd, conn *uc) {
     assert(ptd);
     assert(uc);
     assert(uc->thread);
     assert(uc->thread->base);
 
-    evtimer_set(&ptd->timeout_event, proxy_td_timeout, ptd);
+    proxy *p = ptd->proxy;
+    assert(p != NULL);
 
-    event_base_set(uc->thread->base, &ptd->timeout_event);
+    pthread_mutex_lock(&p->proxy_lock);
+    ptd->timeout_tv = p->behavior.wait_queue_timeout;
+    pthread_mutex_unlock(&p->proxy_lock);
 
-    ptd->timeout_tv.tv_sec  = UPSTREAM_TIMEOUT_SECS; // TODO.
-    ptd->timeout_tv.tv_usec = 0;
+    if (ptd->timeout_tv.tv_sec != 0 ||
+        ptd->timeout_tv.tv_usec != 0) {
+        evtimer_set(&ptd->timeout_event, wait_queue_timeout, ptd);
 
-    return evtimer_add(&ptd->timeout_event, &ptd->timeout_tv) == 0;
+        event_base_set(uc->thread->base, &ptd->timeout_event);
+
+        return evtimer_add(&ptd->timeout_event, &ptd->timeout_tv) == 0;
+    }
+
+    return true;
 }
 
-void proxy_td_timeout(const int fd,
-                      const short which,
-                      void *arg) {
+void wait_queue_timeout(const int fd,
+                        const short which,
+                        void *arg) {
     proxy_td *ptd = arg;
     assert(ptd != NULL);
 
@@ -1229,8 +1238,8 @@ void proxy_td_timeout(const int fd,
         }
 
         if (ptd->waiting_any_downstream_head != NULL) {
-            cproxy_start_upstream_timeout(ptd,
-                                          ptd->waiting_any_downstream_head);
+            cproxy_start_wait_queue_timeout(ptd,
+                                            ptd->waiting_any_downstream_head);
         }
     }
 }
@@ -1393,7 +1402,8 @@ size_t scan_tokens(char *command, token_t *tokens,
     return ntokens;
 }
 
-/* Returns the new head of the list.
+/* Remove conn c from a conn list.
+ * Returns the new head of the list.
  */
 conn *conn_list_remove(conn *head, conn **tail, conn *c, bool *found) {
     conn *prev = NULL;

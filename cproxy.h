@@ -29,8 +29,9 @@ typedef struct downstream     downstream;
 struct proxy_behavior {
     int            nthreads;
     int            downstream_max;     // Determines downstream concurrency.
-    struct timeval downstream_timeout; // Fields of 0 mean no timeout.
     enum protocol  downstream_prot;    // Favored downstream protocol.
+    struct timeval downstream_timeout; // Fields of 0 mean no timeout.
+    struct timeval wait_queue_timeout; // Fields of 0 mean no timeout.
 };
 
 /* Structure used and owned by main listener thread to
@@ -143,6 +144,10 @@ struct proxy_td { // Per proxy, per worker-thread data struct.
     //
     bool (*propagate_downstream)(downstream *d);
 
+    // A timeout for the wait_queue, so that we can emit error
+    // on any upstream conn's that are waiting too long for
+    // an available downstream.
+    //
     // Timeout is in use when timeout_tv fields are non-zero.
     //
     struct timeval timeout_tv;
@@ -256,7 +261,7 @@ bool cproxy_broadcast_a2b_downstream(downstream *d, char *command,
 void cproxy_upstream_ascii_item_response(item *it, conn *uc);
 
 bool cproxy_start_downstream_timeout(downstream *d);
-bool cproxy_start_upstream_timeout(proxy_td *ptd, conn *uc);
+bool cproxy_start_wait_queue_timeout(proxy_td *ptd, conn *uc);
 
 rel_time_t cproxy_realtime(const time_t exptime);
 
