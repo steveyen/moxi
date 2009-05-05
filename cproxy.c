@@ -31,8 +31,10 @@ void        downstream_timeout(const int fd,
 void        proxy_td_timeout(const int fd,
                              const short which,
                              void *arg);
+void        upstream_error(conn *uc);
 void        upstream_retry(void *data0, void *data1);
-conn       *conn_list_remove(conn *head, conn *c, bool *found);
+conn       *conn_list_remove(conn *head, conn **tail,
+                             conn *c, bool *found);
 bool        is_compatible_request(conn *existing, conn *candidate);
 
 // Function tables.
@@ -290,7 +292,8 @@ void cproxy_on_close_upstream_conn(conn *c) {
     for (downstream *d = ptd->downstream_reserved; d != NULL; d = d->next) {
         bool found = false;
 
-        d->upstream_conn = conn_list_remove(d->upstream_conn, c, &found);
+        d->upstream_conn = conn_list_remove(d->upstream_conn, NULL,
+                                            c, &found);
         if (d->upstream_conn == NULL) {
             d->upstream_suffix = NULL;
 
@@ -336,30 +339,10 @@ void cproxy_on_close_upstream_conn(conn *c) {
 
     // Delink from wait queue.
     //
-    conn *prev = NULL;
-    conn *curr = ptd->waiting_any_downstream_head;
-
-    while (curr != NULL) {
-        if (curr == c) {
-            if (ptd->waiting_any_downstream_tail == curr)
-                ptd->waiting_any_downstream_tail = prev;
-
-            if (prev != NULL) {
-                assert(curr != ptd->waiting_any_downstream_head);
-                prev->next = curr->next;
-                break;
-            }
-
-            assert(curr == ptd->waiting_any_downstream_head);
-            ptd->waiting_any_downstream_head = curr->next;
-            break;
-        }
-
-        prev = curr;
-        curr = curr->next;
-    }
-
-    c->next = NULL;
+    ptd->waiting_any_downstream_head =
+        conn_list_remove(ptd->waiting_any_downstream_head,
+                         &ptd->waiting_any_downstream_tail,
+                         c, NULL);
 }
 
 void cproxy_on_close_downstream_conn(conn *c) {
@@ -1017,21 +1000,7 @@ void cproxy_assign_downstream(proxy_td *ptd) {
                             "%d could not forward upstream to downstream\n",
                             uc->sfd);
 
-                // TODO: Handle upstream binary protocol.
-                //
-                // Send an END on get/gets instead of generic SERVER_ERROR.
-                //
-                if (uc->cmd == -1 &&
-                    uc->cmd_start != NULL &&
-                    strncmp(uc->cmd_start, "get", 3) == 0)
-                    out_string(uc, "END");
-                else
-                    out_string(uc, "SERVER_ERROR proxy write to downstream");
-
-                if (!update_event(uc, EV_WRITE | EV_PERSIST)) {
-                    ptd->stats.tot_oom++;
-                    cproxy_close_conn(uc);
-                }
+                upstream_error(uc);
 
                 conn *curr = d->upstream_conn;
                 d->upstream_conn = d->upstream_conn->next;
@@ -1044,6 +1013,30 @@ void cproxy_assign_downstream(proxy_td *ptd) {
 
     if (settings.verbose > 1)
         fprintf(stderr, "assign_downstream, done\n");
+}
+
+void upstream_error(conn *uc) {
+    assert(uc);
+    assert(uc->state == conn_pause);
+
+    proxy_td *ptd = uc->extra;
+    assert(ptd != NULL);
+
+    // TODO: Handle upstream binary protocol.
+    //
+    // Send an END on get/gets instead of generic SERVER_ERROR.
+    //
+    if (uc->cmd == -1 &&
+        uc->cmd_start != NULL &&
+        strncmp(uc->cmd_start, "get", 3) == 0)
+        out_string(uc, "END");
+    else
+        out_string(uc, "SERVER_ERROR proxy write to downstream");
+
+    if (!update_event(uc, EV_WRITE | EV_PERSIST)) {
+        ptd->stats.tot_oom++;
+        cproxy_close_conn(uc);
+    }
 }
 
 void cproxy_reset_upstream(conn *uc) {
@@ -1210,25 +1203,21 @@ void proxy_td_timeout(const int fd,
         // the wait queue, remove them, and emit errors
         // on them.  And then start a new timer if needed.
         //
-        while (ptd->waiting_any_downstream_head != NULL) {
-            conn *uc = ptd->waiting_any_downstream_head;
-            if (uc->cmd_start_time >= (current_time - UPSTREAM_TIMEOUT_SECS))
-                break;
+        conn *uc_curr = ptd->waiting_any_downstream_head;
+        while (uc_curr != NULL) {
+            conn *uc = uc_curr;
 
-            ptd->waiting_any_downstream_head =
-                ptd->waiting_any_downstream_head->next;
-            if (ptd->waiting_any_downstream_head == NULL)
-                ptd->waiting_any_downstream_tail = NULL;
+            uc_curr = uc_curr->next;
 
-            uc->next = NULL;
-
-            // TODO. Handle upstream binary protocol.
+            // Check if upstream conn is old and should be removed.
             //
-            out_string(uc, "SERVER_ERROR timeout");
+            if (uc->cmd_start_time <= (current_time - UPSTREAM_TIMEOUT_SECS)) {
+                ptd->waiting_any_downstream_head =
+                    conn_list_remove(ptd->waiting_any_downstream_head,
+                                     &ptd->waiting_any_downstream_tail,
+                                     uc, NULL); // TODO: O(N^2).
 
-            if (!update_event(uc, EV_WRITE | EV_PERSIST)) {
-                ptd->stats.tot_oom++;
-                cproxy_close_conn(uc);
+                upstream_error(uc);
             }
         }
 
@@ -1399,7 +1388,7 @@ size_t scan_tokens(char *command, token_t *tokens,
 
 /* Returns the new head of the list.
  */
-conn *conn_list_remove(conn *head, conn *c, bool *found) {
+conn *conn_list_remove(conn *head, conn **tail, conn *c, bool *found) {
     conn *prev = NULL;
     conn *curr = head;
 
@@ -1410,6 +1399,10 @@ conn *conn_list_remove(conn *head, conn *c, bool *found) {
         if (curr == c) {
             if (found != NULL)
                 *found = true;
+
+            if (tail != NULL &&
+                *tail == curr)
+                *tail = prev;
 
             if (prev != NULL) {
                 assert(curr != head);
