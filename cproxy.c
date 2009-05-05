@@ -22,7 +22,7 @@ void             memcached_quit_server(memcached_server_st *ptr,
 
 // Internal forward declarations.
 //
-#define UPSTREAM_TIMEOUT_SECS 2
+#define UPSTREAM_TIMEOUT_SECS 20
 
 downstream *downstream_list_remove(downstream *head, downstream *d);
 void        downstream_timeout(const int fd,
