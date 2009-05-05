@@ -22,6 +22,8 @@ void             memcached_quit_server(memcached_server_st *ptr,
 
 // Internal forward declarations.
 //
+#define UPSTREAM_TIMEOUT_SECS 2
+
 downstream *downstream_list_remove(downstream *head, downstream *d);
 void        downstream_timeout(const int fd,
                                const short which,
@@ -1163,16 +1165,8 @@ void cproxy_pause_upstream_for_downstream(proxy_td *ptd, conn *upstream) {
     cproxy_wait_any_downstream(ptd, upstream);
 
     if (ptd->timeout_tv.tv_sec == 0 &&
-        ptd->timeout_tv.tv_usec == 0) {
-        evtimer_set(&ptd->timeout_event, proxy_td_timeout, ptd);
-
-        event_base_set(upstream->thread->base, &ptd->timeout_event);
-
-        ptd->timeout_tv.tv_sec  = 5; // TODO.
-        ptd->timeout_tv.tv_usec = 0;
-
-        evtimer_add(&ptd->timeout_event, &ptd->timeout_tv);
-    }
+        ptd->timeout_tv.tv_usec == 0)
+        cproxy_start_upstream_timeout(ptd, upstream);
 
     cproxy_assign_downstream(ptd);
 }
@@ -1196,10 +1190,53 @@ void proxy_td_timeout(const int fd,
         ptd->timeout_tv.tv_sec = 0;
         ptd->timeout_tv.tv_usec = 0;
 
-        // TODO: Run through all the old upstream conn's in
-        //       the wait queue, remote them, and emit errors
-        //       on them.  And then start a new timer if needed.
+        // Run through all the old upstream conn's in
+        // the wait queue, remove them, and emit errors
+        // on them.  And then start a new timer if needed.
+        //
+        while (ptd->waiting_any_downstream_head != NULL) {
+            conn *uc = ptd->waiting_any_downstream_head;
+            if (uc->cmd_start_time >= (current_time - UPSTREAM_TIMEOUT_SECS))
+                break;
+
+            ptd->waiting_any_downstream_head =
+                ptd->waiting_any_downstream_head->next;
+            if (ptd->waiting_any_downstream_head == NULL)
+                ptd->waiting_any_downstream_tail = NULL;
+
+            uc->next = NULL;
+
+            // TODO. Handle upstream binary protocol.
+            //
+            out_string(uc, "SERVER_ERROR timeout");
+
+            if (!update_event(uc, EV_WRITE | EV_PERSIST)) {
+                ptd->stats.tot_oom++;
+                cproxy_close_conn(uc);
+            }
+        }
+
+        if (ptd->waiting_any_downstream_head != NULL) {
+            cproxy_start_upstream_timeout(ptd,
+                                          ptd->waiting_any_downstream_head);
+        }
     }
+}
+
+bool cproxy_start_upstream_timeout(proxy_td *ptd, conn *uc) {
+    assert(ptd);
+    assert(uc);
+    assert(uc->thread);
+    assert(uc->thread->base);
+
+    evtimer_set(&ptd->timeout_event, proxy_td_timeout, ptd);
+
+    event_base_set(uc->thread->base, &ptd->timeout_event);
+
+    ptd->timeout_tv.tv_sec  = UPSTREAM_TIMEOUT_SECS; // TODO.
+    ptd->timeout_tv.tv_usec = 0;
+
+    return evtimer_add(&ptd->timeout_event, &ptd->timeout_tv) == 0;
 }
 
 rel_time_t cproxy_realtime(const time_t exptime) {

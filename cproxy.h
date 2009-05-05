@@ -256,6 +256,7 @@ bool cproxy_broadcast_a2b_downstream(downstream *d, char *command,
 void cproxy_upstream_ascii_item_response(item *it, conn *uc);
 
 bool cproxy_start_downstream_timeout(downstream *d);
+bool cproxy_start_upstream_timeout(proxy_td *ptd, conn *uc);
 
 rel_time_t cproxy_realtime(const time_t exptime);
 
