@@ -1195,6 +1195,10 @@ void proxy_td_timeout(const int fd,
 
         ptd->timeout_tv.tv_sec = 0;
         ptd->timeout_tv.tv_usec = 0;
+
+        // TODO: Run through all the old upstream conn's in
+        //       the wait queue, remote them, and emit errors
+        //       on them.  And then start a new timer if needed.
     }
 }
 
