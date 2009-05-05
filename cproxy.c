@@ -1171,6 +1171,22 @@ void cproxy_pause_upstream_for_downstream(proxy_td *ptd, conn *upstream) {
     cproxy_assign_downstream(ptd);
 }
 
+bool cproxy_start_upstream_timeout(proxy_td *ptd, conn *uc) {
+    assert(ptd);
+    assert(uc);
+    assert(uc->thread);
+    assert(uc->thread->base);
+
+    evtimer_set(&ptd->timeout_event, proxy_td_timeout, ptd);
+
+    event_base_set(uc->thread->base, &ptd->timeout_event);
+
+    ptd->timeout_tv.tv_sec  = UPSTREAM_TIMEOUT_SECS; // TODO.
+    ptd->timeout_tv.tv_usec = 0;
+
+    return evtimer_add(&ptd->timeout_event, &ptd->timeout_tv) == 0;
+}
+
 void proxy_td_timeout(const int fd,
                       const short which,
                       void *arg) {
@@ -1221,22 +1237,6 @@ void proxy_td_timeout(const int fd,
                                           ptd->waiting_any_downstream_head);
         }
     }
-}
-
-bool cproxy_start_upstream_timeout(proxy_td *ptd, conn *uc) {
-    assert(ptd);
-    assert(uc);
-    assert(uc->thread);
-    assert(uc->thread->base);
-
-    evtimer_set(&ptd->timeout_event, proxy_td_timeout, ptd);
-
-    event_base_set(uc->thread->base, &ptd->timeout_event);
-
-    ptd->timeout_tv.tv_sec  = UPSTREAM_TIMEOUT_SECS; // TODO.
-    ptd->timeout_tv.tv_usec = 0;
-
-    return evtimer_add(&ptd->timeout_event, &ptd->timeout_tv) == 0;
 }
 
 rel_time_t cproxy_realtime(const time_t exptime) {
