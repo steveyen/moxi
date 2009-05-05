@@ -1199,6 +1199,9 @@ void proxy_td_timeout(const int fd,
         ptd->timeout_tv.tv_sec = 0;
         ptd->timeout_tv.tv_usec = 0;
 
+        if (settings.verbose > 1)
+            fprintf(stderr, "proxy_td_timeout cleared\n");
+
         // Run through all the old upstream conn's in
         // the wait queue, remove them, and emit errors
         // on them.  And then start a new timer if needed.
@@ -1212,6 +1215,10 @@ void proxy_td_timeout(const int fd,
             // Check if upstream conn is old and should be removed.
             //
             if (uc->cmd_start_time <= (current_time - UPSTREAM_TIMEOUT_SECS)) {
+                if (settings.verbose > 1)
+                    fprintf(stderr, "proxy_td_timeout sending error %d\n",
+                            uc->sfd);
+
                 ptd->waiting_any_downstream_head =
                     conn_list_remove(ptd->waiting_any_downstream_head,
                                      &ptd->waiting_any_downstream_tail,
