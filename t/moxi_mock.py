@@ -578,7 +578,7 @@ class TestProxy(unittest.TestCase):
         self.client_send('get a\r\n', 3)
         self.client_send('get a\r\n', 4)
 
-        self.wait(100)
+        self.wait(10)
 
         self.mock_send('END\r\n', 0)
         self.client_recv('END\r\n', 0)

@@ -1424,11 +1424,14 @@ conn *conn_list_remove(conn *head, conn **tail, conn *c, bool *found) {
             if (prev != NULL) {
                 assert(curr != head);
                 prev->next = curr->next;
+                curr->next = NULL;
                 return head;
             }
 
             assert(curr == head);
-            return curr->next;
+            conn *r = curr->next;
+            curr->next = NULL;
+            return r;
         }
 
         prev = curr;
