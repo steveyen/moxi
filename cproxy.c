@@ -6,6 +6,7 @@
 #include <sysexits.h>
 #include <pthread.h>
 #include <assert.h>
+#include <math.h>
 #include <libmemcached/memcached.h>
 #include "memcached.h"
 #include "cproxy.h"
@@ -22,8 +23,6 @@ void             memcached_quit_server(memcached_server_st *ptr,
 
 // Internal forward declarations.
 //
-#define UPSTREAM_TIMEOUT_SECS 20
-
 downstream *downstream_list_remove(downstream *head, downstream *d);
 void        downstream_timeout(const int fd,
                                const short which,
@@ -1195,6 +1194,9 @@ void wait_queue_timeout(const int fd,
     proxy_td *ptd = arg;
     assert(ptd != NULL);
 
+    proxy *p = ptd->proxy;
+    assert(p != NULL);
+
     if (settings.verbose > 1)
         fprintf(stderr, "proxy_td_timeout\n");
 
@@ -1211,6 +1213,16 @@ void wait_queue_timeout(const int fd,
         if (settings.verbose > 1)
             fprintf(stderr, "proxy_td_timeout cleared\n");
 
+        pthread_mutex_lock(&p->proxy_lock);
+        struct timeval wqt = p->behavior.wait_queue_timeout;
+        pthread_mutex_unlock(&p->proxy_lock);
+
+        // TODO: Should have better than second resolution,
+        //       except current_time is limited to just
+        //       second resolution.
+        //
+        rel_time_t wqt_sec = wqt.tv_sec + (wqt.tv_usec / 1000000.0);
+
         // Run through all the old upstream conn's in
         // the wait queue, remove them, and emit errors
         // on them.  And then start a new timer if needed.
@@ -1223,7 +1235,7 @@ void wait_queue_timeout(const int fd,
 
             // Check if upstream conn is old and should be removed.
             //
-            if (uc->cmd_start_time <= (current_time - UPSTREAM_TIMEOUT_SECS)) {
+            if (uc->cmd_start_time <= (current_time - wqt_sec)) {
                 if (settings.verbose > 1)
                     fprintf(stderr, "proxy_td_timeout sending error %d\n",
                             uc->sfd);
