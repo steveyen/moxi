@@ -259,7 +259,7 @@ static void add_proxy_stats(proxy_stats *agg, proxy_stats *x) {
     agg->tot_downstream_quit_server   += x->tot_downstream_quit_server;
     agg->tot_downstream_max_reached   += x->tot_downstream_max_reached;
     agg->tot_downstream_create_failed += x->tot_downstream_create_failed;
-    agg->tot_downstream_propgate_failed += x->tot_downstream_propgate_failed;
+    agg->tot_downstream_propagate_failed += x->tot_downstream_propagate_failed;
     agg->tot_downstream_timeout   += x->tot_downstream_timeout;
     agg->tot_wait_queue_timeout   += x->tot_wait_queue_timeout;
     agg->tot_assign_downstream    += x->tot_assign_downstream;
