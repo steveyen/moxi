@@ -169,8 +169,12 @@ void cproxy_reset_stats(proxy_stats *ps) {
     ps->tot_downstream_quit_server = 0;
     ps->tot_downstream_max_reached = 0;
     ps->tot_downstream_create_failed = 0;
+    ps->tot_downstream_propagate_failed = 0;
+    ps->tot_downstream_timeout = 0;
+    ps->tot_wait_queue_timeout = 0;
     ps->tot_assign_downstream = 0;
     ps->tot_assign_upstream = 0;
+    ps->tot_assign_recursion = 0;
     ps->tot_reset_upstream_avail = 0;
     ps->tot_oom = 0;
     ps->tot_retry = 0;
@@ -975,6 +979,9 @@ void cproxy_assign_downstream(proxy_td *ptd) {
             uc_last = uc_last->next;
             uc_last->next = NULL;
 
+            // Note: tot_assign_upstream - tot_assign_downstream
+            // should get us how many requests we've piggybacked together.
+            //
             ptd->stats.tot_assign_upstream++;
         }
 
@@ -982,14 +989,18 @@ void cproxy_assign_downstream(proxy_td *ptd) {
             fprintf(stderr, "assign_downstream, matched to upstream %d\n",
                     d->upstream_conn->sfd);
 
-        if (!ptd->propagate_downstream(d)) {
+        if (ptd->propagate_downstream(d) == false) {
+            ptd->stats.tot_downstream_propagate_failed++;
+
             // During propagate_downstream(), we might have
             // recursed, especially in error situation if
             // a downstream conn got closed and released.
-            // Check before we touch d anymore.
+            // Check for recursion before we touch d anymore.
             //
-            if (da != ptd->downstream_assigns)
+            if (da != ptd->downstream_assigns) {
+                ptd->stats.tot_assign_recursion++;
                 break;
+            }
 
             while (d->upstream_conn != NULL) {
                 conn *uc = d->upstream_conn;
@@ -1198,7 +1209,7 @@ void wait_queue_timeout(const int fd,
     assert(p != NULL);
 
     if (settings.verbose > 1)
-        fprintf(stderr, "proxy_td_timeout\n");
+        fprintf(stderr, "wait_queue_timeout\n");
 
     // This timer callback is invoked when an upstream conn
     // has been in the wait queue for too long.
@@ -1211,7 +1222,7 @@ void wait_queue_timeout(const int fd,
         ptd->timeout_tv.tv_usec = 0;
 
         if (settings.verbose > 1)
-            fprintf(stderr, "proxy_td_timeout cleared\n");
+            fprintf(stderr, "wait_queue_timeout cleared\n");
 
         pthread_mutex_lock(&p->proxy_lock);
         struct timeval wqt = p->behavior.wait_queue_timeout;
@@ -1239,6 +1250,8 @@ void wait_queue_timeout(const int fd,
                 if (settings.verbose > 1)
                     fprintf(stderr, "proxy_td_timeout sending error %d\n",
                             uc->sfd);
+
+                ptd->stats.tot_wait_queue_timeout++;
 
                 ptd->waiting_any_downstream_head =
                     conn_list_remove(ptd->waiting_any_downstream_head,
@@ -1520,6 +1533,7 @@ void downstream_timeout(const int fd,
                         void *arg) {
     downstream *d = arg;
     assert(d != NULL);
+    assert(d->ptd != NULL);
 
     if (settings.verbose > 1)
         fprintf(stderr, "downstream_timeout\n");
@@ -1536,13 +1550,12 @@ void downstream_timeout(const int fd,
         d->timeout_tv.tv_sec = 0;
         d->timeout_tv.tv_usec = 0;
 
+        d->ptd->stats.tot_downstream_timeout++;
+
         int n = memcached_server_count(&d->mst);
 
         for (int i = 0; i < n; i++) {
             if (d->downstream_conns[i] != NULL) {
-                // Doing drive_machine(), which should only loop once,
-                // to get to the connection closing logic.
-                //
                 cproxy_close_conn(d->downstream_conns[i]);
             }
         }
