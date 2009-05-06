@@ -394,7 +394,7 @@ AC_SEARCH_LIBS(memcached_create, memcached)
 
 if test $build_conflate = yes
 then
-   LIBS="$LIBS -lconflate -lsqlite3 -lstrophe -lexpat -lresolv"
+   LIBS="$LIBS -lconflate -lsqlite3 -lstrophe -lexpat -lresolv -lssl"
    LIBS="$LIBS -L\$(HOME)/lib"
    CPPFLAGS="$CPPFLAGS -I\$(HOME)/include"
 fi
