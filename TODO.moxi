@@ -15,6 +15,17 @@ TODO ideas...
 - auth/bucket select.
   - login/auth/bucket-selection after creating downstream conn.
 
+- pipelining/streaming
+  - instead of 100% store-and-forward
+    - store-and-forward is helpful for replay.
+  - use a tee design?
+  - per facebook conversation
+  - pipelining for GET value bodies.
+    - consider multiget key-deduplication case. Should work.
+    - consider non-uniform protocol case.  Should work.
+    - need to keep item refcount sane.
+  - pipelining for SET value bodies.
+
 - timeouts
   - request is taking longer than 50ms -- must be a failure.
   - need timeout for upstream conns waiting in the queue
