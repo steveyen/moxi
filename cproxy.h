@@ -108,6 +108,7 @@ struct proxy_stats {
     uint64_t tot_downstream_max_reached;
     uint64_t tot_downstream_create_failed;
     uint64_t tot_downstream_propagate_failed;
+    uint64_t tot_downstream_close_on_upstream_close;
     uint64_t tot_downstream_timeout;
     uint64_t tot_wait_queue_timeout;
     uint64_t tot_assign_downstream;

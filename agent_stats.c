@@ -259,7 +259,10 @@ static void add_proxy_stats(proxy_stats *agg, proxy_stats *x) {
     agg->tot_downstream_quit_server   += x->tot_downstream_quit_server;
     agg->tot_downstream_max_reached   += x->tot_downstream_max_reached;
     agg->tot_downstream_create_failed += x->tot_downstream_create_failed;
-    agg->tot_downstream_propagate_failed += x->tot_downstream_propagate_failed;
+    agg->tot_downstream_propagate_failed +=
+        x->tot_downstream_propagate_failed;
+    agg->tot_downstream_close_on_upstream_close +=
+        x->tot_downstream_close_on_upstream_close;
     agg->tot_downstream_timeout   += x->tot_downstream_timeout;
     agg->tot_wait_queue_timeout   += x->tot_wait_queue_timeout;
     agg->tot_assign_downstream    += x->tot_assign_downstream;
@@ -268,7 +271,7 @@ static void add_proxy_stats(proxy_stats *agg, proxy_stats *x) {
     agg->tot_reset_upstream_avail += x->tot_reset_upstream_avail;
     agg->tot_retry += x->tot_retry;
     agg->err_oom   += x->err_oom;
-    agg->err_upstream_write_prep += x->err_upstream_write_prep;
+    agg->err_upstream_write_prep   += x->err_upstream_write_prep;
     agg->err_downstream_write_prep += x->err_downstream_write_prep;
 }
 
@@ -324,6 +327,8 @@ void map_proxy_stats_foreach_emit(gpointer key,
                      ps->tot_downstream_create_failed);
     more_thread_stat("tot_downstream_propagate_failed",
                      ps->tot_downstream_propagate_failed);
+    more_thread_stat("tot_downstream_close_on_upstream_close",
+                     ps->tot_downstream_close_on_upstream_close);
     more_thread_stat("tot_downstream_timeout",
                      ps->tot_downstream_timeout);
     more_thread_stat("tot_wait_queue_timeout",

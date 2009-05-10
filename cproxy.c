@@ -170,6 +170,7 @@ void cproxy_reset_stats(proxy_stats *ps) {
     ps->tot_downstream_max_reached = 0;
     ps->tot_downstream_create_failed = 0;
     ps->tot_downstream_propagate_failed = 0;
+    ps->tot_downstream_close_on_upstream_close = 0;
     ps->tot_downstream_timeout = 0;
     ps->tot_wait_queue_timeout = 0;
     ps->tot_assign_downstream = 0;
@@ -326,6 +327,8 @@ void cproxy_on_close_upstream_conn(conn *c) {
             // The safest, but inefficient, thing to do then is
             // to close any conn_mwrite downstream conns.
             //
+            ptd->stats.tot_downstream_close_on_upstream_close++;
+
             int n = memcached_server_count(&d->mst);
 
             for (int i = 0; i < n; i++) {
