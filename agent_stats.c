@@ -266,8 +266,8 @@ static void add_proxy_stats(proxy_stats *agg, proxy_stats *x) {
     agg->tot_assign_upstream      += x->tot_assign_upstream;
     agg->tot_assign_recursion     += x->tot_assign_recursion;
     agg->tot_reset_upstream_avail += x->tot_reset_upstream_avail;
-    agg->tot_oom   += x->tot_oom;
     agg->tot_retry += x->tot_retry;
+    agg->err_oom   += x->err_oom;
 }
 
 void map_proxy_stats_foreach_free(gpointer key,
@@ -334,10 +334,10 @@ void map_proxy_stats_foreach_emit(gpointer key,
                      ps->tot_assign_recursion);
     more_thread_stat("tot_reset_upstream_avail",
                      ps->tot_reset_upstream_avail);
-    more_thread_stat("tot_oom",
-                     ps->tot_oom);
     more_thread_stat("tot_retry",
                      ps->tot_retry);
+    more_thread_stat("err_oom",
+                     ps->err_oom);
 }
 
 /* This callback is invoked by conflate on a conflate thread

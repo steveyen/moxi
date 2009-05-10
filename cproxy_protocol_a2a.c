@@ -153,7 +153,7 @@ void cproxy_process_a2a_downstream(conn *c, char *line) {
                     fprintf(stderr,
                             "Can't update upstream write event\n");
 
-                d->ptd->stats.tot_oom++;
+                d->ptd->stats.err_oom++;
                 cproxy_close_conn(uc);
             }
         }
@@ -328,7 +328,7 @@ bool cproxy_forward_a2a_simple_downstream(downstream *d,
         if (settings.verbose > 1)
             fprintf(stderr, "Couldn't update cproxy write event\n");
 
-        d->ptd->stats.tot_oom++;
+        d->ptd->stats.err_oom++;
         cproxy_close_conn(c);
     }
 
@@ -385,7 +385,7 @@ bool cproxy_broadcast_a2a_downstream(downstream *d,
                     fprintf(stderr,
                             "Update cproxy write event failed\n");
 
-                d->ptd->stats.tot_oom++;
+                d->ptd->stats.err_oom++;
                 cproxy_close_conn(c);
             }
         }
@@ -476,7 +476,7 @@ bool cproxy_forward_a2a_item_downstream(downstream *d, short cmd,
                     return true;
                 }
 
-                d->ptd->stats.tot_oom++;
+                d->ptd->stats.err_oom++;
                 cproxy_close_conn(c);
             }
         }

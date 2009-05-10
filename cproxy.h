@@ -93,8 +93,8 @@ struct proxy {
 
 struct proxy_stats {
     // Naming convention is that num_xxx's go up and down,
-    // while tot_xxx's only increase.  Only the tot_xxx's
-    // can be reset to 0.
+    // while tot_xxx's and err_xxx's only increase.  Only
+    // the tot_xxx's and err_xxx's can be reset to 0.
     //
     uint64_t num_upstream; // Current # of upstreams conns using this proxy.
     uint64_t tot_upstream; // Total # upstream conns that used this proxy.
@@ -114,8 +114,8 @@ struct proxy_stats {
     uint64_t tot_assign_upstream;
     uint64_t tot_assign_recursion;
     uint64_t tot_reset_upstream_avail;
-    uint64_t tot_oom;
     uint64_t tot_retry;
+    uint64_t err_oom;
 };
 
 /* We mirror memcached's threading model with a separate

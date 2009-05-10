@@ -643,7 +643,7 @@ void a2b_process_downstream_response(conn *c) {
                     fprintf(stderr,
                             "Can't write upstream a2b event\n");
 
-                d->ptd->stats.tot_oom++;
+                d->ptd->stats.err_oom++;
                 cproxy_close_conn(uc);
             }
         }
@@ -668,7 +668,7 @@ void a2b_process_downstream_response(conn *c) {
                     sprintf(s, "%llu", v);
                     out_string(uc, s);
                 } else {
-                    d->ptd->stats.tot_oom++;
+                    d->ptd->stats.err_oom++;
                     cproxy_close_conn(uc);
                 }
                 break;
@@ -695,7 +695,7 @@ void a2b_process_downstream_response(conn *c) {
                     fprintf(stderr,
                             "Can't write upstream a2b arith event\n");
 
-                d->ptd->stats.tot_oom++;
+                d->ptd->stats.err_oom++;
                 cproxy_close_conn(uc);
             }
         }
@@ -884,7 +884,7 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
                 d->upstream_suffix = "CLIENT_ERROR a2b parse request\r\n";
         }
 
-        d->ptd->stats.tot_oom++;
+        d->ptd->stats.err_oom++;
         cproxy_close_conn(c);
     }
 
@@ -983,7 +983,7 @@ bool cproxy_broadcast_a2b_downstream(downstream *d,
                     fprintf(stderr,
                             "Update cproxy write event failed\n");
 
-                d->ptd->stats.tot_oom++;
+                d->ptd->stats.err_oom++;
                 cproxy_close_conn(c);
             }
         }
@@ -1115,7 +1115,7 @@ bool cproxy_forward_a2b_item_downstream(downstream *d, short cmd,
 
         // TODO: Need better out-of-memory behavior.
         //
-        d->ptd->stats.tot_oom++;
+        d->ptd->stats.err_oom++;
         cproxy_close_conn(c);
     }
 

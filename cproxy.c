@@ -176,8 +176,8 @@ void cproxy_reset_stats(proxy_stats *ps) {
     ps->tot_assign_upstream = 0;
     ps->tot_assign_recursion = 0;
     ps->tot_reset_upstream_avail = 0;
-    ps->tot_oom = 0;
     ps->tot_retry = 0;
+    ps->err_oom = 0;
 }
 
 /* Must be called on the main listener thread.
@@ -597,7 +597,7 @@ bool cproxy_release_downstream(downstream *d, bool force) {
             if (update_event(d->upstream_conn, EV_WRITE | EV_PERSIST)) {
                 conn_set_state(d->upstream_conn, conn_mwrite);
             } else {
-                d->ptd->stats.tot_oom++;
+                d->ptd->stats.err_oom++;
                 cproxy_close_conn(d->upstream_conn);
             }
         }
@@ -614,7 +614,7 @@ bool cproxy_release_downstream(downstream *d, bool force) {
                 update_event(d->upstream_conn, EV_WRITE | EV_PERSIST)) {
                 conn_set_state(d->upstream_conn, conn_mwrite);
             } else {
-                d->ptd->stats.tot_oom++;
+                d->ptd->stats.err_oom++;
                 cproxy_close_conn(d->upstream_conn);
             }
         }
@@ -1044,7 +1044,7 @@ void upstream_error(conn *uc) {
         out_string(uc, "SERVER_ERROR proxy write to downstream");
 
     if (!update_event(uc, EV_WRITE | EV_PERSIST)) {
-        ptd->stats.tot_oom++;
+        ptd->stats.err_oom++;
         cproxy_close_conn(uc);
     }
 }
@@ -1059,7 +1059,7 @@ void cproxy_reset_upstream(conn *uc) {
 
     if (uc->rbytes <= 0) {
         if (!update_event(uc, EV_READ | EV_PERSIST)) {
-            ptd->stats.tot_oom++;
+            ptd->stats.err_oom++;
             cproxy_close_conn(uc);
         }
 
@@ -1144,15 +1144,18 @@ void cproxy_on_pause_downstream_conn(conn *c) {
 
     downstream *d = c->extra;
     assert(d != NULL);
+    assert(d->ptd != NULL);
 
     // Must update_event() before releasing the downstream conn,
     // because the release might call udpate_event(), too,
     // and we don't want to override its work.
     //
-    if (update_event(c, 0))
+    if (update_event(c, 0)) {
         cproxy_release_downstream_conn(d, c);
-    else
+    } else {
+        d->ptd->stats.err_oom++;
         cproxy_close_conn(c);
+    }
 }
 
 void cproxy_pause_upstream_for_downstream(proxy_td *ptd, conn *upstream) {

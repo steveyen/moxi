@@ -244,7 +244,7 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
                     fprintf(stderr,
                             "Couldn't update cproxy write event\n");
 
-                d->ptd->stats.tot_oom++;
+                d->ptd->stats.err_oom++;
                 cproxy_close_conn(c);
             }
         }
