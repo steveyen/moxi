@@ -38,17 +38,17 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
     c->cmd_start_time = current_time;
     c->cmd_retries    = 0;
 
+    proxy_td *ptd = c->extra;
+    assert(ptd != NULL);
+
     /* For commands set/add/replace, we build an item and read the data
      * directly into it, then continue in nread_complete().
      */
     if (!cproxy_prep_conn_for_write(c)) {
+        ptd->stats.err_upstream_write_prep++;
         conn_set_state(c, conn_closing);
         return;
     }
-
-    proxy_td *ptd = c->extra;
-
-    assert(ptd != NULL);
 
     token_t tokens[MAX_TOKENS];
     size_t  ntokens = scan_tokens(line, tokens, MAX_TOKENS);

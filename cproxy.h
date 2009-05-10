@@ -116,6 +116,7 @@ struct proxy_stats {
     uint64_t tot_reset_upstream_avail;
     uint64_t tot_retry;
     uint64_t err_oom;
+    uint64_t err_upstream_write_prep;
 };
 
 /* We mirror memcached's threading model with a separate

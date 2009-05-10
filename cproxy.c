@@ -178,6 +178,7 @@ void cproxy_reset_stats(proxy_stats *ps) {
     ps->tot_reset_upstream_avail = 0;
     ps->tot_retry = 0;
     ps->err_oom = 0;
+    ps->err_upstream_write_prep = 0;
 }
 
 /* Must be called on the main listener thread.
