@@ -302,34 +302,38 @@ bool cproxy_forward_a2a_simple_downstream(downstream *d,
     // Assuming we're already connected to downstream.
     //
     conn *c = cproxy_find_downstream_conn(d, key, key_len);
-    if (c != NULL &&
-        cproxy_prep_conn_for_write(c)) {
-        assert(c->state == conn_pause);
+    if (c != NULL) {
+        if (cproxy_prep_conn_for_write(c)) {
+            assert(c->state == conn_pause);
 
-        out_string(c, command);
+            out_string(c, command);
 
-        if (settings.verbose > 1)
-            fprintf(stderr, "forwarding to %d, noreply %d\n",
-                    c->sfd, uc->noreply);
+            if (settings.verbose > 1)
+                fprintf(stderr, "forwarding to %d, noreply %d\n",
+                        c->sfd, uc->noreply);
 
-        if (update_event(c, EV_WRITE | EV_PERSIST)) {
-            d->downstream_used_start = 1;
-            d->downstream_used       = 1;
+            if (update_event(c, EV_WRITE | EV_PERSIST)) {
+                d->downstream_used_start = 1;
+                d->downstream_used       = 1;
 
-            if (cproxy_dettach_if_noreply(d, uc) == false) {
-                cproxy_start_downstream_timeout(d);
-            } else {
-                c->write_and_go = conn_pause;
+                if (cproxy_dettach_if_noreply(d, uc) == false) {
+                    cproxy_start_downstream_timeout(d);
+                } else {
+                    c->write_and_go = conn_pause;
+                }
+
+                return true;
             }
 
-            return true;
+            if (settings.verbose > 1)
+                fprintf(stderr, "Couldn't update cproxy write event\n");
+
+            d->ptd->stats.err_oom++;
+            cproxy_close_conn(c);
+        } else {
+            d->ptd->stats.err_downstream_write_prep++;
+            cproxy_close_conn(c);
         }
-
-        if (settings.verbose > 1)
-            fprintf(stderr, "Couldn't update cproxy write event\n");
-
-        d->ptd->stats.err_oom++;
-        cproxy_close_conn(c);
     }
 
     return false;
@@ -368,24 +372,28 @@ bool cproxy_broadcast_a2a_downstream(downstream *d,
 
     for (int i = 0; i < nconns; i++) {
         conn *c = d->downstream_conns[i];
-        if (c != NULL &&
-            cproxy_prep_conn_for_write(c)) {
-            assert(c->state == conn_pause);
+        if (c != NULL) {
+            if (cproxy_prep_conn_for_write(c)) {
+                assert(c->state == conn_pause);
 
-            out_string(c, command);
+                out_string(c, command);
 
-            if (update_event(c, EV_WRITE | EV_PERSIST)) {
-                nwrite++;
+                if (update_event(c, EV_WRITE | EV_PERSIST)) {
+                    nwrite++;
 
-                if (uc->noreply) {
-                    c->write_and_go = conn_pause;
+                    if (uc->noreply) {
+                        c->write_and_go = conn_pause;
+                    }
+                } else {
+                    if (settings.verbose > 1)
+                        fprintf(stderr,
+                                "Update cproxy write event failed\n");
+
+                    d->ptd->stats.err_oom++;
+                    cproxy_close_conn(c);
                 }
             } else {
-                if (settings.verbose > 1)
-                    fprintf(stderr,
-                            "Update cproxy write event failed\n");
-
-                d->ptd->stats.err_oom++;
+                d->ptd->stats.err_downstream_write_prep++;
                 cproxy_close_conn(c);
             }
         }
@@ -422,69 +430,70 @@ bool cproxy_forward_a2a_item_downstream(downstream *d, short cmd,
     // Assuming we're already connected to downstream.
     //
     conn *c = cproxy_find_downstream_conn(d, ITEM_key(it), it->nkey);
-    if (c != NULL &&
-        cproxy_prep_conn_for_write(c)) {
-        assert(c->state == conn_pause);
+    if (c != NULL) {
+        if (cproxy_prep_conn_for_write(c)) {
+            assert(c->state == conn_pause);
 
-        char *verb = nread_text(cmd);
+            char *verb = nread_text(cmd);
+            assert(verb != NULL);
 
-        assert(verb != NULL);
+            char *str_flags   = ITEM_suffix(it);
+            char *str_length  = strchr(str_flags + 1, ' ');
+            int   len_flags   = str_length - str_flags;
+            int   len_length  = it->nsuffix - len_flags - 2;
+            char *str_exptime = add_conn_suffix(c);
+            char *str_cas     = (cmd == NREAD_CAS ? add_conn_suffix(c) : NULL);
 
-        char *str_flags   = ITEM_suffix(it);
-        char *str_length  = strchr(str_flags + 1, ' ');
-        int   len_flags   = str_length - str_flags;
-        int   len_length  = it->nsuffix - len_flags - 2;
-        char *str_exptime = add_conn_suffix(c);
-        char *str_cas     = (cmd == NREAD_CAS ? add_conn_suffix(c) : NULL);
+            if (str_flags != NULL &&
+                str_length != NULL &&
+                len_flags > 1 &&
+                len_length > 1 &&
+                str_exptime != NULL &&
+                (cmd != NREAD_CAS ||
+                 str_cas != NULL)) {
+                sprintf(str_exptime, " %u", it->exptime);
 
-        if (str_flags != NULL &&
-            str_length != NULL &&
-            len_flags > 1 &&
-            len_length > 1 &&
-            str_exptime != NULL &&
-            (cmd != NREAD_CAS ||
-             str_cas != NULL)) {
-            sprintf(str_exptime, " %u", it->exptime);
+                if (str_cas != NULL)
+                    sprintf(str_cas, " %llu",
+                            (unsigned long long) ITEM_get_cas(it));
 
-            if (str_cas != NULL)
-                sprintf(str_cas, " %llu",
-                        (unsigned long long) ITEM_get_cas(it));
+                if (add_iov(c, verb, strlen(verb)) == 0 &&
+                    add_iov(c, ITEM_key(it), it->nkey) == 0 &&
+                    add_iov(c, str_flags, len_flags) == 0 &&
+                    add_iov(c, str_exptime, strlen(str_exptime)) == 0 &&
+                    add_iov(c, str_length, len_length) == 0 &&
+                    (str_cas == NULL ||
+                     add_iov(c, str_cas, strlen(str_cas)) == 0) &&
+                    (uc->noreply == false ||
+                     add_iov(c, " noreply", 8) == 0) &&
+                    add_iov(c, ITEM_data(it) - 2, it->nbytes + 2) == 0) {
+                    conn_set_state(c, conn_mwrite);
+                    c->write_and_go = conn_new_cmd;
 
-            if (add_iov(c, verb, strlen(verb)) == 0 &&
-                add_iov(c, ITEM_key(it), it->nkey) == 0 &&
-                add_iov(c, str_flags, len_flags) == 0 &&
-                add_iov(c, str_exptime, strlen(str_exptime)) == 0 &&
-                add_iov(c, str_length, len_length) == 0 &&
-                (str_cas == NULL ||
-                 add_iov(c, str_cas, strlen(str_cas)) == 0) &&
-                (uc->noreply == false ||
-                 add_iov(c, " noreply", 8) == 0) &&
-                add_iov(c, ITEM_data(it) - 2, it->nbytes + 2) == 0) {
-                conn_set_state(c, conn_mwrite);
-                c->write_and_go = conn_new_cmd;
+                    if (update_event(c, EV_WRITE | EV_PERSIST)) {
+                        d->downstream_used_start = 1;
+                        d->downstream_used       = 1;
 
-                if (update_event(c, EV_WRITE | EV_PERSIST)) {
-                    d->downstream_used_start = 1;
-                    d->downstream_used       = 1;
+                        if (cproxy_dettach_if_noreply(d, uc) == false) {
+                            cproxy_start_downstream_timeout(d);
+                        } else {
+                            c->write_and_go = conn_pause;
+                        }
 
-                    if (cproxy_dettach_if_noreply(d, uc) == false) {
-                        cproxy_start_downstream_timeout(d);
-                    } else {
-                        c->write_and_go = conn_pause;
+                        return true;
                     }
 
-                    return true;
+                    d->ptd->stats.err_oom++;
+                    cproxy_close_conn(c);
                 }
-
-                d->ptd->stats.err_oom++;
-                cproxy_close_conn(c);
             }
+        } else {
+            d->ptd->stats.err_downstream_write_prep++;
+            cproxy_close_conn(c);
         }
 
         if (settings.verbose > 1)
             fprintf(stderr, "Proxy item write out of memory");
-
-        // TODO: Need better out-of-memory behavior.
     }
 
     return false;
