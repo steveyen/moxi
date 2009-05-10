@@ -94,11 +94,13 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
     void (*emit_skey)(conn *c, char *skey, int skey_len),
     void (*emit_end)(conn *c)) {
     assert(d != NULL);
-    assert(d->ptd != NULL);
     assert(d->downstream_conns != NULL);
     assert(d->multiget == NULL);
     assert(uc != NULL);
     assert(uc->noreply == false);
+
+    proxy_td *ptd = d->ptd;
+    assert(ptd != NULL);
 
     int nwrite = 0;
     int nconns = memcached_server_count(&d->mst);
@@ -164,6 +166,8 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
                 //
                 bool first_request = true;
 
+                ptd->stats.tot_multiget_keys++;
+
                 if (d->multiget != NULL) {
                     multiget_entry *entry = calloc(1, sizeof(multiget_entry));
                     if (entry != NULL) {
@@ -206,12 +210,14 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
                         // TODO: Handle when downstream conn is down.
                     }
                 } else {
+                    ptd->stats.tot_multiget_keys_dedupe++;
+
                     if (settings.verbose > 1) {
                         char buf[KEY_MAX_LENGTH + 10];
                         memcpy(buf, key, key_len);
                         buf[key_len] = '\0';
 
-                        fprintf(stderr, "%d cproxy multiget squash: %s\n",
+                        fprintf(stderr, "%d cproxy multiget dedpue: %s\n",
                                 uc_cur->sfd, buf);
                     }
                 }

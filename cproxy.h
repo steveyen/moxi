@@ -116,6 +116,8 @@ struct proxy_stats {
     uint64_t tot_assign_recursion;
     uint64_t tot_reset_upstream_avail;
     uint64_t tot_retry;
+    uint64_t tot_multiget_keys;
+    uint64_t tot_multiget_keys_dedupe;
     uint64_t err_oom;
     uint64_t err_upstream_write_prep;
     uint64_t err_downstream_write_prep;
