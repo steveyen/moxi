@@ -350,7 +350,10 @@ AC_CHECK_HEADER(conflate.h, [
    AC_DEFINE([HAVE_CONFLATE_H], 1,
          [Define this if you have conflate.h])
    build_conflate=yes
-], [build_conflate=no])
+], [build_conflate=yes])
+
+AC_DEFINE([HAVE_CONFLATE_H], 1,
+          [Define this if you have conflate.h])
 
 AM_CONDITIONAL([BUILD_CONFLATE], [test "x$build_conflate" = "xyes"])
 

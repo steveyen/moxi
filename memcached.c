@@ -179,8 +179,8 @@ static void stats_reset(void) {
 static void settings_init(void) {
     settings.use_cas = true;
     settings.access = 0700;
-    settings.port = 11211;
-    settings.udpport = 11211;
+    settings.port = 0;    // Formerly 11211.
+    settings.udpport = 0; // Formerly 11211.
     /* By default this string should be NULL for getaddrinfo() */
     settings.inter = NULL;
     settings.maxbytes = 64 * 1024 * 1024; /* default is 64MB */
@@ -4254,7 +4254,14 @@ int main (int argc, char **argv) {
     if (cproxy_cfg) {
         cproxy_init(cproxy_cfg, cproxy_behavior, settings.num_threads);
         free(cproxy_cfg);
+    } else {
+        if (settings.port == 0 &&
+            settings.udpport == 0) {
+            fprintf(stderr, "error: need proxy configuration (-z).  See usage (-h).\n");
+            return 1;
+        }
     }
+
     if (cproxy_behavior)
         free(cproxy_behavior);
 
