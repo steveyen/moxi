@@ -139,9 +139,9 @@ bool a2b_fill_request_token(struct A2BSpec *spec,
 
 void a2b_process_downstream_response(conn *c);
 
-void a2b_multiget_start(conn *c, char *cmd, int cmd_len);
-void a2b_multiget_skey(conn *c, char *skey, int skey_len);
-void a2b_multiget_end(conn *c);
+int a2b_multiget_start(conn *c, char *cmd, int cmd_len);
+int a2b_multiget_skey(conn *c, char *skey, int skey_len);
+int a2b_multiget_end(conn *c);
 
 void cproxy_init_a2b() {
     if (a2b_spec_map == NULL) {
@@ -895,13 +895,13 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
     return false;
 }
 
-void a2b_multiget_start(conn *c, char *cmd, int cmd_len) {
-    // No-op.
+int a2b_multiget_start(conn *c, char *cmd, int cmd_len) {
+    return 0; // No-op.
 }
 
 /* An skey is a space prefixed key string.
  */
-void a2b_multiget_skey(conn *c, char *skey, int skey_len) {
+int a2b_multiget_skey(conn *c, char *skey, int skey_len) {
     char *key     = skey + 1;
     int   key_len = skey_len - 1;
 
@@ -919,17 +919,18 @@ void a2b_multiget_skey(conn *c, char *skey, int skey_len) {
             req->message.header.request.datatype = PROTOCOL_BINARY_RAW_BYTES;
             req->message.header.request.bodylen  = htonl(key_len);
 
-            add_iov(c, ITEM_data(it), sizeof(req->bytes));
-            add_iov(c, key, key_len);
-
-            return; // Success.
+            if (add_iov(c, ITEM_data(it), sizeof(req->bytes)) == 0 &&
+                add_iov(c, key, key_len) == 0)
+                return 0; // Success.
         }
 
         item_remove(it);
     }
+
+    return -1;
 }
 
-void a2b_multiget_end(conn *c) {
+int a2b_multiget_end(conn *c) {
     item *it = item_alloc("z", 1, 0, 0, sizeof(protocol_binary_request_noop));
     if (it != NULL) {
         if (add_conn_item(c, it)) {
@@ -942,13 +943,14 @@ void a2b_multiget_end(conn *c) {
             req->message.header.request.opcode   = PROTOCOL_BINARY_CMD_NOOP;
             req->message.header.request.datatype = PROTOCOL_BINARY_RAW_BYTES;
 
-            add_iov(c, ITEM_data(it), sizeof(req->bytes));
-
-            return; // Success.
+            if (add_iov(c, ITEM_data(it), sizeof(req->bytes)) == 0)
+                return 0; // Success.
         }
 
         item_remove(it);
     }
+
+    return -1;
 }
 
 /* Used for broadcast commands, like flush_all or stats.

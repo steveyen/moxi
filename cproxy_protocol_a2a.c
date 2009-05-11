@@ -17,9 +17,9 @@
 #define KEY_TOKEN  1
 #define MAX_TOKENS 8
 
-void a2a_multiget_start(conn *c, char *cmd, int cmd_len);
-void a2a_multiget_skey(conn *c, char *skey, int skey_len);
-void a2a_multiget_end(conn *c);
+int a2a_multiget_start(conn *c, char *cmd, int cmd_len);
+int a2a_multiget_skey(conn *c, char *skey, int skey_len);
+int a2a_multiget_end(conn *c);
 
 void cproxy_init_a2a() {
     // Nothing right now.
@@ -339,18 +339,18 @@ bool cproxy_forward_a2a_simple_downstream(downstream *d,
     return false;
 }
 
-void a2a_multiget_start(conn *c, char *cmd, int cmd_len) {
-    add_iov(c, cmd, cmd_len);
+int a2a_multiget_start(conn *c, char *cmd, int cmd_len) {
+    return add_iov(c, cmd, cmd_len);
 }
 
 /* An skey is a space prefixed key string.
  */
-void a2a_multiget_skey(conn *c, char *skey, int skey_len) {
-    add_iov(c, skey, skey_len);
+int a2a_multiget_skey(conn *c, char *skey, int skey_len) {
+    return add_iov(c, skey, skey_len);
 }
 
-void a2a_multiget_end(conn *c) {
-    add_iov(c, "\r\n", 2);
+int a2a_multiget_end(conn *c) {
+    return add_iov(c, "\r\n", 2);
 }
 
 /* Used for broadcast commands, like flush_all or stats.

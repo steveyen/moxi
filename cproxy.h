@@ -290,9 +290,9 @@ struct multiget_entry {
 
 bool multiget_ascii_downstream(
     downstream *d, conn *uc,
-    void (*emit_start)(conn *c, char *cmd, int cmd_len),
-    void (*emit_skey)(conn *c, char *skey, int skey_len),
-    void (*emit_end)(conn *c));
+    int (*emit_start)(conn *c, char *cmd, int cmd_len),
+    int (*emit_skey)(conn *c, char *skey, int skey_len),
+    int (*emit_end)(conn *c));
 
 void multiget_foreach_free(gpointer key,
                            gpointer value,
