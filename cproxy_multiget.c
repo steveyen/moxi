@@ -172,6 +172,7 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
                     multiget_entry *entry = calloc(1, sizeof(multiget_entry));
                     if (entry != NULL) {
                         entry->upstream_conn = uc_cur;
+                        entry->opaque = 0;
                         entry->next = g_hash_table_lookup(d->multiget, key);
 
                         g_hash_table_insert(d->multiget, key, entry);
