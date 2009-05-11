@@ -489,7 +489,11 @@ void cproxy_process_a2b_downstream_nread(conn *c) {
 
             conn_set_state(c, conn_nread);
         } else {
-            // TODO: Error, probably swallow bytes.
+            // TODO: Test this swallow pathway.
+            //
+            c->sbytes = vlen;
+
+            conn_set_state(c, conn_swallow);
         }
     } else {
         a2b_process_downstream_response(c);

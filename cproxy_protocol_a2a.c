@@ -189,6 +189,9 @@ void cproxy_process_a2a_downstream_nread(conn *c) {
     // pthread_mutex_unlock(&c->thread->stats.mutex);
 
     if (d->multiget != NULL) {
+        // TODO: Revisit whether we need this extra memcpy,
+        // or whether ITEM_key is space terminated already.
+        //
         char key_buf[KEY_MAX_LENGTH + 10];
 
         memcpy(key_buf, ITEM_key(it), it->nkey);
