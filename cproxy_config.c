@@ -41,7 +41,7 @@ int cproxy_init(const char *cfg_str,
     if (strchr(cfg_str, '@') == NULL) // Not jid format.
         return cproxy_init_string(cfg_str, behavior);
 
-#ifdef BUILD_CONFLATE
+#ifdef HAVE_CONFLATE_H
     return cproxy_init_agent(cfg_str, behavior);
 #else
     return 1;

@@ -114,6 +114,9 @@ int cproxy_init_agent_start(char *jid, char *jpw,
     assert(config_path);
     assert(host);
 
+    if (settings.verbose > 1)
+        fprintf(stderr, "cproxy_init_agent_start\n");;
+
     proxy_main *m = calloc(1, sizeof(proxy_main));
     if (m != NULL) {
         m->proxy_head = NULL;
@@ -163,6 +166,9 @@ void on_conflate_new_config(void *userdata, kvpair_t *config) {
 
     LIBEVENT_THREAD *mthread = thread_by_index(0);
     assert(mthread != NULL);
+
+    if (settings.verbose > 1)
+        fprintf(stderr, "agent_config on_conflate_new_config\n");
 
     kvpair_t *copy = copy_kvpairs(config);
     if (copy != NULL) {
