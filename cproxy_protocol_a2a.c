@@ -486,6 +486,8 @@ bool cproxy_forward_a2a_item_downstream(downstream *d, short cmd,
 
                 d->ptd->stats.err_oom++;
                 cproxy_close_conn(c);
+            } else {
+                // TODO: Handle this weird error case.
             }
         } else {
             d->ptd->stats.err_downstream_write_prep++;

@@ -1098,24 +1098,24 @@ bool cproxy_forward_a2b_item_downstream(downstream *d, short cmd,
                     req->request.bodylen =
                         htonl(it->nkey + (it->nbytes - 2) + extlen);
 
-                    add_iov(c, ITEM_data(it_hdr), hdrlen);
-                    add_iov(c, ITEM_key(it),  it->nkey);
-                    add_iov(c, ITEM_data(it), it->nbytes - 2);
+                    if (add_iov(c, ITEM_data(it_hdr), hdrlen) == 0 &&
+                        add_iov(c, ITEM_key(it),  it->nkey) == 0 &&
+                        add_iov(c, ITEM_data(it), it->nbytes - 2) == 0) {
+                        conn_set_state(c, conn_mwrite);
+                        c->write_and_go = conn_new_cmd;
 
-                    conn_set_state(c, conn_mwrite);
-                    c->write_and_go = conn_new_cmd;
+                        if (update_event(c, EV_WRITE | EV_PERSIST)) {
+                            d->downstream_used_start = 1;
+                            d->downstream_used       = 1;
 
-                    if (update_event(c, EV_WRITE | EV_PERSIST)) {
-                        d->downstream_used_start = 1;
-                        d->downstream_used       = 1;
+                            if (cproxy_dettach_if_noreply(d, uc) == false) {
+                                cproxy_start_downstream_timeout(d);
+                            } else {
+                                c->write_and_go = conn_pause;
+                            }
 
-                        if (cproxy_dettach_if_noreply(d, uc) == false) {
-                            cproxy_start_downstream_timeout(d);
-                        } else {
-                            c->write_and_go = conn_pause;
+                            return true;
                         }
-
-                        return true;
                     }
                 }
 
