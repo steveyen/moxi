@@ -482,10 +482,10 @@ bool cproxy_forward_a2a_item_downstream(downstream *d, short cmd,
 
                         return true;
                     }
-
-                    d->ptd->stats.err_oom++;
-                    cproxy_close_conn(c);
                 }
+
+                d->ptd->stats.err_oom++;
+                cproxy_close_conn(c);
             }
         } else {
             d->ptd->stats.err_downstream_write_prep++;
