@@ -211,7 +211,7 @@ int a2b_fill_request(token_t *cmd_tokens,
     if (spec != NULL) {
         if (cmd_ntokens >= (spec->ntokens - spec->num_optional) &&
             cmd_ntokens <= (spec->ntokens)) {
-            header->request.magic  = PROTOCOL_BINARY_REQ;
+            header->request.magic = PROTOCOL_BINARY_REQ;
 
             if (noreply)
                 header->request.opcode = spec->cmdq;
@@ -797,25 +797,6 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
 
     assert(uc->next == NULL);
 
-    if (strncmp(command, "flush_all", 9) == 0)
-        return cproxy_broadcast_a2b_downstream(d, command, uc,
-                                               "OK\r\n");
-
-    if (strncmp(command, "stats", 5) == 0) {
-        if (strncmp(command + 5, " reset", 6) == 0)
-            return cproxy_broadcast_a2b_downstream(d, command, uc,
-                                                   "RESET\r\n");
-
-        if (cproxy_broadcast_a2b_downstream(d, command, uc,
-                                            "END\r\n")) {
-            d->merger = g_hash_table_new(protocol_stats_key_hash,
-                                         protocol_stats_key_equal);
-            return true;
-        } else {
-            return false;
-        }
-    }
-
     token_t  tokens[MAX_TOKENS];
     size_t   ntokens = scan_tokens(command, tokens, MAX_TOKENS);
     char    *key     = tokens[KEY_TOKEN].value;
@@ -824,6 +805,73 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
     if (ntokens <= 1) { // This was checked long ago, while parsing
         assert(false);  // the upstream conn.
         return false;
+    }
+
+    uint8_t *out_key    = NULL;
+    uint16_t out_keylen = 0;
+    uint8_t  out_extlen = 0;
+
+    if (strncmp(command, "flush_all", 9) == 0) {
+        protocol_binary_request_flush req;
+        memset(&req, 0, sizeof(req));
+        protocol_binary_request_header *preq =
+            (protocol_binary_request_header *) &req;
+
+        int size = a2b_fill_request(tokens, ntokens,
+                                    uc->noreply, preq,
+                                    &out_key,
+                                    &out_keylen,
+                                    &out_extlen);
+        if (size > 0) {
+            assert(out_key == NULL);
+            assert(out_keylen == 0);
+
+            if (settings.verbose > 1) {
+                fprintf(stderr, "a2b broadcast flush_all\n");
+            }
+
+            if (out_extlen == 0) {
+                preq->request.extlen   = out_extlen = 4;
+                preq->request.datatype = PROTOCOL_BINARY_RAW_BYTES;
+            }
+
+            return cproxy_broadcast_a2b_downstream(d, preq, size,
+                                                   out_key,
+                                                   out_keylen,
+                                                   out_extlen, uc,
+                                                   "OK\r\n");
+        }
+
+        if (settings.verbose > 1) {
+            fprintf(stderr, "a2b broadcast flush_all no size\n");
+        }
+
+        return false;
+    }
+
+    if (strncmp(command, "stats", 5) == 0) {
+        protocol_binary_request_stats req;
+        memset(&req, 0, sizeof(req));
+        protocol_binary_request_header *preq =
+            (protocol_binary_request_header *) &req;
+
+        if (strncmp(command + 5, " reset", 6) == 0)
+            return cproxy_broadcast_a2b_downstream(d, preq, 0,
+                                                   out_key,
+                                                   out_keylen,
+                                                   out_extlen, uc,
+                                                   "RESET\r\n");
+        if (cproxy_broadcast_a2b_downstream(d, preq, 0,
+                                            out_key,
+                                            out_keylen,
+                                            out_extlen, uc,
+                                            "END\r\n")) {
+            d->merger = g_hash_table_new(protocol_stats_key_hash,
+                                         protocol_stats_key_equal);
+            return true;
+        } else {
+            return false;
+        }
     }
 
     // Assuming we're already connected to downstream.
@@ -837,10 +885,6 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
 
             protocol_binary_request_header *header =
                 (protocol_binary_request_header *) c->wbuf;
-
-            uint8_t *out_key    = NULL;
-            uint16_t out_keylen = 0;
-            uint8_t  out_extlen = 0;
 
             memset(header, 0, a2b_size_max);
 
@@ -975,16 +1019,24 @@ int a2b_multiget_end(conn *c) {
 /* Used for broadcast commands, like flush_all or stats.
  */
 bool cproxy_broadcast_a2b_downstream(downstream *d,
-                                     char *command,
+                                     protocol_binary_request_header *req,
+                                     int req_size,
+                                     uint8_t *key,
+                                     uint16_t keylen,
+                                     uint8_t  extlen,
                                      conn *uc,
                                      char *suffix) {
     assert(d != NULL);
     assert(d->ptd != NULL);
     assert(d->downstream_conns != NULL);
-    assert(command != NULL);
+    assert(req != NULL);
+    assert(req_size >= sizeof(req));
+    assert(req->request.bodylen == 0);
     assert(uc != NULL);
     assert(uc->next == NULL);
     assert(uc->item == NULL);
+
+    req->request.bodylen = htonl(keylen + extlen);
 
     int nwrite = 0;
     int nconns = memcached_server_count(&d->mst);
@@ -994,8 +1046,20 @@ bool cproxy_broadcast_a2b_downstream(downstream *d,
         if (c != NULL) {
             if (cproxy_prep_conn_for_write(c)) {
                 assert(c->state == conn_pause);
+                assert(c->wbuf);
+                assert(c->wsize >= req_size);
 
-                out_string(c, command);
+                memcpy(c->wbuf, req, req_size);
+
+                add_iov(c, c->wbuf, req_size);
+
+                if (key != NULL &&
+                    keylen > 0) {
+                    add_iov(c, key, keylen);
+                }
+
+                conn_set_state(c, conn_mwrite);
+                c->write_and_go = conn_new_cmd;
 
                 if (update_event(c, EV_WRITE | EV_PERSIST)) {
                     nwrite++;
@@ -1012,6 +1076,10 @@ bool cproxy_broadcast_a2b_downstream(downstream *d,
                     cproxy_close_conn(c);
                 }
             } else {
+                if (settings.verbose > 1)
+                    fprintf(stderr,
+                            "a2b broadcast prep conn failed\n");
+
                 d->ptd->stats.err_downstream_write_prep++;
                 cproxy_close_conn(c);
             }

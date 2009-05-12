@@ -262,7 +262,12 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d, char *command,
                                           conn *uc);
 bool cproxy_forward_a2b_item_downstream(downstream *d, short cmd,
                                         item *it, conn *uc);
-bool cproxy_broadcast_a2b_downstream(downstream *d, char *command,
+bool cproxy_broadcast_a2b_downstream(downstream *d,
+                                     protocol_binary_request_header *req,
+                                     int req_size,
+                                     uint8_t *key,
+                                     uint16_t keylen,
+                                     uint8_t  extlen,
                                      conn *uc, char *suffix);
 
 // ---------------------------------------------------------------
