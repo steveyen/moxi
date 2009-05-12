@@ -271,6 +271,7 @@ bool a2b_fill_request_token(struct A2BSpec *spec,
         header->request.keylen =
             htons((uint16_t) cmd_tokens[cur_token].length);
         break;
+
     case 'v': // value (for incr/decr)
         delta = 0;
         if (safe_strtoull(cmd_tokens[cur_token].value, &delta)) {
@@ -452,6 +453,9 @@ void cproxy_process_a2b_downstream_nread(conn *c) {
     assert(IS_BINARY(c->protocol));
     assert(IS_PROXY(c->protocol));
 
+    downstream *d = c->extra;
+    assert(d);
+
     if (settings.verbose > 1)
         fprintf(stderr,
                 "<%d cproxy_process_a2b_downstream_nread %d %d\n",
@@ -502,8 +506,12 @@ void cproxy_process_a2b_downstream_nread(conn *c) {
 
             uint64_t cas = CPROXY_NOT_CAS;
 
-            // TODO: Handle cas.
-            //
+            conn *uc = d->upstream_conn;
+            if (uc != NULL &&
+                uc->cmd_start != NULL &&
+                strncmp(uc->cmd_start, "gets ", 5) == 0)
+                cas = header->response.cas;
+
             ITEM_set_cas(it, cas);
 
             conn_set_state(c, conn_nread);
@@ -808,6 +816,8 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
     assert(d->multiget == NULL);
     assert(d->merger == NULL);
 
+    // Handles get and gets.
+    //
     if (strncmp(command, "get", 3) == 0)
         return multiget_ascii_downstream(d, uc,
                                          a2b_multiget_start,
