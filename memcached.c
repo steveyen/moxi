@@ -870,7 +870,7 @@ static void complete_nread_ascii(conn *c) {
 /**
  * get a pointer to the start of the request struct for the current command
  */
-static void* binary_get_request(conn *c) {
+void* binary_get_request(conn *c) {
     char *ret = c->rcurr;
     ret -= (sizeof(c->binary_header) + c->binary_header.request.keylen +
             c->binary_header.request.extlen);

@@ -490,7 +490,7 @@ void cproxy_process_a2b_downstream_nread(conn *c) {
         if (c->cmd == PROTOCOL_BINARY_CMD_GET ||
             c->cmd == PROTOCOL_BINARY_CMD_GETK) {
             protocol_binary_response_get *response_get =
-                (protocol_binary_response_get *) header;
+                (protocol_binary_response_get *) binary_get_request(c);
 
             assert(extlen == sizeof(response_get->message.body));
 
