@@ -262,7 +262,7 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
         fprintf(stderr, "forward multiget nwrite %d out of %d\n",
                 nwrite, nconns);
 
-    d->downstream_used_start = nwrite; // TODO: Need timeout?
+    d->downstream_used_start = nwrite;
     d->downstream_used       = nwrite;
 
     if (cproxy_dettach_if_noreply(d, uc) == false) {
