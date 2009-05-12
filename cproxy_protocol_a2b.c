@@ -640,7 +640,6 @@ void a2b_process_downstream_response(conn *c) {
     case PROTOCOL_BINARY_CMD_SET: /* FALLTHROUGH */
     case PROTOCOL_BINARY_CMD_ADD: /* FALLTHROUGH */
     case PROTOCOL_BINARY_CMD_REPLACE:
-    case PROTOCOL_BINARY_CMD_DELETE:
     case PROTOCOL_BINARY_CMD_APPEND:
     case PROTOCOL_BINARY_CMD_PREPEND:
         assert(c->noreply == false);
@@ -664,6 +663,40 @@ void a2b_process_downstream_response(conn *c) {
             case PROTOCOL_BINARY_RESPONSE_ENOMEM: // TODO.
             default:
                 out_string(uc, "SERVER_ERROR a2b error");
+                break;
+            }
+
+            if (update_event(uc, EV_WRITE | EV_PERSIST)) {
+                conn_set_state(c, conn_pause);
+            } else {
+                if (settings.verbose > 1)
+                    fprintf(stderr,
+                            "Can't write upstream a2b event\n");
+
+                d->ptd->stats.err_oom++;
+                cproxy_close_conn(uc);
+            }
+        }
+        break;
+
+    case PROTOCOL_BINARY_CMD_DELETE:
+        assert(c->noreply == false);
+
+        if (uc != NULL) {
+            assert(uc->next == NULL);
+
+            switch (status) {
+            case 0:
+                out_string(uc, "DELETED");
+                break;
+            case PROTOCOL_BINARY_RESPONSE_KEY_EEXISTS:
+                out_string(uc, "EXISTS");
+                break;
+            case PROTOCOL_BINARY_RESPONSE_KEY_ENOENT:
+            case PROTOCOL_BINARY_RESPONSE_NOT_STORED:
+            case PROTOCOL_BINARY_RESPONSE_ENOMEM: // TODO.
+            default:
+                out_string(uc, "NOT_FOUND");
                 break;
             }
 
