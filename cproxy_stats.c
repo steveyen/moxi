@@ -144,24 +144,28 @@ bool protocol_stats_merge_name_val(GHashTable *merger,
         if (prev_ntokens != 4)
             return true;
 
+        strncpy(buf_val, val, val_len);
+        buf_val[val_len] = '\0';
+
         bool ok;
 
         if (strstr(protocol_stats_keys_smallest, buf_key) != NULL) {
             ok = protocol_stats_merge_smallest(prev_tokens[VALUE_TOKEN].value,
                                                prev_tokens[VALUE_TOKEN].length,
-                                               val, val_len,
+                                               buf_val, val_len,
                                                buf_val, MERGE_BUF_SIZE);
         } else {
             ok = protocol_stats_merge_sum(prev_tokens[VALUE_TOKEN].value,
                                           prev_tokens[VALUE_TOKEN].length,
-                                          val, val_len,
+                                          buf_val, val_len,
                                           buf_val, MERGE_BUF_SIZE);
         }
 
         if (ok) {
+            int   vlen = strlen(buf_val);
             char *hval = malloc(prefix_len + 1 +
                                 name_len + 1 +
-                                strlen(buf_val) + 1);
+                                vlen + 1);
             if (hval != NULL) {
                 memcpy(hval, prefix, prefix_len);
                 hval[prefix_len] = ' ';
@@ -170,7 +174,7 @@ bool protocol_stats_merge_name_val(GHashTable *merger,
                 hval[prefix_len + 1 + name_len] = ' ';
 
                 strcpy(hval + prefix_len + 1 + name_len + 1, buf_val);
-                hval[prefix_len + 1 + name_len + 1 + val_len] = '\0';
+                hval[prefix_len + 1 + name_len + 1 + vlen] = '\0';
 
                 g_hash_table_insert(merger,
                                     hval + prefix_len + 1,
