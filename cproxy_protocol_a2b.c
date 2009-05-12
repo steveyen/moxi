@@ -1188,29 +1188,41 @@ bool cproxy_forward_a2b_item_downstream(downstream *d, short cmd,
                     switch (cmd) {
                     case NREAD_SET:
                         req->request.opcode =
+                            uc->noreply ?
+                            PROTOCOL_BINARY_CMD_SETQ :
                             PROTOCOL_BINARY_CMD_SET;
                         break;
                     case NREAD_CAS: {
                         uint64_t cas = ITEM_get_cas(it);
                         req->request.cas = swap64(cas);
                         req->request.opcode =
+                            uc->noreply ?
+                            PROTOCOL_BINARY_CMD_SETQ :
                             PROTOCOL_BINARY_CMD_SET;
                         break;
                     }
                     case NREAD_ADD:
                         req->request.opcode =
+                            uc->noreply ?
+                            PROTOCOL_BINARY_CMD_ADDQ :
                             PROTOCOL_BINARY_CMD_ADD;
                         break;
                     case NREAD_REPLACE:
                         req->request.opcode =
+                            uc->noreply ?
+                            PROTOCOL_BINARY_CMD_REPLACEQ :
                             PROTOCOL_BINARY_CMD_REPLACE;
                         break;
                     case NREAD_APPEND:
                         req->request.opcode =
+                            uc->noreply ?
+                            PROTOCOL_BINARY_CMD_APPENDQ :
                             PROTOCOL_BINARY_CMD_APPEND;
                         break;
                     case NREAD_PREPEND:
                         req->request.opcode =
+                            uc->noreply ?
+                            PROTOCOL_BINARY_CMD_PREPENDQ :
                             PROTOCOL_BINARY_CMD_PREPEND;
                         break;
                     default:
