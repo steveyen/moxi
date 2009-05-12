@@ -3,6 +3,7 @@
 use strict;
 
 my $topology_name = $ARGV[0] || 'simple';
+my $protocol_name = $ARGV[1] || 'ascii';
 
 my @good_tests = qw(
   binary-get.t
@@ -64,7 +65,7 @@ my $file;
 foreach $file (<./t/*.t>) {
   if ($is_good_test{$file}) {
     print $file . "\n";
-    my $result = `./t/moxi_one.pl $file $topology_name`;
+    my $result = `./t/moxi_one.pl $file $topology_name $protocol_name`;
     while ($result =~ m/^fail /g) {
       print "$&\n";
     }

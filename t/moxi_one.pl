@@ -2,6 +2,7 @@
 
 my $test_name     = $ARGV[0] || './t/flags.t';
 my $topology_name = $ARGV[1] || 'simple';
+my $protocol_name = $ARGV[2] || 'ascii';
 
 my $prefix = <<'PREFIX';
 
@@ -159,6 +160,8 @@ my %topology_map = (
 );
 
 my $topology = $topology_map{$topology_name};
+
+$topology .= "\$args .= \" -Z downstream_prot=$protocol_name\";";
 
 # Tack on ./t/ directory prefix if needed.
 if ($test_name !~ /^\.\/t/) {

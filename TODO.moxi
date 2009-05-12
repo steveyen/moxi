@@ -36,6 +36,19 @@ TODO ideas...
     - on timeout, closes the downstream connection
   - revisit timeout/retry logic.
 
+- keepalive on the connections
+
+- optimization to use SETQ for downstream binary SET's
+
+- make clock timer resolution configurable
+
+- optimization: use trond's allocator instead of malloc/free for
+  multiget hashtable and multiget hashtable entries.
+
+- optimization: use opaque's instead of GETK during binary multiget smush.
+  - issue: ascii-to-ascii uses same codepath, and ascii doesn't have opaques.
+  - issue: non-uniform downstream would be more complicated.
+
 - handling binary protocol
   - on upstream
   - on downstream
