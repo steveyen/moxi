@@ -291,10 +291,25 @@ bool a2b_fill_request_token(struct A2BSpec *spec,
         }
         break;
 
-    case 'x': // xpiration (for flush_all)
-        // TODO.
-        return false;
+    case 'x': { // xpiration (for flush_all)
+        int32_t exptime_int = 0;
+        time_t  exptime = 0;
+
+        if (safe_strtol(cmd_tokens[cur_token].value, &exptime_int)) {
+            /* Ubuntu 8.04 breaks when I pass exptime to safe_strtol */
+            exptime = exptime_int;
+
+            header->request.extlen   = *out_extlen = 4;
+            header->request.datatype = PROTOCOL_BINARY_RAW_BYTES;
+
+            protocol_binary_request_flush *req =
+                (protocol_binary_request_flush *) header;
+
+            req->message.body.expiration = htonl(exptime);
+        }
         break;
+    }
+
     case 'a': // args (for stats)
         // TODO.
         return false;
