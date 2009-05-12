@@ -99,6 +99,10 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
                (strcmp(cmd, "stats") == 0 ||
                 strcmp(cmd, "stats reset") == 0)) {
 
+        // Even though we've coded to handle advanced stats
+        // like stats cachedump, prevent those here to avoid
+        // locking downstream servers.
+        //
         cproxy_pause_upstream_for_downstream(ptd, c);
 
     } else if (ntokens == 2 &&
