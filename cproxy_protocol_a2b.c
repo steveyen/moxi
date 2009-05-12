@@ -729,6 +729,7 @@ void a2b_process_downstream_response(conn *c) {
 
         if (keylen > 0) {
             assert(it != NULL); // Holds the stat value.
+            assert(it->nbytes > 2);
             assert(bodylen > keylen);
             assert(d->merger != NULL);
 
@@ -740,7 +741,7 @@ void a2b_process_downstream_response(conn *c) {
                 protocol_stats_merge_name_val(d->merger,
                                               "STAT", 4,
                                               ITEM_key(it), it->nkey,
-                                              ITEM_data(it), it->nbytes);
+                                              ITEM_data(it), it->nbytes - 2);
             }
 
             item_remove(it);
