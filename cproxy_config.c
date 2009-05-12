@@ -73,12 +73,12 @@ int cproxy_init_string(const char *cfg_str,
 
         proxy_port_str = strsep(&proxy_sect, "=");
         if (proxy_sect == NULL) {
-            fprintf(stderr, "bad cproxy config, missing =\n");
+            fprintf(stderr, "bad moxi config, missing =\n");
             exit(EXIT_FAILURE);
         }
         proxy_port = atoi(proxy_port_str);
         if (proxy_port <= 0) {
-            fprintf(stderr, "bad cproxy config, bad proxy port\n");
+            fprintf(stderr, "bad moxi config, bad proxy port\n");
             exit(EXIT_FAILURE);
         }
 
@@ -91,7 +91,12 @@ int cproxy_init_string(const char *cfg_str,
             int n = cproxy_listen(p);
             if (n > 0) {
                 if (settings.verbose > 1)
-                    fprintf(stderr, "cproxy listening on %d conns\n", n);
+                    fprintf(stderr, "moxi listening on %d with %d conns\n",
+                            proxy_port, n);
+            } else {
+                fprintf(stderr, "moxi could not listen on port %d -- port unavailable?\n",
+                        proxy_port);
+                exit(EXIT_FAILURE);
             }
         } else {
             fprintf(stderr, "could not alloc proxy\n");
