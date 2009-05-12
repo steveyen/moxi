@@ -638,7 +638,7 @@ void a2b_process_downstream_response(conn *c) {
         break;
 
     case PROTOCOL_BINARY_CMD_SET: /* FALLTHROUGH */
-    case PROTOCOL_BINARY_CMD_ADD: /* FALLTHROUGH */
+    case PROTOCOL_BINARY_CMD_ADD:
     case PROTOCOL_BINARY_CMD_REPLACE:
     case PROTOCOL_BINARY_CMD_APPEND:
     case PROTOCOL_BINARY_CMD_PREPEND:
@@ -652,10 +652,16 @@ void a2b_process_downstream_response(conn *c) {
                 out_string(uc, "STORED");
                 break;
             case PROTOCOL_BINARY_RESPONSE_KEY_EEXISTS:
-                out_string(uc, "EXISTS");
+                if (c->cmd == PROTOCOL_BINARY_CMD_ADD)
+                    out_string(uc, "NOT_STORED");
+                else
+                    out_string(uc, "EXISTS");
                 break;
             case PROTOCOL_BINARY_RESPONSE_KEY_ENOENT:
-                out_string(uc, "NOT_FOUND");
+                if (c->cmd == PROTOCOL_BINARY_CMD_REPLACE)
+                    out_string(uc, "NOT_STORED");
+                else
+                    out_string(uc, "NOT_FOUND");
                 break;
             case PROTOCOL_BINARY_RESPONSE_NOT_STORED:
                 out_string(uc, "NOT_STORED");
@@ -1268,8 +1274,11 @@ bool cproxy_forward_a2b_item_downstream(downstream *d, short cmd,
                         protocol_binary_request_set *req_set =
                             (protocol_binary_request_set *) req;
 
-                        req_set->message.body.flags      = htonl(0); // TODO.
-                        req_set->message.body.expiration = htonl(0); // TODO.
+                        req_set->message.body.flags =
+                            htonl(strtoul(ITEM_suffix(it), NULL, 10));
+
+                        req_set->message.body.expiration =
+                            htonl(it->exptime);
                     }
 
                     req->request.bodylen =
