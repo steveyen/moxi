@@ -315,11 +315,15 @@ gboolean skey_equal(gconstpointer v1, gconstpointer v2);
 
 // Stats handling.
 //
-bool protocol_stats_merge(GHashTable *merger, char *line);
+bool protocol_stats_merge_line(GHashTable *merger, char *line);
 
-size_t   protocol_stats_key_len(const char *key);
-guint    protocol_stats_key_hash(gconstpointer v);
-gboolean protocol_stats_key_equal(gconstpointer v1, gconstpointer v2);
+bool protocol_stats_merge_name_val(GHashTable *merger,
+                                   char *prefix,
+                                   int   prefix_len,
+                                   char *name,
+                                   int   name_len,
+                                   char *val,
+                                   int   val_len);
 
 void protocol_stats_foreach_free(gpointer key,
                                  gpointer value,

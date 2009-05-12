@@ -113,7 +113,7 @@ void cproxy_process_a2a_downstream(conn *c, char *line) {
         if (uc != NULL) {
             assert(uc->next == NULL);
 
-            if (protocol_stats_merge(d->merger, line) == false) {
+            if (protocol_stats_merge_line(d->merger, line) == false) {
                 // Forward the line as-is if we couldn't merge it.
                 //
                 int nline = strlen(line);
@@ -284,8 +284,8 @@ bool cproxy_forward_a2a_simple_downstream(downstream *d,
 
         if (cproxy_broadcast_a2a_downstream(d, command, uc,
                                             "END\r\n")) {
-            d->merger = g_hash_table_new(protocol_stats_key_hash,
-                                         protocol_stats_key_equal);
+            d->merger = g_hash_table_new(skey_hash,
+                                         skey_equal);
             return true;
         } else {
             return false;

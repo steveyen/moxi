@@ -43,11 +43,12 @@ int count_dot(char *x, int len);
 // default to just sum the values.  Note the trailing space.
 //
 #define MAX_TOKENS     5
+#define PREFIX_TOKEN   0
 #define NAME_TOKEN     1
 #define VALUE_TOKEN    2
 #define MERGE_BUF_SIZE 300
 
-bool protocol_stats_merge(GHashTable *merger, char *line) {
+bool protocol_stats_merge_line(GHashTable *merger, char *line) {
     assert(merger != NULL);
     assert(line != NULL);
 
@@ -67,8 +68,30 @@ bool protocol_stats_merge(GHashTable *merger, char *line) {
     if (name == NULL ||
         name_len <= 0 ||
         tokens[VALUE_TOKEN].value == NULL ||
+        tokens[VALUE_TOKEN].length <= 0 ||
         tokens[VALUE_TOKEN].length >= MERGE_BUF_SIZE)
         return false;
+
+    return protocol_stats_merge_name_val(merger,
+                                         tokens[PREFIX_TOKEN].value,
+                                         tokens[PREFIX_TOKEN].length,
+                                         name, name_len,
+                                         tokens[VALUE_TOKEN].value,
+                                         tokens[VALUE_TOKEN].length);
+}
+
+// TODO: The stats merge assumes an ascii upstream.
+//
+bool protocol_stats_merge_name_val(GHashTable *merger,
+                                   char *prefix,
+                                   int   prefix_len,
+                                   char *name,
+                                   int   name_len,
+                                   char *val,
+                                   int   val_len) {
+    assert(merger);
+    assert(name);
+    assert(val);
 
     char *key = name + name_len;       // Key part for merge rule lookup.
     while (key >= name && *key != ':') // Scan for last colon.
@@ -78,16 +101,33 @@ bool protocol_stats_merge(GHashTable *merger, char *line) {
     int key_len = name_len - (key - name);
     if (key_len > 0 &&
         key_len < MERGE_BUF_SIZE) {
+        char buf_name[MERGE_BUF_SIZE];
         char buf_key[MERGE_BUF_SIZE];
         char buf_val[MERGE_BUF_SIZE];
-        char buf_end[MERGE_BUF_SIZE];
 
-        char *prev = (char *) g_hash_table_lookup(merger, name);
+        strncpy(buf_name, name, name_len);
+        buf_name[name_len] = '\0';
+
+        char *prev = (char *) g_hash_table_lookup(merger, buf_name);
         if (prev == NULL) {
-            char *hval = strdup(line);
-            g_hash_table_insert(merger,
-                                hval + (name - line),
-                                hval);
+            char *hval = malloc(prefix_len + 1 +
+                                name_len + 1 +
+                                val_len + 1);
+            if (hval != NULL) {
+                memcpy(hval, prefix, prefix_len);
+                hval[prefix_len] = ' ';
+
+                memcpy(hval + prefix_len + 1, name, name_len);
+                hval[prefix_len + 1 + name_len] = ' ';
+
+                memcpy(hval + prefix_len + 1 + name_len + 1, val, val_len);
+                hval[prefix_len + 1 + name_len + 1 + val_len] = '\0';
+
+                g_hash_table_insert(merger,
+                                    hval + prefix_len + 1,
+                                    hval);
+            }
+
             return true;
         }
 
@@ -109,29 +149,35 @@ bool protocol_stats_merge(GHashTable *merger, char *line) {
         if (strstr(protocol_stats_keys_smallest, buf_key) != NULL) {
             ok = protocol_stats_merge_smallest(prev_tokens[VALUE_TOKEN].value,
                                                prev_tokens[VALUE_TOKEN].length,
-                                               tokens[VALUE_TOKEN].value,
-                                               tokens[VALUE_TOKEN].length,
+                                               val, val_len,
                                                buf_val, MERGE_BUF_SIZE);
         } else {
             ok = protocol_stats_merge_sum(prev_tokens[VALUE_TOKEN].value,
                                           prev_tokens[VALUE_TOKEN].length,
-                                          tokens[VALUE_TOKEN].value,
-                                          tokens[VALUE_TOKEN].length,
+                                          val, val_len,
                                           buf_val, MERGE_BUF_SIZE);
         }
 
         if (ok) {
-            int prefix_len = tokens[VALUE_TOKEN].value - line;
+            char *hval = malloc(prefix_len + 1 +
+                                name_len + 1 +
+                                strlen(buf_val) + 1);
+            if (hval != NULL) {
+                memcpy(hval, prefix, prefix_len);
+                hval[prefix_len] = ' ';
 
-            strncpy(buf_end, line, prefix_len);
-            strcpy(buf_end + prefix_len, buf_val);
+                memcpy(hval + prefix_len + 1, name, name_len);
+                hval[prefix_len + 1 + name_len] = ' ';
 
-            char *hval = strdup(buf_end);
-            g_hash_table_insert(merger,
-                                hval + (name - line),
-                                hval);
+                strcpy(hval + prefix_len + 1 + name_len + 1, buf_val);
+                hval[prefix_len + 1 + name_len + 1 + val_len] = '\0';
 
-            free(prev);
+                g_hash_table_insert(merger,
+                                    hval + prefix_len + 1,
+                                    hval);
+
+                free(prev);
+            }
         }
 
         // Note, if we couldn't merge, then just keep
@@ -187,38 +233,6 @@ bool protocol_stats_merge_smallest(char *v1, int v1len,
     }
 
     return false;
-}
-
-size_t protocol_stats_key_len(const char *key) {
-    assert(key);
-
-    char *x = (char *) key;
-    while (*x != ' ' && *x != '\0')
-        x++;
-
-    return x - key;
-}
-
-guint protocol_stats_key_hash(gconstpointer v) {
-    assert(v);
-
-    const char *key = v;
-    size_t      len = protocol_stats_key_len(key);
-
-    return murmur_hash(key, len);
-}
-
-gboolean protocol_stats_key_equal(gconstpointer v1, gconstpointer v2) {
-    assert(v1);
-    assert(v2);
-
-    const char *k1 = v1;
-    const char *k2 = v2;
-
-    size_t n1 = protocol_stats_key_len(k1);
-    size_t n2 = protocol_stats_key_len(k2);
-
-    return (n1 == n2 && strncmp(k1, k2, n1) == 0);
 }
 
 /* Callback to g_hash_table_foreach that frees the multiget_entry list.

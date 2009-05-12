@@ -311,8 +311,12 @@ bool a2b_fill_request_token(struct A2BSpec *spec,
     }
 
     case 'a': // args (for stats)
-        // TODO.
-        return false;
+        assert(out_key);
+        assert(out_keylen);
+        *out_key    = (uint8_t *) cmd_tokens[cur_token].value;
+        *out_keylen = (uint16_t)  cmd_tokens[cur_token].length;
+        header->request.keylen =
+            htons((uint16_t) cmd_tokens[cur_token].length);
         break;
 
     // The noreply was handled in a2b_fill_request().
@@ -721,14 +725,21 @@ void a2b_process_downstream_response(conn *c) {
         break;
 
     case PROTOCOL_BINARY_CMD_STAT:
+        assert(c->noreply == false);
+
         if (keylen > 0) {
-            assert(it != NULL);
+            assert(it != NULL); // Holds the stat value.
             assert(bodylen > keylen);
-            // TODO.
+            assert(d->merger != NULL);
+
+            if (uc != NULL) {
+                assert(uc->next == NULL);
+            }
+
             item_remove(it);
             conn_set_state(c, conn_new_cmd);
         } else {
-            // This is stats terminator.
+            // Handle the stats terminator.
             //
             assert(it == NULL);
             assert(bodylen == 0);
@@ -855,23 +866,37 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
         protocol_binary_request_header *preq =
             (protocol_binary_request_header *) &req;
 
-        if (strncmp(command + 5, " reset", 6) == 0)
-            return cproxy_broadcast_a2b_downstream(d, preq, 0,
-                                                   out_key,
-                                                   out_keylen,
-                                                   out_extlen, uc,
-                                                   "RESET\r\n");
-        if (cproxy_broadcast_a2b_downstream(d, preq, 0,
-                                            out_key,
-                                            out_keylen,
-                                            out_extlen, uc,
-                                            "END\r\n")) {
-            d->merger = g_hash_table_new(protocol_stats_key_hash,
-                                         protocol_stats_key_equal);
-            return true;
-        } else {
-            return false;
+        int size = a2b_fill_request(tokens, ntokens,
+                                    uc->noreply, preq,
+                                    &out_key,
+                                    &out_keylen,
+                                    &out_extlen);
+        if (size > 0) {
+            assert(out_extlen == 0);
+            assert(uc->noreply == false);
+
+            if (settings.verbose > 1)
+                fprintf(stderr, "a2b broadcast %s\n", command);
+
+            if (strncmp(command + 5, " reset", 6) == 0)
+                return cproxy_broadcast_a2b_downstream(d, preq, size,
+                                                       out_key,
+                                                       out_keylen,
+                                                       out_extlen, uc,
+                                                       "RESET\r\n");
+
+            if (cproxy_broadcast_a2b_downstream(d, preq, size,
+                                                out_key,
+                                                out_keylen,
+                                                out_extlen, uc,
+                                                "END\r\n")) {
+                d->merger = g_hash_table_new(skey_hash,
+                                             skey_equal);
+                return true;
+            }
         }
+
+        return false;
     }
 
     // Assuming we're already connected to downstream.
