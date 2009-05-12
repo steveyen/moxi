@@ -734,6 +734,13 @@ void a2b_process_downstream_response(conn *c) {
 
             if (uc != NULL) {
                 assert(uc->next == NULL);
+
+                // TODO: Handle ITEM and PREFIX.
+                //
+                protocol_stats_merge_name_val(d->merger,
+                                              "STAT", 4,
+                                              ITEM_key(it), it->nkey,
+                                              ITEM_data(it), it->nbytes);
             }
 
             item_remove(it);
