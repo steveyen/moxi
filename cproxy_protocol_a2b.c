@@ -735,7 +735,7 @@ void a2b_process_downstream_response(conn *c) {
                 char *s = add_conn_suffix(uc);
                 if (s != NULL) {
                     uint64_t v = swap64(response_incr->message.body.value);
-                    sprintf(s, "%llu", v);
+                    sprintf(s, "%llu", (unsigned long long)v);
                     out_string(uc, s);
                 } else {
                     d->ptd->stats.err_oom++;
