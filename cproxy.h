@@ -7,8 +7,8 @@
 #include <libmemcached/memcached.h>
 #include "work.h"
 
-int cproxy_init(const char *cfg_str,
-                const char *behavior_str,
+int cproxy_init(char *cfg_str,
+                char *behavior_str,
                 int nthreads);
 
 #define IS_PROXY(x) (x == proxy_upstream_ascii_prot || \
@@ -32,12 +32,16 @@ struct proxy_behavior {
     enum protocol  downstream_prot;    // Favored downstream protocol.
     struct timeval downstream_timeout; // Fields of 0 mean no timeout.
     struct timeval wait_queue_timeout; // Fields of 0 mean no timeout.
+
+    char sasl_mech[40]; // Ex, "PLAIN".
+    char sasl_auth[900];
 };
 
 /* Structure used and owned by main listener thread to
  * track all the outstanding proxy objects.
  */
 struct proxy_main {
+    char *behavior_str;      // Proxy default behavior, immutable.
     proxy_behavior behavior; // Proxy default behavior, immutable.
 
     // Start of proxy list.  Only the main listener thread
@@ -64,14 +68,15 @@ struct proxy {
     char *config; // Mutable, covered by proxy_lock, mem owned by proxy,
                   // might be NULL if the proxy is shutting down.
 
-    // Mutable, covered by proxy_lock.
-    //
-    proxy_behavior behavior;
-
     // Mutable, covered by proxy_lock, incremented
     // whenever config changes.
     //
     uint32_t config_ver;
+
+    // Mutable, covered by proxy_lock.
+    //
+    char          *behavior_str;
+    proxy_behavior behavior;
 
     // Any thread that accesses the mutable fields should
     // first acquire the proxy_lock.
@@ -198,7 +203,11 @@ proxy *cproxy_create(char     *name,
                      int       port,
                      char     *config,
                      uint32_t  config_ver,
+                     char          *behavior_str,
                      proxy_behavior behavior);
+
+proxy_behavior cproxy_parse_behavior(char          *behavior_str,
+                                     proxy_behavior behavior_default);
 
 int       cproxy_listen(proxy *p);
 proxy_td *cproxy_find_thread_data(proxy *p, pthread_t thread_id);

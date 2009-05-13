@@ -19,24 +19,33 @@ void on_conflate_new_config(void *userdata, kvpair_t *config);
 void on_conflate_get_stats(void *userdata, void *opaque,
                            conflate_add_stat add_stat);
 
-int cproxy_init_agent(const char *cfg, proxy_behavior behavior);
+int cproxy_init_agent(char *cfg_str,
+                      char *behavior_str,
+                      proxy_behavior behavior);
 
 int cproxy_init_agent_start(char *jid, char *jpw,
                             char *config, char *host,
+                            char *behavior_str,
                             proxy_behavior behavior);
 
 void cproxy_on_new_config(void *data0, void *data1);
 
 void cproxy_on_new_pool(proxy_main *m,
                         char *name, int port,
-                        char *config, uint32_t config_ver);
+                        char *config_str,
+                        uint32_t config_ver,
+                        char *behavior_str);
 
 char **get_key_values(kvpair_t *kvs, char *key);
 
 kvpair_t *copy_kvpairs(kvpair_t *orig);
 
-int cproxy_init_agent(const char *cfg, proxy_behavior behavior) {
-    char *buff = strdup(cfg);
+int cproxy_init_agent(char *cfg_str,
+                      char *behavior_str,
+                      proxy_behavior behavior) {
+    assert(cfg_str);
+
+    char *buff = strdup(cfg_str);
     char *next = buff;
 
     // Each sec (or section) looks like...
@@ -94,6 +103,7 @@ int cproxy_init_agent(const char *cfg, proxy_behavior behavior) {
             exit(EXIT_FAILURE);
         } else {
             if (cproxy_init_agent_start(jid, jpw, config, host,
+                                        behavior_str,
                                         behavior) == 0)
                 rv++;
         }
@@ -104,21 +114,26 @@ int cproxy_init_agent(const char *cfg, proxy_behavior behavior) {
     return rv;
 }
 
-int cproxy_init_agent_start(char *jid, char *jpw,
-                            char *config_path, char *host,
+int cproxy_init_agent_start(char *jid,
+                            char *jpw,
+                            char *config_path,
+                            char *host,
+                            char *behavior_str,
                             proxy_behavior behavior) {
     assert(jid);
     assert(jpw);
     assert(config_path);
     assert(host);
+    assert(behavior_str);
 
     if (settings.verbose > 1)
         fprintf(stderr, "cproxy_init_agent_start\n");;
 
     proxy_main *m = calloc(1, sizeof(proxy_main));
     if (m != NULL) {
-        m->proxy_head = NULL;
-        m->behavior   = behavior;
+        m->proxy_head   = NULL;
+        m->behavior_str = strdup(behavior_str);
+        m->behavior     = behavior;
 
         m->stat_configs      = 0;
         m->stat_config_fails = 0;
@@ -148,6 +163,8 @@ int cproxy_init_agent_start(char *jid, char *jpw,
 
             return 0;
         }
+
+        free(m->behavior_str);
     }
 
     if (settings.verbose > 1)
@@ -199,7 +216,7 @@ void cproxy_on_new_config(void *data0, void *data1) {
     //
     // 	customer1-b
     // 	    localhost:11311
-    // 	    localhost:11312:2,auth=foobar
+    // 	    localhost:11312:2;behavior_key=behavior_val,bkey2=bval2
     // 	customer1-a
     // 	    localhost:11211
     // 	-bindings-
@@ -255,33 +272,37 @@ void cproxy_on_new_config(void *data0, void *data1) {
                 for (int j = 0; servers[j]; j++)
                     n = n + strlen(servers[j]) + 50;
 
-                char *config = calloc(n, 1);
-                char *kprops = calloc(n, 1);
-                if (config != NULL &&
-                    kprops != NULL) {
+                char *config_str   = calloc(n, 1);
+                char *behavior_str = calloc(n, 1);
+                if (config_str != NULL &&
+                    behavior_str != NULL) {
                     for (int j = 0; servers[j]; j++) {
-                        char *sep = strchr(servers[j], ',');
+                        char *sep = strchr(servers[j], ';');
                         if (sep == NULL)
                             sep = servers[j] + strlen(servers[j]);
 
-                        char *cur_config = config + strlen(config);
-                        if (cur_config != config)
+                        char *cur_config =
+                            config_str + strlen(config_str);
+                        if (cur_config != config_str)
                             *cur_config++ = ',';
 
-                        char *cur_kprops = kprops + strlen(kprops);
-                        if (cur_kprops != kprops)
-                            *cur_kprops++ = ';';
+                        char *cur_behavior_str =
+                            behavior_str + strlen(behavior_str);
+                        if (cur_behavior_str != behavior_str)
+                            *cur_behavior_str++ = ';';
 
                         strncpy(cur_config, servers[j], sep - servers[j]);
                         cur_config[sep - servers[j]] = '\0';
 
-                        strcpy(cur_kprops, sep + 1);
+                        strcpy(cur_behavior_str, sep + 1);
                     }
 
                     cproxy_on_new_pool(m, pool_name, pool_port,
-                                       config, new_config_ver);
+                                       config_str, new_config_ver,
+                                       behavior_str);
 
-                    free(config);
+                    free(config_str);
+                    free(behavior_str);
                 } else {
                     if (settings.verbose > 1)
                         fprintf(stderr, "oom on re-config malloc\n");;
@@ -311,33 +332,21 @@ void cproxy_on_new_config(void *data0, void *data1) {
     //       upstreams are pointed at the proxy.
     //
     for (proxy *p = m->proxy_head; p != NULL; p = p->next) {
-        bool  down   = false;
-        int   port   = 0;
-        char *name   = NULL;
-        char *config = NULL;
+        bool down = false;
+        int  port = 0;
 
         pthread_mutex_lock(&p->proxy_lock);
 
         if (p->config_ver != new_config_ver) {
             down = true;
             port = p->port;
-
-            if (p->name != NULL)
-                name = strdup(p->name);
-            if (p->config != NULL)
-                config = strdup(p->config);
         }
 
         pthread_mutex_unlock(&p->proxy_lock);
 
         if (down)
-            cproxy_on_new_pool(m, NULL, port, NULL, new_config_ver);
-
-        if (name != NULL)
-            free(name);
-
-        if (config != NULL)
-            free(config);
+            cproxy_on_new_pool(m, NULL, port,
+                               NULL, new_config_ver, NULL);
     }
 
     free_kvpair(kvs);
@@ -350,10 +359,15 @@ void cproxy_on_new_config(void *data0, void *data1) {
 
 void cproxy_on_new_pool(proxy_main *m,
                         char *name, int port,
-                        char *config, uint32_t config_ver) {
+                        char *config,
+                        uint32_t config_ver,
+                        char *behavior_str) {
     assert(m);
     assert(port >= 0);
     assert(is_listen_thread());
+
+    proxy_behavior behavior =
+        cproxy_parse_behavior(behavior_str, m->behavior);
 
     // See if we've already got a proxy running on the port,
     // and create one if needed.
@@ -367,7 +381,8 @@ void cproxy_on_new_pool(proxy_main *m,
         p = cproxy_create(name, port,
                           config,
                           config_ver,
-                          m->behavior);
+                          behavior_str,
+                          behavior);
         if (p != NULL) {
             p->next = m->proxy_head;
             m->proxy_head = p;
@@ -376,7 +391,7 @@ void cproxy_on_new_pool(proxy_main *m,
             if (n > 0) {
                 if (settings.verbose > 1)
                     fprintf(stderr,
-                            "cproxy_listen success on %u to %s with %d conns\n",
+                            "cproxy_listen success %u to %s with %d conns\n",
                             p->port, p->config, n);
                 m->stat_proxy_starts++;
             } else {
@@ -414,8 +429,9 @@ void cproxy_on_new_pool(proxy_main *m,
             free(p->name);
             p->name = NULL;
         }
-        if (p->name == NULL && name != NULL)
+        if (p->name == NULL && name != NULL) {
             p->name = strdup(name);
+        }
 
         if ((p->config != NULL) &&
             (config == NULL ||
@@ -423,8 +439,19 @@ void cproxy_on_new_pool(proxy_main *m,
             free(p->config);
             p->config = NULL;
         }
-        if (p->config == NULL && config != NULL)
+        if (p->config == NULL && config != NULL) {
             p->config = strdup(config);
+        }
+
+        if ((p->behavior_str != NULL) &&
+            (behavior_str == NULL ||
+             strcmp(p->behavior_str, behavior_str) != 0)) {
+            free(p->behavior_str);
+            p->behavior_str = NULL;
+        }
+        if (p->behavior_str == NULL && behavior_str != NULL) {
+            p->behavior_str = strdup(behavior_str);
+        }
 
         if (p->name != NULL &&
             p->config != NULL)
@@ -435,7 +462,7 @@ void cproxy_on_new_pool(proxy_main *m,
         assert(config_ver != p->config_ver);
 
         p->config_ver = config_ver;
-        p->behavior   = m->behavior;
+        p->behavior   = behavior;
 
         pthread_mutex_unlock(&p->proxy_lock);
     }

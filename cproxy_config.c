@@ -12,15 +12,32 @@
 #include "cproxy.h"
 #include "work.h"
 
-int cproxy_init_string(const char *cfg, proxy_behavior behavior);
+int cproxy_init_string(char *cfg_str,
+                       char *behavior_str,
+                       proxy_behavior behavior);
 
-int cproxy_init_agent(const char *cfg, proxy_behavior behavior);
+int cproxy_init_agent(char *cfg_str,
+                      char *behavior_str,
+                      proxy_behavior behavior);
 
-proxy_behavior cproxy_parse_behavior(const char *behavior_str,
-                                     int nthreads);
+proxy_behavior behavior_default_g = {
+    .nthreads = 0,
+    .downstream_max = 1,
+    .downstream_prot = proxy_downstream_ascii_prot,
+    .downstream_timeout = {
+        .tv_sec  = 0,
+        .tv_usec = 0
+    },
+    .wait_queue_timeout = {
+        .tv_sec  = 0,
+        .tv_usec = 0
+    },
+    .sasl_mech = "PLAIN",
+    .sasl_auth = ""
+};
 
-int cproxy_init(const char *cfg_str,
-                const char *behavior_str,
+int cproxy_init(char *cfg_str,
+                char *behavior_str,
                 int nthreads) {
     assert(nthreads > 1); // Main + at least one worker.
     assert(nthreads == settings.num_threads);
@@ -35,14 +52,21 @@ int cproxy_init(const char *cfg_str,
     cproxy_init_a2a();
     cproxy_init_a2b();
 
-    proxy_behavior behavior = cproxy_parse_behavior(behavior_str,
-                                                    nthreads);
+    proxy_behavior behavior =
+        cproxy_parse_behavior(behavior_str,
+                              behavior_default_g);
+
+    behavior.nthreads = nthreads;
 
     if (strchr(cfg_str, '@') == NULL) // Not jid format.
-        return cproxy_init_string(cfg_str, behavior);
+        return cproxy_init_string(cfg_str,
+                                  behavior_str,
+                                  behavior);
 
 #ifdef HAVE_CONFLATE_H
-    return cproxy_init_agent(cfg_str, behavior);
+    return cproxy_init_agent(cfg_str,
+                             behavior_str,
+                             behavior);
 #else
     fprintf(stderr, "missing conflate\n");
     exit(EXIT_FAILURE);
@@ -50,7 +74,8 @@ int cproxy_init(const char *cfg_str,
 #endif
 }
 
-int cproxy_init_string(const char *cfg_str,
+int cproxy_init_string(char *cfg_str,
+                       char *behavior_str,
                        proxy_behavior behavior) {
     /* cfg looks like "local_port=host:port,host:port;local_port=host:port"
      * like "11222=memcached1.foo.net:11211"  This means local port 11222
@@ -88,6 +113,7 @@ int cproxy_init_string(const char *cfg_str,
                                  proxy_port,
                                  proxy_sect,
                                  0, // config_ver.
+                                 behavior_str,
                                  behavior);
         if (p != NULL) {
             int n = cproxy_listen(p);
@@ -111,26 +137,11 @@ int cproxy_init_string(const char *cfg_str,
     return 0;
 }
 
-proxy_behavior cproxy_parse_behavior(const char *behavior_str,
-                                     int nthreads) {
-    assert(nthreads > 1); // Main + at least one worker.
-    assert(nthreads == settings.num_threads);
-
+proxy_behavior cproxy_parse_behavior(char          *behavior_str,
+                                     proxy_behavior behavior_default) {
     // These are the default proxy behaviors.
     //
-    struct proxy_behavior behavior = {
-        .nthreads = nthreads,
-        .downstream_max = 1,
-        .downstream_prot = proxy_downstream_ascii_prot,
-        .downstream_timeout = {
-            .tv_sec  = 0,
-            .tv_usec = 0
-        },
-        .wait_queue_timeout = {
-            .tv_sec  = 0,
-            .tv_usec = 0
-        }
-    };
+    struct proxy_behavior behavior = behavior_default;
 
     if (behavior_str == NULL ||
         strlen(behavior_str) <= 0)

@@ -80,10 +80,12 @@ proxy *cproxy_create(char    *name,
                      int      port,
                      char    *config,
                      uint32_t config_ver,
+                     char          *behavior_str,
                      proxy_behavior behavior) {
     assert(name != NULL);
     assert(port > 0);
     assert(config != NULL);
+    assert(behavior_str != NULL);
 
     if (settings.verbose > 1)
         fprintf(stderr, "cproxy_create on port %d, downstream %s\n",
@@ -95,7 +97,9 @@ proxy *cproxy_create(char    *name,
         p->port       = port;
         p->config     = strdup(config);
         p->config_ver = config_ver;
-        p->behavior   = behavior;
+
+        p->behavior_str = strdup(behavior_str);
+        p->behavior     = behavior;
 
         p->listening        = 0;
         p->listening_failed = 0;
@@ -107,7 +111,10 @@ proxy *cproxy_create(char    *name,
         p->thread_data_num = p->behavior.nthreads;
         p->thread_data = (proxy_td *) calloc(p->thread_data_num,
                                              sizeof(proxy_td));
-        if (p->thread_data != NULL) {
+        if (p->thread_data != NULL &&
+            p->name != NULL &&
+            p->config != NULL &&
+            p->behavior_str != NULL) {
             // We start at 1, because thread[0] is the main listen/accept
             // thread, and not a true worker thread.  Too lazy to save
             // the wasted thread[0] slot memory.
@@ -149,6 +156,8 @@ proxy *cproxy_create(char    *name,
 
         free(p->name);
         free(p->config);
+        free(p->behavior_str);
+        free(p->thread_data);
     }
 
     free(p);
