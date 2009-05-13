@@ -199,7 +199,7 @@ void cproxy_on_new_config(void *data0, void *data1) {
     //
     // 	customer1-b
     // 	    localhost:11311
-    // 	    localhost:11312
+    // 	    localhost:11312:2,auth=foobar
     // 	customer1-a
     // 	    localhost:11211
     // 	-bindings-
@@ -259,11 +259,15 @@ void cproxy_on_new_config(void *data0, void *data1) {
                 if (config != NULL) {
                     for (int j = 0; servers[j]; j++) {
                         char *cur = config + strlen(config); // TODO: O(N^2).
+                        if (cur != config)
+                            *cur++ = ',';
 
-                        if (j == 0)
-                            sprintf(cur, "%s", servers[j]);
-                        else
-                            sprintf(cur, ",%s", servers[j]);
+                        char *sep = strchr(servers[j], ',');
+                        if (sep == NULL)
+                            sep = servers[j] + strlen(servers[j]);
+
+                        strncpy(cur, servers[j], sep - servers[j]);
+                        cur[sep - servers[j]] = '\0';
                     }
 
                     cproxy_on_new_pool(m, pool_name, pool_port,
