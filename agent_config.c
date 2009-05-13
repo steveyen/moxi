@@ -137,7 +137,7 @@ int cproxy_init_agent_start(char *jid, char *jpw,
         config.host = host; // "localhost"
         config.software   = "memscale";
         config.version    = VERSION;
-        config.save_path  = config_path; // "/tmp/memscale.cfg"
+        config.save_path  = config_path;
         config.userdata   = m;
         config.new_config = on_conflate_new_config;
         config.get_stats  = on_conflate_get_stats;
@@ -242,33 +242,48 @@ void cproxy_on_new_config(void *data0, void *data1) {
             char **servers   = get_key_values(kvs, pool_name);
 
             assert(pool_name);
-            assert(pool_port >= 0);
-            assert(servers);
+            assert(pool_port > 0);
 
-            // Create a config string that libmemcached likes,
-            // first by counting up buffer size needed.
-            //
-            int n = 0;
+            if (servers != NULL &&
+                pool_port > 0) {
+                // Create a config string that libmemcached likes,
+                // first by counting up buffer size needed.
+                // See memcached_servers_parse().
+                //
+                int n = 0;
 
-            for (int j = 0; servers[j]; j++)
-                n = n + strlen(servers[j]) + 50;
+                for (int j = 0; servers[j]; j++)
+                    n = n + strlen(servers[j]) + 50;
 
-            char *config = calloc(n, 1);
-            if (config != NULL) {
-                for (int j = 0; servers[j]; j++) {
-                    char *cur = config + strlen(config); // TODO: O(N^2).
+                char *config = calloc(n, 1);
+                if (config != NULL) {
+                    for (int j = 0; servers[j]; j++) {
+                        char *cur = config + strlen(config); // TODO: O(N^2).
 
-                    if (j == 0)
-                        sprintf(cur, "%s", servers[j]);
-                    else
-                        sprintf(cur, ",%s", servers[j]);
+                        if (j == 0)
+                            sprintf(cur, "%s", servers[j]);
+                        else
+                            sprintf(cur, ",%s", servers[j]);
+                    }
+
+                    cproxy_on_new_pool(m, pool_name, pool_port,
+                                       config, new_config_ver);
+
+                    free(config);
+                } else {
+                    if (settings.verbose > 1)
+                        fprintf(stderr, "oom on re-config malloc\n");;
+                    goto fail;
                 }
-
-                cproxy_on_new_pool(m, pool_name, pool_port,
-                                   config, new_config_ver);
-
-                free(config);
+            } else {
+                if (settings.verbose > 1)
+                    fprintf(stderr, "missing servers or port\n");
+                goto fail;
             }
+        } else {
+            if (settings.verbose > 1)
+                fprintf(stderr, "missing ports or bindings\n");
+            goto fail;
         }
     }
 
