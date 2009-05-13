@@ -52,6 +52,9 @@ int cproxy_init(char *cfg_str,
     cproxy_init_a2a();
     cproxy_init_a2b();
 
+    if (behavior_str == NULL)
+        behavior_str = "";
+
     proxy_behavior behavior =
         cproxy_parse_behavior(behavior_str,
                               behavior_default_g);
