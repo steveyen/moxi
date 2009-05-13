@@ -94,7 +94,8 @@ int cproxy_init_string(const char *cfg_str,
                     fprintf(stderr, "moxi listening on %d with %d conns\n",
                             proxy_port, n);
             } else {
-                fprintf(stderr, "moxi could not listen on port %d -- port unavailable?\n",
+                fprintf(stderr,
+                        "moxi error -- port %d unavailable?\n",
                         proxy_port);
                 exit(EXIT_FAILURE);
             }
