@@ -501,24 +501,31 @@ void cproxy_add_downstream(proxy_td *ptd) {
                     ptd->downstream_num,
                     ptd->downstream_max);
 
-        char *config = NULL;
+        char *config       = NULL;
+        char *behavior_str = NULL;
 
         pthread_mutex_lock(&ptd->proxy->proxy_lock);
 
         if (ptd->proxy->config != NULL)
             config = strdup(ptd->proxy->config);
 
+        if (ptd->proxy->behavior_str != NULL)
+            behavior_str = strdup(ptd->proxy->behavior_str);
+
         uint32_t       config_ver = ptd->proxy->config_ver;
         proxy_behavior behavior   = ptd->proxy->behavior;
 
         pthread_mutex_unlock(&ptd->proxy->proxy_lock);
 
-        // The config will be NULL if the proxy is shutting down.
+        // The config/behavior_str will be NULL if the
+        // proxy is shutting down.
         //
-        if (config != NULL) {
+        if (config != NULL &&
+            behavior_str != NULL) {
             downstream *d =
                 cproxy_create_downstream(config,
                                          config_ver,
+                                         behavior_str,
                                          behavior);
             if (d != NULL) {
                 d->ptd = ptd;
@@ -530,6 +537,7 @@ void cproxy_add_downstream(proxy_td *ptd) {
             }
 
             free(config);
+            free(behavior_str);
         }
     } else {
         ptd->stats.tot_downstream_max_reached++;
@@ -745,19 +753,22 @@ void cproxy_free_downstream(downstream *d) {
  */
 downstream *cproxy_create_downstream(char *config,
                                      uint32_t config_ver,
+                                     char *behavior_str,
                                      proxy_behavior behavior) {
     assert(config != NULL);
+    assert(behavior_str != NULL);
 
     downstream *d = (downstream *) calloc(1, sizeof(downstream));
     if (d != NULL) {
-        d->config     = strdup(config);
-        d->config_ver = config_ver;
-        d->behavior   = behavior;
+        d->config       = strdup(config);
+        d->config_ver   = config_ver;
+        d->behavior_str = strdup(behavior_str);
+        d->behavior     = behavior;
 
         if (settings.verbose > 1)
             fprintf(stderr,
-                    "cproxy_create_downstream: %s, %u\n",
-                    config, config_ver);
+                    "cproxy_create_downstream: %s, %u, %s\n",
+                    config, config_ver, behavior_str);
 
         if (memcached_create(&d->mst) != NULL) {
             memcached_behavior_set(&d->mst, MEMCACHED_BEHAVIOR_NO_BLOCK, 1);
@@ -790,6 +801,7 @@ downstream *cproxy_create_downstream(char *config,
         }
 
         free(d->config);
+        free(d->behavior_str);
         free(d);
     }
 
@@ -811,7 +823,8 @@ bool cproxy_check_downstream_config(downstream *d) {
         rv = true;
     } else if (d->config != NULL &&
                d->ptd->proxy->config != NULL &&
-               strcmp(d->config, d->ptd->proxy->config) == 0) {
+               strcmp(d->config, d->ptd->proxy->config) == 0 &&
+               strcmp(d->behavior_str, d->ptd->proxy->behavior_str) == 0) {
         d->config_ver = d->ptd->proxy->config_ver;
         d->behavior   = d->ptd->proxy->behavior;
         rv = true;

@@ -173,11 +173,16 @@ struct proxy_td { // Per proxy, per worker-thread data struct.
 /* Owned by worker thread.
  */
 struct downstream {
-    proxy_td      *ptd;        // Immutable parent pointer.
-    char          *config;     // Immutable, mem owned by downstream.
-    uint32_t       config_ver; // Immutable, snapshot of proxy->config_ver.
-    proxy_behavior behavior;   // Immutable, snapshot of proxy->behavior.
-    memcached_st   mst;        // Immutable, from libmemcached.
+    // The following group of fields are immutable or read-only (RO),
+    // except for config_ver, which gets updated if the downstream's
+    // config/behavior still matches the parent ptd's config/behavior.
+    //
+    proxy_td      *ptd;          // RO: Parent pointer.
+    char          *config;       // RO: Mem owned by downstream.
+    uint32_t       config_ver;   // RW: Mutable, copy of proxy->config_ver.
+    proxy_behavior behavior;     // RO: Snapshot of proxy->behavior.
+    char          *behavior_str; // RO: Snapshot of proxy->behavior_str.
+    memcached_st   mst;          // RW: From libmemcached.
 
     downstream *next;          // To track reserved/free lists.
 
@@ -221,6 +226,7 @@ void        cproxy_add_downstream(proxy_td *ptd);
 void        cproxy_free_downstream(downstream *d);
 downstream *cproxy_create_downstream(char *config,
                                      uint32_t config_ver,
+                                     char *behavior_str,
                                      proxy_behavior behavior);
 downstream *cproxy_reserve_downstream(proxy_td *ptd);
 bool        cproxy_release_downstream(downstream *d, bool force);
