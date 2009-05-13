@@ -2,6 +2,11 @@ bin_PROGRAMS = moxi
 pkginclude_HEADERS = protocol_binary.h
 noinst_PROGRAMS = moxi-debug sizes testapp
 
+## INCLUDES is apparently not previously set, if you set it
+##  change this
+INCLUDES = $(DEPS_CFLAGS)
+LIBS += $(DEPS_LIBS)
+
 BUILT_SOURCES=
 
 testapp_SOURCES = testapp.c util.c util.h

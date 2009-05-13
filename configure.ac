@@ -233,6 +233,10 @@ AC_SEARCH_LIBS(socket, socket)
 AC_SEARCH_LIBS(gethostbyname, nsl)
 AC_SEARCH_LIBS(umem_cache_create, umem)
 
+PKG_CHECK_MODULES([DEPS], [ glib-2.0 >= 2.16.6 libmemcached >= 0.28 ])
+AC_SUBST(DEPS)
+AC_SUBST(DEPS)
+
 AC_HEADER_STDBOOL
 AC_C_CONST
 
@@ -382,21 +386,12 @@ then
   CFLAGS="$CFLAGS -errfmt=error -errwarn -errshort=tags"
 fi
 
-LIBS="$LIBS -lmemcached"
-LIBS="$LIBS -lglib-2.0 -lintl -liconv"
-LIBS="$LIBS -L/opt/local/lib"
-
-CPPFLAGS="$CPPFLAGS -I/opt/local/include/glib-2.0"
-CPPFLAGS="$CPPFLAGS -I/opt/local/lib/glib-2.0/include"
-CPPFLAGS="$CPPFLAGS -I/opt/local/include"
 
 AC_SEARCH_LIBS(memcached_create, memcached)
 
 if test $build_conflate = yes
 then
    LIBS="$LIBS -lconflate -lsqlite3 -lstrophe -lexpat -lresolv -lssl"
-   LIBS="$LIBS -L\$(HOME)/lib"
-   CPPFLAGS="$CPPFLAGS -I\$(HOME)/include"
 fi
 
 AC_CONFIG_FILES(Makefile doc/Makefile)
