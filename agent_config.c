@@ -80,8 +80,6 @@ int cproxy_init_agent(const char *cfg, proxy_behavior behavior) {
             }
         }
 
-        // TODO: Better config/init error handling.
-        //
         if (jid == NULL) {
             fprintf(stderr, "missing conflate id\n");
             exit(EXIT_FAILURE);
@@ -136,9 +134,9 @@ int cproxy_init_agent_start(char *jid, char *jpw,
         // Different jid's possible for production, staging, etc.
         config.jid  = jid;  // "customer@stevenmb.local"
         config.pass = jpw;  // "password"
-        config.host = host; // "localhost" // TODO: XMPP server, for dev.
+        config.host = host; // "localhost"
         config.software   = "memscale";
-        config.version    = "0.1";       // TODO: Version.
+        config.version    = VERSION;
         config.save_path  = config_path; // "/tmp/memscale.cfg"
         config.userdata   = m;
         config.new_config = on_conflate_new_config;
