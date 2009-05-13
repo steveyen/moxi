@@ -256,18 +256,26 @@ void cproxy_on_new_config(void *data0, void *data1) {
                     n = n + strlen(servers[j]) + 50;
 
                 char *config = calloc(n, 1);
-                if (config != NULL) {
+                char *kprops = calloc(n, 1);
+                if (config != NULL &&
+                    kprops != NULL) {
                     for (int j = 0; servers[j]; j++) {
-                        char *cur = config + strlen(config); // TODO: O(N^2).
-                        if (cur != config)
-                            *cur++ = ',';
-
                         char *sep = strchr(servers[j], ',');
                         if (sep == NULL)
                             sep = servers[j] + strlen(servers[j]);
 
-                        strncpy(cur, servers[j], sep - servers[j]);
-                        cur[sep - servers[j]] = '\0';
+                        char *cur_config = config + strlen(config);
+                        if (cur_config != config)
+                            *cur_config++ = ',';
+
+                        char *cur_kprops = kprops + strlen(kprops);
+                        if (cur_kprops != kprops)
+                            *cur_kprops++ = ';';
+
+                        strncpy(cur_config, servers[j], sep - servers[j]);
+                        cur_config[sep - servers[j]] = '\0';
+
+                        strcpy(cur_kprops, sep + 1);
                     }
 
                     cproxy_on_new_pool(m, pool_name, pool_port,
