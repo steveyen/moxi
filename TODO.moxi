@@ -15,6 +15,9 @@ TODO ideas...
 - auth/bucket select.
   - login/auth/bucket-selection after creating downstream conn.
 
+- histogram of request codes.
+- histogram of response codes.
+
 - pipelining/streaming
   - instead of 100% store-and-forward
     - store-and-forward is helpful for replay.
