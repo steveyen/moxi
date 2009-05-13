@@ -44,6 +44,8 @@ int cproxy_init(const char *cfg_str,
 #ifdef HAVE_CONFLATE_H
     return cproxy_init_agent(cfg_str, behavior);
 #else
+    fprintf(stderr, "missing conflate\n");
+    exit(EXIT_FAILURE);
     return 1;
 #endif
 }
@@ -78,7 +80,7 @@ int cproxy_init_string(const char *cfg_str,
         }
         proxy_port = atoi(proxy_port_str);
         if (proxy_port <= 0) {
-            fprintf(stderr, "bad moxi config, bad proxy port\n");
+            fprintf(stderr, "missing proxy port\n");
             exit(EXIT_FAILURE);
         }
 

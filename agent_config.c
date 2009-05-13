@@ -83,17 +83,17 @@ int cproxy_init_agent(const char *cfg, proxy_behavior behavior) {
         // TODO: Better config/init error handling.
         //
         if (jid == NULL) {
-            if (settings.verbose > 1)
-                fprintf(stderr, "cproxy_init missing jid\n");
+            fprintf(stderr, "missing conflate id\n");
+            exit(EXIT_FAILURE);
         } else if (jpw == NULL) {
-            if (settings.verbose > 1)
-                fprintf(stderr, "cproxy_init missing jpw\n");
+            fprintf(stderr, "missing conflate password\n");
+            exit(EXIT_FAILURE);
         } else if (config == NULL) {
-            if (settings.verbose > 1)
-                fprintf(stderr, "cproxy_init missing config\n");
+            fprintf(stderr, "missing config\n");
+            exit(EXIT_FAILURE);
         } else if (host == NULL) {
-            if (settings.verbose > 1)
-                fprintf(stderr, "cproxy_init missing host\n");
+            fprintf(stderr, "missing host\n");
+            exit(EXIT_FAILURE);
         } else {
             if (cproxy_init_agent_start(jid, jpw, config, host,
                                         behavior) == 0)
