@@ -2,8 +2,21 @@
 
 use strict;
 
+# Invoke like this to test ascii protocol, with all the topologies.
+#
+# ./t/moxi.pl simple ascii && ./t/moxi.pl chain ascii && ./t/moxi.pl fanout ascii && ./t/moxi.pl fanoutin ascii
+#
+# Invoke like this to test binary protocol.
+#
+# ./t/moxi.pl simple binary && ./t/moxi.pl fanout binary
+#
+# TODO: We can't pass chain and fanoutin topologies with binary protocol
+#       until moxi supports upstream binary protocol.
+#
 my $topology_name = $ARGV[0] || 'simple';
 my $protocol_name = $ARGV[1] || 'ascii';
+
+print "mock test: " . $topology_name . " " . $protocol_name . "\n";
 
 my @good_tests = qw(
   binary-get.t
@@ -57,19 +70,24 @@ my @skip_tests = qw(
 my %is_good_test;
 my %is_skip_test;
 
-for (map("./t/$_", @good_tests)) { $is_good_test{$_} = 1 }
-for (map("./t/$_", @skip_tests)) { $is_skip_test{$_} = 1 }
+for (map("./t/$_", @good_tests)) { $is_good_test{$_} = "ascii binary" }
+for (map("./t/$_", @skip_tests)) { $is_skip_test{$_} = "ascii binary" }
+
+# Skipping incrdecr.t for binary due to issue 48 on code.google.com/p/memcached.
+#
+$is_good_test{"./t/incrdecr.t"} = "ascii";
+$is_skip_test{"./t/incrdecr.t"} = "binary";
 
 my $file;
 
 foreach $file (<./t/*.t>) {
-  if ($is_good_test{$file}) {
+  if ($is_good_test{$file} =~ /$protocol_name/) {
     print $file . "\n";
     my $result = `./t/moxi_one.pl $file $topology_name $protocol_name`;
     while ($result =~ m/^fail /g) {
       print "$&\n";
     }
-  } elsif ($is_skip_test{$file}) {
+  } elsif ($is_skip_test{$file} =~ /$protocol_name/) {
     print "skipping test: $file\n";
   } else {
     print "unknown test: $file\n";
