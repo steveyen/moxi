@@ -218,6 +218,14 @@ proxy_behavior cproxy_parse_behavior(char          *behavior_str,
                     int ms = strtol(val, NULL, 10);
                     behavior.wait_queue_timeout.tv_sec  = floor(ms / 1000.0);
                     behavior.wait_queue_timeout.tv_usec = (ms % 1000) * 1000;
+                } else if (strcmp(key, "sasl_plain_usr") == 0) {
+                    if (strlen(key) < sizeof(behavior.sasl_plain_usr) + 1) {
+                        strcpy(behavior.sasl_plain_usr, key);
+                    }
+                } else if (strcmp(key, "sasl_plain_pwd") == 0) {
+                    if (strlen(key) < sizeof(behavior.sasl_plain_pwd) + 1) {
+                        strcpy(behavior.sasl_plain_pwd, key);
+                    }
                 } else {
                     // TODO: Error in behavior config string.
                 }
