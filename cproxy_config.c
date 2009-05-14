@@ -33,8 +33,8 @@ proxy_behavior behavior_default_g = {
         .tv_sec  = 0,
         .tv_usec = 0
     },
-    .sasl_mech = "PLAIN",
-    .sasl_auth = ""
+    .sasl_plain_usr = "",
+    .sasl_plain_pwd = ""
 };
 
 int cproxy_init(char *cfg_str,
