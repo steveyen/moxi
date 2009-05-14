@@ -1242,14 +1242,13 @@ void cproxy_pause_upstream_for_downstream(proxy_td *ptd, conn *upstream) {
     cproxy_assign_downstream(ptd);
 }
 
-bool cproxy_start_wait_queue_timeout(proxy_td *ptd, conn *uc) {
-    assert(ptd);
-    assert(uc);
-    assert(uc->thread);
-    assert(uc->thread->base);
+struct timeval cproxy_get_wait_queue_timeout(proxy *p) {
+    assert(p);
 
-    proxy *p = ptd->proxy;
-    assert(p != NULL);
+    struct timeval rv = {
+        .tv_sec = 0,
+        .tv_usec = 0
+    };
 
     pthread_mutex_lock(&p->proxy_lock);
 
@@ -1259,16 +1258,27 @@ bool cproxy_start_wait_queue_timeout(proxy_td *ptd, conn *uc) {
 
     for (int i = 0; i < p->behaviors_num; i++) {
         if (i <= 0 ||
-            ptd->timeout_tv.tv_sec >
-               p->behaviors[i].wait_queue_timeout.tv_sec ||
-            ptd->timeout_tv.tv_usec >
-               p->behaviors[i].wait_queue_timeout.tv_usec) {
-            ptd->timeout_tv = p->behaviors[i].wait_queue_timeout;
+            rv.tv_sec  < p->behaviors[i].wait_queue_timeout.tv_sec ||
+            rv.tv_usec < p->behaviors[i].wait_queue_timeout.tv_usec) {
+            rv = p->behaviors[i].wait_queue_timeout;
         }
     }
 
     pthread_mutex_unlock(&p->proxy_lock);
 
+    return rv;
+}
+
+bool cproxy_start_wait_queue_timeout(proxy_td *ptd, conn *uc) {
+    assert(ptd);
+    assert(uc);
+    assert(uc->thread);
+    assert(uc->thread->base);
+
+    proxy *p = ptd->proxy;
+    assert(p != NULL);
+
+    ptd->timeout_tv = cproxy_get_wait_queue_timeout(p);
     if (ptd->timeout_tv.tv_sec != 0 ||
         ptd->timeout_tv.tv_usec != 0) {
         evtimer_set(&ptd->timeout_event, wait_queue_timeout, ptd);
@@ -1309,9 +1319,7 @@ void wait_queue_timeout(const int fd,
         if (settings.verbose > 1)
             fprintf(stderr, "wait_queue_timeout cleared\n");
 
-        pthread_mutex_lock(&p->proxy_lock);
-        struct timeval wqt = p->behaviors[0].wait_queue_timeout; // TODO.
-        pthread_mutex_unlock(&p->proxy_lock);
+        struct timeval wqt = cproxy_get_wait_queue_timeout(p);
 
         // TODO: Should have better than second resolution,
         //       except current_time is limited to just
