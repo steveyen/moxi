@@ -82,13 +82,16 @@ proxy *cproxy_create(char    *name,
                      uint32_t config_ver,
                      char           *behaviors_str,
                      int             behaviors_num,
-                     proxy_behavior *behaviors) {
+                     proxy_behavior *behaviors,
+                     int nthreads) {
     assert(name != NULL);
     assert(port > 0);
     assert(config != NULL);
     assert(behaviors_str != NULL);
     assert(behaviors_num > 0);
     assert(behaviors != NULL);
+    assert(nthreads > 1); // Main thread + at least one worker.
+    assert(nthreads == settings.num_threads);
 
     if (settings.verbose > 1)
         fprintf(stderr, "cproxy_create on port %d, downstream %s\n",
@@ -111,9 +114,7 @@ proxy *cproxy_create(char    *name,
 
         pthread_mutex_init(&p->proxy_lock, NULL);
 
-        assert(p->behaviors[0].nthreads == settings.num_threads); // TODO.
-
-        p->thread_data_num = p->behaviors[0].nthreads; // TODO.
+        p->thread_data_num = nthreads;
         p->thread_data = (proxy_td *) calloc(p->thread_data_num,
                                              sizeof(proxy_td));
         if (p->thread_data != NULL &&

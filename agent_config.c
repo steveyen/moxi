@@ -21,12 +21,14 @@ void on_conflate_get_stats(void *userdata, void *opaque,
 
 int cproxy_init_agent(char *cfg_str,
                       char *behavior_str,
-                      proxy_behavior behavior);
+                      proxy_behavior behavior,
+                      int nthreads);
 
 int cproxy_init_agent_start(char *jid, char *jpw,
                             char *config, char *host,
                             char *behavior_str,
-                            proxy_behavior behavior);
+                            proxy_behavior behavior,
+                            int nthreads);
 
 void cproxy_on_new_config(void *data0, void *data1);
 
@@ -44,7 +46,8 @@ kvpair_t *copy_kvpairs(kvpair_t *orig);
 
 int cproxy_init_agent(char *cfg_str,
                       char *behavior_str,
-                      proxy_behavior behavior) {
+                      proxy_behavior behavior,
+                      int nthreads) {
     assert(cfg_str);
 
     char *buff = strdup(cfg_str);
@@ -106,7 +109,8 @@ int cproxy_init_agent(char *cfg_str,
         } else {
             if (cproxy_init_agent_start(jid, jpw, config, host,
                                         behavior_str,
-                                        behavior) == 0)
+                                        behavior,
+                                        nthreads) == 0)
                 rv++;
         }
     }
@@ -121,7 +125,8 @@ int cproxy_init_agent_start(char *jid,
                             char *config_path,
                             char *host,
                             char *behavior_str,
-                            proxy_behavior behavior) {
+                            proxy_behavior behavior,
+                            int nthreads) {
     assert(jid);
     assert(jpw);
     assert(config_path);
@@ -134,6 +139,7 @@ int cproxy_init_agent_start(char *jid,
     proxy_main *m = calloc(1, sizeof(proxy_main));
     if (m != NULL) {
         m->proxy_head   = NULL;
+        m->nthreads     = nthreads;
         m->behavior_str = strdup(behavior_str);
         m->behavior     = behavior;
 
@@ -400,7 +406,8 @@ void cproxy_on_new_pool(proxy_main *m,
                           config_ver,
                           behaviors_str,
                           behaviors_num,
-                          behaviors);
+                          behaviors,
+                          m->nthreads);
         if (p != NULL) {
             p->next = m->proxy_head;
             m->proxy_head = p;

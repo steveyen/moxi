@@ -14,14 +14,15 @@
 
 int cproxy_init_string(char *cfg_str,
                        char *behavior_str,
-                       proxy_behavior behavior);
+                       proxy_behavior behavior,
+                       int nthreads);
 
 int cproxy_init_agent(char *cfg_str,
                       char *behavior_str,
-                      proxy_behavior behavior);
+                      proxy_behavior behavior,
+                      int nthreads);
 
 proxy_behavior behavior_default_g = {
-    .nthreads = 0,
     .downstream_max = 1,
     .downstream_prot = proxy_downstream_ascii_prot,
     .downstream_timeout = {
@@ -59,17 +60,17 @@ int cproxy_init(char *cfg_str,
         cproxy_parse_behavior(behavior_str,
                               behavior_default_g);
 
-    behavior.nthreads = nthreads;
-
     if (strchr(cfg_str, '@') == NULL) // Not jid format.
         return cproxy_init_string(cfg_str,
                                   behavior_str,
-                                  behavior);
+                                  behavior,
+                                  nthreads);
 
 #ifdef HAVE_CONFLATE_H
     return cproxy_init_agent(cfg_str,
                              behavior_str,
-                             behavior);
+                             behavior,
+                             nthreads);
 #else
     fprintf(stderr, "missing conflate\n");
     exit(EXIT_FAILURE);
@@ -79,7 +80,8 @@ int cproxy_init(char *cfg_str,
 
 int cproxy_init_string(char *cfg_str,
                        char *behavior_str,
-                       proxy_behavior behavior) {
+                       proxy_behavior behavior,
+                       int nthreads) {
     /* cfg looks like "local_port=host:port,host:port;local_port=host:port"
      * like "11222=memcached1.foo.net:11211"  This means local port 11222
      * will be a proxy to downstream memcached server running at
@@ -139,7 +141,8 @@ int cproxy_init_string(char *cfg_str,
                                      0, // config_ver.
                                      behaviors_str,
                                      behaviors_num,
-                                     behaviors);
+                                     behaviors,
+                                     nthreads);
             if (p != NULL) {
                 int n = cproxy_listen(p);
                 if (n > 0) {

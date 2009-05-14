@@ -27,7 +27,6 @@ typedef struct proxy_behavior proxy_behavior;
 typedef struct downstream     downstream;
 
 struct proxy_behavior {
-    int            nthreads;           // TODO: Move out of behavior.
     int            downstream_max;     // Determines downstream concurrency.
     enum protocol  downstream_prot;    // Favored downstream protocol.
     struct timeval downstream_timeout; // Fields of 0 mean no timeout.
@@ -48,6 +47,8 @@ struct proxy_main {
     // should access or modify this field.
     //
     proxy *proxy_head;
+
+    int nthreads; // Immutable.
 
     // Updated by main listener thread only,
     // so no extra locking needed.
@@ -212,7 +213,8 @@ proxy *cproxy_create(char     *name,
                      uint32_t  config_ver,
                      char           *behaviors_str,
                      int             behaviors_num,
-                     proxy_behavior *behaviors);
+                     proxy_behavior *behaviors,
+                     int nthreads);
 
 proxy_behavior  cproxy_parse_behavior(char          *behavior_str,
                                       proxy_behavior behavior_default);
