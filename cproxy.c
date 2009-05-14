@@ -20,21 +20,38 @@ uint32_t         memcached_generate_hash(memcached_st *ptr,
                                          size_t key_length);
 void             memcached_quit_server(memcached_server_st *ptr,
                                        uint8_t io_death);
+memcached_return memcached_safe_read(memcached_server_st *ptr,
+                                     void *dta,
+                                     size_t size);
+ssize_t memcached_io_write(memcached_server_st *ptr,
+                           const void *buffer,
+                           size_t length, char with_flush);
+void memcached_io_reset(memcached_server_st *ptr);
+memcached_return memcached_do(memcached_server_st *ptr,
+                              const void *commmand,
+                              size_t command_length,
+                              uint8_t with_flush);
 
 // Internal forward declarations.
 //
 downstream *downstream_list_remove(downstream *head, downstream *d);
-void        downstream_timeout(const int fd,
-                               const short which,
-                               void *arg);
-void        wait_queue_timeout(const int fd,
-                               const short which,
-                               void *arg);
-void        upstream_error(conn *uc);
-void        upstream_retry(void *data0, void *data1);
-conn       *conn_list_remove(conn *head, conn **tail,
-                             conn *c, bool *found);
-bool        is_compatible_request(conn *existing, conn *candidate);
+
+void  downstream_timeout(const int fd,
+                         const short which,
+                         void *arg);
+void  wait_queue_timeout(const int fd,
+                         const short which,
+                         void *arg);
+void  upstream_error(conn *uc);
+void  upstream_retry(void *data0, void *data1);
+
+conn *conn_list_remove(conn *head, conn **tail,
+                       conn *c, bool *found);
+
+bool  is_compatible_request(conn *existing, conn *candidate);
+
+bool auth_downstream(memcached_server_st *server,
+                     proxy_behavior *behavior);
 
 // Function tables.
 //
@@ -892,13 +909,23 @@ int cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread) {
             if (rc == MEMCACHED_SUCCESS) {
                 int fd = d->mst.hosts[i].fd;
                 if (fd >= 0) {
-                    d->downstream_conns[i] =
-                        conn_new(fd, conn_pause, 0, DATA_BUFFER_SIZE,
-                                 d->behaviors[i].downstream_prot,
-                                 thread->base,
-                                 &cproxy_downstream_funcs, d);
-                    if (d->downstream_conns[i] != NULL)
-                        d->downstream_conns[i]->thread = thread;
+                    if (auth_downstream(&d->mst.hosts[i],
+                                        &d->behaviors[i])) {
+                        d->downstream_conns[i] =
+                            conn_new(fd, conn_pause, 0,
+                                     DATA_BUFFER_SIZE,
+                                     d->behaviors[i].downstream_prot,
+                                     thread->base,
+                                     &cproxy_downstream_funcs, d);
+                        if (d->downstream_conns[i] != NULL)
+                            d->downstream_conns[i]->thread = thread;
+                    } else {
+                        memcached_quit_server(&d->mst.hosts[i], 1);
+
+                        if (settings.verbose > 1)
+                            fprintf(stderr,
+                                    "auth_downstream failed\n");
+                    }
                 }
             }
         }
@@ -1713,4 +1740,92 @@ bool cproxy_start_downstream_timeout(downstream *d) {
     d->timeout_tv.tv_usec = dt.tv_usec;
 
     return (evtimer_add(&d->timeout_event, &d->timeout_tv) == 0);
+}
+
+bool auth_downstream(memcached_server_st *server,
+                     proxy_behavior *behavior) {
+    assert(server);
+    assert(behavior);
+
+    char buf[3000];
+
+    if (!IS_BINARY(behavior->downstream_prot))
+        return true;
+
+    int usr_len = strlen(behavior->sasl_plain_usr);
+    int pwd_len = strlen(behavior->sasl_plain_pwd);
+    if (usr_len <= 0 &&
+        pwd_len <= 0)
+        return true; // When no usr & no pwd.
+
+    if (usr_len <= 0 ||
+        pwd_len <= 0 ||
+        !IS_PROXY(behavior->downstream_prot) ||
+        (usr_len + pwd_len + 50 > sizeof(buf)))
+        return false; // Probably misconfigured.
+
+    // The key should look like "PLAIN \0usr \0pwd".
+    //
+    char *cur = buf;
+
+#define PLAIN_PREFIX "PLAIN "
+
+    memcpy(cur, PLAIN_PREFIX, sizeof(PLAIN_PREFIX));
+    cur += sizeof(PLAIN_PREFIX);
+    *cur++ = '\0';
+    memcpy(cur, behavior->sasl_plain_usr, usr_len);
+    cur += usr_len;
+    *cur++ = ' ';
+    *cur++ = '\0';
+    memcpy(cur, behavior->sasl_plain_pwd, pwd_len);
+    cur += pwd_len;
+
+    int key_len = cur - buf;
+
+    protocol_binary_request_header req = { .bytes = {0} };
+
+    req.request.magic    = PROTOCOL_BINARY_REQ;
+    req.request.opcode   = PROTOCOL_BINARY_CMD_SASL_AUTH;
+    req.request.keylen   = htons((uint16_t) key_len);
+    req.request.datatype = PROTOCOL_BINARY_RAW_BYTES;
+    req.request.bodylen  = htonl(key_len);
+
+    if (memcached_do(server, (const char *) req.bytes,
+                     sizeof(req.bytes), 0) != MEMCACHED_SUCCESS ||
+        memcached_io_write(server, buf, key_len, 1) == -1) {
+        memcached_io_reset(server);
+        return false;
+    }
+
+    protocol_binary_response_header res = { .bytes = {0} };
+    if (memcached_safe_read(server, &res.bytes,
+                            sizeof(res.bytes)) == MEMCACHED_SUCCESS &&
+        res.response.magic == PROTOCOL_BINARY_RES) {
+        res.response.status  = ntohs(res.response.status);
+        res.response.keylen  = ntohs(res.response.keylen);
+        res.response.bodylen = ntohl(res.response.bodylen);
+
+        // Swallow whatever body comes.
+        //
+        int len = res.response.bodylen;
+        while (len > 0) {
+            int amt = (len > sizeof(buf) ? sizeof(buf) : len);
+            if (memcached_safe_read(server,
+                                    buf,
+                                    amt) != MEMCACHED_SUCCESS)
+                return false;
+            len -= amt;
+        }
+
+        // The res status should be either...
+        // - SUCCESS         - sasl aware server and good credentials.
+        // - AUTH_ERROR      - wrong credentials.
+        // - UNKNOWN_COMMAND - sasl-unaware server.
+        //
+        if (res.response.status == PROTOCOL_BINARY_RESPONSE_SUCCESS) {
+            return true;
+        }
+    }
+
+    return false;
 }
