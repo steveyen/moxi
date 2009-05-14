@@ -34,7 +34,9 @@ void cproxy_on_new_pool(proxy_main *m,
                         char *name, int port,
                         char *config_str,
                         uint32_t config_ver,
-                        char *behavior_str);
+                        char *behaviors_str,
+                        int   behaviors_num,
+                        proxy_behavior *behaviors);
 
 char **get_key_values(kvpair_t *kvs, char *key);
 
@@ -268,15 +270,25 @@ void cproxy_on_new_config(void *data0, void *data1) {
                 // See memcached_servers_parse().
                 //
                 int n = 0;
+                int s = 0; // Number of servers in this pool.
 
-                for (int j = 0; servers[j]; j++)
-                    n = n + strlen(servers[j]) + 50;
+                while (servers[s]) {
+                    n = n + strlen(servers[s]) + 50;
+                    s++;
+                }
 
-                char *config_str   = calloc(n, 1);
-                char *behavior_str = calloc(n, 1);
+                proxy_behavior *behaviors =
+                    calloc(s, sizeof(proxy_behavior));
+
+                char *config_str    = calloc(n, 1);
+                char *behaviors_str = calloc(n, 1);
+
                 if (config_str != NULL &&
-                    behavior_str != NULL) {
+                    behaviors_str != NULL &&
+                    behaviors != NULL) {
                     for (int j = 0; servers[j]; j++) {
+                        assert(j < s);
+
                         char *sep = strchr(servers[j], ';');
                         if (sep == NULL)
                             sep = servers[j] + strlen(servers[j]);
@@ -286,23 +298,28 @@ void cproxy_on_new_config(void *data0, void *data1) {
                         if (cur_config != config_str)
                             *cur_config++ = ',';
 
-                        char *cur_behavior_str =
-                            behavior_str + strlen(behavior_str);
-                        if (cur_behavior_str != behavior_str)
-                            *cur_behavior_str++ = ';';
+                        char *cur_behaviors_str =
+                            behaviors_str + strlen(behaviors_str);
+                        if (cur_behaviors_str != behaviors_str)
+                            *cur_behaviors_str++ = ';';
 
                         strncpy(cur_config, servers[j], sep - servers[j]);
                         cur_config[sep - servers[j]] = '\0';
 
-                        strcpy(cur_behavior_str, sep + 1);
+                        strcpy(cur_behaviors_str, sep + 1);
+                        behaviors[j] =
+                            cproxy_parse_behavior(cur_behaviors_str,
+                                                  m->behavior);
                     }
 
                     cproxy_on_new_pool(m, pool_name, pool_port,
                                        config_str, new_config_ver,
-                                       behavior_str);
+                                       behaviors_str, s,
+                                       behaviors);
 
                     free(config_str);
-                    free(behavior_str);
+                    free(behaviors_str);
+                    free(behaviors);
                 } else {
                     if (settings.verbose > 1)
                         fprintf(stderr, "oom on re-config malloc\n");;
@@ -346,7 +363,8 @@ void cproxy_on_new_config(void *data0, void *data1) {
 
         if (down)
             cproxy_on_new_pool(m, NULL, port,
-                               NULL, new_config_ver, NULL);
+                               NULL, new_config_ver,
+                               NULL, 0, NULL);
     }
 
     free_kvpair(kvs);
@@ -361,13 +379,12 @@ void cproxy_on_new_pool(proxy_main *m,
                         char *name, int port,
                         char *config,
                         uint32_t config_ver,
-                        char *behavior_str) {
+                        char *behaviors_str,
+                        int   behaviors_num,
+                        proxy_behavior *behaviors) {
     assert(m);
     assert(port >= 0);
     assert(is_listen_thread());
-
-    proxy_behavior behavior =
-        cproxy_parse_behavior(behavior_str, m->behavior);
 
     // See if we've already got a proxy running on the port,
     // and create one if needed.
@@ -381,8 +398,9 @@ void cproxy_on_new_pool(proxy_main *m,
         p = cproxy_create(name, port,
                           config,
                           config_ver,
-                          behavior_str,
-                          behavior);
+                          behaviors_str,
+                          behaviors_num,
+                          behaviors);
         if (p != NULL) {
             p->next = m->proxy_head;
             m->proxy_head = p;
@@ -443,18 +461,33 @@ void cproxy_on_new_pool(proxy_main *m,
             p->config = strdup(config);
         }
 
-        if ((p->behavior_str != NULL) &&
-            (behavior_str == NULL ||
-             strcmp(p->behavior_str, behavior_str) != 0)) {
-            free(p->behavior_str);
-            p->behavior_str = NULL;
+        if ((p->behaviors_str != NULL) &&
+            (behaviors_str == NULL ||
+             strcmp(p->behaviors_str, behaviors_str) != 0)) {
+            free(p->behaviors_str);
+            p->behaviors_str = NULL;
+
+            free(p->behaviors);
+            p->behaviors = NULL;
+            p->behaviors_num = 0;
         }
-        if (p->behavior_str == NULL && behavior_str != NULL) {
-            p->behavior_str = strdup(behavior_str);
+        if (p->behaviors_str == NULL && behaviors_str != NULL) {
+            p->behaviors_str = strdup(behaviors_str);
+
+            if (behaviors != NULL &&
+                behaviors_num > 0) {
+                assert(p->behaviors == NULL);
+                assert(p->behaviors_num == 0);
+
+                p->behaviors_num = behaviors_num;
+                p->behaviors     = cproxy_copy_behaviors(behaviors_num,
+                                                         behaviors);
+            }
         }
 
         if (p->name != NULL &&
-            p->config != NULL)
+            p->config != NULL &&
+            p->behaviors_str != NULL)
             m->stat_proxy_existings++;
         else
             m->stat_proxy_shutdowns++;
@@ -462,7 +495,6 @@ void cproxy_on_new_pool(proxy_main *m,
         assert(config_ver != p->config_ver);
 
         p->config_ver = config_ver;
-        p->behavior   = behavior;
 
         pthread_mutex_unlock(&p->proxy_lock);
     }

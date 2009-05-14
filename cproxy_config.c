@@ -112,29 +112,60 @@ int cproxy_init_string(char *cfg_str,
             exit(EXIT_FAILURE);
         }
 
-        proxy *p = cproxy_create(proxy_name,
-                                 proxy_port,
-                                 proxy_sect,
-                                 0, // config_ver.
-                                 behavior_str,
-                                 behavior);
-        if (p != NULL) {
-            int n = cproxy_listen(p);
-            if (n > 0) {
-                if (settings.verbose > 1)
-                    fprintf(stderr, "moxi listening on %d with %d conns\n",
-                            proxy_port, n);
+        int behaviors_num = 1; // Number of servers.
+        for (char *x = proxy_sect; *x != '\0'; x++)
+            if (*x == ',')
+                behaviors_num++;
+
+        char *behaviors_str =
+            calloc(behaviors_num, strlen(behavior_str) + 4);
+        proxy_behavior *behaviors =
+            calloc(behaviors_num, sizeof(proxy_behavior));
+
+        if (behaviors_str != NULL &&
+            behaviors != NULL) {
+            for (int i = 0; i < behaviors_num; i++) {
+                char *c = behaviors_str + strlen(behaviors_str);
+                if (c != behaviors_str)
+                    *c++ = ';';
+                strcpy(c, behavior_str);
+
+                behaviors[i] = behavior;
+            }
+
+            proxy *p = cproxy_create(proxy_name,
+                                     proxy_port,
+                                     proxy_sect,
+                                     0, // config_ver.
+                                     behaviors_str,
+                                     behaviors_num,
+                                     behaviors);
+            if (p != NULL) {
+                int n = cproxy_listen(p);
+                if (n > 0) {
+                    if (settings.verbose > 1)
+                        fprintf(stderr,
+                                "moxi listening on %d with %d conns\n",
+                                proxy_port, n);
+                } else {
+                    fprintf(stderr,
+                            "moxi error -- port %d unavailable?\n",
+                            proxy_port);
+                    exit(EXIT_FAILURE);
+                }
             } else {
-                fprintf(stderr,
-                        "moxi error -- port %d unavailable?\n",
-                        proxy_port);
+                fprintf(stderr, "could not alloc proxy\n");
                 exit(EXIT_FAILURE);
             }
+
+            free(behaviors_str);
+            free(behaviors);
         } else {
-            fprintf(stderr, "could not alloc proxy\n");
+            fprintf(stderr, "could not alloc behaviors\n");
             exit(EXIT_FAILURE);
         }
     }
+
     free(buff);
 
     return 0;
@@ -196,5 +227,12 @@ proxy_behavior cproxy_parse_behavior(char          *behavior_str,
     assert(IS_PROXY(behavior.downstream_prot));
 
     return behavior;
+}
+
+proxy_behavior *cproxy_copy_behaviors(int arr_size, proxy_behavior *arr) {
+    proxy_behavior *rv = calloc(arr_size, sizeof(proxy_behavior));
+    if (rv != NULL)
+        memcpy(rv, arr, arr_size * sizeof(proxy_behavior));
+    return rv;
 }
 

@@ -80,12 +80,15 @@ proxy *cproxy_create(char    *name,
                      int      port,
                      char    *config,
                      uint32_t config_ver,
-                     char          *behavior_str,
-                     proxy_behavior behavior) {
+                     char           *behaviors_str,
+                     int             behaviors_num,
+                     proxy_behavior *behaviors) {
     assert(name != NULL);
     assert(port > 0);
     assert(config != NULL);
-    assert(behavior_str != NULL);
+    assert(behaviors_str != NULL);
+    assert(behaviors_num > 0);
+    assert(behaviors != NULL);
 
     if (settings.verbose > 1)
         fprintf(stderr, "cproxy_create on port %d, downstream %s\n",
@@ -98,23 +101,26 @@ proxy *cproxy_create(char    *name,
         p->config     = strdup(config);
         p->config_ver = config_ver;
 
-        p->behavior_str = strdup(behavior_str);
-        p->behavior     = behavior;
+        p->behaviors_str = strdup(behaviors_str);
+        p->behaviors_num = behaviors_num;
+        p->behaviors     = cproxy_copy_behaviors(behaviors_num,
+                                                 behaviors);
 
         p->listening        = 0;
         p->listening_failed = 0;
 
         pthread_mutex_init(&p->proxy_lock, NULL);
 
-        assert(p->behavior.nthreads == settings.num_threads);
+        assert(p->behaviors[0].nthreads == settings.num_threads); // TODO.
 
-        p->thread_data_num = p->behavior.nthreads;
+        p->thread_data_num = p->behaviors[0].nthreads; // TODO.
         p->thread_data = (proxy_td *) calloc(p->thread_data_num,
                                              sizeof(proxy_td));
         if (p->thread_data != NULL &&
             p->name != NULL &&
             p->config != NULL &&
-            p->behavior_str != NULL) {
+            p->behaviors_str != NULL &&
+            p->behaviors != NULL) {
             // We start at 1, because thread[0] is the main listen/accept
             // thread, and not a true worker thread.  Too lazy to save
             // the wasted thread[0] slot memory.
@@ -128,14 +134,14 @@ proxy *cproxy_create(char    *name,
                 ptd->downstream_released = NULL;
                 ptd->downstream_tot = 0;
                 ptd->downstream_num = 0;
-                ptd->downstream_max = p->behavior.downstream_max;
+                ptd->downstream_max = p->behaviors[0].downstream_max; // TODO.
                 ptd->downstream_assigns = 0;
 
                 // TODO: Handle ascii-to-binary protocol.
                 //
-                assert(IS_PROXY(p->behavior.downstream_prot));
+                assert(IS_PROXY(p->behaviors[0].downstream_prot)); // TODO.
 
-                if (IS_BINARY(p->behavior.downstream_prot))
+                if (IS_BINARY(p->behaviors[0].downstream_prot))
                     ptd->propagate_downstream =
                         cproxy_forward_a2b_downstream;
                 else
@@ -156,11 +162,11 @@ proxy *cproxy_create(char    *name,
 
         free(p->name);
         free(p->config);
-        free(p->behavior_str);
+        free(p->behaviors_str);
+        free(p->behaviors);
         free(p->thread_data);
+        free(p);
     }
-
-    free(p);
 
     return NULL;
 }
@@ -501,19 +507,25 @@ void cproxy_add_downstream(proxy_td *ptd) {
                     ptd->downstream_num,
                     ptd->downstream_max);
 
-        char *config       = NULL;
-        char *behavior_str = NULL;
+        char *config        = NULL;
+        char *behaviors_str = NULL;
+
+        int             behaviors_num;
+        proxy_behavior *behaviors = NULL;
 
         pthread_mutex_lock(&ptd->proxy->proxy_lock);
 
         if (ptd->proxy->config != NULL)
             config = strdup(ptd->proxy->config);
 
-        if (ptd->proxy->behavior_str != NULL)
-            behavior_str = strdup(ptd->proxy->behavior_str);
+        if (ptd->proxy->behaviors_str != NULL)
+            behaviors_str = strdup(ptd->proxy->behaviors_str);
 
-        uint32_t       config_ver = ptd->proxy->config_ver;
-        proxy_behavior behavior   = ptd->proxy->behavior;
+        uint32_t config_ver = ptd->proxy->config_ver;
+
+        behaviors_num = ptd->proxy->behaviors_num;
+        behaviors     = cproxy_copy_behaviors(ptd->proxy->behaviors_num,
+                                              ptd->proxy->behaviors);
 
         pthread_mutex_unlock(&ptd->proxy->proxy_lock);
 
@@ -521,12 +533,14 @@ void cproxy_add_downstream(proxy_td *ptd) {
         // proxy is shutting down.
         //
         if (config != NULL &&
-            behavior_str != NULL) {
+            behaviors_str != NULL &&
+            behaviors != NULL) {
             downstream *d =
                 cproxy_create_downstream(config,
                                          config_ver,
-                                         behavior_str,
-                                         behavior);
+                                         behaviors_str,
+                                         behaviors_num,
+                                         behaviors);
             if (d != NULL) {
                 d->ptd = ptd;
                 ptd->downstream_tot++;
@@ -535,10 +549,11 @@ void cproxy_add_downstream(proxy_td *ptd) {
             } else {
                 ptd->stats.tot_downstream_create_failed++;
             }
-
-            free(config);
-            free(behavior_str);
         }
+
+        free(config);
+        free(behaviors_str);
+        free(behaviors);
     } else {
         ptd->stats.tot_downstream_max_reached++;
     }
@@ -753,22 +768,27 @@ void cproxy_free_downstream(downstream *d) {
  */
 downstream *cproxy_create_downstream(char *config,
                                      uint32_t config_ver,
-                                     char *behavior_str,
-                                     proxy_behavior behavior) {
+                                     char *behaviors_str,
+                                     int   behaviors_num,
+                                     proxy_behavior *behaviors) {
     assert(config != NULL);
-    assert(behavior_str != NULL);
+    assert(behaviors_str != NULL);
+    assert(behaviors_num > 0);
+    assert(behaviors != NULL);
 
     downstream *d = (downstream *) calloc(1, sizeof(downstream));
     if (d != NULL) {
-        d->config       = strdup(config);
-        d->config_ver   = config_ver;
-        d->behavior_str = strdup(behavior_str);
-        d->behavior     = behavior;
+        d->config        = strdup(config);
+        d->config_ver    = config_ver;
+        d->behaviors_str = strdup(behaviors_str);
+        d->behaviors_num = behaviors_num;
+        d->behaviors     = cproxy_copy_behaviors(behaviors_num,
+                                                 behaviors);
 
         if (settings.verbose > 1)
             fprintf(stderr,
                     "cproxy_create_downstream: %s, %u, %s\n",
-                    config, config_ver, behavior_str);
+                    config, config_ver, behaviors_str);
 
         if (memcached_create(&d->mst) != NULL) {
             memcached_behavior_set(&d->mst, MEMCACHED_BEHAVIOR_NO_BLOCK, 1);
@@ -801,7 +821,8 @@ downstream *cproxy_create_downstream(char *config,
         }
 
         free(d->config);
-        free(d->behavior_str);
+        free(d->behaviors_str);
+        free(d->behaviors);
         free(d);
     }
 
@@ -823,10 +844,11 @@ bool cproxy_check_downstream_config(downstream *d) {
         rv = true;
     } else if (d->config != NULL &&
                d->ptd->proxy->config != NULL &&
-               strcmp(d->config, d->ptd->proxy->config) == 0 &&
-               strcmp(d->behavior_str, d->ptd->proxy->behavior_str) == 0) {
+               strcmp(d->config,
+                      d->ptd->proxy->config) == 0 &&
+               strcmp(d->behaviors_str,
+                      d->ptd->proxy->behaviors_str) == 0) {
         d->config_ver = d->ptd->proxy->config_ver;
-        d->behavior   = d->ptd->proxy->behavior;
         rv = true;
     }
 
@@ -840,7 +862,6 @@ int cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread) {
     assert(d->ptd != NULL);
     assert(d->ptd->downstream_released != d); // Should not be in free list.
     assert(d->downstream_conns != NULL);
-    assert(IS_PROXY(d->behavior.downstream_prot));
     assert(memcached_server_count(&d->mst) > 0);
     assert(thread != NULL);
     assert(thread->base != NULL);
@@ -850,7 +871,13 @@ int cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread) {
     int s = 0; // Number connected.
     int n = memcached_server_count(&d->mst);
 
+    assert(d->behaviors_str != NULL);
+    assert(d->behaviors_num == n);
+    assert(d->behaviors != NULL);
+
     for (int i = 0; i < n; i++) {
+        assert(IS_PROXY(d->behaviors[i].downstream_prot));
+
         if (d->downstream_conns[i] == NULL) {
             rc = memcached_connect(&d->mst.hosts[i]);
             if (rc == MEMCACHED_SUCCESS) {
@@ -858,7 +885,7 @@ int cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread) {
                 if (fd >= 0) {
                     d->downstream_conns[i] =
                         conn_new(fd, conn_pause, 0, DATA_BUFFER_SIZE,
-                                 d->behavior.downstream_prot,
+                                 d->behaviors[i].downstream_prot,
                                  thread->base,
                                  &cproxy_downstream_funcs, d);
                     if (d->downstream_conns[i] != NULL)
@@ -1214,9 +1241,12 @@ bool cproxy_start_wait_queue_timeout(proxy_td *ptd, conn *uc) {
 
     proxy *p = ptd->proxy;
     assert(p != NULL);
+    assert(p->behaviors_str != NULL);
+    assert(p->behaviors_num > 0);
+    assert(p->behaviors != NULL);
 
     pthread_mutex_lock(&p->proxy_lock);
-    ptd->timeout_tv = p->behavior.wait_queue_timeout;
+    ptd->timeout_tv = p->behaviors[0].wait_queue_timeout; // TODO.
     pthread_mutex_unlock(&p->proxy_lock);
 
     if (ptd->timeout_tv.tv_sec != 0 ||
@@ -1239,6 +1269,9 @@ void wait_queue_timeout(const int fd,
 
     proxy *p = ptd->proxy;
     assert(p != NULL);
+    assert(p->behaviors_str != NULL);
+    assert(p->behaviors_num > 0);
+    assert(p->behaviors != NULL);
 
     if (settings.verbose > 1)
         fprintf(stderr, "wait_queue_timeout\n");
@@ -1257,7 +1290,7 @@ void wait_queue_timeout(const int fd,
             fprintf(stderr, "wait_queue_timeout cleared\n");
 
         pthread_mutex_lock(&p->proxy_lock);
-        struct timeval wqt = p->behavior.wait_queue_timeout;
+        struct timeval wqt = p->behaviors[0].wait_queue_timeout; // TODO.
         pthread_mutex_unlock(&p->proxy_lock);
 
         // TODO: Should have better than second resolution,
@@ -1598,9 +1631,12 @@ bool cproxy_start_downstream_timeout(downstream *d) {
     assert(d != NULL);
     assert(d->timeout_tv.tv_sec == 0);
     assert(d->timeout_tv.tv_usec == 0);
+    assert(d->behaviors_str != NULL);
+    assert(d->behaviors_num > 0);
+    assert(d->behaviors != NULL);
 
-    if (d->behavior.downstream_timeout.tv_sec == 0 &&
-        d->behavior.downstream_timeout.tv_usec == 0)
+    if (d->behaviors[0].downstream_timeout.tv_sec == 0 &&
+        d->behaviors[0].downstream_timeout.tv_usec == 0)
         return true;
 
     conn *uc = d->upstream_conn;
@@ -1618,8 +1654,8 @@ bool cproxy_start_downstream_timeout(downstream *d) {
 
     event_base_set(uc->thread->base, &d->timeout_event);
 
-    d->timeout_tv.tv_sec  = d->behavior.downstream_timeout.tv_sec;
-    d->timeout_tv.tv_usec = d->behavior.downstream_timeout.tv_usec;
+    d->timeout_tv.tv_sec  = d->behaviors[0].downstream_timeout.tv_sec;
+    d->timeout_tv.tv_usec = d->behaviors[0].downstream_timeout.tv_usec;
 
     return (evtimer_add(&d->timeout_event, &d->timeout_tv) == 0);
 }

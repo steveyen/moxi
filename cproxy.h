@@ -27,7 +27,7 @@ typedef struct proxy_behavior proxy_behavior;
 typedef struct downstream     downstream;
 
 struct proxy_behavior {
-    int            nthreads;
+    int            nthreads;           // TODO: Move out of behavior.
     int            downstream_max;     // Determines downstream concurrency.
     enum protocol  downstream_prot;    // Favored downstream protocol.
     struct timeval downstream_timeout; // Fields of 0 mean no timeout.
@@ -41,8 +41,8 @@ struct proxy_behavior {
  * track all the outstanding proxy objects.
  */
 struct proxy_main {
-    char *behavior_str;      // Proxy default behavior, immutable.
-    proxy_behavior behavior; // Proxy default behavior, immutable.
+    char *behavior_str;      // Default behavior, immutable.
+    proxy_behavior behavior; // Default behavior, immutable.
 
     // Start of proxy list.  Only the main listener thread
     // should access or modify this field.
@@ -75,8 +75,9 @@ struct proxy {
 
     // Mutable, covered by proxy_lock.
     //
-    char          *behavior_str;
-    proxy_behavior behavior;
+    char           *behaviors_str; // Semicolon delimited.
+    int             behaviors_num; // Size of behaviors array.
+    proxy_behavior *behaviors;     // Array, size is number of servers.
 
     // Any thread that accesses the mutable fields should
     // first acquire the proxy_lock.
@@ -175,16 +176,17 @@ struct proxy_td { // Per proxy, per worker-thread data struct.
 struct downstream {
     // The following group of fields are immutable or read-only (RO),
     // except for config_ver, which gets updated if the downstream's
-    // config/behavior still matches the parent ptd's config/behavior.
+    // config/behaviors still matches the parent ptd's config/behaviors.
     //
-    proxy_td      *ptd;          // RO: Parent pointer.
-    char          *config;       // RO: Mem owned by downstream.
-    uint32_t       config_ver;   // RW: Mutable, copy of proxy->config_ver.
-    proxy_behavior behavior;     // RO: Snapshot of proxy->behavior.
-    char          *behavior_str; // RO: Snapshot of proxy->behavior_str.
-    memcached_st   mst;          // RW: From libmemcached.
+    proxy_td       *ptd;           // RO: Parent pointer.
+    char           *config;        // RO: Mem owned by downstream.
+    uint32_t        config_ver;    // RW: Mutable, copy of proxy->config_ver.
+    char           *behaviors_str; // RO: Snapshot of proxy->behaviors_str.
+    int             behaviors_num; // RO: Snapshot of proxy->behaviors_num.
+    proxy_behavior *behaviors;     // RO: Snapshot of proxy->behaviors.
+    memcached_st    mst;           // RW: From libmemcached.
 
-    downstream *next;          // To track reserved/free lists.
+    downstream *next;         // To track reserved/free lists.
 
     conn **downstream_conns;  // Wraps the fd's of mst with conns.
     int    downstream_used;   // Number of in-use downstream conns, might
@@ -208,11 +210,13 @@ proxy *cproxy_create(char     *name,
                      int       port,
                      char     *config,
                      uint32_t  config_ver,
-                     char          *behavior_str,
-                     proxy_behavior behavior);
+                     char           *behaviors_str,
+                     int             behaviors_num,
+                     proxy_behavior *behaviors);
 
-proxy_behavior cproxy_parse_behavior(char          *behavior_str,
-                                     proxy_behavior behavior_default);
+proxy_behavior  cproxy_parse_behavior(char          *behavior_str,
+                                      proxy_behavior behavior_default);
+proxy_behavior *cproxy_copy_behaviors(int arr_size, proxy_behavior *arr);
 
 int       cproxy_listen(proxy *p);
 proxy_td *cproxy_find_thread_data(proxy *p, pthread_t thread_id);
@@ -226,8 +230,9 @@ void        cproxy_add_downstream(proxy_td *ptd);
 void        cproxy_free_downstream(downstream *d);
 downstream *cproxy_create_downstream(char *config,
                                      uint32_t config_ver,
-                                     char *behavior_str,
-                                     proxy_behavior behavior);
+                                     char *behaviors_str,
+                                     int   behaviors_num,
+                                     proxy_behavior *behaviors);
 downstream *cproxy_reserve_downstream(proxy_td *ptd);
 bool        cproxy_release_downstream(downstream *d, bool force);
 void        cproxy_release_downstream_conn(downstream *d, conn *c);
