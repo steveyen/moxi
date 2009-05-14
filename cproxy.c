@@ -1250,12 +1250,23 @@ bool cproxy_start_wait_queue_timeout(proxy_td *ptd, conn *uc) {
 
     proxy *p = ptd->proxy;
     assert(p != NULL);
+
+    pthread_mutex_lock(&p->proxy_lock);
+
     assert(p->behaviors_str != NULL);
     assert(p->behaviors_num > 0);
     assert(p->behaviors != NULL);
 
-    pthread_mutex_lock(&p->proxy_lock);
-    ptd->timeout_tv = p->behaviors[0].wait_queue_timeout; // TODO.
+    for (int i = 0; i < p->behaviors_num; i++) {
+        if (i <= 0 ||
+            ptd->timeout_tv.tv_sec >
+               p->behaviors[i].wait_queue_timeout.tv_sec ||
+            ptd->timeout_tv.tv_usec >
+               p->behaviors[i].wait_queue_timeout.tv_usec) {
+            ptd->timeout_tv = p->behaviors[i].wait_queue_timeout;
+        }
+    }
+
     pthread_mutex_unlock(&p->proxy_lock);
 
     if (ptd->timeout_tv.tv_sec != 0 ||
