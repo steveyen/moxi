@@ -1269,6 +1269,32 @@ struct timeval cproxy_get_wait_queue_timeout(proxy *p) {
     return rv;
 }
 
+struct timeval cproxy_get_downstream_timeout(downstream *d) {
+    assert(d);
+    assert(d->behaviors_str != NULL);
+    assert(d->behaviors_num > 0);
+    assert(d->behaviors != NULL);
+
+    struct timeval rv = {
+        .tv_sec = 0,
+        .tv_usec = 0
+    };
+
+    assert(d->behaviors_str != NULL);
+    assert(d->behaviors_num > 0);
+    assert(d->behaviors != NULL);
+
+    for (int i = 0; i < d->behaviors_num; i++) {
+        if (i <= 0 ||
+            rv.tv_sec  < d->behaviors[i].downstream_timeout.tv_sec ||
+            rv.tv_usec < d->behaviors[i].downstream_timeout.tv_usec) {
+            rv = d->behaviors[i].downstream_timeout;
+        }
+    }
+
+    return rv;
+}
+
 bool cproxy_start_wait_queue_timeout(proxy_td *ptd, conn *uc) {
     assert(ptd);
     assert(uc);
@@ -1663,8 +1689,9 @@ bool cproxy_start_downstream_timeout(downstream *d) {
     assert(d->behaviors_num > 0);
     assert(d->behaviors != NULL);
 
-    if (d->behaviors[0].downstream_timeout.tv_sec == 0 &&
-        d->behaviors[0].downstream_timeout.tv_usec == 0)
+    struct timeval dt = cproxy_get_downstream_timeout(d);
+    if (dt.tv_sec == 0 &&
+        dt.tv_usec == 0)
         return true;
 
     conn *uc = d->upstream_conn;
@@ -1682,8 +1709,8 @@ bool cproxy_start_downstream_timeout(downstream *d) {
 
     event_base_set(uc->thread->base, &d->timeout_event);
 
-    d->timeout_tv.tv_sec  = d->behaviors[0].downstream_timeout.tv_sec;
-    d->timeout_tv.tv_usec = d->behaviors[0].downstream_timeout.tv_usec;
+    d->timeout_tv.tv_sec  = dt.tv_sec;
+    d->timeout_tv.tv_usec = dt.tv_usec;
 
     return (evtimer_add(&d->timeout_event, &d->timeout_tv) == 0);
 }

@@ -296,6 +296,7 @@ bool cproxy_broadcast_a2b_downstream(downstream *d,
 
 void cproxy_upstream_ascii_item_response(item *it, conn *uc);
 
+struct timeval cproxy_get_downstream_timeout(downstream *d);
 struct timeval cproxy_get_wait_queue_timeout(proxy *p);
 
 bool cproxy_start_downstream_timeout(downstream *d);
