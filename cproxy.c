@@ -97,6 +97,14 @@ proxy *cproxy_create(char    *name,
         fprintf(stderr, "cproxy_create on port %d, downstream %s\n",
                 port, config);
 
+    int downstream_max = 2000; // TODO.
+    for (int i = 0; i < behaviors_num; i++)
+        if (downstream_max > behaviors[i].downstream_max)
+            downstream_max = behaviors[i].downstream_max;
+
+    if (downstream_max <= 0)
+        downstream_max = 1;
+
     proxy *p = (proxy *) calloc(1, sizeof(proxy));
     if (p != NULL) {
         p->name       = strdup(name);
@@ -135,7 +143,7 @@ proxy *cproxy_create(char    *name,
                 ptd->downstream_released = NULL;
                 ptd->downstream_tot = 0;
                 ptd->downstream_num = 0;
-                ptd->downstream_max = p->behaviors[0].downstream_max; // TODO.
+                ptd->downstream_max = downstream_max;
                 ptd->downstream_assigns = 0;
 
                 // TODO: Handle ascii-to-binary protocol.
