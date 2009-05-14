@@ -1761,26 +1761,21 @@ bool auth_downstream(memcached_server_st *server,
     if (usr_len <= 0 ||
         pwd_len <= 0 ||
         !IS_PROXY(behavior->downstream_prot) ||
-        (usr_len + pwd_len + 50 > sizeof(buf)))
+        (usr_len + pwd_len + 50 > sizeof(buf))) {
+        if (settings.verbose > 1)
+            fprintf(stderr, "auth failure args\n");
+
         return false; // Probably misconfigured.
+    }
 
     // The key should look like "PLAIN \0usr \0pwd".
     //
-    char *cur = buf;
-
 #define PLAIN_PREFIX "PLAIN "
 
-    memcpy(cur, PLAIN_PREFIX, sizeof(PLAIN_PREFIX));
-    cur += sizeof(PLAIN_PREFIX);
-    *cur++ = '\0';
-    memcpy(cur, behavior->sasl_plain_usr, usr_len);
-    cur += usr_len;
-    *cur++ = ' ';
-    *cur++ = '\0';
-    memcpy(cur, behavior->sasl_plain_pwd, pwd_len);
-    cur += pwd_len;
-
-    int key_len = cur - buf;
+    int key_len = snprintf(buf, sizeof(buf), "PLAIN %c%s%c%s",
+                           0, behavior->sasl_plain_usr,
+                           0, behavior->sasl_plain_pwd);
+    assert(key_len == strlen(PLAIN_PREFIX) + 2 + usr_len + pwd_len);
 
     protocol_binary_request_header req = { .bytes = {0} };
 
@@ -1794,6 +1789,11 @@ bool auth_downstream(memcached_server_st *server,
                      sizeof(req.bytes), 0) != MEMCACHED_SUCCESS ||
         memcached_io_write(server, buf, key_len, 1) == -1) {
         memcached_io_reset(server);
+
+        if (settings.verbose > 1)
+            fprintf(stderr, "auth failure during write (%d)\n",
+                    key_len);
+
         return false;
     }
 
@@ -1823,6 +1823,9 @@ bool auth_downstream(memcached_server_st *server,
         // - UNKNOWN_COMMAND - sasl-unaware server.
         //
         if (res.response.status == PROTOCOL_BINARY_RESPONSE_SUCCESS) {
+            if (settings.verbose > 1)
+                fprintf(stderr, "auth_downstream success\n");
+
             return true;
         }
     }
