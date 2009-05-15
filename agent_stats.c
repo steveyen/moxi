@@ -24,11 +24,11 @@ void on_conflate_get_stats(void *userdata,
 
 void on_conflate_reset_stats(void *userdata);
 
-static void request_stats(void *data0, void *data1);
-static void request_stats_reset(void *data0, void *data1);
+static void main_stats_collect(void *data0, void *data1);
+static void work_stats_collect(void *data0, void *data1);
 
-static void stats_collect(void *data0, void *data1);
-static void stats_reset(void *data0, void *data1);
+static void main_stats_reset(void *data0, void *data1);
+static void work_stats_reset(void *data0, void *data1);
 
 static void add_proxy_stats(proxy_stats *agg, proxy_stats *x);
 
@@ -113,7 +113,7 @@ void on_conflate_get_stats(void *userdata, void *opaque,
         // Continue on the main listener thread.
         //
         if (i >= m->nthreads &&
-            work_send(mthread->work_queue, request_stats, m, ca)) {
+            work_send(mthread->work_queue, main_stats_collect, m, ca)) {
             // Wait for all the stats collecting to finish.
             //
             for (i = 1; i < m->nthreads; i++) {
@@ -154,7 +154,7 @@ void on_conflate_get_stats(void *userdata, void *opaque,
  *
  * Puts stats gathering work on every worker thread's work_queue.
  */
-static void request_stats(void *data0, void *data1) {
+static void main_stats_collect(void *data0, void *data1) {
     proxy_main *m = data0;
     assert(m);
     assert(m->nthreads > 1);
@@ -185,7 +185,7 @@ static void request_stats(void *data0, void *data1) {
             for (proxy *p = m->proxy_head; p != NULL; p = p->next) {
                 proxy_td *ptd = &p->thread_data[i];
                 if (ptd != NULL &&
-                    work_send(t->work_queue, stats_collect, ptd, c)) {
+                    work_send(t->work_queue, work_stats_collect, ptd, c)) {
                     sent++;
                 }
             }
@@ -206,7 +206,7 @@ static void request_stats(void *data0, void *data1) {
     // we're ok.  New proxies that happen afterwards are fine, too.
 }
 
-static void stats_collect(void *data0, void *data1) {
+static void work_stats_collect(void *data0, void *data1) {
     proxy_td *ptd = data0;
     assert(ptd);
     assert(ptd->proxy);
@@ -360,9 +360,9 @@ void map_proxy_stats_foreach_emit(gpointer key,
 /* This callback is invoked by conflate on a conflate thread
  * when it wants proxy stats.
  *
- * We use the work_queues to retrieve the info, so that normal
- * runtime has fewer locks, at the cost of scatter/gather
- * complexity to handle the proxy stats request.
+ * We use the work_queues to scatter the request across our
+ * threads, so that normal runtime has fewer locks at the
+ * cost of infrequent reset complexity.
  */
 void on_conflate_reset_stats(void *userdata) {
     proxy_main *m = userdata;
@@ -386,7 +386,7 @@ void on_conflate_reset_stats(void *userdata) {
         // Continue on the main listener thread.
         //
         if (i >= m->nthreads &&
-            work_send(mthread->work_queue, request_stats_reset, m, ca)) {
+            work_send(mthread->work_queue, main_stats_reset, m, ca)) {
             // Wait for all resets to finish.
             //
             for (i = 1; i < m->nthreads; i++) {
@@ -402,7 +402,7 @@ void on_conflate_reset_stats(void *userdata) {
  *
  * Puts stats reset work on every worker thread's work_queue.
  */
-static void request_stats_reset(void *data0, void *data1) {
+static void main_stats_reset(void *data0, void *data1) {
     proxy_main *m = data0;
     assert(m);
     assert(m->nthreads > 1);
@@ -433,7 +433,7 @@ static void request_stats_reset(void *data0, void *data1) {
             for (proxy *p = m->proxy_head; p != NULL; p = p->next) {
                 proxy_td *ptd = &p->thread_data[i];
                 if (ptd != NULL &&
-                    work_send(t->work_queue, stats_reset, ptd, c)) {
+                    work_send(t->work_queue, work_stats_reset, ptd, c)) {
                     sent++;
                 }
             }
@@ -454,7 +454,7 @@ static void request_stats_reset(void *data0, void *data1) {
     // we're ok.  New proxies that happen afterwards are fine, too.
 }
 
-static void stats_reset(void *data0, void *data1) {
+static void work_stats_reset(void *data0, void *data1) {
     proxy_td *ptd = data0;
     assert(ptd);
 

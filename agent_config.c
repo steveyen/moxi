@@ -18,6 +18,7 @@
 void on_conflate_new_config(void *userdata, kvpair_t *config);
 void on_conflate_get_stats(void *userdata, void *opaque,
                            conflate_add_stat add_stat);
+void on_conflate_reset_stats(void *userdata);
 
 int cproxy_init_agent(char *cfg_str,
                       proxy_behavior behavior,
@@ -154,8 +155,9 @@ int cproxy_init_agent_start(char *jid,
         config.version    = VERSION;
         config.save_path  = config_path;
         config.userdata   = m;
-        config.new_config = on_conflate_new_config;
-        config.get_stats  = on_conflate_get_stats;
+        config.new_config  = on_conflate_new_config;
+        config.get_stats   = on_conflate_get_stats;
+        config.reset_stats = on_conflate_reset_stats;
 
         if (start_conflate(config)) {
             if (settings.verbose > 1)
