@@ -8,9 +8,8 @@ TODO ideas...
   - talked to Dustin about this, and he knows the
     git submodule and script magic to make the right metaproject.
 
-- test command, described by dustin.
-  - ping timings
-  - time between request and response on each downstream conn.
+- bucket selection
+  - after auth
 
 - histogram of request codes.
 - histogram of response codes.
@@ -43,6 +42,7 @@ TODO ideas...
 - optimization to use SETQ for downstream binary SET's
 
 - make clock timer resolution configurable
+  - 1 second currently
 
 - optimization: use trond's allocator instead of malloc/free for
   multiget hashtable and multiget hashtable entries.
@@ -53,7 +53,7 @@ TODO ideas...
 
 - handling binary protocol
   - on upstream
-  - on downstream
+  - on downstream - DONE
   - when downstreams are not uniform protocol
     - some ascii, some binary
   - easiest - binary upstream and binary downstream
@@ -87,11 +87,16 @@ TODO ideas...
 - optimized connection to self, where moxi is running
   as a memcached server.
 
-- auth/bucket select.
-  - login/auth/bucket-selection after creating downstream conn.
-  - PLAIN support for now.
+- authorization
+  - login/auth after creating downstream conn.
+  - PLAIN support for now DONE.
   - need mech support one day.
   - should support more mech's later.
+
+- test command, described by dustin.
+  - ping timings
+  - time between request and response on each downstream conn.
+  - initial version DONE.
 
 - message aggregation
   - aka, get key squashing or key-dedupe.
