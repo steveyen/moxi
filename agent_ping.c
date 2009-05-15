@@ -19,8 +19,7 @@ memcached_return memcached_version(memcached_st *ptr);
 
 // Local declarations.
 //
-void ping_server(char *pool,
-                 char *server,
+void ping_server(char *server_name,
                  proxy_behavior *behavior,
                  void *opaque,
                  conflate_add_ping_report add_report);
@@ -33,99 +32,129 @@ void on_conflate_ping_test(void *userdata, void *opaque,
 
     // The form key-multivalues looks roughly like...
     //
-    //  pool-customer1-b
+    //  servers
     //    svrname1
     //    svrname2
-    //  pool-customer1-a
-    //    svrname3
     //  svr-svrname1
-    //    key1=val1
-    //    key2=val2
-    //  pools
-    //    customer1-a
-    //    customer1-b
+    //    host=mc1.foo.net
+    //    port=11211
+    //    bucket=buck1
+    //    usr=test1
+    //    pwd=password
+    //  svr-svrname2
+    //    host=mc2.foo.net
+    //    port=11211
+    //    bucket=buck1
+    //    usr=test1
+    //    pwd=password
     //
     if (form != NULL) {
-        char   svr_key[200];
-        char   pool_key[200];
-        char **pools = get_key_values(form, "pools");
+        char   server_key[200];
+        char **servers = get_key_values(form, "servers");
 
-        for (int i = 0; pools != NULL && pools[i]; i++) {
-            snprintf(pool_key, sizeof(pool_key),
-                     "pool-%s", pools[i]);
+        for (int j = 0; servers != NULL && servers[j]; j++) {
+            snprintf(server_key, sizeof(server_key),
+                     "svr-%s", servers[j]);
 
-            char **servers = get_key_values(form, pool_key);
-            for (int j = 0; servers != NULL && servers[j]; j++) {
-                snprintf(svr_key, sizeof(svr_key),
-                         "svr-%s", servers[j]);
+            proxy_behavior behavior;
 
-                proxy_behavior behavior;
+            memset(&behavior, 0, sizeof(behavior));
 
-                memset(&behavior, 0, sizeof(behavior));
-
-                char **props = get_key_values(form, svr_key);
-                for (int k = 0; props && props[k]; k++) {
-                    cproxy_parse_behavior_key_val_str(props[k],
-                                                      &behavior);
-                }
-
-                ping_server(pools[i], servers[j], &behavior,
-                            opaque, add_report);
+            char **props = get_key_values(form, server_key);
+            for (int k = 0; props && props[k]; k++) {
+                cproxy_parse_behavior_key_val_str(props[k],
+                                                  &behavior);
             }
+
+            ping_server(servers[j], &behavior,
+                        opaque, add_report);
         }
     }
 
     add_report(opaque, NULL, NULL);
 }
 
-void ping_server(char *pool,
-                 char *server,
+void ping_server(char *server_name,
                  proxy_behavior *behavior,
                  void *opaque,
                  conflate_add_ping_report add_report) {
-    kvpair_t *kvr = mk_kvpair(pool, NULL);
-    kvr = NULL;
+    assert(server_name);
+    assert(behavior);
+    assert(add_report);
 
-    memcached_st mst;
+    if (strlen(behavior->host) <= 0 ||
+        behavior->port <= 0)
+        return;
+
+    kvpair_t *kvr = mk_kvpair(server_name, NULL);
+    if (kvr == NULL)
+        return;
+
+    memcached_st         mst;
+    memcached_server_st *mservers;
+
+    char buf[300];
+
+#define tv_report(name, val)                           \
+    snprintf(buf, sizeof(buf), "%s=%llu-%llu", name,   \
+            (long long unsigned int) ((val).tv_sec),   \
+            (long long unsigned int) ((val).tv_usec)); \
+    add_kvpair_value(kvr, buf);
 
     if (memcached_create(&mst) != NULL) {
         memcached_behavior_set(&mst, MEMCACHED_BEHAVIOR_NO_BLOCK, 1);
 
-        memcached_server_st *mservers;
+        snprintf(buf, sizeof(buf),
+                 "%s:%u",
+                 behavior->host,
+                 behavior->port);
 
-        mservers = memcached_servers_parse(server);
+        mservers = memcached_servers_parse(buf);
         if (mservers != NULL) {
             memcached_server_push(&mst, mservers);
             memcached_server_list_free(mservers);
             mservers = NULL;
 
             int nconns = memcached_server_count(&mst);
+            bool vers  = false;
 
             for (int i = 0; i < nconns; i++) {
-                struct timeval timer_start;
-                gettimeofday(&timer_start, NULL);
+                struct timeval tv_start;
+                gettimeofday(&tv_start, NULL);
+                tv_report("tv_start", tv_start);
 
                 memcached_return rc = memcached_connect(&mst.hosts[i]);
                 if (rc == MEMCACHED_SUCCESS) {
-                    struct timeval timer_conn;
-                    gettimeofday(&timer_conn, NULL);
+                    struct timeval tv_conn;
+                    gettimeofday(&tv_conn, NULL);
+                    tv_report("tv_conn", tv_conn);
 
                     if (cproxy_auth_downstream(&mst.hosts[i],
                                                behavior)) {
-                        struct timeval timer_auth;
-                        gettimeofday(&timer_auth, NULL);
+                        struct timeval tv_auth;
+                        gettimeofday(&tv_auth, NULL);
+                        tv_report("tv_auth", tv_auth);
+
+                        // Only bother with version if we're authorized.
+                        //
+                        vers = true;
                     }
                 }
             }
 
-            for (int i = 0; i < 5; i++) {
-                struct timeval timer_version_pre;
-                gettimeofday(&timer_version_pre, NULL);
+            // TODO: Need a better ping test here.
+            // TODO: Hardcoded iteration here.
+            //
+            for (int i = 0; vers && i < 5; i++) {
+                struct timeval tv_version_pre;
+                gettimeofday(&tv_version_pre, NULL);
+                tv_report("tv_version_pre", tv_version_pre);
 
                 memcached_version(&mst);
 
-                struct timeval timer_version_post;
-                gettimeofday(&timer_version_post, NULL);
+                struct timeval tv_version_post;
+                gettimeofday(&tv_version_post, NULL);
+                tv_report("tv_version_post", tv_version_post);
             }
         }
 
