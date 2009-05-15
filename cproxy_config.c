@@ -13,12 +13,10 @@
 #include "work.h"
 
 int cproxy_init_string(char *cfg_str,
-                       char *behavior_str,
                        proxy_behavior behavior,
                        int nthreads);
 
 int cproxy_init_agent(char *cfg_str,
-                      char *behavior_str,
                       proxy_behavior behavior,
                       int nthreads);
 
@@ -62,13 +60,11 @@ int cproxy_init(char *cfg_str,
 
     if (strchr(cfg_str, '@') == NULL) // Not jid format.
         return cproxy_init_string(cfg_str,
-                                  behavior_str,
                                   behavior,
                                   nthreads);
 
 #ifdef HAVE_CONFLATE_H
     return cproxy_init_agent(cfg_str,
-                             behavior_str,
                              behavior,
                              nthreads);
 #else
@@ -79,7 +75,6 @@ int cproxy_init(char *cfg_str,
 }
 
 int cproxy_init_string(char *cfg_str,
-                       char *behavior_str,
                        proxy_behavior behavior,
                        int nthreads) {
     /* cfg looks like "local_port=host:port,host:port;local_port=host:port"
@@ -119,19 +114,11 @@ int cproxy_init_string(char *cfg_str,
             if (*x == ',')
                 behaviors_num++;
 
-        char *behaviors_str =
-            calloc(behaviors_num, strlen(behavior_str) + 4);
         proxy_behavior *behaviors =
             calloc(behaviors_num, sizeof(proxy_behavior));
 
-        if (behaviors_str != NULL &&
-            behaviors != NULL) {
+        if (behaviors != NULL) {
             for (int i = 0; i < behaviors_num; i++) {
-                char *c = behaviors_str + strlen(behaviors_str);
-                if (c != behaviors_str)
-                    *c++ = ';';
-                strcpy(c, behavior_str);
-
                 behaviors[i] = behavior;
             }
 
@@ -139,7 +126,6 @@ int cproxy_init_string(char *cfg_str,
                                      proxy_port,
                                      proxy_sect,
                                      0, // config_ver.
-                                     behaviors_str,
                                      behaviors_num,
                                      behaviors,
                                      nthreads);
@@ -161,7 +147,6 @@ int cproxy_init_string(char *cfg_str,
                 exit(EXIT_FAILURE);
             }
 
-            free(behaviors_str);
             free(behaviors);
         } else {
             fprintf(stderr, "could not alloc behaviors\n");
@@ -192,44 +177,7 @@ proxy_behavior cproxy_parse_behavior(char          *behavior_str,
     while (next != NULL) {
         char *key_val = strsep(&next, ",");
         if (key_val != NULL) {
-            char *key = strsep(&key_val, "=");
-            char *val = key_val;
-
-            if (key != NULL &&
-                val != NULL) {
-                if (strcmp(key, "downstream_max") == 0) {
-                    behavior.downstream_max = strtol(val, NULL, 10);
-                    assert(behavior.downstream_max > 0);
-                } else if (strcmp(key, "downstream_prot") == 0) {
-                    if (strcmp(val, "ascii") == 0)
-                        behavior.downstream_prot =
-                            proxy_downstream_ascii_prot;
-                    else if (strcmp(val, "binary") == 0)
-                        behavior.downstream_prot =
-                            proxy_downstream_binary_prot;
-                    else {
-                        // TODO: Error in behavior config string.
-                    }
-                } else if (strcmp(key, "downstream_timeout") == 0) {
-                    int ms = strtol(val, NULL, 10);
-                    behavior.downstream_timeout.tv_sec  = floor(ms / 1000.0);
-                    behavior.downstream_timeout.tv_usec = (ms % 1000) * 1000;
-                } else if (strcmp(key, "wait_queue_timeout") == 0) {
-                    int ms = strtol(val, NULL, 10);
-                    behavior.wait_queue_timeout.tv_sec  = floor(ms / 1000.0);
-                    behavior.wait_queue_timeout.tv_usec = (ms % 1000) * 1000;
-                } else if (strcmp(key, "sasl_plain_usr") == 0) {
-                    if (strlen(val) < sizeof(behavior.sasl_plain_usr) + 1) {
-                        strcpy(behavior.sasl_plain_usr, val);
-                    }
-                } else if (strcmp(key, "sasl_plain_pwd") == 0) {
-                    if (strlen(val) < sizeof(behavior.sasl_plain_pwd) + 1) {
-                        strcpy(behavior.sasl_plain_pwd, val);
-                    }
-                } else {
-                    // TODO: Error in behavior config string.
-                }
-            }
+            cproxy_parse_behavior_key_val_str(key_val, &behavior);
         }
     }
 
@@ -240,10 +188,87 @@ proxy_behavior cproxy_parse_behavior(char          *behavior_str,
     return behavior;
 }
 
+void cproxy_parse_behavior_key_val_str(char *key_val,
+                                       proxy_behavior *behavior) {
+    assert(behavior != NULL);
+
+    if (key_val != NULL) {
+        char *key = strsep(&key_val, "=");
+        char *val = key_val;
+        cproxy_parse_behavior_key_val(key, val, behavior);
+    }
+}
+
+void cproxy_parse_behavior_key_val(char *key,
+                                   char *val,
+                                   proxy_behavior *behavior) {
+    assert(behavior != NULL);
+
+    if (key != NULL &&
+        val != NULL) {
+        if (strcmp(key, "downstream_max") == 0) {
+            behavior->downstream_max = strtol(val, NULL, 10);
+            assert(behavior->downstream_max > 0);
+        } else if (strcmp(key, "downstream_prot") == 0) {
+            if (strcmp(val, "ascii") == 0)
+                behavior->downstream_prot =
+                    proxy_downstream_ascii_prot;
+            else if (strcmp(val, "binary") == 0)
+                behavior->downstream_prot =
+                    proxy_downstream_binary_prot;
+            else {
+                // TODO: Error in behavior config string.
+            }
+        } else if (strcmp(key, "downstream_timeout") == 0) {
+            int ms = strtol(val, NULL, 10);
+            behavior->downstream_timeout.tv_sec  = floor(ms / 1000.0);
+            behavior->downstream_timeout.tv_usec = (ms % 1000) * 1000;
+        } else if (strcmp(key, "wait_queue_timeout") == 0) {
+            int ms = strtol(val, NULL, 10);
+            behavior->wait_queue_timeout.tv_sec  = floor(ms / 1000.0);
+            behavior->wait_queue_timeout.tv_usec = (ms % 1000) * 1000;
+        } else if (strcmp(key, "sasl_plain_usr") == 0) {
+            if (strlen(val) < sizeof(behavior->sasl_plain_usr) + 1) {
+                strcpy(behavior->sasl_plain_usr, val);
+            }
+        } else if (strcmp(key, "sasl_plain_pwd") == 0) {
+            if (strlen(val) < sizeof(behavior->sasl_plain_pwd) + 1) {
+                strcpy(behavior->sasl_plain_pwd, val);
+            }
+        } else {
+            // TODO: Error in behavior config string.
+        }
+    }
+}
+
 proxy_behavior *cproxy_copy_behaviors(int arr_size, proxy_behavior *arr) {
     proxy_behavior *rv = calloc(arr_size, sizeof(proxy_behavior));
     if (rv != NULL)
         memcpy(rv, arr, arr_size * sizeof(proxy_behavior));
     return rv;
+}
+
+bool cproxy_equal_behaviors(int x_size, proxy_behavior *x,
+                            int y_size, proxy_behavior *y) {
+    if (x_size != y_size)
+        return false;
+
+    for (int i = 0; i < x_size; i++) {
+        if (cproxy_equal_behavior(&x[i], &y[i]) == false)
+            return false;
+    }
+
+    return true;
+}
+
+bool cproxy_equal_behavior(proxy_behavior *x,
+                           proxy_behavior *y) {
+    if (x == NULL && y == NULL)
+        return true;
+
+    if (x == NULL || y == NULL)
+        return false;
+
+    return memcmp(x, y, sizeof(proxy_behavior)) == 0;
 }
 

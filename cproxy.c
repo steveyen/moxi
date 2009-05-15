@@ -97,14 +97,12 @@ proxy *cproxy_create(char    *name,
                      int      port,
                      char    *config,
                      uint32_t config_ver,
-                     char           *behaviors_str,
                      int             behaviors_num,
                      proxy_behavior *behaviors,
                      int nthreads) {
     assert(name != NULL);
     assert(port > 0);
     assert(config != NULL);
-    assert(behaviors_str != NULL);
     assert(behaviors_num > 0);
     assert(behaviors != NULL);
     assert(nthreads > 1); // Main thread + at least one worker.
@@ -129,7 +127,6 @@ proxy *cproxy_create(char    *name,
         p->config     = strdup(config);
         p->config_ver = config_ver;
 
-        p->behaviors_str = strdup(behaviors_str);
         p->behaviors_num = behaviors_num;
         p->behaviors     = cproxy_copy_behaviors(behaviors_num,
                                                  behaviors);
@@ -145,7 +142,6 @@ proxy *cproxy_create(char    *name,
         if (p->thread_data != NULL &&
             p->name != NULL &&
             p->config != NULL &&
-            p->behaviors_str != NULL &&
             p->behaviors != NULL) {
             // We start at 1, because thread[0] is the main listen/accept
             // thread, and not a true worker thread.  Too lazy to save
@@ -188,7 +184,6 @@ proxy *cproxy_create(char    *name,
 
         free(p->name);
         free(p->config);
-        free(p->behaviors_str);
         free(p->behaviors);
         free(p->thread_data);
         free(p);
@@ -533,8 +528,7 @@ void cproxy_add_downstream(proxy_td *ptd) {
                     ptd->downstream_num,
                     ptd->downstream_max);
 
-        char *config        = NULL;
-        char *behaviors_str = NULL;
+        char *config = NULL;
 
         int             behaviors_num;
         proxy_behavior *behaviors = NULL;
@@ -543,9 +537,6 @@ void cproxy_add_downstream(proxy_td *ptd) {
 
         if (ptd->proxy->config != NULL)
             config = strdup(ptd->proxy->config);
-
-        if (ptd->proxy->behaviors_str != NULL)
-            behaviors_str = strdup(ptd->proxy->behaviors_str);
 
         uint32_t config_ver = ptd->proxy->config_ver;
 
@@ -559,12 +550,10 @@ void cproxy_add_downstream(proxy_td *ptd) {
         // proxy is shutting down.
         //
         if (config != NULL &&
-            behaviors_str != NULL &&
             behaviors != NULL) {
             downstream *d =
                 cproxy_create_downstream(config,
                                          config_ver,
-                                         behaviors_str,
                                          behaviors_num,
                                          behaviors);
             if (d != NULL) {
@@ -578,7 +567,6 @@ void cproxy_add_downstream(proxy_td *ptd) {
         }
 
         free(config);
-        free(behaviors_str);
         free(behaviors);
     } else {
         ptd->stats.tot_downstream_max_reached++;
@@ -794,11 +782,9 @@ void cproxy_free_downstream(downstream *d) {
  */
 downstream *cproxy_create_downstream(char *config,
                                      uint32_t config_ver,
-                                     char *behaviors_str,
                                      int   behaviors_num,
                                      proxy_behavior *behaviors) {
     assert(config != NULL);
-    assert(behaviors_str != NULL);
     assert(behaviors_num > 0);
     assert(behaviors != NULL);
 
@@ -806,15 +792,14 @@ downstream *cproxy_create_downstream(char *config,
     if (d != NULL) {
         d->config        = strdup(config);
         d->config_ver    = config_ver;
-        d->behaviors_str = strdup(behaviors_str);
         d->behaviors_num = behaviors_num;
         d->behaviors     = cproxy_copy_behaviors(behaviors_num,
                                                  behaviors);
 
         if (settings.verbose > 1)
             fprintf(stderr,
-                    "cproxy_create_downstream: %s, %u, %s\n",
-                    config, config_ver, behaviors_str);
+                    "cproxy_create_downstream: %s, %u\n",
+                    config, config_ver);
 
         if (memcached_create(&d->mst) != NULL) {
             memcached_behavior_set(&d->mst, MEMCACHED_BEHAVIOR_NO_BLOCK, 1);
@@ -847,7 +832,6 @@ downstream *cproxy_create_downstream(char *config,
         }
 
         free(d->config);
-        free(d->behaviors_str);
         free(d->behaviors);
         free(d);
     }
@@ -872,8 +856,10 @@ bool cproxy_check_downstream_config(downstream *d) {
                d->ptd->proxy->config != NULL &&
                strcmp(d->config,
                       d->ptd->proxy->config) == 0 &&
-               strcmp(d->behaviors_str,
-                      d->ptd->proxy->behaviors_str) == 0) {
+               cproxy_equal_behaviors(d->behaviors_num,
+                                      d->behaviors,
+                                      d->ptd->proxy->behaviors_num,
+                                      d->ptd->proxy->behaviors)) {
         d->config_ver = d->ptd->proxy->config_ver;
         rv = true;
     }
@@ -897,7 +883,6 @@ int cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread) {
     int s = 0; // Number connected.
     int n = memcached_server_count(&d->mst);
 
-    assert(d->behaviors_str != NULL);
     assert(d->behaviors_num == n);
     assert(d->behaviors != NULL);
 
@@ -1279,7 +1264,6 @@ struct timeval cproxy_get_wait_queue_timeout(proxy *p) {
 
     pthread_mutex_lock(&p->proxy_lock);
 
-    assert(p->behaviors_str != NULL);
     assert(p->behaviors_num > 0);
     assert(p->behaviors != NULL);
 
@@ -1298,7 +1282,6 @@ struct timeval cproxy_get_wait_queue_timeout(proxy *p) {
 
 struct timeval cproxy_get_downstream_timeout(downstream *d) {
     assert(d);
-    assert(d->behaviors_str != NULL);
     assert(d->behaviors_num > 0);
     assert(d->behaviors != NULL);
 
@@ -1306,10 +1289,6 @@ struct timeval cproxy_get_downstream_timeout(downstream *d) {
         .tv_sec = 0,
         .tv_usec = 0
     };
-
-    assert(d->behaviors_str != NULL);
-    assert(d->behaviors_num > 0);
-    assert(d->behaviors != NULL);
 
     for (int i = 0; i < d->behaviors_num; i++) {
         if (i <= 0 ||
@@ -1352,9 +1331,6 @@ void wait_queue_timeout(const int fd,
 
     proxy *p = ptd->proxy;
     assert(p != NULL);
-    assert(p->behaviors_str != NULL);
-    assert(p->behaviors_num > 0);
-    assert(p->behaviors != NULL);
 
     if (settings.verbose > 1)
         fprintf(stderr, "wait_queue_timeout\n");
@@ -1712,7 +1688,6 @@ bool cproxy_start_downstream_timeout(downstream *d) {
     assert(d != NULL);
     assert(d->timeout_tv.tv_sec == 0);
     assert(d->timeout_tv.tv_usec == 0);
-    assert(d->behaviors_str != NULL);
     assert(d->behaviors_num > 0);
     assert(d->behaviors != NULL);
 
@@ -1768,14 +1743,12 @@ bool auth_downstream(memcached_server_st *server,
         return false; // Probably misconfigured.
     }
 
-    // The key should look like "PLAIN \0usr \0pwd".
+    // The key should look like "PLAIN \0usr\0pwd".
     //
-#define PLAIN_PREFIX "PLAIN "
-
     int key_len = snprintf(buf, sizeof(buf), "PLAIN %c%s%c%s",
                            0, behavior->sasl_plain_usr,
                            0, behavior->sasl_plain_pwd);
-    assert(key_len == strlen(PLAIN_PREFIX) + 2 + usr_len + pwd_len);
+    assert(key_len == 8 + usr_len + pwd_len);
 
     protocol_binary_request_header req = { .bytes = {0} };
 

@@ -32,7 +32,7 @@ struct proxy_behavior {
     struct timeval downstream_timeout; // Fields of 0 mean no timeout.
     struct timeval wait_queue_timeout; // Fields of 0 mean no timeout.
 
-    char sasl_plain_usr[900];
+    char sasl_plain_usr[300];
     char sasl_plain_pwd[900];
 };
 
@@ -40,7 +40,6 @@ struct proxy_behavior {
  * track all the outstanding proxy objects.
  */
 struct proxy_main {
-    char *behavior_str;      // Default behavior, immutable.
     proxy_behavior behavior; // Default behavior, immutable.
 
     // Start of proxy list.  Only the main listener thread
@@ -76,7 +75,6 @@ struct proxy {
 
     // Mutable, covered by proxy_lock.
     //
-    char           *behaviors_str; // Semicolon delimited.
     int             behaviors_num; // Size of behaviors array.
     proxy_behavior *behaviors;     // Array, size is number of servers.
 
@@ -182,7 +180,6 @@ struct downstream {
     proxy_td       *ptd;           // RO: Parent pointer.
     char           *config;        // RO: Mem owned by downstream.
     uint32_t        config_ver;    // RW: Mutable, copy of proxy->config_ver.
-    char           *behaviors_str; // RO: Snapshot of proxy->behaviors_str.
     int             behaviors_num; // RO: Snapshot of proxy->behaviors_num.
     proxy_behavior *behaviors;     // RO: Snapshot of proxy->behaviors.
     memcached_st    mst;           // RW: From libmemcached.
@@ -211,14 +208,9 @@ proxy *cproxy_create(char     *name,
                      int       port,
                      char     *config,
                      uint32_t  config_ver,
-                     char           *behaviors_str,
                      int             behaviors_num,
                      proxy_behavior *behaviors,
                      int nthreads);
-
-proxy_behavior  cproxy_parse_behavior(char          *behavior_str,
-                                      proxy_behavior behavior_default);
-proxy_behavior *cproxy_copy_behaviors(int arr_size, proxy_behavior *arr);
 
 int       cproxy_listen(proxy *p);
 proxy_td *cproxy_find_thread_data(proxy *p, pthread_t thread_id);
@@ -232,7 +224,6 @@ void        cproxy_add_downstream(proxy_td *ptd);
 void        cproxy_free_downstream(downstream *d);
 downstream *cproxy_create_downstream(char *config,
                                      uint32_t config_ver,
-                                     char *behaviors_str,
                                      int   behaviors_num,
                                      proxy_behavior *behaviors);
 downstream *cproxy_reserve_downstream(proxy_td *ptd);
@@ -291,6 +282,25 @@ bool cproxy_broadcast_a2b_downstream(downstream *d,
                                      uint16_t keylen,
                                      uint8_t  extlen,
                                      conn *uc, char *suffix);
+
+// ---------------------------------------------------------------
+
+proxy_behavior cproxy_parse_behavior(char          *behavior_str,
+                                     proxy_behavior behavior_default);
+
+void cproxy_parse_behavior_key_val_str(char *key_val,
+                                       proxy_behavior *behavior);
+
+void cproxy_parse_behavior_key_val(char *key,
+                                   char *val,
+                                   proxy_behavior *behavior);
+
+proxy_behavior *cproxy_copy_behaviors(int arr_size, proxy_behavior *arr);
+
+bool cproxy_equal_behaviors(int x_size, proxy_behavior *x,
+                            int y_size, proxy_behavior *y);
+bool cproxy_equal_behavior(proxy_behavior *x,
+                           proxy_behavior *y);
 
 // ---------------------------------------------------------------
 
