@@ -236,6 +236,9 @@ int   cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread);
 void  cproxy_wait_any_downstream(proxy_td *ptd, conn *c);
 void  cproxy_assign_downstream(proxy_td *ptd);
 
+bool  cproxy_auth_downstream(memcached_server_st *server,
+                             proxy_behavior *behavior);
+
 void  cproxy_pause_upstream_for_downstream(proxy_td *ptd, conn *upstream);
 conn *cproxy_find_downstream_conn(downstream *d, char *key, int key_length);
 int   cproxy_server_index(downstream *d, char *key, size_t key_length);

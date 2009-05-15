@@ -50,9 +50,6 @@ conn *conn_list_remove(conn *head, conn **tail,
 
 bool  is_compatible_request(conn *existing, conn *candidate);
 
-bool auth_downstream(memcached_server_st *server,
-                     proxy_behavior *behavior);
-
 // Function tables.
 //
 conn_funcs cproxy_listen_funcs = {
@@ -894,8 +891,8 @@ int cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread) {
             if (rc == MEMCACHED_SUCCESS) {
                 int fd = d->mst.hosts[i].fd;
                 if (fd >= 0) {
-                    if (auth_downstream(&d->mst.hosts[i],
-                                        &d->behaviors[i])) {
+                    if (cproxy_auth_downstream(&d->mst.hosts[i],
+                                               &d->behaviors[i])) {
                         d->downstream_conns[i] =
                             conn_new(fd, conn_pause, 0,
                                      DATA_BUFFER_SIZE,
@@ -1717,8 +1714,8 @@ bool cproxy_start_downstream_timeout(downstream *d) {
     return (evtimer_add(&d->timeout_event, &d->timeout_tv) == 0);
 }
 
-bool auth_downstream(memcached_server_st *server,
-                     proxy_behavior *behavior) {
+bool cproxy_auth_downstream(memcached_server_st *server,
+                            proxy_behavior *behavior) {
     assert(server);
     assert(behavior);
 
