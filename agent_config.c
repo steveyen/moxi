@@ -198,7 +198,7 @@ void cproxy_on_new_config(void *data0, void *data1) {
     //  bindings
     //    11221
     //    11331
-    //  pool
+    //  pools
     //    customer1-a
     //    customer1-b
     //
