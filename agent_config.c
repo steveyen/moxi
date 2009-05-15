@@ -188,19 +188,23 @@ void cproxy_on_new_config(void *data0, void *data1) {
     // The kvs key-multivalues looks roughly like...
     //
     //  pool-customer1-b
-    //    localhost:11311
-    //    localhost:11312
+    //    svrname1
+    //    svrname2
     //  pool-customer1-a
-    //    localhost:11211
-    //  svr-localhost:11311
-    //    key1=val1
-    //    key2=val2
-    //  bindings
-    //    11221
-    //    11331
+    //    svrname3
+    //  svr-svrname1
+    //    host=mc1.foo.net
+    //    port=11211
+    //    weight=1
+    //    bucket=buck1
+    //    usr=test1
+    //    pwd=password
     //  pools
     //    customer1-a
     //    customer1-b
+    //  bindings
+    //    11221
+    //    11331
     //
     char **pools = get_key_values(kvs, "pools");
     if (pools == NULL)
@@ -268,23 +272,39 @@ void cproxy_on_new_config(void *data0, void *data1) {
                     for (int j = 0; servers[j]; j++) {
                         assert(j < s);
 
-                        char *config_end = config_str + strlen(config_str);
-                        if (config_end != config_str)
-                            *config_end++ = ',';
-                        strncpy(config_end, servers[j],
-                                n - (config_end - config_str));
-
                         char svr_key[200];
 
                         snprintf(svr_key, sizeof(svr_key),
                                  "svr-%s", servers[j]);
 
+                        // Inherit default behavior.
+                        //
                         behaviors[j] = m->behavior;
 
                         char **props = get_key_values(kvs, svr_key);
                         for (int k = 0; props && props[k]; k++) {
                             cproxy_parse_behavior_key_val_str(props[k],
                                                               &behaviors[j]);
+                        }
+
+                        char *config_end = config_str + strlen(config_str);
+                        if (config_end != config_str)
+                            *config_end++ = ',';
+
+                        if (strlen(behaviors[j].host) > 0 &&
+                            behaviors[j].port > 0) {
+                            snprintf(config_end,
+                                     n - (config_end - config_str),
+                                     "%s:%u",
+                                     behaviors[j].host,
+                                     behaviors[j].port);
+                        } else {
+                            if (settings.verbose > 1)
+                                fprintf(stderr,
+                                        "missing host:port for %s in %s\n",
+                                        svr_key, pool_name);
+
+                            goto fail;
                         }
 
                         if (behaviors[j].downstream_weight > 0) {

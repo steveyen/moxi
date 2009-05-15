@@ -1724,8 +1724,8 @@ bool cproxy_auth_downstream(memcached_server_st *server,
     if (!IS_BINARY(behavior->downstream_prot))
         return true;
 
-    int usr_len = strlen(behavior->sasl_plain_usr);
-    int pwd_len = strlen(behavior->sasl_plain_pwd);
+    int usr_len = strlen(behavior->usr);
+    int pwd_len = strlen(behavior->pwd);
     if (usr_len <= 0 &&
         pwd_len <= 0)
         return true; // When no usr & no pwd.
@@ -1743,8 +1743,8 @@ bool cproxy_auth_downstream(memcached_server_st *server,
     // The key should look like "PLAIN \0usr\0pwd".
     //
     int key_len = snprintf(buf, sizeof(buf), "PLAIN %c%s%c%s",
-                           0, behavior->sasl_plain_usr,
-                           0, behavior->sasl_plain_pwd);
+                           0, behavior->usr,
+                           0, behavior->pwd);
     assert(key_len == 8 + usr_len + pwd_len);
 
     protocol_binary_request_header req = { .bytes = {0} };

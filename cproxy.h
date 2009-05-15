@@ -33,8 +33,11 @@ struct proxy_behavior {
     struct timeval downstream_timeout; // Fields of 0 mean no timeout.
     struct timeval wait_queue_timeout; // Fields of 0 mean no timeout.
 
-    char sasl_plain_usr[300];
-    char sasl_plain_pwd[900];
+    char usr[250];
+    char pwd[900];
+    char host[250];
+    int  port;
+    char bucket[250];
 };
 
 /* Structure used and owned by main listener thread to

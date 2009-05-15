@@ -28,8 +28,11 @@ proxy_behavior behavior_default_g = {
         .tv_sec  = 0,
         .tv_usec = 0
     },
-    .sasl_plain_usr = "",
-    .sasl_plain_pwd = ""
+    .host = "",
+    .port = 0,
+    .bucket = "",
+    .usr = "",
+    .pwd = ""
 };
 
 int cproxy_init(char *cfg_str,
@@ -219,7 +222,8 @@ void cproxy_parse_behavior_key_val(char *key,
                 behavior->downstream_prot =
                     proxy_downstream_binary_prot;
             else {
-                // TODO: Error in behavior config string.
+                if (settings.verbose > 1)
+                    fprintf(stderr, "unknown behavior prot: %s\n", val);
             }
         } else if (strcmp(key, "timeout") == 0 ||
                    strcmp(key, "downstream_timeout") == 0) {
@@ -230,18 +234,27 @@ void cproxy_parse_behavior_key_val(char *key,
             int ms = strtol(val, NULL, 10);
             behavior->wait_queue_timeout.tv_sec  = floor(ms / 1000.0);
             behavior->wait_queue_timeout.tv_usec = (ms % 1000) * 1000;
-        } else if (strcmp(key, "usr") == 0 ||
-                   strcmp(key, "sasl_plain_usr") == 0) {
-            if (strlen(val) < sizeof(behavior->sasl_plain_usr) + 1) {
-                strcpy(behavior->sasl_plain_usr, val);
+        } else if (strcmp(key, "usr") == 0) {
+            if (strlen(val) < sizeof(behavior->usr) + 1) {
+                strcpy(behavior->usr, val);
             }
-        } else if (strcmp(key, "pwd") == 0 ||
-                   strcmp(key, "sasl_plain_pwd") == 0) {
-            if (strlen(val) < sizeof(behavior->sasl_plain_pwd) + 1) {
-                strcpy(behavior->sasl_plain_pwd, val);
+        } else if (strcmp(key, "pwd") == 0) {
+            if (strlen(val) < sizeof(behavior->pwd) + 1) {
+                strcpy(behavior->pwd, val);
+            }
+        } else if (strcmp(key, "host") == 0) {
+            if (strlen(val) < sizeof(behavior->host) + 1) {
+                strcpy(behavior->host, val);
+            }
+        } else if (strcmp(key, "port") == 0) {
+            behavior->port = strtol(val, NULL, 10);
+        } else if (strcmp(key, "bucket") == 0) {
+            if (strlen(val) < sizeof(behavior->bucket) + 1) {
+                strcpy(behavior->bucket, val);
             }
         } else {
-            // TODO: Error in behavior config string.
+            if (settings.verbose > 1)
+                fprintf(stderr, "unknown behavior key: %s\n", key);
         }
     }
 }
