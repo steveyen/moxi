@@ -45,8 +45,6 @@ void cproxy_on_new_pool(proxy_main *m,
 
 char **get_key_values(kvpair_t *kvs, char *key);
 
-kvpair_t *copy_kvpairs(kvpair_t *orig);
-
 int cproxy_init_agent(char *cfg_str,
                       proxy_behavior behavior,
                       int nthreads) {
@@ -190,7 +188,7 @@ void on_conflate_new_config(void *userdata, kvpair_t *config) {
     if (settings.verbose > 1)
         fprintf(stderr, "agent_config on_conflate_new_config\n");
 
-    kvpair_t *copy = copy_kvpairs(config);
+    kvpair_t *copy = dup_kvpair(config);
     if (copy != NULL) {
         work_send(mthread->work_queue, cproxy_on_new_config, m, copy);
     }
@@ -514,17 +512,6 @@ char **get_key_values(kvpair_t *kvs, char *key) {
     kvpair_t *x = find_kvpair(kvs, key);
     if (x != NULL)
         return x->values;
-    return NULL;
-}
-
-kvpair_t *copy_kvpairs(kvpair_t *orig) {
-    if (orig != NULL) {
-        kvpair_t *copy = mk_kvpair(orig->key, orig->values);
-        if (copy != NULL) {
-            copy->next = copy_kvpairs(orig->next);
-            return copy;
-        }
-    }
     return NULL;
 }
 
