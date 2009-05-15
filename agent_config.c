@@ -17,8 +17,13 @@
 
 void on_conflate_new_config(void *userdata, kvpair_t *config);
 void on_conflate_get_stats(void *userdata, void *opaque,
+                           char *type, kvpair_t *form,
                            conflate_add_stat add_stat);
-void on_conflate_reset_stats(void *userdata);
+void on_conflate_reset_stats(void *userdata,
+                             char *type, kvpair_t *form);
+void on_conflate_ping_test(void *userdata, void *opaque,
+                           kvpair_t *form,
+                           conflate_add_ping_report cb);
 
 int cproxy_init_agent(char *cfg_str,
                       proxy_behavior behavior,

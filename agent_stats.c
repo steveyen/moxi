@@ -20,9 +20,11 @@ uint32_t murmur_hash(const char *key, size_t length);
 //
 void on_conflate_get_stats(void *userdata,
                            void *opaque,
+                           char *type, kvpair_t *form,
                            conflate_add_stat add_stat);
 
-void on_conflate_reset_stats(void *userdata);
+void on_conflate_reset_stats(void *userdata,
+                             char *type, kvpair_t *form);
 
 static void main_stats_collect(void *data0, void *data1);
 static void work_stats_collect(void *data0, void *data1);
@@ -54,6 +56,7 @@ struct add_stat_emit {
  * complexity to handle the proxy stats request.
  */
 void on_conflate_get_stats(void *userdata, void *opaque,
+                           char *type, kvpair_t *form,
                            conflate_add_stat add_stat) {
     proxy_main *m = userdata;
     assert(m);
@@ -82,17 +85,17 @@ void on_conflate_get_stats(void *userdata, void *opaque,
               m->behavior.wait_queue_timeout.tv_sec * 1000 +
               m->behavior.wait_queue_timeout.tv_usec / 1000);
     more_stat("%llu", "configs",
-              m->stat_configs);
+              (long long unsigned int) m->stat_configs);
     more_stat("%llu", "config_fails",
-              m->stat_config_fails);
+              (long long unsigned int) m->stat_config_fails);
     more_stat("%llu", "proxy_starts",
-              m->stat_proxy_starts);
+              (long long unsigned int) m->stat_proxy_starts);
     more_stat("%llu", "proxy_start_fails",
-              m->stat_proxy_start_fails);
+              (long long unsigned int) m->stat_proxy_start_fails);
     more_stat("%llu", "proxy_existings",
-              m->stat_proxy_existings);
+              (long long unsigned int) m->stat_proxy_existings);
     more_stat("%llu", "proxy_shutdowns",
-              m->stat_proxy_shutdowns);
+              (long long unsigned int) m->stat_proxy_shutdowns);
 
     // Alloc here so the main listener thread has less work.
     //
@@ -302,9 +305,9 @@ void map_proxy_stats_foreach_emit(gpointer key,
     char buf_key[200];
     char buf_val[100];
 
-#define more_thread_stat(key, val)                         \
-    sprintf(buf_key, "%u:%s-%s", emit->thread, name, key); \
-    sprintf(buf_val, "%llu", val);                         \
+#define more_thread_stat(key, val)                          \
+    sprintf(buf_key, "%u:%s-%s", emit->thread, name, key);  \
+    sprintf(buf_val, "%llu", (long long unsigned int) val); \
     emit->add_stat(emit->opaque, buf_key, buf_val);
 
     more_thread_stat("num_upstream",
@@ -364,7 +367,8 @@ void map_proxy_stats_foreach_emit(gpointer key,
  * threads, so that normal runtime has fewer locks at the
  * cost of infrequent reset complexity.
  */
-void on_conflate_reset_stats(void *userdata) {
+void on_conflate_reset_stats(void *userdata,
+                             char *type, kvpair_t *form) {
     proxy_main *m = userdata;
     assert(m);
     assert(m->nthreads > 1);
