@@ -10,41 +10,10 @@
 #include "memcached.h"
 #include "cproxy.h"
 #include "work.h"
+#include "agent.h"
 
 // Integration with libconflate.
 //
-#include "conflate.h"
-
-void on_conflate_new_config(void *userdata, kvpair_t *config);
-void on_conflate_get_stats(void *userdata, void *opaque,
-                           char *type, kvpair_t *form,
-                           conflate_add_stat add_stat);
-void on_conflate_reset_stats(void *userdata,
-                             char *type, kvpair_t *form);
-void on_conflate_ping_test(void *userdata, void *opaque,
-                           kvpair_t *form,
-                           conflate_add_ping_report cb);
-
-int cproxy_init_agent(char *cfg_str,
-                      proxy_behavior behavior,
-                      int nthreads);
-
-int cproxy_init_agent_start(char *jid, char *jpw,
-                            char *config, char *host,
-                            proxy_behavior behavior,
-                            int nthreads);
-
-void cproxy_on_new_config(void *data0, void *data1);
-
-void cproxy_on_new_pool(proxy_main *m,
-                        char *name, int port,
-                        char *config_str,
-                        uint32_t config_ver,
-                        int   behaviors_num,
-                        proxy_behavior *behaviors);
-
-char **get_key_values(kvpair_t *kvs, char *key);
-
 int cproxy_init_agent(char *cfg_str,
                       proxy_behavior behavior,
                       int nthreads) {
@@ -161,6 +130,7 @@ int cproxy_init_agent_start(char *jid,
         config.new_config  = on_conflate_new_config;
         config.get_stats   = on_conflate_get_stats;
         config.reset_stats = on_conflate_reset_stats;
+        config.ping_test   = on_conflate_ping_test;
 
         if (start_conflate(config)) {
             if (settings.verbose > 1)

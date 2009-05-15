@@ -11,20 +11,11 @@
 #include "conflate.h"
 #include "cproxy.h"
 #include "work.h"
+#include "agent.h"
 
 // From libmemcached.
 //
 uint32_t murmur_hash(const char *key, size_t length);
-
-// Local declarations.
-//
-void on_conflate_get_stats(void *userdata,
-                           void *opaque,
-                           char *type, kvpair_t *form,
-                           conflate_add_stat add_stat);
-
-void on_conflate_reset_stats(void *userdata,
-                             char *type, kvpair_t *form);
 
 static void main_stats_collect(void *data0, void *data1);
 static void work_stats_collect(void *data0, void *data1);

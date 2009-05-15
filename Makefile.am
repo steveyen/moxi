@@ -35,7 +35,7 @@ testapp_SOURCES += cache.c
 endif
 
 if BUILD_CONFLATE
-moxi_SOURCES += agent_config.c agent_stats.c
+moxi_SOURCES += agent.h agent_config.c agent_ping.c agent_stats.c
 endif
 
 if BUILD_SOLARIS_PRIVS
