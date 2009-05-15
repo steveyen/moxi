@@ -28,6 +28,7 @@ typedef struct downstream     downstream;
 
 struct proxy_behavior {
     int            downstream_max;     // Determines downstream concurrency.
+    int            downstream_weight;
     enum protocol  downstream_prot;    // Favored downstream protocol.
     struct timeval downstream_timeout; // Fields of 0 mean no timeout.
     struct timeval wait_queue_timeout; // Fields of 0 mean no timeout.

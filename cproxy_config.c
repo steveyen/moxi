@@ -22,6 +22,7 @@ int cproxy_init_agent(char *cfg_str,
 
 proxy_behavior behavior_default_g = {
     .downstream_max = 1,
+    .downstream_weight = 0,
     .downstream_prot = proxy_downstream_ascii_prot,
     .downstream_timeout = {
         .tv_sec  = 0,
@@ -209,7 +210,12 @@ void cproxy_parse_behavior_key_val(char *key,
         if (strcmp(key, "downstream_max") == 0) {
             behavior->downstream_max = strtol(val, NULL, 10);
             assert(behavior->downstream_max > 0);
-        } else if (strcmp(key, "downstream_prot") == 0) {
+        } else if (strcmp(key, "weight") == 0 ||
+                   strcmp(key, "downstream_weight") == 0) {
+            behavior->downstream_weight = strtol(val, NULL, 10);
+            assert(behavior->downstream_max > 0);
+        } else if (strcmp(key, "prot") == 0 ||
+                   strcmp(key, "downstream_prot") == 0) {
             if (strcmp(val, "ascii") == 0)
                 behavior->downstream_prot =
                     proxy_downstream_ascii_prot;
@@ -219,7 +225,8 @@ void cproxy_parse_behavior_key_val(char *key,
             else {
                 // TODO: Error in behavior config string.
             }
-        } else if (strcmp(key, "downstream_timeout") == 0) {
+        } else if (strcmp(key, "timeout") == 0 ||
+                   strcmp(key, "downstream_timeout") == 0) {
             int ms = strtol(val, NULL, 10);
             behavior->downstream_timeout.tv_sec  = floor(ms / 1000.0);
             behavior->downstream_timeout.tv_usec = (ms % 1000) * 1000;
@@ -227,11 +234,13 @@ void cproxy_parse_behavior_key_val(char *key,
             int ms = strtol(val, NULL, 10);
             behavior->wait_queue_timeout.tv_sec  = floor(ms / 1000.0);
             behavior->wait_queue_timeout.tv_usec = (ms % 1000) * 1000;
-        } else if (strcmp(key, "sasl_plain_usr") == 0) {
+        } else if (strcmp(key, "usr") == 0 ||
+                   strcmp(key, "sasl_plain_usr") == 0) {
             if (strlen(val) < sizeof(behavior->sasl_plain_usr) + 1) {
                 strcpy(behavior->sasl_plain_usr, val);
             }
-        } else if (strcmp(key, "sasl_plain_pwd") == 0) {
+        } else if (strcmp(key, "pwd") == 0 ||
+                   strcmp(key, "sasl_plain_pwd") == 0) {
             if (strlen(val) < sizeof(behavior->sasl_plain_pwd) + 1) {
                 strcpy(behavior->sasl_plain_pwd, val);
             }

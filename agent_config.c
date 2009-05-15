@@ -277,7 +277,7 @@ void cproxy_on_new_config(void *data0, void *data1) {
                 int s = 0; // Number of servers in this pool.
 
                 while (servers[s]) {
-                    n = n + strlen(servers[s]) + 5;
+                    n = n + strlen(servers[s]) + 20; // Extra for weight.
                     s++;
                 }
 
@@ -296,7 +296,8 @@ void cproxy_on_new_config(void *data0, void *data1) {
                         char *config_end = config_str + strlen(config_str);
                         if (config_end != config_str)
                             *config_end++ = ',';
-                        strcpy(config_end, servers[j]);
+                        strncpy(config_end, servers[j],
+                                n - (config_end - config_str));
 
                         char svr_key[200];
 
@@ -310,7 +311,19 @@ void cproxy_on_new_config(void *data0, void *data1) {
                             cproxy_parse_behavior_key_val_str(props[k],
                                                               &behaviors[j]);
                         }
+
+                        if (behaviors[j].downstream_weight > 0) {
+                            config_end = config_str + strlen(config_str);
+                            snprintf(config_end,
+                                     n - (config_end - config_str),
+                                     ":%u",
+                                     behaviors[j].downstream_weight);
+                        }
                     }
+
+                    if (settings.verbose > 1)
+                        fprintf(stderr, "agent_config: %s\n",
+                                config_str);
 
                     cproxy_on_new_pool(m, pool_name, pool_port,
                                        config_str, new_config_ver,
