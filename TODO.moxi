@@ -12,9 +12,6 @@ TODO ideas...
   - ping timings
   - time between request and response on each downstream conn.
 
-- auth/bucket select.
-  - login/auth/bucket-selection after creating downstream conn.
-
 - histogram of request codes.
 - histogram of response codes.
 
@@ -30,16 +27,18 @@ TODO ideas...
   - pipelining for SET value bodies.
 
 - timeouts
-  - request is taking longer than 50ms -- must be a failure.
+  - request is taking longer than X ms -- must be a failure.
   - need timeout for upstream conns waiting in the queue
-    for an available downstream.
+    for an available downstream -- DONE
     - if no downstreams are available, then upstream conn
       might wait forever, if there's no timeout.
   - need timeout for downstream requests -- DONE
     - on timeout, closes the downstream connection
-  - revisit timeout/retry logic.
 
 - keepalive on the connections
+
+- request retry
+  - revisit timeout/retry logic.
 
 - optimization to use SETQ for downstream binary SET's
 
@@ -87,6 +86,12 @@ TODO ideas...
 
 - optimized connection to self, where moxi is running
   as a memcached server.
+
+- auth/bucket select.
+  - login/auth/bucket-selection after creating downstream conn.
+  - PLAIN support for now.
+  - need mech support one day.
+  - should support more mech's later.
 
 - message aggregation
   - aka, get key squashing or key-dedupe.
