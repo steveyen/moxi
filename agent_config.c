@@ -222,23 +222,26 @@ void cproxy_on_new_config(void *data0, void *data1) {
 
     // The kvs key-multivalues looks roughly like...
     //
-    // 	customer1-b
-    // 	    localhost:11311
-    // 	    localhost:11312:2;behavior_key=behavior_val,bkey2=bval2
-    // 	customer1-a
-    // 	    localhost:11211
-    // 	-bindings-
-    // 	    11221
-    // 	    11331
-    // 	-pools-
-    // 	    customer1-a
-    // 	    customer1-b
+    //  pool-customer1-b
+    //    localhost:11311
+    //    localhost:11312
+    //  pool-customer1-a
+    //    localhost:11211
+    //  svr-localhost:11311
+    //    key1=val1
+    //    key2=val2
+    //  bindings
+    //    11221
+    //    11331
+    //  pool
+    //    customer1-a
+    //    customer1-b
     //
-    char **pools = get_key_values(kvs, "-pools-");
+    char **pools = get_key_values(kvs, "pools");
     if (pools == NULL)
         goto fail;
 
-    char **bindings = get_key_values(kvs, "-bindings-");
+    char **bindings = get_key_values(kvs, "bindings");
     if (bindings == NULL)
         goto fail;
 
@@ -262,9 +265,14 @@ void cproxy_on_new_config(void *data0, void *data1) {
 
         if (pools[i] != NULL &&
             bindings[i] != NULL) {
-            char  *pool_name = pools[i];
-            int    pool_port = atoi(bindings[i]);
-            char **servers   = get_key_values(kvs, pool_name);
+            char *pool_name = pools[i];
+            int   pool_port = atoi(bindings[i]);
+            char  pool_key[200];
+
+            snprintf(pool_key, sizeof(pool_key),
+                     "pool-%s", pool_name);
+
+            char **servers = get_key_values(kvs, pool_key);
 
             assert(pool_name);
             assert(pool_port > 0);
@@ -279,7 +287,7 @@ void cproxy_on_new_config(void *data0, void *data1) {
                 int s = 0; // Number of servers in this pool.
 
                 while (servers[s]) {
-                    n = n + strlen(servers[s]) + 50;
+                    n = n + strlen(servers[s]) + 5;
                     s++;
                 }
 
@@ -510,18 +518,9 @@ void cproxy_on_new_pool(proxy_main *m,
 // ----------------------------------------------------------
 
 char **get_key_values(kvpair_t *kvs, char *key) {
-    assert(kvs);
-    assert(key);
-
-    while (kvs != NULL) {
-        assert(kvs->key);
-
-        if (strcmp(kvs->key, key) == 0)
-            return kvs->values;
-
-        kvs = kvs->next;
-    }
-
+    kvpair_t *x = find_kvpair(kvs, key);
+    if (x != NULL)
+        return x->values;
     return NULL;
 }
 
