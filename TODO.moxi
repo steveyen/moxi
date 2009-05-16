@@ -4,63 +4,34 @@ moxi used to be called "cproxy".
 
 TODO ideas...
 
-- submodules, easy low-dependency build steps.
-  - talked to Dustin about this, and he knows the
-    git submodule and script magic to make the right metaproject.
+- need debug/log in libconflate.
 
-- bucket selection
-  - after auth
+- tests!
+
+- startup REST call to check if we have latest version.
 
 - histogram of request codes.
 - histogram of response codes.
 
-- pipelining/streaming
-  - instead of 100% store-and-forward
-    - store-and-forward is helpful for replay.
-  - use a tee design?
-  - per facebook conversation
-  - pipelining for GET value bodies.
-    - consider multiget key-deduplication case. Should work.
-    - consider non-uniform protocol case.  Should work.
-    - need to keep item refcount sane.
-  - pipelining for SET value bodies.
+- make clock timer resolution configurable
+  - 1 second currently
 
-- timeouts
-  - request is taking longer than X ms -- must be a failure.
-  - need timeout for upstream conns waiting in the queue
-    for an available downstream -- DONE
-    - if no downstreams are available, then upstream conn
-      might wait forever, if there's no timeout.
-  - need timeout for downstream requests -- DONE
-    - on timeout, closes the downstream connection
-
-- keepalive on the connections
+- keepalive on the connections with a timer
+  - add stats to see if this is a problem?
 
 - request retry
   - revisit timeout/retry logic.
 
-- optimization to use SETQ for downstream binary SET's
+- revisit settings.verbose levels
 
-- make clock timer resolution configurable
-  - 1 second currently
+- revisit error msg strings
 
-- optimization: use trond's allocator instead of malloc/free for
-  multiget hashtable and multiget hashtable entries.
+- should mcp/libconflate msgs have version numbers?
+  - added note to mcp issue tracker.
 
-- optimization: use opaque's instead of GETK during binary multiget smush.
-  - issue: ascii-to-ascii uses same codepath, and ascii doesn't have opaques.
-  - issue: non-uniform downstream would be more complicated.
-
-- handling binary protocol
-  - on upstream
-  - on downstream - DONE
-  - when downstreams are not uniform protocol
-    - some ascii, some binary
-  - easiest - binary upstream and binary downstream
-    - binary quiet commands are similar to ascii noreply?
-      - there are state assumptions so we can't just
-        jump to another downstream.
-    - need to associate upstream with a favored downstream
+- optimization: use trond's allocator instead of malloc/free
+  - for multiget hashtable
+  - for multiget hashtable entries.
 
 - failover/drain mode
   - sort of an edge case of replication
@@ -74,6 +45,49 @@ TODO ideas...
 
 - servers owned by others.
 
+- optimized connection to self, where moxi is running
+  as a memcached server.
+
+- doxygen for moxi
+
+- timeouts
+  - request is taking longer than X ms -- must be a failure.
+  - need timeout for upstream conns waiting in the queue
+    for an available downstream -- DONE
+    - if no downstreams are available, then upstream conn
+      might wait forever, if there's no timeout.
+  - need timeout for downstream requests -- DONE
+    - on timeout, closes the downstream connection
+
+- submodules, easy low-dependency build steps.
+  - talked to Dustin about this, and he knows the
+    git submodule and script magic to make the
+    right metaproject.  this is proxybuild.
+  - need a faster way to test end-to-end, with mcp.
+    faster edit-compile-test-debug cycle
+
+- pipelining/streaming
+  - instead of 100% store-and-forward
+    - store-and-forward is helpful for replay.
+  - use a tee design?
+  - per facebook conversation
+  - pipelining for GET value bodies.
+    - consider multiget key-deduplication case. Should work.
+    - consider non-uniform protocol case.  Should work.
+    - need to keep item refcount sane.
+  - pipelining for SET value bodies.
+
+- handling binary protocol
+  - on upstream
+  - on downstream - DONE
+  - when downstreams are not uniform protocol
+    - some ascii, some binary
+  - easiest - binary upstream and binary downstream
+    - binary quiet commands are similar to ascii noreply?
+      - there are state assumptions so we can't just
+        jump to another downstream.
+    - need to associate upstream with a favored downstream
+
 - retry SET's and DELETE's
   - so that upstream can continue fast and just fire-&-forget.
     - but, need to respect serializability, similar to noreply bug?
@@ -84,12 +98,16 @@ TODO ideas...
   - fall back to set-password approach.
   - use unix-domain-sockets, and filesystem security/access control.
 
-- optimized connection to self, where moxi is running
-  as a memcached server.
+- optimization to use SETQ for downstream binary SET's
+
+- optimization: use opaque's instead of GETK during binary multiget smush.
+  - issue: ascii-to-ascii uses same codepath, and ascii doesn't have opaques.
+  - issue: non-uniform downstream would be more complicated
+           if we used opaques.
 
 - authorization
   - login/auth after creating downstream conn.
-  - PLAIN support for now DONE.
+  - PLAIN support - DONE.
   - need mech support one day.
   - should support more mech's later.
 
@@ -97,6 +115,11 @@ TODO ideas...
   - ping timings
   - time between request and response on each downstream conn.
   - initial version DONE.
+  - need version that can use small "ping test" buckets.
+
+- bucket selection
+  - after auth -- DONE.
+  - need server side of this.
 
 - message aggregation
   - aka, get key squashing or key-dedupe.
