@@ -119,6 +119,8 @@ int cproxy_init_agent_start(char *jid,
 
         memset(&config, 0, sizeof(config));
 
+        init_conflate(&config);
+
         // Different jid's possible for production, staging, etc.
         config.jid  = jid;  // "customer@stevenmb.local"
         config.pass = jpw;  // "password"

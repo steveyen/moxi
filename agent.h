@@ -5,6 +5,15 @@
 
 #include "conflate.h"
 
+int cproxy_init_agent(char *cfg_str,
+                      proxy_behavior behavior,
+                      int nthreads);
+
+int cproxy_init_agent_start(char *jid, char *jpw,
+                            char *config, char *host,
+                            proxy_behavior behavior,
+                            int nthreads);
+
 void on_conflate_new_config(void *userdata, kvpair_t *config);
 void on_conflate_get_stats(void *userdata, void *opaque,
                            char *type, kvpair_t *form,
@@ -14,15 +23,6 @@ void on_conflate_reset_stats(void *userdata,
 void on_conflate_ping_test(void *userdata, void *opaque,
                            kvpair_t *form,
                            conflate_add_ping_report cb);
-
-int cproxy_init_agent(char *cfg_str,
-                      proxy_behavior behavior,
-                      int nthreads);
-
-int cproxy_init_agent_start(char *jid, char *jpw,
-                            char *config, char *host,
-                            proxy_behavior behavior,
-                            int nthreads);
 
 void cproxy_on_new_config(void *data0, void *data1);
 

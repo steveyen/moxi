@@ -16,6 +16,10 @@ int cproxy_init_string(char *cfg_str,
                        proxy_behavior behavior,
                        int nthreads);
 
+int cproxy_init_agent(char *cfg_str,
+                      proxy_behavior behavior,
+                      int nthreads);
+
 proxy_behavior behavior_default_g = {
     .downstream_max = 1,
     .downstream_weight = 0,
