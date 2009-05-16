@@ -241,6 +241,8 @@ void  cproxy_assign_downstream(proxy_td *ptd);
 
 bool  cproxy_auth_downstream(memcached_server_st *server,
                              proxy_behavior *behavior);
+bool  cproxy_bucket_downstream(memcached_server_st *server,
+                               proxy_behavior *behavior);
 
 void  cproxy_pause_upstream_for_downstream(proxy_td *ptd, conn *upstream);
 conn *cproxy_find_downstream_conn(downstream *d, char *key, int key_length);

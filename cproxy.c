@@ -892,7 +892,9 @@ int cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread) {
                 int fd = d->mst.hosts[i].fd;
                 if (fd >= 0) {
                     if (cproxy_auth_downstream(&d->mst.hosts[i],
-                                               &d->behaviors[i])) {
+                                               &d->behaviors[i]) &&
+                        cproxy_bucket_downstream(&d->mst.hosts[i],
+                                                 &d->behaviors[i])) {
                         d->downstream_conns[i] =
                             conn_new(fd, conn_pause, 0,
                                      DATA_BUFFER_SIZE,
@@ -903,10 +905,6 @@ int cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread) {
                             d->downstream_conns[i]->thread = thread;
                     } else {
                         memcached_quit_server(&d->mst.hosts[i], 1);
-
-                        if (settings.verbose > 1)
-                            fprintf(stderr,
-                                    "auth_downstream failed\n");
                     }
                 }
             }
@@ -1798,6 +1796,90 @@ bool cproxy_auth_downstream(memcached_server_st *server,
 
             return true;
         }
+
+        if (settings.verbose > 1)
+            fprintf(stderr, "auth_downstream failure, %s (%x)\n",
+                    behavior->usr,
+                    res.response.status);
+    }
+
+    return false;
+}
+
+bool cproxy_bucket_downstream(memcached_server_st *server,
+                              proxy_behavior *behavior) {
+    assert(server);
+    assert(behavior);
+    assert(IS_PROXY(behavior->downstream_prot));
+
+    if (!IS_BINARY(behavior->downstream_prot))
+        return true;
+
+    int bucket_len = strlen(behavior->bucket);
+    if (bucket_len <= 0)
+        return true; // When no bucket.
+
+    protocol_binary_request_header req = { .bytes = {0} };
+
+    req.request.magic    = PROTOCOL_BINARY_REQ;
+    req.request.opcode   = PROTOCOL_BINARY_CMD_BUCKET;
+    req.request.keylen   = htons((uint16_t) bucket_len);
+    req.request.datatype = PROTOCOL_BINARY_RAW_BYTES;
+    req.request.bodylen  = htonl(bucket_len);
+
+    if (memcached_do(server, (const char *) req.bytes,
+                     sizeof(req.bytes), 0) != MEMCACHED_SUCCESS ||
+        memcached_io_write(server,
+                           behavior->bucket,
+                           bucket_len, 1) == -1) {
+        memcached_io_reset(server);
+
+        if (settings.verbose > 1)
+            fprintf(stderr, "bucket failure during write (%d)\n",
+                    bucket_len);
+
+        return false;
+    }
+
+    protocol_binary_response_header res = { .bytes = {0} };
+    if (memcached_safe_read(server, &res.bytes,
+                            sizeof(res.bytes)) == MEMCACHED_SUCCESS &&
+        res.response.magic == PROTOCOL_BINARY_RES) {
+        res.response.status  = ntohs(res.response.status);
+        res.response.keylen  = ntohs(res.response.keylen);
+        res.response.bodylen = ntohl(res.response.bodylen);
+
+        // Swallow whatever body comes.
+        //
+        char buf[300];
+
+        int len = res.response.bodylen;
+        while (len > 0) {
+            int amt = (len > sizeof(buf) ? sizeof(buf) : len);
+            if (memcached_safe_read(server,
+                                    buf,
+                                    amt) != MEMCACHED_SUCCESS)
+                return false;
+            len -= amt;
+        }
+
+        // The res status should be either...
+        // - SUCCESS         - we got the bucket.
+        // - AUTH_ERROR      - not allowed to use that bucket.
+        // - UNKNOWN_COMMAND - bucket-unaware server.
+        //
+        if (res.response.status == PROTOCOL_BINARY_RESPONSE_SUCCESS) {
+            if (settings.verbose > 1)
+                fprintf(stderr, "bucket_downstream success, %s\n",
+                        behavior->bucket);
+
+            return true;
+        }
+
+        if (settings.verbose > 1)
+            fprintf(stderr, "bucket_downstream failure, %s (%x)\n",
+                    behavior->bucket,
+                    res.response.status);
     }
 
     return false;
