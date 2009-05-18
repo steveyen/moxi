@@ -56,6 +56,10 @@ void on_conflate_ping_test(void *userdata, void *opaque,
             snprintf(server_key, sizeof(server_key),
                      "svr-%s", servers[j]);
 
+            if (settings.verbose > 1)
+                fprintf(stderr, "ping_test %s\n",
+                        server_key);
+
             proxy_behavior behavior;
 
             memset(&behavior, 0, sizeof(behavior));
@@ -119,6 +123,9 @@ void ping_server(char *server_name,
             bool vers  = false;
 
             for (int i = 0; i < nconns; i++) {
+                if (settings.verbose > 1)
+                    fprintf(stderr, "ping_test connecting %d\n", i);
+
                 struct timeval tv_start;
                 gettimeofday(&tv_start, NULL);
                 tv_report("tv_start", tv_start);
@@ -130,12 +137,15 @@ void ping_server(char *server_name,
                     tv_report("tv_conn", tv_conn);
 
                     if (cproxy_auth_downstream(&mst.hosts[i],
-                                               behavior)) {
+                                               behavior) &&
+                        cproxy_bucket_downstream(&mst.hosts[i],
+                                                 behavior)) {
                         struct timeval tv_auth;
                         gettimeofday(&tv_auth, NULL);
                         tv_report("tv_auth", tv_auth);
 
-                        // Only bother with version if we're authorized.
+                        // Only bother with version if at least one
+                        // server is authorized.
                         //
                         vers = true;
                     }
@@ -144,6 +154,7 @@ void ping_server(char *server_name,
 
             // TODO: Need a better ping test here.
             // TODO: Hardcoded iteration here.
+            // TODO: Set a few small & big values, and get them.
             //
             for (int i = 0; vers && i < 5; i++) {
                 struct timeval tv_version_pre;

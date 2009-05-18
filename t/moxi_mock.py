@@ -679,6 +679,8 @@ class TestProxy(unittest.TestCase):
 ## test get and multi-get
 ## test simple update commands
 ## test broadcast commands like flush_all
+#
+# Retest all the above with binary protocol.
 
 if __name__ == '__main__':
     unittest.main()
