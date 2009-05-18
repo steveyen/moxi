@@ -7,6 +7,16 @@ import threading
 import time
 import re
 
+# Before you run moxi_mock.py, start a moxi like...
+#
+#   ./moxi-debug -z 11333=localhost:11311 -p 0 -U 0 -vvv -t 1
+#
+# Then...
+#
+#   python ./t/moxi_mock.py
+#
+# ----------------------------------
+
 def debug(x):
     if True:
         print(x)
