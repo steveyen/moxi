@@ -257,6 +257,20 @@ void cproxy_on_new_config(void *data0, void *data1) {
         goto fail;
     }
 
+    char **behavior_kvs = get_key_values(kvs, "behavior");
+    if (behavior_kvs != NULL) {
+        // Update the default behavior.
+        //
+        proxy_behavior m_behavior = m->behavior;
+
+        for (int k = 0; behavior_kvs[k]; k++) {
+            cproxy_parse_behavior_key_val_str(behavior_kvs[k],
+                                              &m_behavior);
+        }
+
+        m->behavior = m_behavior;
+    }
+
     for (int i = 0; i < npools; i++) {
         assert(pools[i]);
         assert(bindings[i]);

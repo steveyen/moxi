@@ -44,7 +44,7 @@ struct proxy_behavior {
  * track all the outstanding proxy objects.
  */
 struct proxy_main {
-    proxy_behavior behavior; // Default behavior, immutable.
+    proxy_behavior behavior; // Default, main listener modifiable only.
 
     // Start of proxy list.  Only the main listener thread
     // should access or modify this field.
