@@ -14,6 +14,32 @@
 
 // Integration with libconflate.
 //
+static void agent_logger(void *userdata,
+                         enum conflate_log_level lvl,
+                         const char *msg, ...)
+{
+    char *n = NULL;
+    bool v = false;
+
+    switch(lvl) {
+    case FATAL: n = "FATAL"; v = settings.verbose > 0; break;
+    case ERROR: n = "ERROR"; v = settings.verbose > 0; break;
+    case WARN:  n = "WARN";  v = settings.verbose > 1; break;
+    case INFO:  n = "INFO";  v = settings.verbose > 1; break;
+    case DEBUG: n = "DEBUG"; v = settings.verbose > 2; break;
+    }
+    if (!v)
+        return;
+
+    char fmt[strlen(msg) + 16];
+    snprintf(fmt, sizeof(fmt), "%s: %s\n", n, msg);
+
+    va_list ap;
+    va_start(ap, msg);
+    vfprintf(stderr, fmt, ap);
+    va_end(ap);
+}
+
 int cproxy_init_agent(char *cfg_str,
                       proxy_behavior behavior,
                       int nthreads) {
@@ -133,6 +159,7 @@ int cproxy_init_agent_start(char *jid,
         config.get_stats   = on_conflate_get_stats;
         config.reset_stats = on_conflate_reset_stats;
         config.ping_test   = on_conflate_ping_test;
+        config.log         = agent_logger;
 
         if (start_conflate(config)) {
             if (settings.verbose > 1)
