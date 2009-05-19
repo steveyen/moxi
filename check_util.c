@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/time.h>
 
 #include <check.h>
 
@@ -120,6 +121,48 @@ START_TEST (test_safe_strtol)
 }
 END_TEST
 
+START_TEST (test_timeval_subtract_secs)
+{
+    struct timeval tv1 = { 11, 0 };
+    struct timeval tv2 = { 13, 0 };
+    struct timeval res = { 0, 0 };
+
+    fail_if(timeval_subtract(&res, &tv2, &tv1) == 1,
+            "Expected positive result.");
+
+    fail_unless(res.tv_sec == 2, "Expected two second diff.");
+    fail_unless(res.tv_usec == 0, "Expected no millisecond diff.");
+}
+END_TEST
+
+START_TEST (test_timeval_subtract_usecs)
+{
+    struct timeval tv1 = { 0, 11 };
+    struct timeval tv2 = { 0, 13 };
+    struct timeval res = { 0, 0 };
+
+    fail_if(timeval_subtract(&res, &tv2, &tv1) == 1,
+            "Expected positive result.");
+
+    fail_unless(res.tv_sec == 0, "Expected no second diff.");
+    fail_unless(res.tv_usec == 2, "Expected two millisecond diff.");
+}
+END_TEST
+
+START_TEST (test_timeval_subtract_secs_and_usecs)
+{
+    struct timeval tv1 = { 3, 11 };
+    struct timeval tv2 = { 4, 13 };
+    struct timeval res = { 0, 0 };
+
+    fail_if(timeval_subtract(&res, &tv2, &tv1) == 1,
+            "Expected positive result.");
+
+    fail_unless(res.tv_sec == 1, "Expected one second diff.");
+    fail_unless(res.tv_usec == 2, "Expected two millisecond diff.");
+}
+END_TEST
+
 static Suite* util_suite (void)
 {
     Suite *s = suite_create ("util");
@@ -130,6 +173,9 @@ static Suite* util_suite (void)
     tcase_add_test(tc_core, test_safe_strtoull);
     tcase_add_test(tc_core, test_safe_strtoll);
     tcase_add_test(tc_core, test_safe_strtol);
+    tcase_add_test(tc_core, test_timeval_subtract_secs);
+    tcase_add_test(tc_core, test_timeval_subtract_usecs);
+    tcase_add_test(tc_core, test_timeval_subtract_secs_and_usecs);
     suite_add_tcase(s, tc_core);
 
     return s;
