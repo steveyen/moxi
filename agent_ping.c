@@ -169,6 +169,11 @@ void ping_server(char *server_name,
             }
         }
 
+        if (!kvr) {
+            snprintf(buf, sizeof(buf), "Didn't work. :(");
+            kvr = mk_kvpair("error", bufa);
+        }
+
         assert(kvr);
         add_report(opaque, server_name, kvr);
         free_kvpair(kvr);
