@@ -234,6 +234,8 @@ AC_SEARCH_LIBS(gethostbyname, nsl)
 AC_SEARCH_LIBS(umem_cache_create, umem)
 
 PKG_CHECK_MODULES([DEPS], [ glib-2.0 >= 2.16.6 libmemcached >= 0.28 ])
+PKG_CHECK_MODULES([CHECK], [check >= 0.9.4])
+
 AC_SUBST(DEPS)
 AC_SUBST(DEPS)
 

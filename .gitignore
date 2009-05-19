@@ -41,3 +41,4 @@ doc/protocol-binary.txt
 /version.num
 /testapp
 /doc/doxy
+/check_util

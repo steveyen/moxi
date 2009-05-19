@@ -29,6 +29,14 @@ moxi_SOURCES = memcached.c memcached.h \
                     cproxy_multiget.c \
                     cproxy_stats.c
 
+TESTS = check_util
+
+check_PROGRAMS = check_util
+
+check_util_SOURCES = check_util.c util.c util.h
+check_util_CFLAGS = @CHECK_CFLAGS@
+check_util_LDADD = @CHECK_LIBS@
+
 if BUILD_CACHE
 moxi_SOURCES += cache.c
 testapp_SOURCES += cache.c
