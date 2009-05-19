@@ -158,9 +158,9 @@ proxy *cproxy_create(char    *name,
 
                 // TODO: Handle ascii-to-binary protocol.
                 //
-                assert(IS_PROXY(p->behaviors[0].downstream_prot)); // TODO.
+                assert(IS_PROXY(p->behaviors[0].downstream_protocol)); // TODO.
 
-                if (IS_BINARY(p->behaviors[0].downstream_prot))
+                if (IS_BINARY(p->behaviors[0].downstream_protocol))
                     ptd->propagate_downstream =
                         cproxy_forward_a2b_downstream;
                 else
@@ -231,6 +231,8 @@ int cproxy_listen(proxy *p) {
     conn *listen_conn_orig = listen_conn;
 
     // Idempotent, remembers if it already created listening socket(s).
+    //
+    // TODO: Handle upstream binary protocol.
     //
     if (p->listening == 0) {
         if (server_socket(p->port, proxy_upstream_ascii_prot) == 0) {
@@ -888,7 +890,7 @@ int cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread) {
     assert(d->behaviors != NULL);
 
     for (int i = 0; i < n; i++) {
-        assert(IS_PROXY(d->behaviors[i].downstream_prot));
+        assert(IS_PROXY(d->behaviors[i].downstream_protocol));
 
         if (d->downstream_conns[i] == NULL) {
             rc = memcached_connect(&d->mst.hosts[i]);
@@ -902,7 +904,7 @@ int cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread) {
                         d->downstream_conns[i] =
                             conn_new(fd, conn_pause, 0,
                                      DATA_BUFFER_SIZE,
-                                     d->behaviors[i].downstream_prot,
+                                     d->behaviors[i].downstream_protocol,
                                      thread->base,
                                      &cproxy_downstream_funcs, d);
                         if (d->downstream_conns[i] != NULL)
@@ -1723,7 +1725,7 @@ bool cproxy_auth_downstream(memcached_server_st *server,
 
     char buf[3000];
 
-    if (!IS_BINARY(behavior->downstream_prot))
+    if (!IS_BINARY(behavior->downstream_protocol))
         return true;
 
     int usr_len = strlen(behavior->usr);
@@ -1734,7 +1736,7 @@ bool cproxy_auth_downstream(memcached_server_st *server,
 
     if (usr_len <= 0 ||
         pwd_len <= 0 ||
-        !IS_PROXY(behavior->downstream_prot) ||
+        !IS_PROXY(behavior->downstream_protocol) ||
         (usr_len + pwd_len + 50 > sizeof(buf))) {
         if (settings.verbose > 1)
             fprintf(stderr, "auth failure args\n");
@@ -1814,9 +1816,9 @@ bool cproxy_bucket_downstream(memcached_server_st *server,
                               proxy_behavior *behavior) {
     assert(server);
     assert(behavior);
-    assert(IS_PROXY(behavior->downstream_prot));
+    assert(IS_PROXY(behavior->downstream_protocol));
 
-    if (!IS_BINARY(behavior->downstream_prot))
+    if (!IS_BINARY(behavior->downstream_protocol))
         return true;
 
     int bucket_len = strlen(behavior->bucket);

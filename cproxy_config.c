@@ -23,7 +23,7 @@ int cproxy_init_agent(char *cfg_str,
 proxy_behavior behavior_default_g = {
     .downstream_max = 1,
     .downstream_weight = 0,
-    .downstream_prot = proxy_downstream_ascii_prot,
+    .downstream_protocol = proxy_downstream_ascii_prot,
     .downstream_timeout = {
         .tv_sec  = 0,
         .tv_usec = 0
@@ -191,7 +191,7 @@ proxy_behavior cproxy_parse_behavior(char          *behavior_str,
 
     free(buff);
 
-    assert(IS_PROXY(behavior.downstream_prot));
+    assert(IS_PROXY(behavior.downstream_protocol));
 
     return behavior;
 }
@@ -221,13 +221,13 @@ void cproxy_parse_behavior_key_val(char *key,
                    strcmp(key, "downstream_weight") == 0) {
             behavior->downstream_weight = strtol(val, NULL, 10);
             assert(behavior->downstream_max > 0);
-        } else if (strcmp(key, "prot") == 0 ||
-                   strcmp(key, "downstream_prot") == 0) {
+        } else if (strcmp(key, "protocol") == 0 ||
+                   strcmp(key, "downstream_protocol") == 0) {
             if (strcmp(val, "ascii") == 0)
-                behavior->downstream_prot =
+                behavior->downstream_protocol =
                     proxy_downstream_ascii_prot;
             else if (strcmp(val, "binary") == 0)
-                behavior->downstream_prot =
+                behavior->downstream_protocol =
                     proxy_downstream_binary_prot;
             else {
                 if (settings.verbose > 1)
@@ -312,8 +312,8 @@ void cproxy_dump_behavior(proxy_behavior *b, char *prefix) {
             prefix, b->downstream_max);
     fprintf(stderr, "%s downstream_weight: %d\n",
             prefix, b->downstream_weight);
-    fprintf(stderr, "%s downstream_prot: %d\n",
-            prefix, b->downstream_prot);
+    fprintf(stderr, "%s downstream_protocol: %d\n",
+            prefix, b->downstream_protocol);
     fprintf(stderr, "%s downstream_timeout: %llu, %llu\n",
             prefix,
             (long long unsigned int) b->downstream_timeout.tv_sec,

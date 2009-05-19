@@ -67,8 +67,8 @@ void on_conflate_get_stats(void *userdata, void *opaque,
               m->nthreads);
     more_stat("%u", "downstream_max",
               m->behavior.downstream_max);
-    more_stat("%u", "downstream_prot",
-              m->behavior.downstream_prot);
+    more_stat("%u", "downstream_protocol",
+              m->behavior.downstream_protocol);
     more_stat("%ld", "downstream_timeout", // In millisecs.
               m->behavior.downstream_timeout.tv_sec * 1000 +
               m->behavior.downstream_timeout.tv_usec / 1000);
