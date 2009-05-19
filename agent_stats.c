@@ -216,11 +216,15 @@ static void work_stats_collect(void *data0, void *data1) {
     assert(map_proxy_stats != NULL);
 
     pthread_mutex_lock(&p->proxy_lock);
+    bool locked = true;
 
     if (p->name != NULL) {
         char *key = malloc(strlen(p->name) + 50);
         if (key != NULL) {
             sprintf(key, "%d:%s", p->port, p->name);
+
+            pthread_mutex_unlock(&p->proxy_lock);
+            locked = false;
 
             proxy_stats *ps = g_hash_table_lookup(map_proxy_stats, key);
             if (ps == NULL) {
@@ -239,7 +243,8 @@ static void work_stats_collect(void *data0, void *data1) {
         }
     }
 
-    pthread_mutex_unlock(&p->proxy_lock);
+    if (locked)
+        pthread_mutex_unlock(&p->proxy_lock);
 
     work_collect_one(c);
 }
