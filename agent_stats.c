@@ -63,12 +63,14 @@ void on_conflate_get_stats(void *userdata, void *opaque,
     assert(mthread);
     assert(mthread->work_queue);
 
-    char buf[100];
+    char buf[400];
 
 #define more_stat(spec, key, val) \
-    sprintf(buf, spec, val);      \
+    snprintf(buf, sizeof(buf), spec, val);       \
     add_stat(opaque, key, buf);
 
+    more_stat("%s", "version",
+              VERSION);
     more_stat("%u", "nthreads",
               m->nthreads);
     more_stat("%u", "downstream_max",
@@ -298,27 +300,28 @@ static void work_stats_collect(void *data0, void *data1) {
     bool locked = true;
 
     if (p->name != NULL) {
-        char *key = malloc(strlen(p->name) + 50);
-        if (key != NULL) {
-            sprintf(key, "%d:%s", p->port, p->name);
+        int   key_len = strlen(p->name) + 50;
+        char *key_buf = malloc(key_len);
+        if (key_buf != NULL) {
+            snprintf(key_buf, key_len, "%d:%s", p->port, p->name);
 
             pthread_mutex_unlock(&p->proxy_lock);
             locked = false;
 
-            proxy_stats *ps = g_hash_table_lookup(map_proxy_stats, key);
+            proxy_stats *ps = g_hash_table_lookup(map_proxy_stats, key_buf);
             if (ps == NULL) {
                 ps = calloc(1, sizeof(proxy_stats));
                 if (ps != NULL) {
-                    g_hash_table_insert(map_proxy_stats, key, ps);
-                    key = NULL;
+                    g_hash_table_insert(map_proxy_stats, key_buf, ps);
+                    key_buf = NULL;
                 }
             }
 
             if (ps != NULL)
                 add_proxy_stats(ps, &ptd->stats);
 
-            if (key != NULL)
-                free(key);
+            if (key_buf != NULL)
+                free(key_buf);
         }
     }
 
@@ -386,9 +389,11 @@ void map_proxy_stats_foreach_emit(gpointer key,
     char buf_key[200];
     char buf_val[100];
 
-#define more_thread_stat(key, val)                          \
-    sprintf(buf_key, "%u:%s-%s", emit->thread, name, key);  \
-    sprintf(buf_val, "%llu", (long long unsigned int) val); \
+#define more_thread_stat(key, val)                  \
+    snprintf(buf_key, sizeof(buf_key),              \
+             "%u:%s-%s", emit->thread, name, key);  \
+    snprintf(buf_val, sizeof(buf_val),              \
+             "%llu", (long long unsigned int) val); \
     emit->add_stat(emit->opaque, buf_key, buf_val);
 
     more_thread_stat("num_upstream",
