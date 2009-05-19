@@ -90,20 +90,25 @@ void ping_server(char *server_name,
         behavior->port <= 0)
         return;
 
-    kvpair_t *kvr = mk_kvpair(server_name, NULL);
-    if (kvr == NULL)
-        return;
-
     memcached_st         mst;
     memcached_server_st *mservers;
 
-    char buf[300];
+    char  buf[300];
+    char *bufa[2];
+    bufa[0] = buf;
+    bufa[1] = NULL;
+
+    kvpair_t *kvr;
 
 #define tv_report(name, val)                           \
-    snprintf(buf, sizeof(buf), "%s=%llu-%llu", name,   \
+    snprintf(buf, sizeof(buf), "%llu %llu",            \
             (long long unsigned int) ((val).tv_sec),   \
             (long long unsigned int) ((val).tv_usec)); \
-    add_kvpair_value(kvr, buf);
+    kvr = mk_kvpair(name, bufa);                       \
+    if (kvr != NULL) {                                 \
+        add_report(opaque, server_name, kvr);          \
+        free_kvpair(kvr);                              \
+    }
 
     if (memcached_create(&mst) != NULL) {
         memcached_behavior_set(&mst, MEMCACHED_BEHAVIOR_NO_BLOCK, 1);
