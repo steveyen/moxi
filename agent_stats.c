@@ -34,9 +34,15 @@ void map_proxy_stats_foreach_emit(gpointer key,
                                   gpointer user_data);
 
 struct add_stat_emit {
-    conflate_add_stat  add_stat;
-    void           *opaque;
-    int             thread;
+    conflate_add_stat add_stat;
+    void             *opaque;
+    int               thread;
+};
+
+struct main_stats_collect_info {
+    proxy_main       *m;
+    conflate_add_stat add_stat;
+    void             *opaque;
 };
 
 /* This callback is invoked by conflate on a conflate thread
@@ -106,8 +112,14 @@ void on_conflate_get_stats(void *userdata, void *opaque,
 
         // Continue on the main listener thread.
         //
+        struct main_stats_collect_info msci = {
+            .m        = m,
+            .add_stat = add_stat,
+            .opaque   = opaque
+        };
+
         if (i >= m->nthreads &&
-            work_send(mthread->work_queue, main_stats_collect, m, ca)) {
+            work_send(mthread->work_queue, main_stats_collect, &msci, ca)) {
             // Wait for all the stats collecting to finish.
             //
             for (i = 1; i < m->nthreads; i++) {
@@ -149,7 +161,11 @@ void on_conflate_get_stats(void *userdata, void *opaque,
  * Puts stats gathering work on every worker thread's work_queue.
  */
 static void main_stats_collect(void *data0, void *data1) {
-    proxy_main *m = data0;
+    struct main_stats_collect_info *msci = data0;
+    assert(msci);
+    assert(msci->add_stat);
+
+    proxy_main *m = msci->m;
     assert(m);
     assert(m->nthreads > 1);
 
@@ -161,8 +177,71 @@ static void main_stats_collect(void *data0, void *data1) {
     int sent   = 0;
     int nproxy = 0;
 
-    for (proxy *p = m->proxy_head; p != NULL; p = p->next)
+    char bufk[100];
+    char bufv[4000];
+
+#define emit_s(num, key, val)                        \
+    snprintf(bufk, sizeof(bufk), "%u:%s", num, key); \
+    msci->add_stat(msci->opaque, bufk, val);
+
+#define emit_f(num, key, fmtv, val)                  \
+    snprintf(bufv, sizeof(bufv), fmtv, val);         \
+    emit_s(num, key, bufv);
+
+    for (proxy *p = m->proxy_head; p != NULL; p = p->next) {
         nproxy++;
+
+        pthread_mutex_lock(&p->proxy_lock);
+
+        emit_f(p->port, "port", "%u", p->port);
+        emit_s(p->port, "name",   p->name);
+        emit_s(p->port, "config", p->config);
+        emit_f(p->port, "config_ver",    "%u", p->config_ver);
+        emit_f(p->port, "behaviors_num", "%u", p->behaviors_num);
+
+        for (int i = 0; i < p->behaviors_num; i++) {
+            char bufb[100];
+
+#define emit_xs(key, val)                                  \
+            snprintf(bufb, sizeof(bufb), "%u:%s", i, key); \
+            emit_s(p->port, bufb, val);
+
+#define emit_xf(key, fmtv, val)                            \
+            snprintf(bufb, sizeof(bufb), "%u:%s", i, key); \
+            emit_f(p->port, bufb, fmtv, val);
+
+            emit_xs("usr",        p->behaviors[i].usr);
+            emit_xs("host",       p->behaviors[i].host);
+            emit_xf("port", "%u", p->behaviors[i].port);
+            emit_xs("bucket",     p->behaviors[i].bucket);
+
+            emit_xf("downstream_max",
+                   "%u", p->behaviors[i].downstream_max);
+            emit_xf("downstream_weight",
+                   "%u", p->behaviors[i].downstream_weight);
+            emit_xf("downstream_protocol",
+                   "%u", p->behaviors[i].downstream_protocol);
+            emit_xf("downstream_timeout_sec",
+                   "%llu", (long long unsigned int)
+                   p->behaviors[i].downstream_timeout.tv_sec);
+            emit_xf("downstream_timeout_usec",
+                   "%llu", (long long unsigned int)
+                   p->behaviors[i].downstream_timeout.tv_usec);
+            emit_xf("wait_queue_timeout_sec",
+                   "%llu", (long long unsigned int)
+                   p->behaviors[i].wait_queue_timeout.tv_sec);
+            emit_xf("wait_queue_timeout_usec",
+                   "%llu", (long long unsigned int)
+                   p->behaviors[i].wait_queue_timeout.tv_usec);
+        }
+
+        emit_f(p->port, "listening",
+             "%llu", (long long unsigned int) p->listening);
+        emit_f(p->port, "listening_failed",
+             "%llu", (long long unsigned int) p->listening_failed);
+
+        pthread_mutex_unlock(&p->proxy_lock);
+    }
 
     // Starting at 1 because 0 is the main listen thread.
     //
