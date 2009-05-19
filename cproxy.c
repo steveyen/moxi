@@ -749,8 +749,12 @@ void cproxy_free_downstream(downstream *d) {
 
     int n = memcached_server_count(&d->mst);
 
-    for (int i = 0; i < n; i++)
-        d->downstream_conns[i]->extra = NULL;
+    if (d->downstream_conns != NULL) {
+        for (int i = 0; i < n; i++) {
+            if (d->downstream_conns[i] != NULL)
+                d->downstream_conns[i]->extra = NULL;
+        }
+    }
 
     // This will close sockets, which will force associated conn's
     // to go to conn_closing state.  Since we've already cleared
