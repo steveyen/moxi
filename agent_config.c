@@ -502,6 +502,9 @@ void cproxy_on_new_pool(proxy_main *m,
              strcmp(p->name, name) != 0)) {
             free(p->name);
             p->name = NULL;
+
+            if (settings.verbose > 1)
+                fprintf(stderr, "agent_config name changed\n");
         }
         if (p->name == NULL && name != NULL) {
             p->name = strdup(name);
@@ -512,6 +515,9 @@ void cproxy_on_new_pool(proxy_main *m,
              strcmp(p->config, config) != 0)) {
             free(p->config);
             p->config = NULL;
+
+            if (settings.verbose > 1)
+                fprintf(stderr, "agent_config config changed\n");
         }
         if (p->config == NULL && config != NULL) {
             p->config = strdup(config);
@@ -526,6 +532,9 @@ void cproxy_on_new_pool(proxy_main *m,
             free(p->behaviors);
             p->behaviors = NULL;
             p->behaviors_num = 0;
+
+            if (settings.verbose > 1)
+                fprintf(stderr, "agent_config behaviors changed\n");
         }
         if (p->behaviors == NULL && behaviors != NULL) {
             p->behaviors = cproxy_copy_behaviors(behaviors_num,
