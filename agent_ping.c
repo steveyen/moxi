@@ -95,10 +95,8 @@ void ping_server(char *server_name,
 
     struct timeval timing;
 
-    char  buf[300];
-    char *bufa[2];
-    bufa[0] = buf;
-    bufa[1] = NULL;
+    char  buf[300] = { 0x00 };
+    char *bufa[2]  = { buf, NULL };
 
     kvpair_t *kvr = NULL, *kvtmp = NULL;
 
