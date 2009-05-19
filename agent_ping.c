@@ -78,6 +78,35 @@ void on_conflate_ping_test(void *userdata, void *opaque,
     add_report(opaque, NULL, NULL);
 }
 
+/* This was stolen from the glibc docs.
+
+   Why they'd write documentation to show how to do this vs. just
+   provide the function is unclear.
+*/
+static int timeval_subtract(struct timeval *result,
+                            struct timeval *x, struct timeval *y)
+{
+    /* Perform the carry for the later subtraction by updating y. */
+    if (x->tv_usec < y->tv_usec) {
+        int nsec = (y->tv_usec - x->tv_usec) / 1000000 + 1;
+        y->tv_usec -= 1000000 * nsec;
+        y->tv_sec += nsec;
+    }
+    if (x->tv_usec - y->tv_usec > 1000000) {
+        int nsec = (x->tv_usec - y->tv_usec) / 1000000;
+        y->tv_usec += 1000000 * nsec;
+        y->tv_sec -= nsec;
+    }
+
+    /* Compute the time remaining to wait.
+       tv_usec is certainly positive. */
+    result->tv_sec = x->tv_sec - y->tv_sec;
+    result->tv_usec = x->tv_usec - y->tv_usec;
+
+    /* Return 1 if result is negative. */
+    return x->tv_sec < y->tv_sec;
+}
+
 void ping_server(char *server_name,
                  proxy_behavior *behavior,
                  void *opaque,
@@ -93,6 +122,8 @@ void ping_server(char *server_name,
     memcached_st         mst;
     memcached_server_st *mservers;
 
+    struct timeval timing;
+
     char  buf[300];
     char *bufa[2];
     bufa[0] = buf;
@@ -100,12 +131,13 @@ void ping_server(char *server_name,
 
     kvpair_t *kvr = NULL, *kvtmp = NULL;
 
-#define tv_report(name, val)                           \
-    snprintf(buf, sizeof(buf), "%llu %llu",            \
-            (long long unsigned int) ((val).tv_sec),   \
-            (long long unsigned int) ((val).tv_usec)); \
-    kvtmp = mk_kvpair(name, bufa);                     \
-    kvtmp->next = kvr;                                 \
+#define tv_report(name, mark, val)                          \
+    timeval_subtract(&timing, &val, &mark);                 \
+    snprintf(buf, sizeof(buf), "%llu %llu",                 \
+             (long long unsigned int) ((timing).tv_sec),    \
+             (long long unsigned int) ((timing).tv_usec));  \
+    kvtmp = mk_kvpair(name, bufa);                          \
+    kvtmp->next = kvr;                                      \
     kvr = kvtmp;
 
     if (memcached_create(&mst) != NULL) {
@@ -129,15 +161,14 @@ void ping_server(char *server_name,
                 if (settings.verbose > 1)
                     fprintf(stderr, "ping_test connecting %d\n", i);
 
-                struct timeval tv_start;
-                gettimeofday(&tv_start, NULL);
-                tv_report("tv_start", tv_start);
+                struct timeval start;
+                gettimeofday(&start, NULL);
 
                 memcached_return rc = memcached_connect(&mst.hosts[i]);
                 if (rc == MEMCACHED_SUCCESS) {
                     struct timeval tv_conn;
                     gettimeofday(&tv_conn, NULL);
-                    tv_report("tv_conn", tv_conn);
+                    tv_report("conn", start, tv_conn);
 
                     if (cproxy_auth_downstream(&mst.hosts[i],
                                                behavior) &&
@@ -145,7 +176,7 @@ void ping_server(char *server_name,
                                                  behavior)) {
                         struct timeval tv_auth;
                         gettimeofday(&tv_auth, NULL);
-                        tv_report("tv_auth", tv_auth);
+                        tv_report("auth", tv_conn, tv_auth);
 
                         // Only bother with version if at least one
                         // server is authorized.
@@ -162,13 +193,12 @@ void ping_server(char *server_name,
             for (int i = 0; vers && i < 5; i++) {
                 struct timeval tv_version_pre;
                 gettimeofday(&tv_version_pre, NULL);
-                tv_report("tv_version_pre", tv_version_pre);
 
                 memcached_version(&mst);
 
                 struct timeval tv_version_post;
                 gettimeofday(&tv_version_post, NULL);
-                tv_report("tv_version_post", tv_version_post);
+                tv_report("version", tv_version_pre, tv_version_post);
             }
         }
 
