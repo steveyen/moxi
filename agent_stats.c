@@ -203,7 +203,9 @@ static void main_stats_collect(void *data0, void *data1) {
 static void work_stats_collect(void *data0, void *data1) {
     proxy_td *ptd = data0;
     assert(ptd);
-    assert(ptd->proxy);
+
+    proxy *p = ptd->proxy;
+    assert(p);
 
     work_collect *c = data1;
     assert(c);
@@ -213,10 +215,12 @@ static void work_stats_collect(void *data0, void *data1) {
     GHashTable *map_proxy_stats = c->data;
     assert(map_proxy_stats != NULL);
 
-    if (ptd->proxy->name != NULL) {
-        char *key = malloc(strlen(ptd->proxy->name) + 50);
+    pthread_mutex_lock(&p->proxy_lock);
+
+    if (p->name != NULL) {
+        char *key = malloc(strlen(p->name) + 50);
         if (key != NULL) {
-            sprintf(key, "%d:%s", ptd->proxy->port, ptd->proxy->name);
+            sprintf(key, "%d:%s", p->port, p->name);
 
             proxy_stats *ps = g_hash_table_lookup(map_proxy_stats, key);
             if (ps == NULL) {
@@ -234,6 +238,8 @@ static void work_stats_collect(void *data0, void *data1) {
                 free(key);
         }
     }
+
+    pthread_mutex_unlock(&p->proxy_lock);
 
     work_collect_one(c);
 }
