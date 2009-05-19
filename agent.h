@@ -35,4 +35,4 @@ void cproxy_on_new_pool(proxy_main *m,
 
 char **get_key_values(kvpair_t *kvs, char *key);
 
-#endif AGENT_H
+#endif
