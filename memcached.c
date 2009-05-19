@@ -4254,6 +4254,8 @@ int main (int argc, char **argv) {
     if (cproxy_cfg) {
         cproxy_init(cproxy_cfg, cproxy_behavior, settings.num_threads);
         free(cproxy_cfg);
+    } else if (argc > 1 && strncmp(argv[argc - 1], "apikey=", 7) == 0) {
+        cproxy_init(argv[argc - 1], cproxy_behavior, settings.num_threads);
     } else {
         if (settings.port == 0 &&
             settings.udpport == 0) {
