@@ -98,17 +98,15 @@ void ping_server(char *server_name,
     bufa[0] = buf;
     bufa[1] = NULL;
 
-    kvpair_t *kvr;
+    kvpair_t *kvr = NULL, *kvtmp = NULL;
 
 #define tv_report(name, val)                           \
     snprintf(buf, sizeof(buf), "%llu %llu",            \
             (long long unsigned int) ((val).tv_sec),   \
             (long long unsigned int) ((val).tv_usec)); \
-    kvr = mk_kvpair(name, bufa);                       \
-    if (kvr != NULL) {                                 \
-        add_report(opaque, server_name, kvr);          \
-        free_kvpair(kvr);                              \
-    }
+    kvtmp = mk_kvpair(name, bufa);                     \
+    kvtmp->next = kvr;                                 \
+    kvr = kvtmp;
 
     if (memcached_create(&mst) != NULL) {
         memcached_behavior_set(&mst, MEMCACHED_BEHAVIOR_NO_BLOCK, 1);
@@ -173,6 +171,10 @@ void ping_server(char *server_name,
                 tv_report("tv_version_post", tv_version_post);
             }
         }
+
+        assert(kvr);
+        add_report(opaque, server_name, kvr);
+        free_kvpair(kvr);
 
         memcached_free(&mst);
     }
