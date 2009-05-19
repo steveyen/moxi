@@ -363,7 +363,8 @@ void cproxy_on_new_config(void *data0, void *data1) {
                         }
 
                         if (settings.verbose > 1) {
-                            cproxy_dump_behavior(&behaviors[j]);
+                            cproxy_dump_behavior(&behaviors[j],
+                                                 "on_new_config");
                         }
                     }
 

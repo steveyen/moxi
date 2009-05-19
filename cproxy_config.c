@@ -98,7 +98,7 @@ int cproxy_init_string(char *cfg_str,
     int   proxy_port;
 
     if (settings.verbose > 1) {
-        cproxy_dump_behavior(&behavior);
+        cproxy_dump_behavior(&behavior, "init_string");
     }
 
     buff = strdup(cfg_str);
@@ -283,8 +283,8 @@ bool cproxy_equal_behaviors(int x_size, proxy_behavior *x,
         if (cproxy_equal_behavior(&x[i], &y[i]) == false) {
             if (settings.verbose > 1) {
                 fprintf(stderr, "behaviors not equal (%d)\n", i);
-                cproxy_dump_behavior(&x[i]);
-                cproxy_dump_behavior(&y[i]);
+                cproxy_dump_behavior(&x[i], "x");
+                cproxy_dump_behavior(&y[i], "y");
             }
 
             return false;
@@ -305,16 +305,25 @@ bool cproxy_equal_behavior(proxy_behavior *x,
     return memcmp(x, y, sizeof(proxy_behavior)) == 0;
 }
 
-void cproxy_dump_behavior(proxy_behavior *b) {
-    fprintf(stderr, "downstream_max: %d\n", b->downstream_max);
-    fprintf(stderr, "downstream_weight: %d\n", b->downstream_weight);
-    fprintf(stderr, "downstream_prot: %d\n", b->downstream_prot);
-    fprintf(stderr, "downstream_timeout: %llu, %llu\n",
+void cproxy_dump_behavior(proxy_behavior *b, char *prefix) {
+    if (prefix == NULL)
+        prefix = "";
+    fprintf(stderr, "%s downstream_max: %d\n",
+            prefix, b->downstream_max);
+    fprintf(stderr, "%s downstream_weight: %d\n",
+            prefix, b->downstream_weight);
+    fprintf(stderr, "%s downstream_prot: %d\n",
+            prefix, b->downstream_prot);
+    fprintf(stderr, "%s downstream_timeout: %llu, %llu\n",
+            prefix,
             (long long unsigned int) b->downstream_timeout.tv_sec,
             (long long unsigned int) b->downstream_timeout.tv_usec);
-    fprintf(stderr, "usr: %s\n", b->usr);
-    fprintf(stderr, "pwd: %s\n", b->pwd);
-    fprintf(stderr, "host: %s\n", b->host);
-    fprintf(stderr, "port: %d\n", b->port);
-    fprintf(stderr, "bucket: %s\n", b->bucket);
+    fprintf(stderr, "%s usr: %s\n",
+            prefix, b->usr);
+    fprintf(stderr, "%s host: %s\n",
+            prefix, b->host);
+    fprintf(stderr, "%s port: %d\n",
+            prefix, b->port);
+    fprintf(stderr, "%s bucket: %s\n",
+            prefix, b->bucket);
 }
