@@ -291,19 +291,17 @@ void cproxy_on_new_config(void *data0, void *data1) {
 
             if (servers != NULL &&
                 pool_port > 0) {
-                // Create a config string that libmemcached likes,
-                // first by counting up buffer size needed.
+                // Create a config string that libmemcached likes.
                 // See memcached_servers_parse().
                 //
-                int n = 0;
-                int s = 0; // Number of servers in this pool.
+                int   config_len = 200;
+                char *config_str = calloc(config_len, 1);
 
-                while (servers[s]) {
-                    n = n + strlen(servers[s]) + 20; // Extra for weight.
+                // Number of servers in this pool.
+                //
+                int s = 0;
+                while (servers[s])
                     s++;
-                }
-
-                char *config_str = calloc(n, 1);
 
                 // Array of behaviors, one entry for each server.
                 //
@@ -313,8 +311,6 @@ void cproxy_on_new_config(void *data0, void *data1) {
                 if (config_str != NULL &&
                     behaviors != NULL) {
                     for (int j = 0; servers[j]; j++) {
-                        assert(j < s);
-
                         char svr_key[800];
 
                         snprintf(svr_key, sizeof(svr_key),
@@ -330,6 +326,14 @@ void cproxy_on_new_config(void *data0, void *data1) {
                                                               &behaviors[j]);
                         }
 
+                        int x = 40 + // For port and weight.
+                            strlen(config_str) +
+                            strlen(behaviors[j].host);
+                        if (config_len < x) {
+                            config_len = 2 * (config_len + x);
+                            config_str = realloc(config_str, config_len);
+                        }
+
                         char *config_end = config_str + strlen(config_str);
                         if (config_end != config_str)
                             *config_end++ = ',';
@@ -337,7 +341,7 @@ void cproxy_on_new_config(void *data0, void *data1) {
                         if (strlen(behaviors[j].host) > 0 &&
                             behaviors[j].port > 0) {
                             snprintf(config_end,
-                                     n - (config_end - config_str),
+                                     config_len - (config_end - config_str),
                                      "%s:%u",
                                      behaviors[j].host,
                                      behaviors[j].port);
@@ -353,7 +357,7 @@ void cproxy_on_new_config(void *data0, void *data1) {
                         if (behaviors[j].downstream_weight > 0) {
                             config_end = config_str + strlen(config_str);
                             snprintf(config_end,
-                                     n - (config_end - config_str),
+                                     config_len - (config_end - config_str),
                                      ":%u",
                                      behaviors[j].downstream_weight);
                         }
