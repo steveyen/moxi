@@ -6,8 +6,6 @@ TODO ideas...
 
 - tests!
 
-- no thread-id in agent_stats.
-
 - startup REST call to check if we have latest version.
 
 - histogram of request codes.
@@ -292,5 +290,7 @@ known bugs
 
 - DONE: need debug/log in libconflate.
 
-- agent_stats returns current config and VERSION. - DONE
+- DONE: agent_stats returns current config and VERSION.
+
+- DONE: no thread-id in agent_stats.  Now aggregating results.
 

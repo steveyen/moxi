@@ -36,7 +36,6 @@ void map_proxy_stats_foreach_emit(gpointer key,
 struct add_stat_emit {
     conflate_add_stat add_stat;
     void             *opaque;
-    int               thread;
 };
 
 struct main_stats_collect_info {
@@ -103,6 +102,10 @@ void on_conflate_get_stats(void *userdata, void *opaque,
         int i;
 
         for (i = 1; i < m->nthreads; i++) {
+            // Each thread gets its own collection hashmap, which
+            // is keyed by each proxy's "binding:name", and whose
+            // values are proxy_stats.
+            //
             GHashTable *map_proxy_stats =
                 g_hash_table_new(g_str_hash,
                                  g_str_equal);
@@ -126,19 +129,48 @@ void on_conflate_get_stats(void *userdata, void *opaque,
             //
             for (i = 1; i < m->nthreads; i++) {
                 work_collect_wait(&ca[i]);
+            }
 
-                GHashTable *map_proxy_stats = ca[i].data;
-                if (map_proxy_stats != NULL) {
-                    struct add_stat_emit emit;
+            assert(m->nthreads > 0);
 
-                    emit.add_stat  = add_stat;
-                    emit.opaque    = opaque;
-                    emit.thread    = i;
+            GHashTable *end_proxy_stats = ca[1].data;
+            if (end_proxy_stats != NULL) {
+                // Skip the first worker thread (index 1)'s results,
+                // because that's where we'll aggregate final results.
+                //
+                for (i = 2; i < m->nthreads; i++) {
+                    GHashTable *map_proxy_stats = ca[i].data;
+                    if (map_proxy_stats != NULL) {
+                        GHashTableIter iter;
 
-                    g_hash_table_foreach(map_proxy_stats,
-                                         map_proxy_stats_foreach_emit,
-                                         &emit);
+                        g_hash_table_iter_init(&iter, map_proxy_stats);
+
+                        gpointer key   = NULL;
+                        gpointer value = NULL;
+
+                        while (g_hash_table_iter_next (&iter, &key, &value)) {
+                            if (key != NULL) {
+                                proxy_stats *cur_ps = (proxy_stats *) value;
+                                proxy_stats *end_ps =
+                                    g_hash_table_lookup(end_proxy_stats,
+                                                        key);
+                                if (cur_ps != NULL &&
+                                    end_ps != NULL) {
+                                    add_proxy_stats(end_ps, cur_ps);
+                                }
+                            }
+                        }
+                    }
                 }
+
+                struct add_stat_emit emit;
+
+                emit.add_stat = add_stat;
+                emit.opaque   = opaque;
+
+                g_hash_table_foreach(end_proxy_stats,
+                                     map_proxy_stats_foreach_emit,
+                                     &emit);
             }
         }
 
@@ -378,14 +410,15 @@ void map_proxy_stats_foreach_emit(gpointer key,
     assert(ps != NULL);
 
     struct add_stat_emit *emit = user_data;
-    assert(user_data != NULL);
+    assert(emit != NULL);
+    assert(emit->add_stat != NULL);
 
     char buf_key[200];
     char buf_val[100];
 
 #define more_thread_stat(key, val)                  \
     snprintf(buf_key, sizeof(buf_key),              \
-             "%u:%s-%s", emit->thread, name, key);  \
+             "%s-%s", name, key);                   \
     snprintf(buf_val, sizeof(buf_val),              \
              "%llu", (long long unsigned int) val); \
     emit->add_stat(emit->opaque, buf_key, buf_val);
