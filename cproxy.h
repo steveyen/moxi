@@ -180,7 +180,7 @@ struct downstream {
 
     downstream *next;         // To track reserved/free lists.
 
-    // Function pointer changes depending on how we propagate
+    // Immutable function pointer that determines how we propagate
     // an upstream request to a downstream.  Eg, ascii vs binary,
     // replicating or not, etc.
     //
