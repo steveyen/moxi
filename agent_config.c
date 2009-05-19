@@ -315,7 +315,7 @@ void cproxy_on_new_config(void *data0, void *data1) {
                     for (int j = 0; servers[j]; j++) {
                         assert(j < s);
 
-                        char svr_key[200];
+                        char svr_key[800];
 
                         snprintf(svr_key, sizeof(svr_key),
                                  "svr-%s", servers[j]);
@@ -356,6 +356,10 @@ void cproxy_on_new_config(void *data0, void *data1) {
                                      n - (config_end - config_str),
                                      ":%u",
                                      behaviors[j].downstream_weight);
+                        }
+
+                        if (settings.verbose > 1) {
+                            cproxy_dump_behavior(&behaviors[j]);
                         }
                     }
 

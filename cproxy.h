@@ -311,6 +311,8 @@ bool cproxy_equal_behaviors(int x_size, proxy_behavior *x,
 bool cproxy_equal_behavior(proxy_behavior *x,
                            proxy_behavior *y);
 
+void cproxy_dump_behavior(proxy_behavior *b);
+
 // ---------------------------------------------------------------
 
 void cproxy_upstream_ascii_item_response(item *it, conn *uc);

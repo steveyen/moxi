@@ -97,6 +97,10 @@ int cproxy_init_string(char *cfg_str,
     char *proxy_port_str;
     int   proxy_port;
 
+    if (settings.verbose > 1) {
+        cproxy_dump_behavior(&behavior);
+    }
+
     buff = strdup(cfg_str);
     next = buff;
     while (next != NULL) {
@@ -276,8 +280,15 @@ bool cproxy_equal_behaviors(int x_size, proxy_behavior *x,
         return false;
 
     for (int i = 0; i < x_size; i++) {
-        if (cproxy_equal_behavior(&x[i], &y[i]) == false)
+        if (cproxy_equal_behavior(&x[i], &y[i]) == false) {
+            if (settings.verbose > 1) {
+                fprintf(stderr, "behaviors not equal (%d)\n", i);
+                cproxy_dump_behavior(&x[i]);
+                cproxy_dump_behavior(&y[i]);
+            }
+
             return false;
+        }
     }
 
     return true;
@@ -294,3 +305,16 @@ bool cproxy_equal_behavior(proxy_behavior *x,
     return memcmp(x, y, sizeof(proxy_behavior)) == 0;
 }
 
+void cproxy_dump_behavior(proxy_behavior *b) {
+    fprintf(stderr, "downstream_max: %d\n", b->downstream_max);
+    fprintf(stderr, "downstream_weight: %d\n", b->downstream_weight);
+    fprintf(stderr, "downstream_prot: %d\n", b->downstream_prot);
+    fprintf(stderr, "downstream_timeout: %llu, %llu\n",
+            (long long unsigned int) b->downstream_timeout.tv_sec,
+            (long long unsigned int) b->downstream_timeout.tv_usec);
+    fprintf(stderr, "usr: %s\n", b->usr);
+    fprintf(stderr, "pwd: %s\n", b->pwd);
+    fprintf(stderr, "host: %s\n", b->host);
+    fprintf(stderr, "port: %d\n", b->port);
+    fprintf(stderr, "bucket: %s\n", b->bucket);
+}
