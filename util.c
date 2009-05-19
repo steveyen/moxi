@@ -112,3 +112,8 @@ int timeval_subtract(struct timeval *result,
     /* Return 1 if result is negative. */
     return x->tv_sec < y->tv_sec;
 }
+
+double timeval_to_double(struct timeval tv)
+{
+    return (double)tv.tv_sec + ((double)tv.tv_usec / 1000000);
+}

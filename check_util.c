@@ -1,8 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <math.h>
 #include <string.h>
 #include <sys/time.h>
-
 #include <check.h>
 
 #include "memcached.h"
@@ -163,6 +163,16 @@ START_TEST (test_timeval_subtract_secs_and_usecs)
 }
 END_TEST
 
+START_TEST (test_timeval_to_double_secs)
+{
+    struct timeval tv = { 3, 69825 };
+    double d = timeval_to_double(tv);
+
+    fail_unless(fabs(d - 3.069825) < 0.00001,
+                "Double conversion failed.");
+}
+END_TEST
+
 static Suite* util_suite (void)
 {
     Suite *s = suite_create ("util");
@@ -176,6 +186,7 @@ static Suite* util_suite (void)
     tcase_add_test(tc_core, test_timeval_subtract_secs);
     tcase_add_test(tc_core, test_timeval_subtract_usecs);
     tcase_add_test(tc_core, test_timeval_subtract_secs_and_usecs);
+    tcase_add_test(tc_core, test_timeval_to_double_secs);
     suite_add_tcase(s, tc_core);
 
     return s;

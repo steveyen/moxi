@@ -19,3 +19,10 @@ bool safe_strtol(const char *str, int32_t *out);
 */
 int timeval_subtract(struct timeval *result,
                      struct timeval *x, struct timeval *y);
+
+/**
+ * Convert a timeval to a simple double.
+ *
+ * This is generally useful for deltas.
+ */
+double timeval_to_double(struct timeval tv);
