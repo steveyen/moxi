@@ -155,21 +155,8 @@ proxy *cproxy_create(char    *name,
                 ptd->downstream_num = 0;
                 ptd->downstream_max = downstream_max;
                 ptd->downstream_assigns = 0;
-
-                // TODO: Handle ascii-to-binary protocol.
-                //
-                assert(IS_PROXY(p->behaviors[0].downstream_protocol)); // TODO.
-
-                if (IS_BINARY(p->behaviors[0].downstream_protocol))
-                    ptd->propagate_downstream =
-                        cproxy_forward_a2b_downstream;
-                else
-                    ptd->propagate_downstream =
-                        cproxy_forward_a2a_downstream;
-
                 ptd->timeout_tv.tv_sec = 0;
                 ptd->timeout_tv.tv_usec = 0;
-
                 ptd->stats.num_upstream = 0;
                 ptd->stats.num_downstream_conn = 0;
 
@@ -799,12 +786,23 @@ downstream *cproxy_create_downstream(char *config,
         d->behaviors     = cproxy_copy_behaviors(behaviors_num,
                                                  behaviors);
 
+        // TODO: Handle non-uniform downstream protocols.
+        //
+        assert(IS_PROXY(behaviors[0].downstream_protocol)); // TODO.
+
+        if (IS_BINARY(behaviors[0].downstream_protocol))
+            d->propagate = cproxy_forward_a2b_downstream;
+        else
+            d->propagate = cproxy_forward_a2a_downstream;
+
         if (settings.verbose > 1)
             fprintf(stderr,
                     "cproxy_create_downstream: %s, %u\n",
                     config, config_ver);
 
-        if (memcached_create(&d->mst) != NULL) {
+        if (d->config != NULL &&
+            d->behaviors != NULL &&
+            memcached_create(&d->mst) != NULL) {
             memcached_behavior_set(&d->mst, MEMCACHED_BEHAVIOR_NO_BLOCK, 1);
 
             memcached_server_st *mservers;
@@ -990,7 +988,6 @@ int cproxy_server_index(downstream *d, char *key, size_t key_length) {
 
 void cproxy_assign_downstream(proxy_td *ptd) {
     assert(ptd != NULL);
-    assert(ptd->propagate_downstream != NULL);
 
     if (settings.verbose > 1)
         fprintf(stderr, "assign_downstream\n");
@@ -1021,6 +1018,7 @@ void cproxy_assign_downstream(proxy_td *ptd) {
         assert(d->upstream_conn == NULL);
         assert(d->downstream_used == 0);
         assert(d->downstream_used_start == 0);
+        assert(d->propagate != NULL);
         assert(d->multiget == NULL);
         assert(d->merger == NULL);
         assert(d->timeout_tv.tv_sec == 0);
@@ -1067,13 +1065,13 @@ void cproxy_assign_downstream(proxy_td *ptd) {
             fprintf(stderr, "assign_downstream, matched to upstream %d\n",
                     d->upstream_conn->sfd);
 
-        if (ptd->propagate_downstream(d) == false) {
+        if (d->propagate(d) == false) {
             ptd->stats.tot_downstream_propagate_failed++;
 
-            // During propagate_downstream(), we might have
-            // recursed, especially in error situation if
-            // a downstream conn got closed and released.
-            // Check for recursion before we touch d anymore.
+            // During propagate(), we might have recursed,
+            // especially in error situation if a downstream
+            // conn got closed and released.  Check for recursion
+            // before we touch d anymore.
             //
             if (da != ptd->downstream_assigns) {
                 ptd->stats.tot_assign_recursion++;

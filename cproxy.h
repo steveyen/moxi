@@ -152,16 +152,6 @@ struct proxy_td { // Per proxy, per worker-thread data struct.
     int         downstream_max;      // Max downstream concurrency number.
     uint64_t    downstream_assigns;  // Track recursion.
 
-    // Function pointer changes depending on how we propagate
-    // an upstream request to a downstream.  Eg, ascii vs binary,
-    // replicating or not, etc.
-    //
-    // TODO: Move this to a per-downstream-conn level,
-    // so we can have non-uniform downstream conns.
-    // For example, some downstream conn's are ascii, some binary.
-    //
-    bool (*propagate_downstream)(downstream *d);
-
     // A timeout for the wait_queue, so that we can emit error
     // on any upstream conn's that are waiting too long for
     // an available downstream.
@@ -189,6 +179,16 @@ struct downstream {
     memcached_st    mst;           // RW: From libmemcached.
 
     downstream *next;         // To track reserved/free lists.
+
+    // Function pointer changes depending on how we propagate
+    // an upstream request to a downstream.  Eg, ascii vs binary,
+    // replicating or not, etc.
+    //
+    // TODO: Move this to a per-downstream-conn level,
+    // so we can have non-uniform downstream conns.
+    // For example, some downstream conn's are ascii, some binary.
+    //
+    bool (*propagate)(downstream *d);
 
     conn **downstream_conns;  // Wraps the fd's of mst with conns.
     int    downstream_used;   // Number of in-use downstream conns, might
