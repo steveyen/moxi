@@ -100,13 +100,11 @@ void ping_server(char *server_name,
 
     kvpair_t *kvr = NULL, *kvtmp = NULL;
 
-#define tv_report(name, mark, val)                          \
-    timeval_subtract(&timing, &val, &mark);                 \
-    snprintf(buf, sizeof(buf), "%llu %llu",                 \
-             (long long unsigned int) ((timing).tv_sec),    \
-             (long long unsigned int) ((timing).tv_usec));  \
-    kvtmp = mk_kvpair(name, bufa);                          \
-    kvtmp->next = kvr;                                      \
+#define tv_report(name, mark, val)                                      \
+    timeval_subtract(&timing, &val, &mark);                             \
+    snprintf(buf, sizeof(buf), "%f", timeval_to_double(timing));        \
+    kvtmp = mk_kvpair(name, bufa);                                      \
+    kvtmp->next = kvr;                                                  \
     kvr = kvtmp;
 
     if (memcached_create(&mst) != NULL) {
