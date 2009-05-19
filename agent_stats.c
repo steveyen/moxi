@@ -73,14 +73,14 @@ void on_conflate_get_stats(void *userdata, void *opaque,
               VERSION);
     more_stat("%u", "nthreads",
               m->nthreads);
-    more_stat("%u", "downstream_max",
+    more_stat("%u", "default_downstream_max",
               m->behavior.downstream_max);
-    more_stat("%u", "downstream_protocol",
+    more_stat("%u", "default_downstream_protocol",
               m->behavior.downstream_protocol);
-    more_stat("%ld", "downstream_timeout", // In millisecs.
+    more_stat("%ld", "default_downstream_timeout", // In millisecs.
               m->behavior.downstream_timeout.tv_sec * 1000 +
               m->behavior.downstream_timeout.tv_usec / 1000);
-    more_stat("%ld", "wait_queue_timeout", // In millisecs.
+    more_stat("%ld", "default_wait_queue_timeout", // In millisecs.
               m->behavior.wait_queue_timeout.tv_sec * 1000 +
               m->behavior.wait_queue_timeout.tv_usec / 1000);
     more_stat("%llu", "configs",
@@ -223,18 +223,12 @@ static void main_stats_collect(void *data0, void *data1) {
                    "%u", p->behaviors[i].downstream_weight);
             emit_xf("downstream_protocol",
                    "%u", p->behaviors[i].downstream_protocol);
-            emit_xf("downstream_timeout_sec",
-                   "%llu", (long long unsigned int)
-                   p->behaviors[i].downstream_timeout.tv_sec);
-            emit_xf("downstream_timeout_usec",
-                   "%llu", (long long unsigned int)
-                   p->behaviors[i].downstream_timeout.tv_usec);
-            emit_xf("wait_queue_timeout_sec",
-                   "%llu", (long long unsigned int)
-                   p->behaviors[i].wait_queue_timeout.tv_sec);
-            emit_xf("wait_queue_timeout_usec",
-                   "%llu", (long long unsigned int)
-                   p->behaviors[i].wait_queue_timeout.tv_usec);
+            emit_xf("downstream_timeout", "%ld", // In millisecs.
+                    p->behaviors[i].downstream_timeout.tv_sec * 1000 +
+                    p->behaviors[i].downstream_timeout.tv_usec / 1000);
+            emit_xf("wait_queue_timeout", "%ld", // In millisecs.
+                    p->behaviors[i].wait_queue_timeout.tv_sec * 1000 +
+                    p->behaviors[i].wait_queue_timeout.tv_usec / 1000);
         }
 
         emit_f(p->port, "listening",

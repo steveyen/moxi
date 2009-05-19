@@ -8,8 +8,6 @@ TODO ideas...
 
 - no thread-id in agent_stats.
 
-- agent_stats returns current config.
-
 - startup REST call to check if we have latest version.
 
 - histogram of request codes.
@@ -293,4 +291,6 @@ known bugs
   - actually, config algorithm key'ed by port is right.
 
 - DONE: need debug/log in libconflate.
+
+- agent_stats returns current config and VERSION. - DONE
 
