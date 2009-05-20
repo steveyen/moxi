@@ -812,6 +812,7 @@ downstream *cproxy_create_downstream(char *config,
             d->behaviors != NULL &&
             memcached_create(&d->mst) != NULL) {
             memcached_behavior_set(&d->mst, MEMCACHED_BEHAVIOR_NO_BLOCK, 1);
+            memcached_behavior_set(&d->mst, MEMCACHED_BEHAVIOR_KETAMA, 1);
 
             memcached_server_st *mservers;
 
