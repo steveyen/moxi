@@ -116,6 +116,12 @@ struct proxy_stats {
     uint64_t tot_downstream_quit_server;
     uint64_t tot_downstream_max_reached;
     uint64_t tot_downstream_create_failed;
+    uint64_t tot_downstream_connect;
+    uint64_t tot_downstream_connect_failed;
+    uint64_t tot_downstream_auth;
+    uint64_t tot_downstream_auth_failed;
+    uint64_t tot_downstream_bucket;
+    uint64_t tot_downstream_bucket_failed;
     uint64_t tot_downstream_propagate_failed;
     uint64_t tot_downstream_close_on_upstream_close;
     uint64_t tot_downstream_timeout;

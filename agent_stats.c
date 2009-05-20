@@ -369,9 +369,15 @@ static void add_proxy_stats(proxy_stats *agg, proxy_stats *x) {
     agg->tot_downstream_released += x->tot_downstream_released;
     agg->tot_downstream_reserved += x->tot_downstream_reserved;
     agg->tot_downstream_freed    += x->tot_downstream_freed;
-    agg->tot_downstream_quit_server   += x->tot_downstream_quit_server;
-    agg->tot_downstream_max_reached   += x->tot_downstream_max_reached;
-    agg->tot_downstream_create_failed += x->tot_downstream_create_failed;
+    agg->tot_downstream_quit_server    += x->tot_downstream_quit_server;
+    agg->tot_downstream_max_reached    += x->tot_downstream_max_reached;
+    agg->tot_downstream_create_failed  += x->tot_downstream_create_failed;
+    agg->tot_downstream_connect        += x->tot_downstream_connect;
+    agg->tot_downstream_connect_failed += x->tot_downstream_connect_failed;
+    agg->tot_downstream_auth           += x->tot_downstream_auth;
+    agg->tot_downstream_auth_failed    += x->tot_downstream_auth_failed;
+    agg->tot_downstream_bucket         += x->tot_downstream_bucket;
+    agg->tot_downstream_bucket_failed  += x->tot_downstream_bucket_failed;
     agg->tot_downstream_propagate_failed +=
         x->tot_downstream_propagate_failed;
     agg->tot_downstream_close_on_upstream_close +=
@@ -443,6 +449,18 @@ void map_proxy_stats_foreach_emit(gpointer key,
                      ps->tot_downstream_max_reached);
     more_thread_stat("tot_downstream_create_failed",
                      ps->tot_downstream_create_failed);
+    more_thread_stat("tot_downstream_connect",
+                     ps->tot_downstream_connect);
+    more_thread_stat("tot_downstream_connect_failed",
+                     ps->tot_downstream_connect_failed);
+    more_thread_stat("tot_downstream_auth",
+                     ps->tot_downstream_auth);
+    more_thread_stat("tot_downstream_auth_failed",
+                     ps->tot_downstream_auth_failed);
+    more_thread_stat("tot_downstream_bucket",
+                     ps->tot_downstream_bucket);
+    more_thread_stat("tot_downstream_bucket_failed",
+                     ps->tot_downstream_bucket_failed);
     more_thread_stat("tot_downstream_propagate_failed",
                      ps->tot_downstream_propagate_failed);
     more_thread_stat("tot_downstream_close_on_upstream_close",
