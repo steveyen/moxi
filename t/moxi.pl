@@ -70,24 +70,36 @@ my @skip_tests = qw(
 my %is_good_test;
 my %is_skip_test;
 
-for (map("./t/$_", @good_tests)) { $is_good_test{$_} = "ascii binary" }
-for (map("./t/$_", @skip_tests)) { $is_skip_test{$_} = "ascii binary" }
+for (map("./t/$_", @good_tests)) {
+  $is_good_test{$_} = "ascii binary simple chain fanout fanoutin"
+}
+for (map("./t/$_", @skip_tests)) {
+  $is_skip_test{$_} = "ascii binary simple chain fanout fanoutin"
+}
 
-# Skipping incrdecr.t for binary due to issue 48 on code.google.com/p/memcached.
+# Skipping incrdecr.t for binary due to issue 48
+# on code.google.com/p/memcached.
 #
-$is_good_test{"./t/incrdecr.t"} = "ascii";
-$is_skip_test{"./t/incrdecr.t"} = "binary";
+$is_good_test{"./t/incrdecr.t"} = "ascii simple chain fanout fanoutin";
+$is_skip_test{"./t/incrdecr.t"} = "binary simple chain fanout fanoutin";
+
+# Skipping cas.t for fanoutin due to multi-"gets" race condition.
+#
+$is_good_test{"./t/cas.t"} = "ascii binary simple chain fanout";
+$is_skip_test{"./t/cas.t"} = "ascii binary fanoutin";
 
 my $file;
 
 foreach $file (<./t/*.t>) {
-  if ($is_good_test{$file} =~ /$protocol_name/) {
+  if ($is_good_test{$file} =~ /$protocol_name/ &&
+      $is_good_test{$file} =~ /$topology_name/) {
     print $file . "\n";
     my $result = `./t/moxi_one.pl $file $topology_name $protocol_name`;
     while ($result =~ m/^fail /g) {
       print "$&\n";
     }
-  } elsif ($is_skip_test{$file} =~ /$protocol_name/) {
+  } elsif ($is_skip_test{$file} =~ /$protocol_name/ &&
+           $is_skip_test{$file} =~ /$topology_name/) {
     print "skipping test: $file\n";
   } else {
     print "unknown test: $file\n";
