@@ -47,6 +47,8 @@ TODO ideas...
 
 - doxygen for moxi
 
+- allow apikey to not be on the cmdline, readable from secure 600 file
+
 - timeouts
   - request is taking longer than X ms -- must be a failure.
   - need timeout for upstream conns waiting in the queue

@@ -1039,8 +1039,27 @@ void cproxy_assign_downstream(proxy_td *ptd) {
             stop = true;
 
         downstream *d = cproxy_reserve_downstream(ptd);
-        if (d == NULL)
+        if (d == NULL) {
+            if (ptd->downstream_num <= 0) {
+                // Absolutely no downstreams connected, so
+                // might as well error out.
+                //
+                while (ptd->waiting_any_downstream_head != NULL) {
+                    ptd->stats.tot_downstream_propagate_failed++;
+
+                    conn *uc = ptd->waiting_any_downstream_head;
+                    ptd->waiting_any_downstream_head =
+                        ptd->waiting_any_downstream_head->next;
+                    if (ptd->waiting_any_downstream_head == NULL)
+                        ptd->waiting_any_downstream_tail = NULL;
+                    uc->next = NULL;
+
+                    upstream_error(uc);
+                }
+            }
+
             break; // If no downstreams are available, stop loop.
+        }
 
         assert(d->upstream_conn == NULL);
         assert(d->downstream_used == 0);
