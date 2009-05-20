@@ -6,7 +6,9 @@ TODO ideas...
 
 - tests!
 
-- startup REST call to check if we have latest version.
+- add OS version to stats.
+
+- startup REST/HTTP call to check if we have latest version.
 
 - histogram of request codes.
 - histogram of response codes.
@@ -23,9 +25,6 @@ TODO ideas...
 - revisit settings.verbose levels
 
 - revisit error msg strings
-
-- should mcp/libconflate msgs have version numbers?
-  - added note to mcp issue tracker.
 
 - optimization: use trond's allocator instead of malloc/free
   - for multiget hashtable
@@ -108,6 +107,9 @@ TODO ideas...
   - PLAIN support - DONE.
   - need mech support one day.
   - should support more mech's later.
+
+- should mcp/libconflate msgs have version numbers?
+  - added note to mcp issue tracker.
 
 - test command, described by dustin.
   - ping timings
