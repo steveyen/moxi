@@ -529,6 +529,13 @@ static void main_stats_reset(void *data0, void *data1) {
 
     assert(is_listen_thread());
 
+    m->stat_configs = 0;
+    m->stat_config_fails = 0;
+    m->stat_proxy_starts = 0;
+    m->stat_proxy_start_fails = 0;
+    m->stat_proxy_existings = 0;
+    m->stat_proxy_shutdowns = 0;
+
     int sent   = 0;
     int nproxy = 0;
 
