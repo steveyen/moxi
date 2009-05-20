@@ -26,3 +26,15 @@ int timeval_subtract(struct timeval *result,
  * This is generally useful for deltas.
  */
 double timeval_to_double(struct timeval tv);
+
+struct moxi_stats {
+    double min;
+    double max;
+    double avg;
+    double stddev;
+};
+
+/**
+ * Compute some statistics over a sequence.
+ */
+void compute_stats(struct moxi_stats *out, const double *vals, int num_vals);

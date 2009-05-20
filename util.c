@@ -4,6 +4,7 @@
 #include <errno.h>
 #include <string.h>
 #include <stdlib.h>
+#include <math.h>
 
 #include "memcached.h"
 
@@ -116,4 +117,34 @@ int timeval_subtract(struct timeval *result,
 double timeval_to_double(struct timeval tv)
 {
     return (double)tv.tv_sec + ((double)tv.tv_usec / 1000000);
+}
+
+void compute_stats(struct moxi_stats *out, const double *vals, int num_vals)
+{
+    assert(out);
+    assert(vals);
+    assert(num_vals > 0);
+
+    out->min = vals[0];
+    out->max = vals[0];
+
+    double sum = 0;
+
+    // min, max and sum
+    for (int i = 0; i < num_vals; i++) {
+        sum += vals[i];
+        out->min = fmin(out->min, vals[i]);
+        out->max = fmax(out->max, vals[i]);
+    }
+
+    // avg
+    out->avg = sum / (double)num_vals;
+
+    // stddev
+    sum = 0;
+    for (int i = 0; i < num_vals; i++) {
+        sum += pow(vals[i] - out->avg, 2);
+    }
+
+    out->stddev = sqrt(sum / num_vals);
 }

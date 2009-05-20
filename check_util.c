@@ -163,13 +163,32 @@ START_TEST (test_timeval_subtract_secs_and_usecs)
 }
 END_TEST
 
+static bool almost_equal(double a, double b)
+{
+    return fabs(a - b) < 0.00001;
+}
+
 START_TEST (test_timeval_to_double_secs)
 {
     struct timeval tv = { 3, 69825 };
     double d = timeval_to_double(tv);
 
-    fail_unless(fabs(d - 3.069825) < 0.00001,
-                "Double conversion failed.");
+    fail_unless(almost_equal(d, 3.069825), "Double conversion failed.");
+}
+END_TEST
+
+START_TEST (test_compute_stats)
+{
+    double vals[] = { 2, 4, 4, 4, 5, 5, 7, 9 };
+    struct moxi_stats stats;
+
+    compute_stats(&stats, vals, sizeof(vals) / sizeof(double));
+
+    fail_unless(almost_equal(stats.min, 2.0), "Min should be 2");
+    fail_unless(almost_equal(stats.max, 9.0), "Max should be 9");
+    fail_unless(almost_equal(stats.avg, 5.0), "Avg should be 5");
+    fail_unless(almost_equal(stats.stddev, 2.0),
+                "Standard devition should be 2.");
 }
 END_TEST
 
@@ -187,6 +206,7 @@ static Suite* util_suite (void)
     tcase_add_test(tc_core, test_timeval_subtract_usecs);
     tcase_add_test(tc_core, test_timeval_subtract_secs_and_usecs);
     tcase_add_test(tc_core, test_timeval_to_double_secs);
+    tcase_add_test(tc_core, test_compute_stats);
     suite_add_tcase(s, tc_core);
 
     return s;
