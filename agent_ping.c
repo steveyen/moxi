@@ -100,12 +100,17 @@ void ping_server(char *server_name,
 
     kvpair_t *kvr = NULL, *kvtmp = NULL;
 
-#define tv_report(name, mark, val)                                      \
-    timeval_subtract(&timing, &val, &mark);                             \
-    snprintf(buf, sizeof(buf), "%f", timeval_to_double(timing));        \
-    kvtmp = mk_kvpair(name, bufa);                                      \
-    kvtmp->next = kvr;                                                  \
+    int num_iterations = 5;
+
+#define dbl_report(name, dval)                  \
+    snprintf(buf, sizeof(buf), "%f", dval);     \
+    kvtmp = mk_kvpair(name, bufa);              \
+    kvtmp->next = kvr;                          \
     kvr = kvtmp;
+
+#define tv_report(name, mark, val)                  \
+    timeval_subtract(&timing, &val, &mark);         \
+    dbl_report(name, timeval_to_double(timing));
 
     if (memcached_create(&mst) != NULL) {
         memcached_behavior_set(&mst, MEMCACHED_BEHAVIOR_NO_BLOCK, 1);
@@ -122,7 +127,7 @@ void ping_server(char *server_name,
             mservers = NULL;
 
             int nconns = memcached_server_count(&mst);
-            bool vers  = false;
+            bool connected  = false;
 
             for (int i = 0; i < nconns; i++) {
                 if (settings.verbose > 1)
@@ -145,27 +150,36 @@ void ping_server(char *server_name,
                         gettimeofday(&tv_auth, NULL);
                         tv_report("auth", tv_conn, tv_auth);
 
-                        // Only bother with version if at least one
-                        // server is authorized.
-                        //
-                        vers = true;
+                        // Flag whether to proceed if we connected
+                        connected = true;
                     }
                 }
             }
 
-            // TODO: Need a better ping test here.
-            // TODO: Hardcoded iteration here.
-            // TODO: Set a few small & big values, and get them.
-            //
-            for (int i = 0; vers && i < 5; i++) {
-                struct timeval tv_version_pre;
-                gettimeofday(&tv_version_pre, NULL);
+            if (connected) {
 
-                memcached_version(&mst);
+                // TODO: Need a better ping test here.
+                // TODO: Set a few small & big values, and get them.
+                double results[num_iterations];
+                for (int i = 0; i < num_iterations; i++) {
+                    struct timeval tv_version_pre;
+                    gettimeofday(&tv_version_pre, NULL);
 
-                struct timeval tv_version_post;
-                gettimeofday(&tv_version_post, NULL);
-                tv_report("version", tv_version_pre, tv_version_post);
+                    memcached_version(&mst);
+
+                    struct timeval tv_version_post;
+                    gettimeofday(&tv_version_post, NULL);
+                    timeval_subtract(&timing, &tv_version_post,
+                                     &tv_version_pre);
+                    results[i] = timeval_to_double(timing);
+                }
+
+                struct moxi_stats version_stats = { 0.0 };
+                compute_stats(&version_stats, results, num_iterations);
+                dbl_report("version_min", version_stats.min);
+                dbl_report("version_avg", version_stats.avg);
+                dbl_report("version_max", version_stats.max);
+                dbl_report("version_stddev", version_stats.stddev);
             }
         }
 
