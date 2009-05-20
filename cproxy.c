@@ -785,7 +785,9 @@ downstream *cproxy_create_downstream(char *config,
     assert(behaviors != NULL);
 
     downstream *d = (downstream *) calloc(1, sizeof(downstream));
-    if (d != NULL) {
+    if (d != NULL &&
+        config != NULL &&
+        config[0] != '\0') {
         d->config        = strdup(config);
         d->config_ver    = config_ver;
         d->behaviors_num = behaviors_num;

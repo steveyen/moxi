@@ -216,7 +216,7 @@ void cproxy_parse_behavior_key_val(char *key,
         val != NULL) {
         if (strcmp(key, "downstream_max") == 0) {
             behavior->downstream_max = strtol(val, NULL, 10);
-            assert(behavior->downstream_max > 0);
+            assert(behavior->downstream_max >= 0);
         } else if (strcmp(key, "weight") == 0 ||
                    strcmp(key, "downstream_weight") == 0) {
             behavior->downstream_weight = strtol(val, NULL, 10);
@@ -314,10 +314,10 @@ void cproxy_dump_behavior(proxy_behavior *b, char *prefix) {
             prefix, b->downstream_weight);
     fprintf(stderr, "%s downstream_protocol: %d\n",
             prefix, b->downstream_protocol);
-    fprintf(stderr, "%s downstream_timeout: %llu, %llu\n",
+    fprintf(stderr, "%s downstream_timeout: %ld\n", // In millisecs.
             prefix,
-            (long long unsigned int) b->downstream_timeout.tv_sec,
-            (long long unsigned int) b->downstream_timeout.tv_usec);
+            b->downstream_timeout.tv_sec * 1000 +
+            b->downstream_timeout.tv_usec / 1000);
     fprintf(stderr, "%s usr: %s\n",
             prefix, b->usr);
     fprintf(stderr, "%s host: %s\n",
