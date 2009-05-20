@@ -17,9 +17,12 @@
 memcached_return memcached_connect(memcached_server_st *ptr);
 memcached_return memcached_version(memcached_st *ptr);
 
+#define DEFAULT_LATENCY_ITERATIONS 5
+
 // Local declarations.
 //
 void ping_server(char *server_name,
+                 int latency_iterations,
                  proxy_behavior *behavior,
                  void *opaque,
                  conflate_add_ping_report add_report);
@@ -52,6 +55,14 @@ void on_conflate_ping_test(void *userdata, void *opaque,
         char   server_key[200];
         char **servers = get_key_values(form, "servers");
 
+        int latency_iterations = DEFAULT_LATENCY_ITERATIONS;
+        kvpair_t *l_iter = find_kvpair(form, "latency_iterations");
+        if (l_iter) {
+            if (!safe_strtol(l_iter->values[0], &latency_iterations)) {
+                latency_iterations = DEFAULT_LATENCY_ITERATIONS;
+            }
+        }
+
         for (int j = 0; servers != NULL && servers[j]; j++) {
             snprintf(server_key, sizeof(server_key),
                      "svr-%s", servers[j]);
@@ -70,8 +81,8 @@ void on_conflate_ping_test(void *userdata, void *opaque,
                                                   &behavior);
             }
 
-            ping_server(servers[j], &behavior,
-                        opaque, add_report);
+            ping_server(servers[j], latency_iterations,
+                        &behavior, opaque, add_report);
         }
     }
 
@@ -79,6 +90,7 @@ void on_conflate_ping_test(void *userdata, void *opaque,
 }
 
 void ping_server(char *server_name,
+                 int latency_iterations,
                  proxy_behavior *behavior,
                  void *opaque,
                  conflate_add_ping_report add_report) {
@@ -99,8 +111,6 @@ void ping_server(char *server_name,
     char *bufa[2]  = { buf, NULL };
 
     kvpair_t *kvr = NULL, *kvtmp = NULL;
-
-    int num_iterations = 5;
 
 #define dbl_report(name, dval)                  \
     snprintf(buf, sizeof(buf), "%f", dval);     \
@@ -160,8 +170,8 @@ void ping_server(char *server_name,
 
                 // TODO: Need a better ping test here.
                 // TODO: Set a few small & big values, and get them.
-                double results[num_iterations];
-                for (int i = 0; i < num_iterations; i++) {
+                double v_results[latency_iterations];
+                for (int i = 0; i < latency_iterations; i++) {
                     struct timeval tv_version_pre;
                     gettimeofday(&tv_version_pre, NULL);
 
@@ -171,11 +181,11 @@ void ping_server(char *server_name,
                     gettimeofday(&tv_version_post, NULL);
                     timeval_subtract(&timing, &tv_version_post,
                                      &tv_version_pre);
-                    results[i] = timeval_to_double(timing);
+                    v_results[i] = timeval_to_double(timing);
                 }
 
                 struct moxi_stats version_stats = { 0.0 };
-                compute_stats(&version_stats, results, num_iterations);
+                compute_stats(&version_stats, v_results, latency_iterations);
                 dbl_report("version_min", version_stats.min);
                 dbl_report("version_avg", version_stats.avg);
                 dbl_report("version_max", version_stats.max);
