@@ -539,8 +539,14 @@ static void main_stats_reset(void *data0, void *data1) {
     int sent   = 0;
     int nproxy = 0;
 
-    for (proxy *p = m->proxy_head; p != NULL; p = p->next)
+    for (proxy *p = m->proxy_head; p != NULL; p = p->next) {
         nproxy++;
+
+        // We don't clear p->listening because it's meant to
+        // increase and decrease.
+        //
+        p->listening_failed = 0;
+    }
 
     // Starting at 1 because 0 is the main listen thread.
     //
