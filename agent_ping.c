@@ -322,6 +322,9 @@ void ping_server(char *server_name,
                                 "max", recipe_stats.max);
                     stat_report(val_name, vlen, recipes[j].name,
                                 "stddev", recipe_stats.stddev);
+                    stat_report(val_name, vlen, recipes[j].name,
+                                "95th", recipe_stats.ninetyfifth);
+
 
                     snprintf(val_name, vlen, "%s_fail", recipes[j].name);
                     int_report(val_name, failures);

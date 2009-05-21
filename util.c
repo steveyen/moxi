@@ -119,7 +119,14 @@ double timeval_to_double(struct timeval tv)
     return (double)tv.tv_sec + ((double)tv.tv_usec / 1000000);
 }
 
-void compute_stats(struct moxi_stats *out, const double *vals, int num_vals)
+static int cmp_doubles(const void *pa, const void *pb)
+{
+    double a = *(double*)pa;
+    double b = *(double*)pb;
+    return a == b ? 0 : (a < b ? -1 : 1);
+}
+
+void compute_stats(struct moxi_stats *out, double *vals, int num_vals)
 {
     assert(out);
     assert(vals);
@@ -147,4 +154,8 @@ void compute_stats(struct moxi_stats *out, const double *vals, int num_vals)
     }
 
     out->stddev = sqrt(sum / num_vals);
+
+    // 95th %ile
+    qsort(vals, num_vals, sizeof(double), cmp_doubles);
+    out->ninetyfifth = vals[(int)((float)num_vals * 0.95)];
 }

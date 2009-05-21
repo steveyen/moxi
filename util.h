@@ -32,9 +32,14 @@ struct moxi_stats {
     double max;
     double avg;
     double stddev;
+    double ninetyfifth;
 };
 
 /**
  * Compute some statistics over a sequence.
+ *
+ * @param out accumulated stats for input values
+ * @param vals input values (note: these will be reordered)
+ * @param num_values the number of values to be processed
  */
-void compute_stats(struct moxi_stats *out, const double *vals, int num_vals);
+void compute_stats(struct moxi_stats *out, double *vals, int num_vals);
