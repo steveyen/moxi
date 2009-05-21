@@ -3706,14 +3706,20 @@ static void clock_handler(const int fd, const short which, void *arg) {
     set_current_time();
 }
 
-static void usage(void) {
+static void usage(int argc, char **argv) {
     printf(PACKAGE " " VERSION "\n");
-    printf("-z <port=<mc_host:mc_port(,*)>>\n"
-           "              moxi listens on the given port and forwards to\n"
+    printf("\n");
+#ifdef HAVE_CONFLATE_H
+    printf("  %s [flags] apikey=<APIKEY>\n", argv[0]);
+    printf("    or\n");
+#endif
+    printf("  %s [flags] -z=<port=<mc_host:mc_port(,*)>\n\n", argv[0]);
+    printf("              moxi listens on the given port and forwards to\n"
            "              downstream memcached servers running at\n"
            "              mc_host:mc_port.  More than one mc_host:mc_port\n"
            "              can be listed, separated by commas.\n"
-           "              For example, -z 11211=server1:11211,server2:11211\n"
+           "              For example, -z 11211=server1:11211,server2:11211\n");
+    printf("\nThe optional [flags] are...\n\n"
            "-p <num>      TCP port number to listen on (default: 11211)\n"
            "              to have moxi be a memcached server\n"
            "-U <num>      UDP port number to listen on (default: 11211, 0 is off)\n"
@@ -4001,7 +4007,7 @@ int main (int argc, char **argv) {
             settings.maxconns = atoi(optarg);
             break;
         case 'h':
-            usage();
+            usage(argc, argv);
             exit(EXIT_SUCCESS);
         case 'i':
             usage_license();
@@ -4254,12 +4260,20 @@ int main (int argc, char **argv) {
     if (cproxy_cfg) {
         cproxy_init(cproxy_cfg, cproxy_behavior, settings.num_threads);
         free(cproxy_cfg);
-    } else if (argc > 1 && strncmp(argv[argc - 1], "apikey=", 7) == 0) {
-        cproxy_init(argv[argc - 1], cproxy_behavior, settings.num_threads);
     } else {
-        if (settings.port == 0 &&
+        int i = argc - 1;
+        while (i > 0) {
+            if (strncmp(argv[i], "apikey=", 7) == 0) {
+                cproxy_init(argv[i], cproxy_behavior, settings.num_threads);
+                break;
+            }
+            i--;
+        }
+        if (i <= 0 &&
+            settings.port == 0 &&
             settings.udpport == 0) {
-            fprintf(stderr, "error: need proxy configuration (-z).  See usage (-h).\n");
+            fprintf(stderr,
+                    "error: need proxy configuration.  See usage (-h).\n");
             return 1;
         }
     }
