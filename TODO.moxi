@@ -8,8 +8,6 @@ TODO ideas...
 
 - add OS version to stats.
 
-- startup REST/HTTP call to check if we have latest version.
-
 - histogram of request codes.
 - histogram of response codes.
 
