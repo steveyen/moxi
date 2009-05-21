@@ -189,6 +189,8 @@ START_TEST (test_compute_stats)
     fail_unless(almost_equal(stats.avg, 5.0), "Avg should be 5");
     fail_unless(almost_equal(stats.stddev, 2.0),
                 "Standard devition should be 2.");
+    fail_unless(almost_equal(stats.ninetyfifth, 9.0),
+                "95th %%ile should be 9.");
 }
 END_TEST
 
