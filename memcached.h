@@ -79,118 +79,6 @@
     harvesting it on a low memory condition. */
 #define TAIL_REPAIR_TIME (3 * 3600)
 
-/** Time relative to server start. Smaller than time_t on 64-bit systems. */
-typedef unsigned int rel_time_t;
-
-/** Stats stored per slab (and per thread). */
-struct slab_stats {
-    uint64_t  set_cmds;
-    uint64_t  get_hits;
-    uint64_t  delete_hits;
-    uint64_t  cas_hits;
-    uint64_t  cas_badval;
-    uint64_t  incr_hits;
-    uint64_t  decr_hits;
-};
-
-/**
- * Stats stored per-thread.
- */
-struct thread_stats {
-    pthread_mutex_t   mutex;
-    uint64_t          get_cmds;
-    uint64_t          get_misses;
-    uint64_t          delete_misses;
-    uint64_t          incr_misses;
-    uint64_t          decr_misses;
-    uint64_t          cas_misses;
-    uint64_t          bytes_read;
-    uint64_t          bytes_written;
-    uint64_t          flush_cmds;
-    struct slab_stats slab_stats[MAX_NUMBER_OF_SLAB_CLASSES];
-};
-
-/**
- * Global stats.
- */
-struct stats {
-    pthread_mutex_t mutex;
-    unsigned int  curr_items;
-    unsigned int  total_items;
-    uint64_t      curr_bytes;
-    unsigned int  curr_conns;
-    unsigned int  total_conns;
-    unsigned int  conn_structs;
-    uint64_t      get_cmds;
-    uint64_t      set_cmds;
-    uint64_t      get_hits;
-    uint64_t      get_misses;
-    uint64_t      evictions;
-    time_t        started;          /* when the process was started */
-    bool          accepting_conns;  /* whether we are currently accepting */
-    uint64_t      listen_disabled_num;
-};
-
-#define MAX_VERBOSITY_LEVEL 2
-
-/* When adding a setting, be sure to update process_stat_settings */
-/**
- * Globally accessible settings as derived from the commandline.
- */
-struct settings {
-    size_t maxbytes;
-    int maxconns;
-    int port;
-    int udpport;
-    char *inter;
-    int verbose;
-    rel_time_t oldest_live; /* ignore existing items older than this */
-    int evict_to_free;
-    char *socketpath;   /* path to unix socket if using local socket */
-    int access;  /* access mask (a la chmod) for unix domain socket */
-    double factor;          /* chunk size growth factor */
-    int chunk_size;
-    int num_threads;        /* number of libevent threads to run */
-    char prefix_delimiter;  /* character that marks a key prefix (for stats) */
-    int detail_enabled;     /* nonzero if we're collecting detailed stats */
-    int reqs_per_event;     /* Maximum number of io to process on each
-                               io-event. */
-    bool use_cas;
-    int backlog;
-};
-
-extern struct stats stats;
-extern time_t process_started;
-extern struct settings settings;
-
-#define ITEM_LINKED 1
-#define ITEM_CAS 2
-
-/* temp */
-#define ITEM_SLABBED 4
-
-/**
- * Structure for storing items within memcached.
- */
-typedef struct _stritem {
-    struct _stritem *next;
-    struct _stritem *prev;
-    struct _stritem *h_next;    /* hash chain next */
-    rel_time_t      time;       /* least recent access */
-    rel_time_t      exptime;    /* expire time */
-    int             nbytes;     /* size of data */
-    unsigned short  refcount;
-    uint8_t         nsuffix;    /* length of flags-and-length string */
-    uint8_t         it_flags;   /* ITEM_* above */
-    uint8_t         slabs_clsid;/* which slab class we're in */
-    uint8_t         nkey;       /* key length, w/terminating null and padding */
-    void * end[];
-    /* if it_flags & ITEM_CAS we have 8 bytes CAS */
-    /* then null-terminated key */
-    /* then " flags length\r\n" (no terminating null) */
-    /* then data with terminating \r\n (no terminating null; it's binary!) */
-} item;
-
 /* warning: don't use these macros with a function, as it evals its arg twice */
 #define ITEM_get_cas(i) ((uint64_t)(((i)->it_flags & ITEM_CAS) ? \
                                     *(uint64_t*)&((i)->end[0]) : 0x0))
@@ -274,7 +162,6 @@ enum bin_substates {
 
 enum protocol {
     ascii_prot = 3, /* arbitrary value. */
-    ascii_udp_prot,
     binary_prot,
     proxy_upstream_ascii_prot,
     proxy_downstream_ascii_prot,
@@ -282,8 +169,14 @@ enum protocol {
     negotiating_prot /* Discovering the protocol */
 };
 
-#define IS_UDP(x) (x == ascii_udp_prot)
-#define IS_ASCII(x) (x == ascii_prot || x == ascii_udp_prot || \
+enum network_transport {
+    local_transport, /* Unix sockets*/
+    tcp_transport,
+    udp_transport
+};
+
+#define IS_UDP(x) (x == udp_transport)
+#define IS_ASCII(x) (x == ascii_prot || \
                      x == proxy_upstream_ascii_prot || \
                      x == proxy_downstream_ascii_prot)
 #define IS_BINARY(x) (x == binary_prot || \
@@ -299,6 +192,120 @@ enum protocol {
 enum store_item_type {
     NOT_STORED=0, STORED, EXISTS, NOT_FOUND
 };
+
+
+/** Time relative to server start. Smaller than time_t on 64-bit systems. */
+typedef unsigned int rel_time_t;
+
+/** Stats stored per slab (and per thread). */
+struct slab_stats {
+    uint64_t  set_cmds;
+    uint64_t  get_hits;
+    uint64_t  delete_hits;
+    uint64_t  cas_hits;
+    uint64_t  cas_badval;
+    uint64_t  incr_hits;
+    uint64_t  decr_hits;
+};
+
+/**
+ * Stats stored per-thread.
+ */
+struct thread_stats {
+    pthread_mutex_t   mutex;
+    uint64_t          get_cmds;
+    uint64_t          get_misses;
+    uint64_t          delete_misses;
+    uint64_t          incr_misses;
+    uint64_t          decr_misses;
+    uint64_t          cas_misses;
+    uint64_t          bytes_read;
+    uint64_t          bytes_written;
+    uint64_t          flush_cmds;
+    struct slab_stats slab_stats[MAX_NUMBER_OF_SLAB_CLASSES];
+};
+
+/**
+ * Global stats.
+ */
+struct stats {
+    pthread_mutex_t mutex;
+    unsigned int  curr_items;
+    unsigned int  total_items;
+    uint64_t      curr_bytes;
+    unsigned int  curr_conns;
+    unsigned int  total_conns;
+    unsigned int  conn_structs;
+    uint64_t      get_cmds;
+    uint64_t      set_cmds;
+    uint64_t      get_hits;
+    uint64_t      get_misses;
+    uint64_t      evictions;
+    time_t        started;          /* when the process was started */
+    bool          accepting_conns;  /* whether we are currently accepting */
+    uint64_t      listen_disabled_num;
+};
+
+#define MAX_VERBOSITY_LEVEL 2
+
+/* When adding a setting, be sure to update process_stat_settings */
+/**
+ * Globally accessible settings as derived from the commandline.
+ */
+struct settings {
+    size_t maxbytes;
+    int maxconns;
+    int port;
+    int udpport;
+    char *inter;
+    int verbose;
+    rel_time_t oldest_live; /* ignore existing items older than this */
+    int evict_to_free;
+    char *socketpath;   /* path to unix socket if using local socket */
+    int access;  /* access mask (a la chmod) for unix domain socket */
+    double factor;          /* chunk size growth factor */
+    int chunk_size;
+    int num_threads;        /* number of libevent threads to run */
+    char prefix_delimiter;  /* character that marks a key prefix (for stats) */
+    int detail_enabled;     /* nonzero if we're collecting detailed stats */
+    int reqs_per_event;     /* Maximum number of io to process on each
+                               io-event. */
+    bool use_cas;
+    enum protocol binding_protocol;
+    int backlog;
+};
+
+extern struct stats stats;
+extern time_t process_started;
+extern struct settings settings;
+
+#define ITEM_LINKED 1
+#define ITEM_CAS 2
+
+/* temp */
+#define ITEM_SLABBED 4
+
+/**
+ * Structure for storing items within memcached.
+ */
+typedef struct _stritem {
+    struct _stritem *next;
+    struct _stritem *prev;
+    struct _stritem *h_next;    /* hash chain next */
+    rel_time_t      time;       /* least recent access */
+    rel_time_t      exptime;    /* expire time */
+    int             nbytes;     /* size of data */
+    unsigned short  refcount;
+    uint8_t         nsuffix;    /* length of flags-and-length string */
+    uint8_t         it_flags;   /* ITEM_* above */
+    uint8_t         slabs_clsid;/* which slab class we're in */
+    uint8_t         nkey;       /* key length, w/terminating null and padding */
+    void * end[];
+    /* if it_flags & ITEM_CAS we have 8 bytes CAS */
+    /* then null-terminated key */
+    /* then " flags length\r\n" (no terminating null) */
+    /* then data with terminating \r\n (no terminating null; it's binary!) */
+} item;
 
 typedef struct {
     pthread_t thread_id;        /* unique ID of this thread */
@@ -392,6 +399,7 @@ struct conn {
     int    suffixleft;
 
     enum protocol protocol;   /* which protocol this connection speaks */
+    enum network_transport transport; /* what transport is used by this connection */
 
     /* data for UDP clients */
     int    request_id; /* Incoming UDP request ID, if this is a UDP "connection" */
@@ -446,9 +454,12 @@ void do_accept_new_conns(const bool do_accept);
 char *do_add_delta(conn *c, item *item, const bool incr, const int64_t delta,
                    char *buf);
 enum store_item_type do_store_item(item *item, int comm, conn* c);
+
 conn *conn_new(const int sfd, const enum conn_states init_state,
                const int event_flags, const int read_buffer_size,
-               enum protocol prot, struct event_base *base,
+               enum protocol prot,
+               enum network_transport transport,
+               struct event_base *base,
                conn_funcs *funcs, void *extra);
 void conn_set_state(conn *c, enum conn_states state);
 void add_bytes_read(conn *c, int bytes_read);
@@ -475,7 +486,9 @@ const char *state_text(enum conn_states state);
 
 extern int daemonize(int nochdir, int noclose);
 
-int server_socket(const int port, enum protocol prot);
+int server_socket(const int port,
+                  enum protocol prot,
+                  enum network_transport transport);
 
 void drive_machine(conn *c);
 
@@ -499,12 +512,19 @@ int  thread_index(pthread_t thread_id);
 LIBEVENT_THREAD *thread_by_index(int i);
 
 int  dispatch_event_add(int thread, conn *c);
-void dispatch_conn_new(int sfd, enum conn_states init_state, int event_flags,
-                       int read_buffer_size, enum protocol prot,
+
+void dispatch_conn_new(int sfd, enum conn_states init_state,
+                       int event_flags,
+                       int read_buffer_size,
+                       enum protocol prot,
+                       enum network_transport transport,
                        conn_funcs *funcs, void *extra);
+
 void dispatch_conn_new_to_thread(int tid, int sfd, enum conn_states init_state,
-                                 int event_flags, int read_buffer_size,
+                                 int event_flags,
+                                 int read_buffer_size,
                                  enum protocol prot,
+                                 enum network_transport transport,
                                  conn_funcs *funcs, void *extra);
 
 /* Lock wrappers for cache functions that are called from main loop. */

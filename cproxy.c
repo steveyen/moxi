@@ -228,7 +228,9 @@ int cproxy_listen(proxy *p) {
     // TODO: Handle upstream binary protocol.
     //
     if (p->listening == 0) {
-        if (server_socket(p->port, proxy_upstream_ascii_prot) == 0) {
+        if (server_socket(p->port,
+                          proxy_upstream_ascii_prot,
+                          tcp_transport) == 0) {
             assert(listen_conn != NULL);
 
             // The listen_conn global list is changed by server_socket(),
@@ -918,6 +920,7 @@ int cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread) {
                                 conn_new(fd, conn_pause, 0,
                                          DATA_BUFFER_SIZE,
                                          d->behaviors[i].downstream_protocol,
+                                         tcp_transport,
                                          thread->base,
                                          &cproxy_downstream_funcs, d);
                             if (d->downstream_conns[i] != NULL) {

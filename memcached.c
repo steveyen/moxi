@@ -196,6 +196,7 @@ static void settings_init(void) {
     settings.detail_enabled = 0;
     settings.reqs_per_event = 20;
     settings.backlog = 1024;
+    settings.binding_protocol = negotiating_prot;
 }
 
 /*
@@ -232,7 +233,7 @@ int add_msghdr(conn *c) {
     c->msgbytes = 0;
     c->msgused++;
 
-    if (IS_UDP(c->protocol)) {
+    if (IS_UDP(c->transport)) {
         /* Leave room for the UDP header, which we'll fill in later. */
         return add_iov(c, NULL, UDP_HEADER_SIZE);
     }
@@ -311,9 +312,6 @@ static const char *prot_text(enum protocol prot) {
         case binary_prot:
             rv = "binary";
             break;
-        case ascii_udp_prot:
-            rv = "ascii-udp";
-            break;
         case proxy_upstream_ascii_prot:
             rv = "proxy-upstream-ascii";
             break;
@@ -332,7 +330,9 @@ static const char *prot_text(enum protocol prot) {
 
 conn *conn_new(const int sfd, enum conn_states init_state,
                const int event_flags,
-               const int read_buffer_size, enum protocol prot,
+               const int read_buffer_size,
+               enum protocol prot,
+               enum network_transport transport,
                struct event_base *base,
                conn_funcs *funcs, void *extra) {
     conn *c = conn_from_freelist();
@@ -378,6 +378,9 @@ conn *conn_new(const int sfd, enum conn_states init_state,
         STATS_UNLOCK();
     }
 
+    c->transport = transport;
+    c->protocol = prot;
+
     /* unix socket mode doesn't need this, so zeroed out.  but why
      * is this done for every command?  presumably for UDP
      * mode.  */
@@ -390,20 +393,23 @@ conn *conn_new(const int sfd, enum conn_states init_state,
     if (settings.verbose > 1) {
         if (init_state == conn_listening) {
             fprintf(stderr, "<%d server listening (%s)\n", sfd,
-                    prot_text(prot));
-        } else if (IS_UDP(prot)) {
+                prot_text(c->protocol));
+        } else if (IS_UDP(transport)) {
             fprintf(stderr, "<%d server listening (udp)\n", sfd);
-        } else if (prot == negotiating_prot) {
+        } else if (c->protocol == negotiating_prot) {
             fprintf(stderr, "<%d new auto-negotiating client connection\n",
                     sfd);
+        } else if (c->protocol == ascii_prot) {
+            fprintf(stderr, "<%d new ascii client connection.\n", sfd);
+        } else if (c->protocol == binary_prot) {
+            fprintf(stderr, "<%d new binary client connection.\n", sfd);
         } else {
             fprintf(stderr, "<%d new %s client connection\n",
-                    sfd, prot_text(prot));
+                    sfd, prot_text(c->protocol));
         }
     }
 
     c->sfd = sfd;
-    c->protocol = prot;
     c->state = init_state;
     c->rlbytes = 0;
     c->cmd = -1;
@@ -546,7 +552,7 @@ static void conn_close(conn *c) {
 static void conn_shrink(conn *c) {
     assert(c != NULL);
 
-    if (IS_UDP(c->protocol))
+    if (IS_UDP(c->transport))
         return;
 
     if (c->rsize > READ_BUFFER_HIGHWAT && c->rbytes < DATA_BUFFER_SIZE) {
@@ -685,7 +691,7 @@ int add_iov(conn *c, const void *buf, int len) {
          * Limit UDP packets, and the first payloads of TCP replies, to
          * UDP_MAX_PAYLOAD_SIZE bytes.
          */
-        limit_to_mtu = IS_UDP(c->protocol) || (1 == c->msgused);
+        limit_to_mtu = IS_UDP(c->transport) || (1 == c->msgused);
 
         /* We may need to start a new msghdr if this one is full. */
         if (m->msg_iovlen == IOV_MAX ||
@@ -2163,6 +2169,8 @@ static void process_stat_settings(ADD_STAT add_stats, void *c) {
     APPEND_STAT("reqs_per_event", "%d", settings.reqs_per_event);
     APPEND_STAT("cas_enabled", "%s", settings.use_cas ? "yes" : "no");
     APPEND_STAT("tcp_backlog", "%d", settings.backlog);
+    APPEND_STAT("binding_protocol", "%s",
+                prot_text(settings.binding_protocol));
 }
 
 static void process_stat(conn *c, token_t *tokens, const size_t ntokens) {
@@ -2394,7 +2402,7 @@ static inline void process_get_command(conn *c, token_t *tokens, size_t ntokens,
         in \r\n. So we send SERVER_ERROR instead.
     */
     if (key_token->value != NULL || add_iov(c, "END\r\n", 5) != 0
-        || (IS_UDP(c->protocol) && build_udp_headers(c) != 0)) {
+        || (IS_UDP(c->transport) && build_udp_headers(c) != 0)) {
         out_string(c, "SERVER_ERROR out of memory writing get response");
     }
     else {
@@ -2810,7 +2818,7 @@ int try_read_command(conn *c) {
     assert(c->rcurr <= (c->rbuf + c->rsize));
     assert(c->rbytes > 0);
 
-    if (c->protocol == negotiating_prot)  {
+    if (c->protocol == negotiating_prot || c->transport == udp_transport)  {
         if ((unsigned char)c->rbuf[0] == (unsigned char)PROTOCOL_BINARY_REQ) {
             c->protocol = binary_prot;
         } else {
@@ -2866,7 +2874,7 @@ int try_read_command(conn *c) {
                             c->binary_header.request.magic);
                 }
                 conn_set_state(c, conn_closing);
-                return 0;
+                return -1;
             }
 
             c->msgcurr = 0;
@@ -3115,7 +3123,7 @@ static enum transmit_result transmit(conn *c) {
         if (settings.verbose > 0)
             perror("Failed to write, and not due to blocking");
 
-        if (IS_UDP(c->protocol))
+        if (IS_UDP(c->transport))
             conn_set_state(c, conn_read);
         else
             conn_set_state(c, conn_closing);
@@ -3163,7 +3171,9 @@ void drive_machine(conn *c) {
             }
 
             dispatch_conn_new(sfd, conn_new_cmd, EV_READ | EV_PERSIST,
-                              DATA_BUFFER_SIZE, c->protocol,
+                              DATA_BUFFER_SIZE,
+                              c->protocol,
+                              tcp_transport,
                               c->funcs, c->extra);
             stop = true;
             break;
@@ -3181,7 +3191,7 @@ void drive_machine(conn *c) {
             break;
 
         case conn_read:
-            res = IS_UDP(c->protocol) ? try_read_udp(c) : try_read_network(c);
+            res = IS_UDP(c->transport) ? try_read_udp(c) : try_read_network(c);
 
             switch (res) {
             case READ_NO_DATA_RECEIVED:
@@ -3315,9 +3325,8 @@ void drive_machine(conn *c) {
              * assemble it into a msgbuf list (this will be a single-entry
              * list for TCP or a two-entry list for UDP).
              */
-            if (c->iovused == 0 || (IS_UDP(c->protocol) && c->iovused == 1)) {
-                if (add_iov(c, c->wcurr, c->wbytes) != 0 ||
-                    (IS_UDP(c->protocol) && build_udp_headers(c) != 0)) {
+            if (c->iovused == 0 || (IS_UDP(c->transport) && c->iovused == 1)) {
+                if (add_iov(c, c->wcurr, c->wbytes) != 0) {
                     if (settings.verbose > 0)
                         fprintf(stderr, "Couldn't build response\n");
                     conn_set_state(c, conn_closing);
@@ -3328,6 +3337,12 @@ void drive_machine(conn *c) {
             /* fall through... */
 
         case conn_mwrite:
+          if (IS_UDP(c->transport) && c->msgcurr == 0 && build_udp_headers(c) != 0) {
+            if (settings.verbose > 0)
+              fprintf(stderr, "Failed to build UDP headers\n");
+            conn_set_state(c, conn_closing);
+            break;
+          }
             switch (transmit(c)) {
             case TRANSMIT_COMPLETE:
                 if (c->state == conn_mwrite) {
@@ -3379,7 +3394,7 @@ void drive_machine(conn *c) {
             if (c->funcs->conn_close != NULL)
                 c->funcs->conn_close(c);
 
-            if (IS_UDP(c->protocol))
+            if (IS_UDP(c->transport))
                 conn_cleanup(c);
             else
                 conn_close(c);
@@ -3476,7 +3491,9 @@ static void maximize_sndbuf(const int sfd) {
         fprintf(stderr, "<%d send buffer was %d, now %d\n", sfd, old_size, last_good);
 }
 
-int server_socket(const int port, enum protocol prot) {
+int server_socket(const int port,
+                  enum protocol prot,
+                  enum network_transport transport) {
     int sfd;
     struct linger ling = {0, 0};
     struct addrinfo *ai;
@@ -3495,7 +3512,7 @@ int server_socket(const int port, enum protocol prot) {
     memset(&hints, 0, sizeof (hints));
     hints.ai_flags = AI_PASSIVE;
     hints.ai_family = AF_UNSPEC;
-    hints.ai_socktype = IS_UDP(prot) ? SOCK_DGRAM : SOCK_STREAM;
+    hints.ai_socktype = IS_UDP(transport) ? SOCK_DGRAM : SOCK_STREAM;
 
     snprintf(port_buf, NI_MAXSERV, "%d", port);
     error= getaddrinfo(settings.inter, port_buf, &hints, &ai);
@@ -3529,7 +3546,7 @@ int server_socket(const int port, enum protocol prot) {
 #endif
 
         setsockopt(sfd, SOL_SOCKET, SO_REUSEADDR, (void *)&flags, sizeof(flags));
-        if (IS_UDP(prot)) {
+        if (IS_UDP(transport)) {
             maximize_sndbuf(sfd);
         } else {
             error = setsockopt(sfd, SOL_SOCKET, SO_KEEPALIVE, (void *)&flags, sizeof(flags));
@@ -3556,7 +3573,7 @@ int server_socket(const int port, enum protocol prot) {
             continue;
         } else {
             success++;
-            if (!IS_UDP(prot) && listen(sfd, settings.backlog) == -1) {
+            if (!IS_UDP(transport) && listen(sfd, settings.backlog) == -1) {
                 perror("listen()");
                 close(sfd);
                 freeaddrinfo(ai);
@@ -3564,19 +3581,20 @@ int server_socket(const int port, enum protocol prot) {
             }
         }
 
-        if (IS_UDP(prot)) {
+        if (IS_UDP(transport)) {
             int c;
 
             for (c = 1; c < settings.num_threads; c++) {
                 /* this is guaranteed to hit all threads because we round-robin */
                 dispatch_conn_new(sfd, conn_read, EV_READ | EV_PERSIST,
-                                  UDP_READ_BUFFER_SIZE, ascii_udp_prot,
+                                  UDP_READ_BUFFER_SIZE, prot, transport,
                                   NULL, NULL);
             }
         } else {
             if (!(listen_conn_add = conn_new(sfd, conn_listening,
                                              EV_READ | EV_PERSIST, 1,
-                                             prot, main_base, NULL, NULL))) {
+                                             prot, transport,
+                                             main_base, NULL, NULL))) {
                 fprintf(stderr, "failed to create listening connection\n");
                 exit(EXIT_FAILURE);
             }
@@ -3660,7 +3678,8 @@ static int server_socket_unix(const char *path, int access_mask) {
     }
     if (!(listen_conn = conn_new(sfd, conn_listening,
                                  EV_READ | EV_PERSIST, 1,
-                                 negotiating_prot, main_base,
+                                 negotiating_prot,
+                                 local_transport, main_base,
                                  NULL, NULL))) {
         fprintf(stderr, "failed to create listening connection\n");
         exit(EXIT_FAILURE);
@@ -3768,6 +3787,7 @@ static void usage(int argc, char **argv) {
            "              to prevent starvation.  default 20\n");
     printf("-C            Disable use of CAS\n");
     printf("-b            Set the backlog queue limit (default 1024)\n");
+    printf("-B            Binding protocol - one of ascii, binary, or auto (default)\n");
     return;
 }
 
@@ -3981,6 +4001,7 @@ int main (int argc, char **argv) {
           "b:"  /* backlog queue limit */
           "z:"  /* cproxy configuration */
           "Z:"  /* cproxy behavior */
+          "B:"  /* Binding protocol */
         ))) {
         switch (c) {
         case 'a':
@@ -4087,6 +4108,19 @@ int main (int argc, char **argv) {
             break;
         case 'Z' :
             cproxy_behavior = strdup(optarg);
+            break;
+        case 'B':
+            if (strcmp(optarg, "auto") == 0) {
+                settings.binding_protocol = negotiating_prot;
+            } else if (strcmp(optarg, "binary") == 0) {
+                settings.binding_protocol = binary_prot;
+            } else if (strcmp(optarg, "ascii") == 0) {
+                settings.binding_protocol = ascii_prot;
+            } else {
+                fprintf(stderr, "Invalid value for binding protocol: %s\n"
+                        " -- should be one of auto, binary, or ascii\n", optarg);
+                exit(EX_USAGE);
+            }
             break;
         default:
             fprintf(stderr, "Illegal argument \"%c\"\n", c);
@@ -4229,7 +4263,9 @@ int main (int argc, char **argv) {
     if (settings.socketpath == NULL) {
         int udp_port;
         errno = 0;
-        if (settings.port && server_socket(settings.port, negotiating_prot)) {
+        if (settings.port && server_socket(settings.port,
+                                           settings.binding_protocol,
+                                           tcp_transport)) {
             fprintf(stderr, "failed to listen on TCP port %d\n", settings.port);
             if (errno != 0)
                 perror("tcp listen");
@@ -4246,7 +4282,9 @@ int main (int argc, char **argv) {
 
         /* create the UDP listening socket and bind it */
         errno = 0;
-        if (settings.udpport && server_socket(settings.udpport, ascii_udp_prot)) {
+        if (settings.udpport && server_socket(settings.udpport,
+                                              settings.binding_protocol,
+                                              udp_transport)) {
             fprintf(stderr, "failed to listen on UDP port %d\n", settings.udpport);
             if (errno != 0)
                 perror("udp listen");
