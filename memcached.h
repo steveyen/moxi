@@ -429,9 +429,9 @@ struct conn {
     conn_funcs *funcs;
     void *extra;
 
-    char       *cmd_start;      // Pointer into rbuf, snapshot of rcurr.
-    rel_time_t  cmd_start_time; // Snapshot of current_time.
-    int         cmd_retries;
+    char     *cmd_start;      // Pointer into rbuf, snapshot of rcurr.
+    uint32_t  cmd_start_time; // Snapshot of msec_current_time.
+    int       cmd_retries;
 };
 
 extern conn *listen_conn;

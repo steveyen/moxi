@@ -9,13 +9,16 @@
 
 int cproxy_init(char *cfg_str,
                 char *behavior_str,
-                int nthreads);
+                int nthreads,
+                struct event_base *main_base);
 
 #define IS_PROXY(x) (x == proxy_upstream_ascii_prot || \
                      x == proxy_downstream_ascii_prot || \
                      x == proxy_downstream_binary_prot)
 
 #define CPROXY_NOT_CAS -1
+
+extern volatile uint32_t msec_current_time;
 
 // -------------------------------
 

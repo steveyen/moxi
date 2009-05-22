@@ -12,6 +12,13 @@
 #include "cproxy.h"
 #include "work.h"
 
+volatile uint32_t  msec_current_time;
+struct event       msec_clockevent;
+struct event_base *msec_clockevent_base;
+
+void msec_clock_handler(const int fd, const short which, void *arg);
+void msec_set_current_time(void);
+
 int cproxy_init_string(char *cfg_str,
                        proxy_behavior behavior,
                        int nthreads);
@@ -41,7 +48,8 @@ proxy_behavior behavior_default_g = {
 
 int cproxy_init(char *cfg_str,
                 char *behavior_str,
-                int nthreads) {
+                int nthreads,
+                struct event_base *main_base) {
     assert(nthreads > 1); // Main + at least one worker.
     assert(nthreads == settings.num_threads);
 
@@ -51,6 +59,9 @@ int cproxy_init(char *cfg_str,
 
     if (settings.verbose > 1)
         fprintf(stderr, "cproxy_init (%s)\n", cfg_str);
+
+    msec_clockevent_base = main_base;
+    msec_clock_handler(0, 0, NULL);
 
     cproxy_init_a2a();
     cproxy_init_a2b();
@@ -327,3 +338,36 @@ void cproxy_dump_behavior(proxy_behavior *b, char *prefix) {
     fprintf(stderr, "%s bucket: %s\n",
             prefix, b->bucket);
 }
+
+// ---------------------------------------
+
+/* Time-sensitive callers can call it by hand with this,
+ * outside the normal subsecond timer
+ */
+void msec_set_current_time(void) {
+    struct timeval timer;
+    gettimeofday(&timer, NULL);
+    msec_current_time =
+        (timer.tv_sec - process_started) * 1000 + (timer.tv_usec / 1000);
+}
+
+void msec_clock_handler(const int fd, const short which, void *arg) {
+    // Subsecond resolution timer.
+    //
+    struct timeval t = { .tv_sec = 0, .tv_usec = 200000 };
+    static bool initialized = false;
+
+    if (initialized) {
+        /* only delete the event if it's actually there. */
+        evtimer_del(&msec_clockevent);
+    } else {
+        initialized = true;
+    }
+
+    evtimer_set(&msec_clockevent, msec_clock_handler, 0);
+    event_base_set(msec_clockevent_base, &msec_clockevent);
+    evtimer_add(&msec_clockevent, &t);
+
+    msec_set_current_time();
+}
+

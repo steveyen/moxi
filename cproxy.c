@@ -1398,11 +1398,8 @@ void wait_queue_timeout(const int fd,
 
         struct timeval wqt = cproxy_get_wait_queue_timeout(p);
 
-        // TODO: Should have better than second resolution,
-        //       except current_time is limited to just
-        //       second resolution.
-        //
-        rel_time_t wqt_sec = wqt.tv_sec + (wqt.tv_usec / 1000000.0);
+        uint32_t wqt_msec =
+            (wqt.tv_sec - process_started) * 1000 + (wqt.tv_usec / 1000);
 
         // Run through all the old upstream conn's in
         // the wait queue, remove them, and emit errors
@@ -1416,7 +1413,7 @@ void wait_queue_timeout(const int fd,
 
             // Check if upstream conn is old and should be removed.
             //
-            if (uc->cmd_start_time <= (current_time - wqt_sec)) {
+            if (uc->cmd_start_time <= (msec_current_time - wqt_msec)) {
                 if (settings.verbose > 1)
                     fprintf(stderr, "proxy_td_timeout sending error %d\n",
                             uc->sfd);

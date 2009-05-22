@@ -4296,13 +4296,18 @@ int main (int argc, char **argv) {
      * we can be a proxy to ourselves for testing.
      */
     if (cproxy_cfg) {
-        cproxy_init(cproxy_cfg, cproxy_behavior, settings.num_threads);
+        cproxy_init(cproxy_cfg,
+                    cproxy_behavior,
+                    settings.num_threads,
+                    main_base);
         free(cproxy_cfg);
     } else {
         int i = argc - 1;
         while (i > 0) {
             if (strncmp(argv[i], "apikey=", 7) == 0) {
-                cproxy_init(argv[i], cproxy_behavior, settings.num_threads);
+                cproxy_init(argv[i], cproxy_behavior,
+                            settings.num_threads,
+                            main_base);
                 break;
             }
             i--;
