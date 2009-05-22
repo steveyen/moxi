@@ -83,10 +83,12 @@ for (map("./t/$_", @skip_tests)) {
 $is_good_test{"./t/incrdecr.t"} = "ascii simple chain fanout fanoutin";
 $is_skip_test{"./t/incrdecr.t"} = "binary simple chain fanout fanoutin";
 
-# Skipping cas.t for fanoutin due to multi-"gets" race condition.
+# Skipping cas.t for fanout/fanoutin due to multi-"gets" race condition.
+# The test expects "gets x y" to return results in order "x y", but
+# when moxi does a fanout, the order is non-deterministic.
 #
-$is_good_test{"./t/cas.t"} = "ascii binary simple chain fanout";
-$is_skip_test{"./t/cas.t"} = "ascii binary fanoutin";
+$is_good_test{"./t/cas.t"} = "ascii binary simple chain";
+$is_skip_test{"./t/cas.t"} = "ascii binary fanout fanoutin";
 
 my $file;
 
