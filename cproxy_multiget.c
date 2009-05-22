@@ -157,7 +157,7 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
             else
                 key_len = strlen(key);
 
-            // This key_len check helps skips consecutive spaces.
+            // This key_len check helps skip consecutive spaces.
             //
             if (key_len > 0) {
                 // See if we've already requested this key via
@@ -200,11 +200,10 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
                             c->msgused <= 1 &&
                             c->msgbytes <= 0) {
                             emit_start(c, command, cmd_len);
-
-                            // TODO: Handle out of iov memory.
                         }
 
-                        // Write the key, including the preceding space.
+                        // Provide the preceding space as optimization
+                        // for ascii-to-ascii configuration.
                         //
                         emit_skey(c, key - 1, key_len + 1);
                     } else {
