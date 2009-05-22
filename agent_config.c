@@ -89,16 +89,20 @@ int cproxy_init_agent(char *cfg_str,
             }
         }
 
-        if (jid == NULL) {
+        if (jid == NULL ||
+            strlen(jid) <= 0) {
             fprintf(stderr, "missing conflate id\n");
             exit(EXIT_FAILURE);
-        } else if (jpw == NULL) {
+        } else if (jpw == NULL ||
+                   strlen(jpw) <= 0) {
             fprintf(stderr, "missing conflate password\n");
             exit(EXIT_FAILURE);
-        } else if (config == NULL) {
+        } else if (config == NULL ||
+                   strlen(config) <= 0) {
             fprintf(stderr, "missing config\n");
             exit(EXIT_FAILURE);
-        } else if (host == NULL) {
+        } else if (host == NULL ||
+                   strlen(host) <= 0) {
             fprintf(stderr, "missing host\n");
             exit(EXIT_FAILURE);
         } else {
