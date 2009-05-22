@@ -3,7 +3,7 @@
 #ifndef AGENT_H
 #define AGENT_H
 
-#include "conflate.h"
+#include <conflate.h>
 
 int cproxy_init_agent(char *cfg_str,
                       proxy_behavior behavior,

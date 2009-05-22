@@ -155,7 +155,7 @@ int cproxy_init_agent_start(char *jid,
         config.jid  = jid;  // "customer@stevenmb.local"
         config.pass = jpw;  // "password"
         config.host = host; // "localhost"
-        config.software   = "memscale";
+        config.software   = PACKAGE;
         config.version    = VERSION;
         config.save_path  = config_path;
         config.userdata   = m;
