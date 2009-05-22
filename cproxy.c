@@ -36,6 +36,8 @@ memcached_return memcached_do(memcached_server_st *ptr,
 //
 downstream *downstream_list_remove(downstream *head, downstream *d);
 
+int downstream_conn_index(downstream *d, conn *c);
+
 void  downstream_timeout(const int fd,
                          const short which,
                          void *arg);
@@ -94,6 +96,7 @@ proxy *cproxy_create(char    *name,
                      int      port,
                      char    *config,
                      uint32_t config_ver,
+                     proxy_behavior  behavior_head,
                      int             behaviors_num,
                      proxy_behavior *behaviors,
                      int nthreads) {
@@ -109,14 +112,6 @@ proxy *cproxy_create(char    *name,
         fprintf(stderr, "cproxy_create on port %d, downstream %s\n",
                 port, config);
 
-    int downstream_max = 2000; // TODO.
-    for (int i = 0; i < behaviors_num; i++)
-        if (downstream_max > behaviors[i].downstream_max)
-            downstream_max = behaviors[i].downstream_max;
-
-    if (downstream_max <= 0)
-        downstream_max = 1;
-
     proxy *p = (proxy *) calloc(1, sizeof(proxy));
     if (p != NULL) {
         p->name       = strdup(name);
@@ -124,6 +119,7 @@ proxy *cproxy_create(char    *name,
         p->config     = strdup(config);
         p->config_ver = config_ver;
 
+        p->behavior_head = behavior_head;
         p->behaviors_num = behaviors_num;
         p->behaviors     = cproxy_copy_behaviors(behaviors_num,
                                                  behaviors);
@@ -153,7 +149,7 @@ proxy *cproxy_create(char    *name,
                 ptd->downstream_released = NULL;
                 ptd->downstream_tot = 0;
                 ptd->downstream_num = 0;
-                ptd->downstream_max = downstream_max;
+                ptd->downstream_max = behavior_head.downstream_max;
                 ptd->downstream_assigns = 0;
                 ptd->timeout_tv.tv_sec = 0;
                 ptd->timeout_tv.tv_usec = 0;
@@ -1311,40 +1307,41 @@ struct timeval cproxy_get_wait_queue_timeout(proxy *p) {
     };
 
     pthread_mutex_lock(&p->proxy_lock);
-
-    assert(p->behaviors_num > 0);
-    assert(p->behaviors != NULL);
-
-    for (int i = 0; i < p->behaviors_num; i++) {
-        if (i <= 0 ||
-            rv.tv_sec  < p->behaviors[i].wait_queue_timeout.tv_sec ||
-            rv.tv_usec < p->behaviors[i].wait_queue_timeout.tv_usec) {
-            rv = p->behaviors[i].wait_queue_timeout;
-        }
-    }
-
+    rv = p->behavior_head.wait_queue_timeout;
     pthread_mutex_unlock(&p->proxy_lock);
 
     return rv;
 }
 
-struct timeval cproxy_get_downstream_timeout(downstream *d) {
+struct timeval cproxy_get_downstream_timeout(downstream *d, conn *c) {
     assert(d);
-    assert(d->behaviors_num > 0);
-    assert(d->behaviors != NULL);
 
-    struct timeval rv = {
-        .tv_sec = 0,
-        .tv_usec = 0
-    };
+    struct timeval rv;
 
-    for (int i = 0; i < d->behaviors_num; i++) {
-        if (i <= 0 ||
-            rv.tv_sec  < d->behaviors[i].downstream_timeout.tv_sec ||
-            rv.tv_usec < d->behaviors[i].downstream_timeout.tv_usec) {
+    if (c != NULL) {
+        assert(d->behaviors_num > 0);
+        assert(d->behaviors != NULL);
+        assert(d->downstream_conns != NULL);
+
+        int i = downstream_conn_index(d, c);
+        if (i >= 0 && i < d->behaviors_num) {
             rv = d->behaviors[i].downstream_timeout;
+            if (rv.tv_sec != 0 ||
+                rv.tv_usec != 0) {
+                return rv;
+            }
         }
     }
+
+    proxy_td *ptd = d->ptd;
+    assert(ptd);
+
+    proxy *p = ptd->proxy;
+    assert(p);
+
+    pthread_mutex_lock(&p->proxy_lock);
+    rv = p->behavior_head.downstream_timeout;
+    pthread_mutex_unlock(&p->proxy_lock);
 
     return rv;
 }
@@ -1729,14 +1726,14 @@ void downstream_timeout(const int fd,
     }
 }
 
-bool cproxy_start_downstream_timeout(downstream *d) {
+bool cproxy_start_downstream_timeout(downstream *d, conn *c) {
     assert(d != NULL);
     assert(d->timeout_tv.tv_sec == 0);
     assert(d->timeout_tv.tv_usec == 0);
     assert(d->behaviors_num > 0);
     assert(d->behaviors != NULL);
 
-    struct timeval dt = cproxy_get_downstream_timeout(d);
+    struct timeval dt = cproxy_get_downstream_timeout(d, c);
     if (dt.tv_sec == 0 &&
         dt.tv_usec == 0)
         return true;
@@ -1934,3 +1931,17 @@ bool cproxy_bucket_downstream(memcached_server_st *server,
 
     return false;
 }
+
+int downstream_conn_index(downstream *d, conn *c) {
+    assert(d);
+
+    int nconns = memcached_server_count(&d->mst);
+    for (int i = 0; i < nconns; i++) {
+        if (d->downstream_conns[i] == c) {
+            return i;
+        }
+    }
+
+    return -1;
+}
+

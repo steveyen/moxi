@@ -82,7 +82,8 @@ struct proxy {
 
     // Mutable, covered by proxy_lock.
     //
-    int             behaviors_num; // Size of behaviors array.
+    proxy_behavior  behavior_head; // Proxy-level behavior.
+    int             behaviors_num; // Size of servers-level behaviors array.
     proxy_behavior *behaviors;     // Array, size is number of servers.
 
     // Any thread that accesses the mutable fields should
@@ -221,6 +222,7 @@ proxy *cproxy_create(char     *name,
                      int       port,
                      char     *config,
                      uint32_t  config_ver,
+                     proxy_behavior  behavior_head,
                      int             behaviors_num,
                      proxy_behavior *behaviors,
                      int nthreads);
@@ -326,10 +328,10 @@ void cproxy_dump_behavior(proxy_behavior *b, char *prefix);
 
 void cproxy_upstream_ascii_item_response(item *it, conn *uc);
 
-struct timeval cproxy_get_downstream_timeout(downstream *d);
+struct timeval cproxy_get_downstream_timeout(downstream *d, conn *c);
 struct timeval cproxy_get_wait_queue_timeout(proxy *p);
 
-bool cproxy_start_downstream_timeout(downstream *d);
+bool cproxy_start_downstream_timeout(downstream *d, conn *c);
 bool cproxy_start_wait_queue_timeout(proxy_td *ptd, conn *uc);
 
 rel_time_t cproxy_realtime(const time_t exptime);

@@ -320,7 +320,7 @@ bool cproxy_forward_a2a_simple_downstream(downstream *d,
                 d->downstream_used       = 1;
 
                 if (cproxy_dettach_if_noreply(d, uc) == false) {
-                    cproxy_start_downstream_timeout(d);
+                    cproxy_start_downstream_timeout(d, c);
                 } else {
                     c->write_and_go = conn_pause;
                 }
@@ -412,7 +412,7 @@ bool cproxy_broadcast_a2a_downstream(downstream *d,
     if (cproxy_dettach_if_noreply(d, uc) == false) {
         d->upstream_suffix = suffix;
 
-        cproxy_start_downstream_timeout(d);
+        cproxy_start_downstream_timeout(d, NULL);
     }
 
     return nwrite > 0;
@@ -478,7 +478,7 @@ bool cproxy_forward_a2a_item_downstream(downstream *d, short cmd,
                         d->downstream_used       = 1;
 
                         if (cproxy_dettach_if_noreply(d, uc) == false) {
-                            cproxy_start_downstream_timeout(d);
+                            cproxy_start_downstream_timeout(d, c);
                         } else {
                             c->write_and_go = conn_pause;
                         }

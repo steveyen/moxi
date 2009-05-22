@@ -39,11 +39,11 @@ proxy_behavior behavior_default_g = {
         .tv_sec  = 0,
         .tv_usec = 0
     },
-    .host = "",
+    .host = {0},
     .port = 0,
-    .bucket = "",
-    .usr = "",
-    .pwd = ""
+    .bucket = {0},
+    .usr = {0},
+    .pwd = {0}
 };
 
 int cproxy_init(char *cfg_str,
@@ -145,6 +145,7 @@ int cproxy_init_string(char *cfg_str,
                                      proxy_port,
                                      proxy_sect,
                                      0, // config_ver.
+                                     behavior,
                                      behaviors_num,
                                      behaviors,
                                      nthreads);
