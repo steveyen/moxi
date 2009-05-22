@@ -33,6 +33,10 @@ void map_proxy_stats_foreach_emit(gpointer key,
                                   gpointer value,
                                   gpointer user_data);
 
+void map_proxy_stats_foreach_merge(gpointer key,
+                                   gpointer value,
+                                   gpointer user_data);
+
 struct add_stat_emit {
     conflate_add_stat add_stat;
     void             *opaque;
@@ -141,25 +145,9 @@ void on_conflate_get_stats(void *userdata, void *opaque,
                 for (i = 2; i < m->nthreads; i++) {
                     GHashTable *map_proxy_stats = ca[i].data;
                     if (map_proxy_stats != NULL) {
-                        GHashTableIter iter;
-
-                        g_hash_table_iter_init(&iter, map_proxy_stats);
-
-                        gpointer key   = NULL;
-                        gpointer value = NULL;
-
-                        while (g_hash_table_iter_next (&iter, &key, &value)) {
-                            if (key != NULL) {
-                                proxy_stats *cur_ps = (proxy_stats *) value;
-                                proxy_stats *end_ps =
-                                    g_hash_table_lookup(end_proxy_stats,
-                                                        key);
-                                if (cur_ps != NULL &&
-                                    end_ps != NULL) {
-                                    add_proxy_stats(end_ps, cur_ps);
-                                }
-                            }
-                        }
+                        g_hash_table_foreach(map_proxy_stats,
+                                             map_proxy_stats_foreach_merge,
+                                             end_proxy_stats);
                     }
                 }
 
@@ -188,6 +176,23 @@ void on_conflate_get_stats(void *userdata, void *opaque,
     }
 
     add_stat(opaque, NULL, NULL);
+}
+
+void map_proxy_stats_foreach_merge(gpointer key,
+                                   gpointer value,
+                                   gpointer user_data) {
+    GHashTable *end_proxy_stats = user_data;
+    if (key != NULL &&
+        end_proxy_stats != NULL) {
+        proxy_stats *cur_ps = (proxy_stats *) value;
+        proxy_stats *end_ps =
+            g_hash_table_lookup(end_proxy_stats,
+                                key);
+        if (cur_ps != NULL &&
+            end_ps != NULL) {
+            add_proxy_stats(end_ps, cur_ps);
+        }
+    }
 }
 
 /* Must be invoked on the main listener thread.

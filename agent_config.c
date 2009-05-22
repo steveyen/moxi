@@ -59,8 +59,8 @@ int cproxy_init_agent(char *cfg_str,
     while (next != NULL) {
         char *jid    = NULL;
         char *jpw    = NULL;
-        char *config = "/tmp/memscale.cfg"; // TODO: Revisit.
-        char *host   = "localhost";         // TODO: Revisit.
+        char *config = NULL;
+        char *host   = NULL;
 
         char *cur = strsep(&next, ";");
         while (cur != NULL) {
@@ -93,24 +93,35 @@ int cproxy_init_agent(char *cfg_str,
             strlen(jid) <= 0) {
             fprintf(stderr, "missing conflate id\n");
             exit(EXIT_FAILURE);
-        } else if (jpw == NULL ||
-                   strlen(jpw) <= 0) {
+        }
+
+        if (jpw == NULL ||
+            strlen(jpw) <= 0) {
             fprintf(stderr, "missing conflate password\n");
             exit(EXIT_FAILURE);
-        } else if (config == NULL ||
-                   strlen(config) <= 0) {
-            fprintf(stderr, "missing config\n");
-            exit(EXIT_FAILURE);
-        } else if (host == NULL ||
-                   strlen(host) <= 0) {
-            fprintf(stderr, "missing host\n");
-            exit(EXIT_FAILURE);
-        } else {
-            if (cproxy_init_agent_start(jid, jpw, config, host,
-                                        behavior,
-                                        nthreads) == 0)
-                rv++;
         }
+
+        int config_alloc = 0;
+        if (config == NULL) {
+            config_alloc = strlen(jid) + 100;
+            config = calloc(config_alloc, 1);
+            if (config != NULL) {
+                snprintf(config, config_alloc,
+                         "/var/tmp/moxi_%s.cfg", jid);
+            } else {
+                fprintf(stderr, "conflate config buf alloc\n");
+                exit(EXIT_FAILURE);
+            }
+        }
+
+        if (cproxy_init_agent_start(jid, jpw, config, host,
+                                    behavior,
+                                    nthreads) == 0)
+            rv++;
+
+        if (config_alloc > 0 &&
+            config != NULL)
+            free(config);
     }
 
     free(buff);
@@ -127,7 +138,6 @@ int cproxy_init_agent_start(char *jid,
     assert(jid);
     assert(jpw);
     assert(config_path);
-    assert(host);
 
     if (settings.verbose > 1)
         fprintf(stderr, "cproxy_init_agent_start\n");;
