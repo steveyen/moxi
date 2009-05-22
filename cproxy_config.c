@@ -12,9 +12,10 @@
 #include "cproxy.h"
 #include "work.h"
 
-volatile uint32_t  msec_current_time;
+volatile uint32_t  msec_current_time = 0;
+int                msec_cycle = 200;
 struct event       msec_clockevent;
-struct event_base *msec_clockevent_base;
+struct event_base *msec_clockevent_base = NULL;
 
 void msec_clock_handler(const int fd, const short which, void *arg);
 void msec_set_current_time(void);
@@ -28,8 +29,10 @@ int cproxy_init_agent(char *cfg_str,
                       int nthreads);
 
 proxy_behavior behavior_default_g = {
+    .cycle = 0,
     .downstream_max = 1,
     .downstream_weight = 0,
+    .downstream_retry = 0,
     .downstream_protocol = proxy_downstream_ascii_prot,
     .downstream_timeout = {
         .tv_sec  = 0,
@@ -60,9 +63,6 @@ int cproxy_init(char *cfg_str,
     if (settings.verbose > 1)
         fprintf(stderr, "cproxy_init (%s)\n", cfg_str);
 
-    msec_clockevent_base = main_base;
-    msec_clock_handler(0, 0, NULL);
-
     cproxy_init_a2a();
     cproxy_init_a2b();
 
@@ -72,6 +72,12 @@ int cproxy_init(char *cfg_str,
     proxy_behavior behavior =
         cproxy_parse_behavior(behavior_str,
                               behavior_default_g);
+
+    if (behavior.cycle > 0)
+        msec_cycle = behavior.cycle;
+
+    msec_clockevent_base = main_base;
+    msec_clock_handler(0, 0, NULL);
 
     if (strchr(cfg_str, '@') == NULL) // Not jid format.
         return cproxy_init_string(cfg_str,
@@ -226,13 +232,20 @@ void cproxy_parse_behavior_key_val(char *key,
 
     if (key != NULL &&
         val != NULL) {
-        if (strcmp(key, "downstream_max") == 0) {
+        if (strcmp(key, "cycle") == 0) {
+            behavior->cycle = strtol(val, NULL, 10);
+            assert(behavior->cycle > 0);
+        } else if (strcmp(key, "downstream_max") == 0) {
             behavior->downstream_max = strtol(val, NULL, 10);
             assert(behavior->downstream_max >= 0);
         } else if (strcmp(key, "weight") == 0 ||
                    strcmp(key, "downstream_weight") == 0) {
             behavior->downstream_weight = strtol(val, NULL, 10);
             assert(behavior->downstream_max > 0);
+        } else if (strcmp(key, "retry") == 0 ||
+                   strcmp(key, "downstream_retry") == 0) {
+            behavior->downstream_retry = strtol(val, NULL, 10);
+            assert(behavior->downstream_retry > 0);
         } else if (strcmp(key, "protocol") == 0 ||
                    strcmp(key, "downstream_protocol") == 0) {
             if (strcmp(val, "ascii") == 0)
@@ -324,6 +337,8 @@ void cproxy_dump_behavior(proxy_behavior *b, char *prefix) {
             prefix, b->downstream_max);
     fprintf(stderr, "%s downstream_weight: %d\n",
             prefix, b->downstream_weight);
+    fprintf(stderr, "%s downstream_retry: %d\n",
+            prefix, b->downstream_retry);
     fprintf(stderr, "%s downstream_protocol: %d\n",
             prefix, b->downstream_protocol);
     fprintf(stderr, "%s downstream_timeout: %ld\n", // In millisecs.
@@ -355,7 +370,9 @@ void msec_set_current_time(void) {
 void msec_clock_handler(const int fd, const short which, void *arg) {
     // Subsecond resolution timer.
     //
-    struct timeval t = { .tv_sec = 0, .tv_usec = 200000 };
+    struct timeval t = { .tv_sec = 0,
+                         .tv_usec = msec_cycle * 1000 };
+
     static bool initialized = false;
 
     if (initialized) {

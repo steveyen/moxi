@@ -30,17 +30,23 @@ typedef struct proxy_behavior proxy_behavior;
 typedef struct downstream     downstream;
 
 struct proxy_behavior {
-    int            downstream_max;      // Downstream concurrency.
-    int            downstream_weight;
-    enum protocol  downstream_protocol; // Favored downstream protocol.
-    struct timeval downstream_timeout;  // Fields of 0 mean no timeout.
-    struct timeval wait_queue_timeout;  // Fields of 0 mean no timeout.
+    // IL means startup, system initialization level behavior.
+    // PL means proxy-level behavior.
+    // SL means server-level behavior, although we inherit from proxy level.
+    //
+    int            cycle;               // IL: Clock resolution in millisecs.
+    int            downstream_max;      // PL: Downstream concurrency.
+    int            downstream_weight;   // SL: Server weight.
+    int            downstream_retry;    // SL: How many times to retry a cmd.
+    enum protocol  downstream_protocol; // SL: Favored downstream protocol.
+    struct timeval downstream_timeout;  // SL: Fields of 0 mean no timeout.
+    struct timeval wait_queue_timeout;  // PL: Fields of 0 mean no timeout.
 
-    char usr[250];
-    char pwd[900];
-    char host[250];
-    int  port;
-    char bucket[250];
+    char usr[250];    // SL.
+    char pwd[900];    // SL.
+    char host[250];   // SL.
+    int  port;        // SL.
+    char bucket[250]; // SL.
 };
 
 /* Structure used and owned by main listener thread to

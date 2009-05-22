@@ -455,10 +455,16 @@ void cproxy_on_close_downstream_conn(conn *c) {
             d->downstream_used_start == d->downstream_used &&
             d->downstream_used_start == 1 &&
             d->upstream_conn->next == NULL &&
-            d->upstream_conn->cmd_retries < 1) {
-            d->upstream_conn->cmd_retries++;
-            uc_retry = d->upstream_conn;
-            d->upstream_suffix = NULL;
+            d->behaviors != NULL) {
+            int i = downstream_conn_index(d, c);
+            if (i >= 0 && i < d->behaviors_num) {
+                int retry_max = d->behaviors[i].downstream_retry;
+                if (d->upstream_conn->cmd_retries < retry_max) {
+                    d->upstream_conn->cmd_retries++;
+                    uc_retry = d->upstream_conn;
+                    d->upstream_suffix = NULL;
+                }
+            }
         }
     }
 
