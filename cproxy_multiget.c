@@ -92,7 +92,8 @@ void multiget_remove_upstream(gpointer key,
 bool multiget_ascii_downstream(downstream *d, conn *uc,
     int (*emit_start)(conn *c, char *cmd, int cmd_len),
     int (*emit_skey)(conn *c, char *skey, int skey_len),
-    int (*emit_end)(conn *c)) {
+    int (*emit_end)(conn *c),
+    GHashTable *front_cache) {
     assert(d != NULL);
     assert(d->downstream_conns != NULL);
     assert(d->multiget == NULL);
@@ -160,6 +161,14 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
             // This key_len check helps skip consecutive spaces.
             //
             if (key_len > 0) {
+                // See if we have a front cache hit.
+                //
+                if (front_cache != NULL) {
+                    item *it = g_hash_table_lookup(front_cache, key);
+                    if (it != NULL) {
+                    }
+                }
+
                 // See if we've already requested this key via
                 // the multiget hash table, in order to
                 // de-deplicate repeated keys.

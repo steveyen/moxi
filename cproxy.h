@@ -6,6 +6,7 @@
 #include <glib.h>
 #include <libmemcached/memcached.h>
 #include "work.h"
+#include "matcher.h"
 
 int cproxy_init(char *cfg_str,
                 char *behavior_str,
@@ -176,6 +177,8 @@ struct proxy_td { // Per proxy, per worker-thread data struct.
     //
     struct timeval timeout_tv;
     struct event   timeout_event;
+
+    GHashTable *front_cache; // Keyed by string, value of item.
 
     proxy_stats stats;
 };
@@ -360,7 +363,8 @@ bool multiget_ascii_downstream(
     downstream *d, conn *uc,
     int (*emit_start)(conn *c, char *cmd, int cmd_len),
     int (*emit_skey)(conn *c, char *skey, int skey_len),
-    int (*emit_end)(conn *c));
+    int (*emit_end)(conn *c),
+    GHashTable *front_cache);
 
 void multiget_foreach_free(gpointer key,
                            gpointer value,

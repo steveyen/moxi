@@ -153,6 +153,7 @@ proxy *cproxy_create(char    *name,
                 ptd->downstream_assigns = 0;
                 ptd->timeout_tv.tv_sec = 0;
                 ptd->timeout_tv.tv_usec = 0;
+                ptd->front_cache = NULL;
                 ptd->stats.num_upstream = 0;
                 ptd->stats.num_downstream_conn = 0;
 
