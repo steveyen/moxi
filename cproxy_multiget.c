@@ -304,3 +304,36 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
     return nwrite > 0;
 }
 
+void multiget_ascii_downstream_response(downstream *d, item *it) {
+    assert(d);
+    assert(it);
+
+    if (d->multiget != NULL) {
+        // TODO: Revisit whether we need this extra memcpy,
+        // or whether ITEM_key is space terminated already.
+        //
+        char key_buf[KEY_MAX_LENGTH + 10];
+        assert(it->nkey <= KEY_MAX_LENGTH);
+        memcpy(key_buf, ITEM_key(it), it->nkey);
+        key_buf[it->nkey] = '\0';
+
+        multiget_entry *entry =
+            g_hash_table_lookup(d->multiget, key_buf);
+
+        while (entry != NULL) {
+            // The upstream might have been closed mid-request.
+            //
+            conn *uc = entry->upstream_conn;
+            if (uc != NULL)
+                cproxy_upstream_ascii_item_response(it, uc);
+
+            entry = entry->next;
+        }
+    } else {
+        conn *uc = d->upstream_conn;
+        while (uc != NULL) {
+            cproxy_upstream_ascii_item_response(it, uc);
+            uc = uc->next;
+        }
+    }
+}

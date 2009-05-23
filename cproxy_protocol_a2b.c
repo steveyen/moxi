@@ -601,30 +601,7 @@ void a2b_process_downstream_response(conn *c) {
             *(ITEM_data(it) + it->nbytes - 2) = '\r';
             *(ITEM_data(it) + it->nbytes - 1) = '\n';
 
-            if (d->multiget != NULL) {
-                char key_buf[KEY_MAX_LENGTH + 10];
-
-                memcpy(key_buf, ITEM_key(it), it->nkey);
-                key_buf[it->nkey] = '\0';
-
-                multiget_entry *entry =
-                    g_hash_table_lookup(d->multiget, key_buf);
-
-                while (entry != NULL) {
-                    // The upstream might have been closed mid-request.
-                    //
-                    uc = entry->upstream_conn;
-                    if (uc != NULL)
-                        cproxy_upstream_ascii_item_response(it, uc);
-
-                    entry = entry->next;
-                }
-            } else {
-                while (uc != NULL) {
-                    cproxy_upstream_ascii_item_response(it, uc);
-                    uc = uc->next;
-                }
-            }
+            multiget_ascii_downstream_response(d, it);
         } else {
             assert(false); // TODO.
         }

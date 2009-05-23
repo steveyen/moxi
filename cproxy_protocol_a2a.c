@@ -188,34 +188,7 @@ void cproxy_process_a2a_downstream_nread(conn *c) {
     // c->thread->stats.slab_stats[it->slabs_clsid].set_cmds++;
     // pthread_mutex_unlock(&c->thread->stats.mutex);
 
-    if (d->multiget != NULL) {
-        // TODO: Revisit whether we need this extra memcpy,
-        // or whether ITEM_key is space terminated already.
-        //
-        char key_buf[KEY_MAX_LENGTH + 10];
-
-        memcpy(key_buf, ITEM_key(it), it->nkey);
-        key_buf[it->nkey] = '\0';
-
-        multiget_entry *entry =
-            g_hash_table_lookup(d->multiget, key_buf);
-
-        while (entry != NULL) {
-            // The upstream might be NULL if it was closed mid-request.
-            //
-            if (entry->upstream_conn != NULL)
-                cproxy_upstream_ascii_item_response(it,
-                                                    entry->upstream_conn);
-
-            entry = entry->next;
-        }
-    } else {
-        conn *uc = d->upstream_conn;
-        while (uc != NULL) {
-            cproxy_upstream_ascii_item_response(it, uc);
-            uc = uc->next;
-        }
-    }
+    multiget_ascii_downstream_response(d, it);
 
     item_remove(it);
 }

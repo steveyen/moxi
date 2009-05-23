@@ -366,6 +366,8 @@ bool multiget_ascii_downstream(
     int (*emit_end)(conn *c),
     GHashTable *front_cache);
 
+void multiget_ascii_downstream_response(downstream *d, item *it);
+
 void multiget_foreach_free(gpointer key,
                            gpointer value,
                            gpointer user_data);
