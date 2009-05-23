@@ -387,6 +387,8 @@ size_t   skey_len(const char *key);
 guint    skey_hash(gconstpointer v);
 gboolean skey_equal(gconstpointer v1, gconstpointer v2);
 
+void helper_g_free(gpointer data);
+
 // Stats handling.
 //
 bool protocol_stats_merge_line(GHashTable *merger, char *line);

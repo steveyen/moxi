@@ -12,6 +12,12 @@
 #include "cproxy.h"
 #include "work.h"
 
+// From libmemcached.
+//
+uint32_t murmur_hash(const char *key, size_t length);
+
+// Local declarations.
+//
 volatile uint32_t  msec_current_time = 0;
 int                msec_cycle = 200;
 struct event       msec_clockevent;
@@ -48,6 +54,46 @@ proxy_behavior behavior_default_g = {
     .usr = {0},
     .pwd = {0}
 };
+
+// Key may be zero or space terminated.
+//
+size_t skey_len(const char *key) {
+    assert(key);
+
+    char *x = (char *) key;
+    while (*x != ' ' && *x != '\0')
+        x++;
+
+    return x - key;
+}
+
+guint skey_hash(gconstpointer v) {
+    assert(v);
+
+    const char *key = v;
+    size_t      len = skey_len(key);
+
+    return murmur_hash(key, len);
+}
+
+gboolean skey_equal(gconstpointer v1, gconstpointer v2) {
+    assert(v1);
+    assert(v2);
+
+    const char *k1 = v1;
+    const char *k2 = v2;
+
+    size_t n1 = skey_len(k1);
+    size_t n2 = skey_len(k2);
+
+    return (n1 == n2 && strncmp(k1, k2, n1) == 0);
+}
+
+void helper_g_free(gpointer data) {
+    free(data);
+}
+
+// ---------------------------------------
 
 int cproxy_init(char *cfg_str,
                 char *behavior_str,
