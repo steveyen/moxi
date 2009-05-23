@@ -263,20 +263,20 @@ class TestProxy(unittest.TestCase):
         self.assertTrue(self.mock_quiet())
 
     def testBasicSerialGet(self):
-        """Test quit command does reach mock server"""
+        """Test basic serial get commands"""
         self.client_connect()
-        self.client_send("get keyNotThere\r\n")
-        self.mock_recv('get keyNotThere\r\n')
+        self.client_send("get keyNotThere0\r\n")
+        self.mock_recv('get keyNotThere0\r\n')
         self.mock_send('END\r\n')
         self.client_recv("END\r\n")
 
-        self.client_send("get keyNotThere\r\n")
-        self.mock_recv('get keyNotThere\r\n')
+        self.client_send("get keyNotThere1\r\n")
+        self.mock_recv('get keyNotThere1\r\n')
         self.mock_send('END\r\n')
         self.client_recv("END\r\n")
 
-        self.client_send("get keyNotThere\r\n")
-        self.mock_recv('get keyNotThere\r\n')
+        self.client_send("get keyNotThere2\r\n")
+        self.mock_recv('get keyNotThere2\r\n')
         self.mock_send('END\r\n')
         self.client_recv("END\r\n")
 

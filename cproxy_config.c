@@ -241,11 +241,11 @@ void cproxy_parse_behavior_key_val(char *key,
         } else if (strcmp(key, "weight") == 0 ||
                    strcmp(key, "downstream_weight") == 0) {
             behavior->downstream_weight = strtol(val, NULL, 10);
-            assert(behavior->downstream_max > 0);
+            assert(behavior->downstream_max >= 0);
         } else if (strcmp(key, "retry") == 0 ||
                    strcmp(key, "downstream_retry") == 0) {
             behavior->downstream_retry = strtol(val, NULL, 10);
-            assert(behavior->downstream_retry > 0);
+            assert(behavior->downstream_retry >= 0);
         } else if (strcmp(key, "protocol") == 0 ||
                    strcmp(key, "downstream_protocol") == 0) {
             if (strcmp(val, "ascii") == 0)
