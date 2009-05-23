@@ -845,7 +845,8 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
                                          a2b_multiget_start,
                                          a2b_multiget_skey,
                                          a2b_multiget_end,
-                                         front_cache);
+                                         front_cache,
+                                         &d->ptd->proxy->front_cache_lock);
     }
 
     assert(uc->next == NULL);

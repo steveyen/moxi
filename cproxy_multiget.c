@@ -93,7 +93,8 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
     int (*emit_start)(conn *c, char *cmd, int cmd_len),
     int (*emit_skey)(conn *c, char *skey, int skey_len),
     int (*emit_end)(conn *c),
-    GHashTable *front_cache) {
+    GHashTable *front_cache,
+    pthread_mutex_t *front_cache_lock) {
     assert(d != NULL);
     assert(d->downstream_conns != NULL);
     assert(d->multiget == NULL);
@@ -169,6 +170,8 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
 
                 // Handle a front cache hit by queuing response.
                 //
+                pthread_mutex_lock(front_cache_lock);
+
                 if (front_cache != NULL) {
                     item *it = g_hash_table_lookup(front_cache, key);
                     if (it != NULL) {
@@ -183,6 +186,8 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
                             //
                             cproxy_upstream_ascii_item_response(it, uc_cur);
 
+                            pthread_mutex_unlock(front_cache_lock);
+
                             goto loop_next;
                         }
 
@@ -196,6 +201,8 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
                         item_remove(it);
                     }
                 }
+
+                pthread_mutex_unlock(front_cache_lock);
 
                 // See if we've already requested this key via
                 // the multiget hash table, in order to

@@ -107,6 +107,8 @@ struct proxy {
 
     proxy *next; // Modified/accessed only by main listener thread.
 
+    // The front_cache_xxx fields are covered by front_cache_lock.
+    //
     GHashTable     *front_cache; // Keyed by string, value of item.
     matcher         front_cache_matcher;
     pthread_mutex_t front_cache_lock;
@@ -366,7 +368,8 @@ bool multiget_ascii_downstream(
     int (*emit_start)(conn *c, char *cmd, int cmd_len),
     int (*emit_skey)(conn *c, char *skey, int skey_len),
     int (*emit_end)(conn *c),
-    GHashTable *front_cache);
+    GHashTable *front_cache,
+    pthread_mutex_t *front_cache_lock);
 
 void multiget_ascii_downstream_response(downstream *d, item *it);
 
