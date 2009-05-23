@@ -125,6 +125,10 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
             fprintf(stderr, "cproxy multiget hash table new\n");
     }
 
+    // Snapshot the volatile only once.
+    //
+    uint32_t msec_current_time_snapshot = msec_current_time;
+
     int   uc_num = 0;
     conn *uc_cur = uc;
 
@@ -171,9 +175,10 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
                         assert(it->nkey == key_len);
                         assert(strncmp(ITEM_key(it), key, it->nkey) == 0);
 
-                        // TODO: Need configurable front cache expiry time.
+                        // TODO: Need configurable front cache oldest_live
+                        // as fast FLUSH_ALL implementation.
                         //
-                        if (it->time > msec_current_time - 5000) {
+                        if (it->time > msec_current_time_snapshot) {
                             // TODO: Stats for front cache hit.
                             //
                             cproxy_upstream_ascii_item_response(it, uc_cur);
@@ -316,8 +321,28 @@ void multiget_ascii_downstream_response(downstream *d, item *it) {
     if (ptd->front_cache != NULL) {
         if (matcher_check(&ptd->front_cache_matcher,
                           ITEM_key(it), it->nkey)) {
-            // it->refcount++; // TODO: Need item lock here?
-            // g_hash_table_insert(ptd->front_cache, ITEM_key(it));
+            // The ITEM_key is not NULL or space terminated,
+            // and we need a copy, too, for hashtable ownership.
+            //
+            char *key_buf = malloc(it->nkey + 1);
+            if (key_buf != NULL) {
+                memcpy(key_buf, ITEM_key(it), it->nkey);
+                key_buf[it->nkey] = '\0';
+
+                // TODO: Would be nice if there was a g_hash_table_add().
+                //
+                if (g_hash_table_lookup(ptd->front_cache, key_buf) == NULL) {
+                    // TODO: Need configurable L1 cache expiry.
+                    //
+                    it->time = msec_current_time + 2000;
+
+                    it->refcount++; // TODO: Need item lock here?
+
+                    g_hash_table_insert(ptd->front_cache, key_buf, it);
+                } else {
+                    free(key_buf);
+                }
+            }
         }
     }
 
