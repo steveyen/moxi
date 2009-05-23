@@ -400,6 +400,7 @@ void cproxy_on_close_downstream_conn(conn *c) {
     c->extra = NULL;
 
     int n = memcached_server_count(&d->mst);
+    int k = -1; // Index of conn.
 
     for (int i = 0; i < n; i++) {
         if (d->downstream_conns[i] == c) {
@@ -415,6 +416,8 @@ void cproxy_on_close_downstream_conn(conn *c) {
             assert(d->mst.hosts[i].fd == c->sfd);
             memcached_quit_server(&d->mst.hosts[i], 1);
             assert(d->mst.hosts[i].fd == -1);
+
+            k = i;
         }
     }
 
@@ -447,7 +450,8 @@ void cproxy_on_close_downstream_conn(conn *c) {
         // ending up here.  That is, drive_machine only
         // seems to move to conn_closing from conn_read.
         //
-        // If we haven't received any reply yet, we retry once.
+        // If we haven't received any reply yet, we retry based
+        // on our cmd_retries counter.
         //
         // TODO: Reconsider retry behavior, is it right in all situations?
         //
@@ -457,9 +461,8 @@ void cproxy_on_close_downstream_conn(conn *c) {
             d->downstream_used_start == 1 &&
             d->upstream_conn->next == NULL &&
             d->behaviors != NULL) {
-            int i = downstream_conn_index(d, c);
-            if (i >= 0 && i < d->behaviors_num) {
-                int retry_max = d->behaviors[i].downstream_retry;
+            if (k >= 0 && k < d->behaviors_num) {
+                int retry_max = d->behaviors[k].downstream_retry;
                 if (d->upstream_conn->cmd_retries < retry_max) {
                     d->upstream_conn->cmd_retries++;
                     uc_retry = d->upstream_conn;
