@@ -307,10 +307,22 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
 void multiget_ascii_downstream_response(downstream *d, item *it) {
     assert(d);
     assert(it);
+    assert(it->nkey > 0);
+    assert(ITEM_key(it) != NULL);
+
+    proxy_td *ptd = d->ptd;
+    assert(ptd);
+
+    if (ptd->front_cache != NULL) {
+        if (matcher_check(&ptd->front_cache_matcher,
+                          ITEM_key(it), it->nkey)) {
+            // it->refcount++; // TODO: Need item lock here?
+            // g_hash_table_insert(ptd->front_cache, ITEM_key(it));
+        }
+    }
 
     if (d->multiget != NULL) {
-        // TODO: Revisit whether we need this extra memcpy,
-        // or whether ITEM_key is space terminated already.
+        // The ITEM_key is not NULL or space terminated.
         //
         char key_buf[KEY_MAX_LENGTH + 10];
         assert(it->nkey <= KEY_MAX_LENGTH);

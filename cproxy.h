@@ -179,6 +179,7 @@ struct proxy_td { // Per proxy, per worker-thread data struct.
     struct event   timeout_event;
 
     GHashTable *front_cache; // Keyed by string, value of item.
+    matcher     front_cache_matcher;
 
     proxy_stats stats;
 };
