@@ -161,11 +161,34 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
             // This key_len check helps skip consecutive spaces.
             //
             if (key_len > 0) {
-                // See if we have a front cache hit.
+                ptd->stats.tot_multiget_keys++;
+
+                // Handle a front cache hit by queuing response.
                 //
                 if (front_cache != NULL) {
                     item *it = g_hash_table_lookup(front_cache, key);
                     if (it != NULL) {
+                        assert(it->nkey == key_len);
+                        assert(strncmp(ITEM_key(it), key, it->nkey) == 0);
+
+                        // TODO: Need configurable front cache expiry time.
+                        //
+                        if (it->time > msec_current_time - 5000) {
+                            // TODO: Stats for front cache hit.
+                            //
+                            cproxy_upstream_ascii_item_response(it, uc_cur);
+
+                            goto loop_next;
+                        }
+
+                        // Handle item expiry.
+                        //
+                        // TODO: Stats for front cache expiry.
+                        // TODO: Track front cache size.
+                        //
+                        g_hash_table_remove(front_cache, key);
+
+                        item_remove(it);
                     }
                 }
 
@@ -174,8 +197,6 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
                 // de-deplicate repeated keys.
                 //
                 bool first_request = true;
-
-                ptd->stats.tot_multiget_keys++;
 
                 if (d->multiget != NULL) {
                     multiget_entry *entry = calloc(1, sizeof(multiget_entry));
@@ -232,6 +253,7 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
                 }
             }
 
+        loop_next:
             space = next_space;
         }
 
