@@ -825,6 +825,7 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
                                           char *command, conn *uc) {
     assert(d != NULL);
     assert(d->ptd != NULL);
+    assert(d->ptd->proxy != NULL);
     assert(d->downstream_conns != NULL);
     assert(command != NULL);
     assert(uc != NULL);
@@ -838,7 +839,7 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
         // Only use front_cache for 'get', not for 'gets'.
         //
         GHashTable *front_cache =
-            (command[3] == ' ') ? d->ptd->front_cache : NULL;
+            (command[3] == ' ') ? d->ptd->proxy->front_cache : NULL;
 
         return multiget_ascii_downstream(d, uc,
                                          a2b_multiget_start,

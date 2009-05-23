@@ -107,6 +107,10 @@ struct proxy {
 
     proxy *next; // Modified/accessed only by main listener thread.
 
+    GHashTable     *front_cache; // Keyed by string, value of item.
+    matcher         front_cache_matcher;
+    pthread_mutex_t front_cache_lock;
+
     proxy_td *thread_data;     // Immutable.
     int       thread_data_num; // Immutable.
 };
@@ -177,9 +181,6 @@ struct proxy_td { // Per proxy, per worker-thread data struct.
     //
     struct timeval timeout_tv;
     struct event   timeout_event;
-
-    GHashTable *front_cache; // Keyed by string, value of item.
-    matcher     front_cache_matcher;
 
     proxy_stats stats;
 };

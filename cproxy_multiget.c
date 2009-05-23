@@ -318,8 +318,13 @@ void multiget_ascii_downstream_response(downstream *d, item *it) {
     proxy_td *ptd = d->ptd;
     assert(ptd);
 
-    if (ptd->front_cache != NULL) {
-        if (matcher_check(&ptd->front_cache_matcher,
+    proxy *p = ptd->proxy;
+    assert(p);
+
+    pthread_mutex_lock(&p->front_cache_lock);
+
+    if (p->front_cache != NULL) {
+        if (matcher_check(&p->front_cache_matcher,
                           ITEM_key(it), it->nkey)) {
             // The ITEM_key is not NULL or space terminated,
             // and we need a copy, too, for hashtable ownership.
@@ -331,20 +336,22 @@ void multiget_ascii_downstream_response(downstream *d, item *it) {
 
                 // TODO: Would be nice if there was a g_hash_table_add().
                 //
-                if (g_hash_table_lookup(ptd->front_cache, key_buf) == NULL) {
+                if (g_hash_table_lookup(p->front_cache, key_buf) == NULL) {
                     // TODO: Need configurable L1 cache expiry.
                     //
                     it->time = msec_current_time + 2000;
 
                     it->refcount++; // TODO: Need item lock here?
 
-                    g_hash_table_insert(ptd->front_cache, key_buf, it);
+                    g_hash_table_insert(p->front_cache, key_buf, it);
                 } else {
                     free(key_buf);
                 }
             }
         }
     }
+
+    pthread_mutex_unlock(&p->front_cache_lock);
 
     if (d->multiget != NULL) {
         // The ITEM_key is not NULL or space terminated.

@@ -127,7 +127,13 @@ proxy *cproxy_create(char    *name,
         p->listening        = 0;
         p->listening_failed = 0;
 
+        p->next = NULL;
+
         pthread_mutex_init(&p->proxy_lock, NULL);
+
+        p->front_cache = NULL;
+
+        pthread_mutex_init(&p->front_cache_lock, NULL);
 
         p->thread_data_num = nthreads;
         p->thread_data = (proxy_td *) calloc(p->thread_data_num,
@@ -153,7 +159,6 @@ proxy *cproxy_create(char    *name,
                 ptd->downstream_assigns = 0;
                 ptd->timeout_tv.tv_sec = 0;
                 ptd->timeout_tv.tv_usec = 0;
-                ptd->front_cache = NULL;
                 ptd->stats.num_upstream = 0;
                 ptd->stats.num_downstream_conn = 0;
 
