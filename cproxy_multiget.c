@@ -150,8 +150,16 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
 
                             pthread_mutex_unlock(front_cache_lock);
 
+                            if (settings.verbose > 1)
+                                fprintf(stderr,
+                                        "front_cache hit: %s\n", key);
+
                             goto loop_next;
                         }
+
+                        if (settings.verbose > 1)
+                            fprintf(stderr,
+                                    "front_cache expire: %s\n", key);
 
                         // Handle item expiry.
                         //
@@ -321,7 +329,15 @@ void multiget_ascii_downstream_response(downstream *d, item *it) {
                         it->refcount++; // TODO: Need item lock here?
 
                         g_hash_table_insert(p->front_cache, key_buf, it);
+
+                        if (settings.verbose > 1)
+                            fprintf(stderr,
+                                    "front_cache add: %s\n", key_buf);
                     } else {
+                        if (settings.verbose > 1)
+                            fprintf(stderr,
+                                    "front_cache add-skip: %s\n", key_buf);
+
                         free(key_buf);
                     }
                 }
