@@ -129,10 +129,13 @@ proxy *cproxy_create(char    *name,
 
         p->next = NULL;
 
-        pthread_mutex_init(&p->proxy_lock,       NULL);
-        pthread_mutex_init(&p->front_cache_lock, NULL);
+        pthread_mutex_init(&p->proxy_lock, NULL);
 
-        front_cache_start(p, &behavior_head);
+        mcache_init(&p->front_cache, true);
+
+        if (behavior_head.front_cache_lifespan > 0)
+            mcache_start(&p->front_cache,
+                         behavior_head.front_cache_spec);
 
         p->thread_data_num = nthreads;
         p->thread_data = (proxy_td *) calloc(p->thread_data_num,

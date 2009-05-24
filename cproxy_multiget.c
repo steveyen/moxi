@@ -55,8 +55,7 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
     int (*emit_start)(conn *c, char *cmd, int cmd_len),
     int (*emit_skey)(conn *c, char *skey, int skey_len),
     int (*emit_end)(conn *c),
-    GHashTable *front_cache,
-    pthread_mutex_t *front_cache_lock) {
+    mcache *front_cache) {
     assert(d != NULL);
     assert(d->downstream_conns != NULL);
     assert(d->multiget == NULL);
@@ -132,47 +131,18 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
 
                 // Handle a front cache hit by queuing response.
                 //
-                pthread_mutex_lock(front_cache_lock);
+                item *it = mcache_get(front_cache, key, key_len,
+                                      msec_current_time_snapshot);
+                if (it != NULL) {
+                    assert(it->nkey == key_len);
+                    assert(strncmp(ITEM_key(it), key, it->nkey) == 0);
 
-                if (front_cache != NULL) {
-                    item *it = g_hash_table_lookup(front_cache, key);
-                    if (it != NULL) {
-                        assert(it->nkey == key_len);
-                        assert(strncmp(ITEM_key(it), key, it->nkey) == 0);
+                    cproxy_upstream_ascii_item_response(it, uc_cur);
 
-                        // TODO: Need configurable front cache oldest_live
-                        // as fast FLUSH_ALL implementation.
-                        //
-                        if (it->time > msec_current_time_snapshot) {
-                            // TODO: Stats for front cache hit.
-                            //
-                            cproxy_upstream_ascii_item_response(it, uc_cur);
+                    item_remove(it);
 
-                            pthread_mutex_unlock(front_cache_lock);
-
-                            if (settings.verbose > 1)
-                                fprintf(stderr,
-                                        "front_cache hit: %s\n", key);
-
-                            goto loop_next;
-                        }
-
-                        if (settings.verbose > 1)
-                            fprintf(stderr,
-                                    "front_cache expire: %s\n", key);
-
-                        // Handle item expiry.
-                        //
-                        // TODO: Stats for front cache expiry.
-                        // TODO: Track front cache size.
-                        //
-                        g_hash_table_remove(front_cache, key);
-
-                        item_remove(it);
-                    }
+                    goto loop_next;
                 }
-
-                pthread_mutex_unlock(front_cache_lock);
 
                 // See if we've already requested this key via
                 // the multiget hash table, in order to
@@ -229,7 +199,8 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
                         memcpy(buf, key, key_len);
                         buf[key_len] = '\0';
 
-                        fprintf(stderr, "%d cproxy multiget dedpue: %s\n",
+                        fprintf(stderr,
+                                "%d cproxy multiget dedpue: %s\n",
                                 uc_cur->sfd, buf);
                     }
                 }
@@ -303,48 +274,8 @@ void multiget_ascii_downstream_response(downstream *d, item *it) {
     pthread_mutex_unlock(&p->proxy_lock);
 
     if (front_cache_lifespan > 0) {
-        // TODO: The front_cache_lock area is too wide.
-        //
-        pthread_mutex_lock(&p->front_cache_lock);
-
-        if (p->front_cache != NULL) {
-            if (matcher_check(&p->front_cache_matcher,
-                              ITEM_key(it), it->nkey)) {
-                // The ITEM_key is not NULL or space terminated,
-                // and we need a copy, too, for hashtable ownership.
-                //
-                char *key_buf = malloc(it->nkey + 1);
-                if (key_buf != NULL) {
-                    memcpy(key_buf, ITEM_key(it), it->nkey);
-                    key_buf[it->nkey] = '\0';
-
-                    // TODO: Would be nice if there was a g_hash_table_add().
-                    //
-                    if (g_hash_table_lookup(p->front_cache,
-                                            key_buf) == NULL) {
-                        // TODO: Need configurable L1 cache expiry.
-                        //
-                        it->time = msec_current_time + front_cache_lifespan;
-
-                        it->refcount++; // TODO: Need item lock here?
-
-                        g_hash_table_insert(p->front_cache, key_buf, it);
-
-                        if (settings.verbose > 1)
-                            fprintf(stderr,
-                                    "front_cache add: %s\n", key_buf);
-                    } else {
-                        if (settings.verbose > 1)
-                            fprintf(stderr,
-                                    "front_cache add-skip: %s\n", key_buf);
-
-                        free(key_buf);
-                    }
-                }
-            }
-        }
-
-        pthread_mutex_unlock(&p->front_cache_lock);
+        mcache_add(&p->front_cache, it, front_cache_lifespan,
+                   msec_current_time);
     }
 
     if (d->multiget != NULL) {

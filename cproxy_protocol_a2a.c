@@ -242,15 +242,14 @@ bool cproxy_forward_a2a_simple_downstream(downstream *d,
     if (strncmp(command, "get", 3) == 0) {
         // Only use front_cache for 'get', not for 'gets'.
         //
-        GHashTable *front_cache =
-            (command[3] == ' ') ? d->ptd->proxy->front_cache : NULL;
+        mcache *front_cache =
+            (command[3] == ' ') ? &d->ptd->proxy->front_cache : NULL;
 
         return multiget_ascii_downstream(d, uc,
                                          a2a_multiget_start,
                                          a2a_multiget_skey,
                                          a2a_multiget_end,
-                                         front_cache,
-                                         &d->ptd->proxy->front_cache_lock);
+                                         front_cache);
     }
 
     assert(uc->next == NULL);

@@ -23,6 +23,13 @@ extern volatile uint32_t msec_current_time;
 
 // -------------------------------
 
+typedef struct {
+    pthread_mutex_t *lock; // NULL-able, for non-multithreaded.
+
+    GHashTable *map;    // NULL-able, keyed by string, value is item.
+    matcher    *filter; // NULL-able, filter keys during ADD.
+} mcache;
+
 typedef struct proxy          proxy;
 typedef struct proxy_td       proxy_td;
 typedef struct proxy_main     proxy_main;
@@ -110,11 +117,7 @@ struct proxy {
 
     proxy *next; // Modified/accessed only by main listener thread.
 
-    // The front_cache_xxx fields are covered by front_cache_lock.
-    //
-    GHashTable     *front_cache; // Keyed by string, value of item.
-    matcher         front_cache_matcher;
-    pthread_mutex_t front_cache_lock;
+    mcache front_cache;
 
     proxy_td *thread_data;     // Immutable.
     int       thread_data_num; // Immutable.
@@ -371,8 +374,7 @@ bool multiget_ascii_downstream(
     int (*emit_start)(conn *c, char *cmd, int cmd_len),
     int (*emit_skey)(conn *c, char *skey, int skey_len),
     int (*emit_end)(conn *c),
-    GHashTable *front_cache,
-    pthread_mutex_t *front_cache_lock);
+    mcache *front_cache);
 
 void multiget_ascii_downstream_response(downstream *d, item *it);
 
@@ -412,8 +414,14 @@ void protocol_stats_foreach_write(gpointer key,
                                   gpointer value,
                                   gpointer user_data);
 
-void front_cache_start(proxy *p, proxy_behavior *behavior);
-void front_cache_stop(proxy *p);
+void  mcache_init(mcache *m, bool multithreaded);
+void  mcache_start(mcache *m, char *spec);
+void  mcache_stop(mcache *m);
+item *mcache_get(mcache *m, char *key, int key_len,
+                 uint32_t curr_time);
+void  mcache_add(mcache *m, item *it,
+                 uint32_t lifespan,
+                 uint32_t curr_time);
 
 // TODO: The following generic items should be broken out into util file.
 //
