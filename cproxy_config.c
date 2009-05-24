@@ -48,6 +48,7 @@ proxy_behavior behavior_default_g = {
         .tv_sec  = 0,
         .tv_usec = 0
     },
+    .front_cache_lifespan = 0,
     .host = {0},
     .port = 0,
     .bucket = {0},
@@ -161,7 +162,7 @@ int cproxy_init_string(char *cfg_str,
     int   proxy_port;
 
     if (settings.verbose > 1) {
-        cproxy_dump_behavior(&behavior, "init_string");
+        cproxy_dump_behavior(&behavior, "init_string", 2);
     }
 
     buff = strdup(cfg_str);
@@ -313,6 +314,8 @@ void cproxy_parse_behavior_key_val(char *key,
             int ms = strtol(val, NULL, 10);
             behavior->wait_queue_timeout.tv_sec  = floor(ms / 1000.0);
             behavior->wait_queue_timeout.tv_usec = (ms % 1000) * 1000;
+        } else if (strcmp(key, "front_cache_lifespan") == 0) {
+            behavior->front_cache_lifespan = strtol(val, NULL, 10);
         } else if (strcmp(key, "usr") == 0) {
             if (strlen(val) < sizeof(behavior->usr) + 1) {
                 strcpy(behavior->usr, val);
@@ -354,8 +357,8 @@ bool cproxy_equal_behaviors(int x_size, proxy_behavior *x,
         if (cproxy_equal_behavior(&x[i], &y[i]) == false) {
             if (settings.verbose > 1) {
                 fprintf(stderr, "behaviors not equal (%d)\n", i);
-                cproxy_dump_behavior(&x[i], "x");
-                cproxy_dump_behavior(&y[i], "y");
+                cproxy_dump_behavior(&x[i], "x", 0);
+                cproxy_dump_behavior(&y[i], "y", 0);
             }
 
             return false;
@@ -376,11 +379,17 @@ bool cproxy_equal_behavior(proxy_behavior *x,
     return memcmp(x, y, sizeof(proxy_behavior)) == 0;
 }
 
-void cproxy_dump_behavior(proxy_behavior *b, char *prefix) {
+void cproxy_dump_behavior(proxy_behavior *b, char *prefix, int level) {
     if (prefix == NULL)
         prefix = "";
-    fprintf(stderr, "%s downstream_max: %d\n",
-            prefix, b->downstream_max);
+
+    if (level >= 2)
+        fprintf(stderr, "%s cycle: %d\n",
+                prefix, b->cycle);
+    if (level >= 1)
+        fprintf(stderr, "%s downstream_max: %d\n",
+                prefix, b->downstream_max);
+
     fprintf(stderr, "%s downstream_weight: %d\n",
             prefix, b->downstream_weight);
     fprintf(stderr, "%s downstream_retry: %d\n",
@@ -391,6 +400,16 @@ void cproxy_dump_behavior(proxy_behavior *b, char *prefix) {
             prefix,
             b->downstream_timeout.tv_sec * 1000 +
             b->downstream_timeout.tv_usec / 1000);
+
+    if (level >= 1)
+        fprintf(stderr, "%s wait_queue_timeout: %ld\n", // In millisecs.
+                prefix,
+                b->wait_queue_timeout.tv_sec * 1000 +
+                b->wait_queue_timeout.tv_usec / 1000);
+    if (level >= 1)
+        fprintf(stderr, "%s front_cache_lifespan: %d\n",
+                prefix, b->front_cache_lifespan);
+
     fprintf(stderr, "%s usr: %s\n",
             prefix, b->usr);
     fprintf(stderr, "%s host: %s\n",

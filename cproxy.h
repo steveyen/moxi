@@ -43,6 +43,8 @@ struct proxy_behavior {
     struct timeval downstream_timeout;  // SL: Fields of 0 mean no timeout.
     struct timeval wait_queue_timeout;  // PL: Fields of 0 mean no timeout.
 
+    uint32_t front_cache_lifespan; // PL: In millisecs.
+
     char usr[250];    // SL.
     char pwd[900];    // SL.
     char host[250];   // SL.
@@ -335,7 +337,7 @@ bool cproxy_equal_behaviors(int x_size, proxy_behavior *x,
 bool cproxy_equal_behavior(proxy_behavior *x,
                            proxy_behavior *y);
 
-void cproxy_dump_behavior(proxy_behavior *b, char *prefix);
+void cproxy_dump_behavior(proxy_behavior *b, char *prefix, int level);
 
 // ---------------------------------------------------------------
 

@@ -76,8 +76,14 @@ void on_conflate_get_stats(void *userdata, void *opaque,
               VERSION);
     more_stat("%u", "nthreads",
               m->nthreads);
+    more_stat("%u", "cycle",
+              m->behavior.cycle);
     more_stat("%u", "default_downstream_max",
               m->behavior.downstream_max);
+    more_stat("%u", "default_downstream_weight",
+              m->behavior.downstream_weight);
+    more_stat("%u", "default_downstream_retry",
+              m->behavior.downstream_retry);
     more_stat("%u", "default_downstream_protocol",
               m->behavior.downstream_protocol);
     more_stat("%ld", "default_downstream_timeout", // In millisecs.
@@ -86,6 +92,8 @@ void on_conflate_get_stats(void *userdata, void *opaque,
     more_stat("%ld", "default_wait_queue_timeout", // In millisecs.
               m->behavior.wait_queue_timeout.tv_sec * 1000 +
               m->behavior.wait_queue_timeout.tv_usec / 1000);
+    more_stat("%u", "front_cache_lifespan",
+              m->behavior.front_cache_lifespan);
     more_stat("%llu", "configs",
               (long long unsigned int) m->stat_configs);
     more_stat("%llu", "config_fails",
