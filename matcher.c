@@ -84,7 +84,6 @@ void matcher_remove_all(matcher *m) {
 
 bool matcher_check(matcher *m, char *str, int str_len) {
     assert(m);
-    assert(IS_INITTED(m));
     if (!IS_INITTED(m)) return false;
     assert(m->patterns_num <= m->patterns_max);
     // TODO.
