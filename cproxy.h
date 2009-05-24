@@ -429,6 +429,7 @@ item *mcache_get(mcache *m, char *key, int key_len,
 void  mcache_add(mcache *m, item *it,
                  uint32_t lifespan,
                  uint32_t curr_time);
+void  mcache_delete(mcache *m, char *key, int key_len);
 
 // TODO: The following generic items should be broken out into util file.
 //

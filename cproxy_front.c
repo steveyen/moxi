@@ -11,9 +11,7 @@
 #include "memcached.h"
 #include "cproxy.h"
 
-void mcache_foreach_free(gpointer key,
-                         gpointer value,
-                         gpointer user_data);
+void mcache_item_free(gpointer value);
 
 void mcache_init(mcache *m, bool multithreaded) {
     assert(m);
@@ -59,7 +57,7 @@ void mcache_start(mcache *m, char *spec) {
     m->map = g_hash_table_new_full(skey_hash,
                                    skey_equal,
                                    helper_g_free,
-                                   NULL);
+                                   mcache_item_free);
     if (m->map != NULL) {
         if (spec != NULL && strlen(spec) > 0) {
             m->filter = calloc(1, sizeof(matcher));
@@ -89,9 +87,6 @@ void mcache_stop(mcache *m) {
     }
 
     if (m->map != NULL) {
-        g_hash_table_foreach(m->map,
-                             mcache_foreach_free,
-                             NULL);
         g_hash_table_destroy(m->map);
         m->map = NULL;
     }
@@ -148,8 +143,6 @@ item *mcache_get(mcache *m, char *key, int key_len,
             // TODO: Track mcache size.
             //
             g_hash_table_remove(m->map, key);
-
-            item_remove(it);
         } else {
             m->tot_get_misses++;
         }
@@ -219,13 +212,32 @@ void mcache_add(mcache *m, item *it,
         pthread_mutex_unlock(m->lock);
 }
 
-void mcache_foreach_free(gpointer key,
-                         gpointer value,
-                         gpointer user_data) {
-    // Freeing only the value, not the key, since g_hash_table_destroy()
-    // will free the keys.
-    //
-    assert(value);
-    item_remove((item *) value);
+void mcache_delete(mcache *m, char *key, int key_len) {
+    assert(key);
+    assert(key_len > 0);
+    assert(key[key_len] == '\0' ||
+           key[key_len] == ' ');
+
+    if (m == NULL)
+        return;
+
+    if (m->lock)
+        pthread_mutex_lock(m->lock);
+
+    if (m->map != NULL) {
+        // Handle item expiry.
+        //
+        // TODO: Stats for mcache expiry.
+        // TODO: Track mcache size.
+        //
+        g_hash_table_remove(m->map, key);
+    }
+
+    if (m->lock)
+        pthread_mutex_unlock(m->lock);
 }
 
+void mcache_item_free(gpointer value) {
+    if (value != NULL)
+        item_remove((item *) value);
+}
