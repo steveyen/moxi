@@ -16,24 +16,19 @@ typedef struct {
     int patterns_max; // Size of patterns array, may be 0.
     int patterns_num; // Number of active patterns, <= patterns_max.
     char **patterns;  // May be NULL.
+    int   *lengths;   // May be NULL, same size as patterns array.
 
     // Statistics.
     //
-    uint64_t *hits;   // Same size as patterns array, may be NULL.
+    uint64_t *hits;   // May be NULL, same size as patterns array.
     uint64_t  misses;
 
     int initted; // Last field.
 } matcher;
 
-void matcher_init(matcher *m);
+void matcher_init(matcher *m, char *spec);
 
 matcher *matcher_clone(matcher *m, matcher *copy);
-
-void matcher_add(matcher *m, char *pattern);
-
-void matcher_remove(matcher *m, char *pattern);
-
-void matcher_remove_all(matcher *m);
 
 bool matcher_check(matcher *m, char *str, int str_len);
 

@@ -49,6 +49,7 @@ proxy_behavior behavior_default_g = {
         .tv_usec = 0
     },
     .front_cache_lifespan = 0,
+    .front_cache_spec = {0},
     .host = {0},
     .port = 0,
     .bucket = {0},
@@ -316,6 +317,10 @@ void cproxy_parse_behavior_key_val(char *key,
             behavior->wait_queue_timeout.tv_usec = (ms % 1000) * 1000;
         } else if (strcmp(key, "front_cache_lifespan") == 0) {
             behavior->front_cache_lifespan = strtol(val, NULL, 10);
+        } else if (strcmp(key, "front_cache_spec") == 0) {
+            if (strlen(val) < sizeof(behavior->front_cache_spec) + 1) {
+                strcpy(behavior->front_cache_spec, val);
+            }
         } else if (strcmp(key, "usr") == 0) {
             if (strlen(val) < sizeof(behavior->usr) + 1) {
                 strcpy(behavior->usr, val);
@@ -409,6 +414,9 @@ void cproxy_dump_behavior(proxy_behavior *b, char *prefix, int level) {
     if (level >= 1)
         fprintf(stderr, "%s front_cache_lifespan: %d\n",
                 prefix, b->front_cache_lifespan);
+    if (level >= 1)
+        fprintf(stderr, "%s front_cache_spec: %s\n",
+                prefix, b->front_cache_spec);
 
     fprintf(stderr, "%s usr: %s\n",
             prefix, b->usr);

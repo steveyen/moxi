@@ -43,7 +43,8 @@ struct proxy_behavior {
     struct timeval downstream_timeout;  // SL: Fields of 0 mean no timeout.
     struct timeval wait_queue_timeout;  // PL: Fields of 0 mean no timeout.
 
-    uint32_t front_cache_lifespan; // PL: In millisecs.
+    uint32_t front_cache_lifespan;  // PL: In millisecs.
+    char     front_cache_spec[400]; // PL.
 
     char usr[250];    // SL.
     char pwd[900];    // SL.

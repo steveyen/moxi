@@ -66,10 +66,10 @@ void on_conflate_get_stats(void *userdata, void *opaque,
     assert(mthread);
     assert(mthread->work_queue);
 
-    char buf[400];
+    char buf[800];
 
-#define more_stat(spec, key, val) \
-    snprintf(buf, sizeof(buf), spec, val);       \
+#define more_stat(spec, key, val)          \
+    snprintf(buf, sizeof(buf), spec, val); \
     add_stat(opaque, key, buf);
 
     more_stat("%s", "version",
@@ -94,6 +94,8 @@ void on_conflate_get_stats(void *userdata, void *opaque,
               m->behavior.wait_queue_timeout.tv_usec / 1000);
     more_stat("%u", "front_cache_lifespan",
               m->behavior.front_cache_lifespan);
+    more_stat("%s", "front_cache_spec",
+              m->behavior.front_cache_spec);
     more_stat("%llu", "configs",
               (long long unsigned int) m->stat_configs);
     more_stat("%llu", "config_fails",
