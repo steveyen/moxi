@@ -76,17 +76,26 @@ matcher *matcher_clone(matcher *m, matcher *copy) {
         return copy;
 
  fail:
-    for (int i = 0; copy->patterns && i < copy->patterns_num; i++) {
-        free(copy->patterns[i]);
-    }
-
-    free(copy->patterns);
-    free(copy->lengths);
-    free(copy->hits);
-
-    memset(copy, 0, sizeof(matcher));
+    matcher_free(copy);
 
     return NULL;
+}
+
+void matcher_free(matcher *m) {
+    if (m == NULL)
+        return;
+
+    if (m->patterns != NULL) {
+        for (int i = 0; i < m->patterns_num; i++) {
+            free(m->patterns[i]);
+        }
+    }
+
+    free(m->patterns);
+    free(m->lengths);
+    free(m->hits);
+
+    memset(m, 0, sizeof(matcher)); // Helps clear m->initted.
 }
 
 void matcher_add(matcher *m, char *pattern) {

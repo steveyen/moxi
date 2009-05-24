@@ -26,11 +26,10 @@ typedef struct {
     int initted; // Last field.
 } matcher;
 
-void matcher_init(matcher *m, char *spec);
-
+void     matcher_init(matcher *m, char *spec);
+void     matcher_free(matcher *m);
 matcher *matcher_clone(matcher *m, matcher *copy);
-
-bool matcher_check(matcher *m, char *str, int str_len);
+bool     matcher_check(matcher *m, char *str, int str_len);
 
 #endif /* MATCHER_H */
 
