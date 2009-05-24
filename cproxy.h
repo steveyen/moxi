@@ -35,10 +35,10 @@ struct proxy_behavior {
     // PL means proxy-level behavior.
     // SL means server-level behavior, although we inherit from proxy level.
     //
-    int            cycle;               // IL: Clock resolution in millisecs.
-    int            downstream_max;      // PL: Downstream concurrency.
-    int            downstream_weight;   // SL: Server weight.
-    int            downstream_retry;    // SL: How many times to retry a cmd.
+    uint32_t       cycle;               // IL: Clock resolution in millisecs.
+    uint32_t       downstream_max;      // PL: Downstream concurrency.
+    uint32_t       downstream_weight;   // SL: Server weight.
+    uint32_t       downstream_retry;    // SL: How many times to retry a cmd.
     enum protocol  downstream_protocol; // SL: Favored downstream protocol.
     struct timeval downstream_timeout;  // SL: Fields of 0 mean no timeout.
     struct timeval wait_queue_timeout;  // PL: Fields of 0 mean no timeout.
