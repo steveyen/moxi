@@ -28,6 +28,12 @@ typedef struct {
 
     GHashTable *map;    // NULL-able, keyed by string, value is item.
     matcher    *filter; // NULL-able, filter keys during ADD.
+
+    uint64_t tot_get_hits;
+    uint64_t tot_get_expires;
+    uint64_t tot_get_misses;
+    uint64_t tot_adds;
+    uint64_t tot_add_skips;
 } mcache;
 
 typedef struct proxy          proxy;
@@ -417,6 +423,7 @@ void protocol_stats_foreach_write(gpointer key,
 void  mcache_init(mcache *m, bool multithreaded);
 void  mcache_start(mcache *m, char *spec);
 void  mcache_stop(mcache *m);
+void  mcache_reset_stats(mcache *m);
 item *mcache_get(mcache *m, char *key, int key_len,
                  uint32_t curr_time);
 void  mcache_add(mcache *m, item *it,

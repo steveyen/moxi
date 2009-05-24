@@ -284,6 +284,28 @@ static void main_stats_collect(void *data0, void *data1) {
              "%llu", (long long unsigned int) p->listening_failed);
 
         pthread_mutex_unlock(&p->proxy_lock);
+
+        // Emit front_cache stats.
+        //
+        pthread_mutex_lock(p->front_cache.lock);
+
+        emit_f(p->port, "front_cache_tot_get_hits",
+               "%llu",
+               (long long unsigned int) p->front_cache.tot_get_hits);
+        emit_f(p->port, "front_cache_tot_get_expires",
+               "%llu",
+               (long long unsigned int) p->front_cache.tot_get_expires);
+        emit_f(p->port, "front_cache_tot_get_misses",
+               "%llu",
+               (long long unsigned int) p->front_cache.tot_get_misses);
+        emit_f(p->port, "front_cache_tot_adds",
+               "%llu",
+               (long long unsigned int) p->front_cache.tot_adds);
+        emit_f(p->port, "front_cache_tot_add_skips",
+               "%llu",
+               (long long unsigned int) p->front_cache.tot_add_skips);
+
+        pthread_mutex_unlock(p->front_cache.lock);
     }
 
     // Starting at 1 because 0 is the main listen thread.

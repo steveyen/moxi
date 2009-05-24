@@ -28,6 +28,24 @@ void mcache_init(mcache *m, bool multithreaded) {
     } else {
         m->lock = NULL;
     }
+
+    mcache_reset_stats(m);
+}
+
+void mcache_reset_stats(mcache *m) {
+    assert(m);
+
+    if (m->lock)
+        pthread_mutex_lock(m->lock);
+
+    m->tot_get_hits = 0;
+    m->tot_get_expires = 0;
+    m->tot_get_misses = 0;
+    m->tot_adds = 0;
+    m->tot_add_skips = 0;
+
+    if (m->lock)
+        pthread_mutex_unlock(m->lock);
 }
 
 void mcache_start(mcache *m, char *spec) {
@@ -106,6 +124,8 @@ item *mcache_get(mcache *m, char *key, int key_len,
                 //
                 it->refcount++; // TODO: Need locking here?
 
+                m->tot_get_hits++;
+
                 if (m->lock)
                     pthread_mutex_unlock(m->lock);
 
@@ -115,6 +135,8 @@ item *mcache_get(mcache *m, char *key, int key_len,
 
                 return it;
             }
+
+            m->tot_get_expires++;
 
             if (settings.verbose > 1)
                 fprintf(stderr,
@@ -128,6 +150,8 @@ item *mcache_get(mcache *m, char *key, int key_len,
             g_hash_table_remove(m->map, key);
 
             item_remove(it);
+        } else {
+            m->tot_get_misses++;
         }
     }
 
@@ -140,10 +164,12 @@ item *mcache_get(mcache *m, char *key, int key_len,
 void mcache_add(mcache *m, item *it,
                 uint32_t lifespan,
                 uint32_t curr_time) {
+    assert(it);
+
     if (m == NULL)
         return;
 
-    // TODO: This lock areas are too wide.
+    // TODO: Our lock areas are too wide.
     //
     if (m->lock)
         pthread_mutex_lock(m->lock);
@@ -171,10 +197,14 @@ void mcache_add(mcache *m, item *it,
 
                     g_hash_table_insert(m->map, key_buf, it);
 
+                    m->tot_adds++;
+
                     if (settings.verbose > 1)
                         fprintf(stderr,
                                 "mcache add: %s\n", key_buf);
                 } else {
+                    m->tot_add_skips++;
+
                     if (settings.verbose > 1)
                         fprintf(stderr,
                                 "mcache add-skip: %s\n", key_buf);
