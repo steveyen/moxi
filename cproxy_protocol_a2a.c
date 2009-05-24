@@ -159,7 +159,6 @@ void cproxy_process_a2a_downstream(conn *c, char *line) {
             }
 
             cproxy_del_front_cache_key_ascii_response(d, line,
-                                                      NULL, 0,
                                                       uc->cmd_start);
         }
     }

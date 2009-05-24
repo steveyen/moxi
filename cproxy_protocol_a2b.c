@@ -649,8 +649,7 @@ void a2b_process_downstream_response(conn *c) {
                 break;
             }
 
-            cproxy_del_front_cache_key_ascii(d, NULL, 0,
-                                             uc->cmd_start);
+            cproxy_del_front_cache_key_ascii(d, uc->cmd_start);
 
             if (update_event(uc, EV_WRITE | EV_PERSIST)) {
                 conn_set_state(c, conn_pause);
@@ -686,8 +685,7 @@ void a2b_process_downstream_response(conn *c) {
                 break;
             }
 
-            cproxy_del_front_cache_key_ascii(d, NULL, 0,
-                                             uc->cmd_start);
+            cproxy_del_front_cache_key_ascii(d, uc->cmd_start);
 
             if (update_event(uc, EV_WRITE | EV_PERSIST)) {
                 conn_set_state(c, conn_pause);
@@ -741,8 +739,7 @@ void a2b_process_downstream_response(conn *c) {
                 break;
             }
 
-            cproxy_del_front_cache_key_ascii(d, NULL, 0,
-                                             uc->cmd_start);
+            cproxy_del_front_cache_key_ascii(d, uc->cmd_start);
 
             if (update_event(uc, EV_WRITE | EV_PERSIST)) {
                 conn_set_state(c, conn_pause);

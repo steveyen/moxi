@@ -421,14 +421,10 @@ void protocol_stats_foreach_write(gpointer key,
                                   gpointer user_data);
 
 void cproxy_del_front_cache_key_ascii(downstream *d,
-                                      char *key,
-                                      int   key_len,
                                       char *command);
 
 void cproxy_del_front_cache_key_ascii_response(downstream *d,
                                                char *response,
-                                               char *key,
-                                               int   key_len,
                                                char *command);
 
 void  mcache_init(mcache *m, bool multithreaded);

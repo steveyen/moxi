@@ -212,8 +212,6 @@ void cproxy_upstream_ascii_item_response(item *it, conn *uc) {
  */
 void cproxy_del_front_cache_key_ascii_response(downstream *d,
                                                char *response,
-                                               char *key,
-                                               int   key_len,
                                                char *command) {
     assert(d);
     assert(d->ptd);
@@ -235,32 +233,28 @@ void cproxy_del_front_cache_key_ascii_response(downstream *d,
         strncmp(response, "SERVER_ERROR", 12) == 0 ||
         (response[0] == '-') ||
         (response[0] >= '0' && response[0] <= '9')) {
-        cproxy_del_front_cache_key_ascii(d, key, key_len, command);
+        cproxy_del_front_cache_key_ascii(d, command);
     }
 }
 
 void cproxy_del_front_cache_key_ascii(downstream *d,
-                                      char *key,
-                                      int   key_len,
                                       char *command) {
     assert(d);
     assert(d->ptd);
     assert(d->ptd->proxy);
 
     if (mcache_started(&d->ptd->proxy->front_cache)) {
-        if (key == NULL &&
-            command != NULL) {
-            char *spc = strchr(command, ' ');
-            if (spc != NULL) {
-                key = spc + 1;
-                key_len = skey_len(key);
-            }
-        }
+        char *spc = strchr(command, ' ');
+        if (spc != NULL) {
+            char *key = spc + 1;
+            int   key_len = skey_len(key);
+            if (key_len > 0) {
+                mcache_delete(&d->ptd->proxy->front_cache,
+                              key, key_len);
 
-        if (key != NULL &&
-            key_len > 0) {
-            mcache_delete(&d->ptd->proxy->front_cache,
-                          key, key_len);
+                if (settings.verbose > 1)
+                    fprintf(stderr, "front_cache del %s\n", key);
+            }
         }
     }
 }
