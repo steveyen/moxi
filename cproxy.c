@@ -52,10 +52,6 @@ conn *conn_list_remove(conn *head, conn **tail,
 
 bool  is_compatible_request(conn *existing, conn *candidate);
 
-void front_cache_foreach_free(gpointer key,
-                              gpointer value,
-                              gpointer user_data);
-
 // Function tables.
 //
 conn_funcs cproxy_listen_funcs = {
@@ -1961,55 +1957,5 @@ int downstream_conn_index(downstream *d, conn *c) {
     }
 
     return -1;
-}
-
-void front_cache_start(proxy *p, proxy_behavior *behavior) {
-    assert(p);
-    assert(p->front_cache == NULL);
-    assert(behavior);
-
-    pthread_mutex_lock(&p->front_cache_lock);
-
-    if (behavior->front_cache_lifespan > 0 &&
-        strlen(behavior->front_cache_spec) > 0) {
-        p->front_cache = g_hash_table_new_full(skey_hash,
-                                               skey_equal,
-                                               helper_g_free,
-                                               NULL);
-        matcher_init(&p->front_cache_matcher,
-                     behavior->front_cache_spec);
-    } else {
-        p->front_cache = NULL;
-    }
-
-    pthread_mutex_unlock(&p->front_cache_lock);
-}
-
-void front_cache_stop(proxy *p) {
-    assert(p);
-
-    pthread_mutex_lock(&p->front_cache_lock);
-
-    matcher_free(&p->front_cache_matcher);
-
-    if (p->front_cache != NULL) {
-        g_hash_table_foreach(p->front_cache,
-                             front_cache_foreach_free,
-                             NULL);
-        g_hash_table_destroy(p->front_cache);
-        p->front_cache = NULL;
-    }
-
-    pthread_mutex_unlock(&p->front_cache_lock);
-}
-
-void front_cache_foreach_free(gpointer key,
-                              gpointer value,
-                              gpointer user_data) {
-    assert(key);
-    free(key);
-
-    assert(value);
-    item_remove((item *) value);
 }
 
