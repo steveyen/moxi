@@ -222,9 +222,9 @@ void mcache_add(mcache *m, item *it,
 void mcache_foreach_free(gpointer key,
                          gpointer value,
                          gpointer user_data) {
-    assert(key);
-    free(key);
-
+    // Freeing only the value, not the key, since g_hash_table_destroy()
+    // will free the keys.
+    //
     assert(value);
     item_remove((item *) value);
 }
