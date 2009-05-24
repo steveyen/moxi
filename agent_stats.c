@@ -601,6 +601,8 @@ static void main_stats_reset(void *data0, void *data1) {
         // increase and decrease.
         //
         p->listening_failed = 0;
+
+        mcache_reset_stats(&p->front_cache);
     }
 
     // Starting at 1 because 0 is the main listen thread.
