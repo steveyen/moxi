@@ -27,7 +27,6 @@ typedef struct {
     pthread_mutex_t *lock; // NULL-able, for non-multithreaded.
 
     GHashTable *map;    // NULL-able, keyed by string, value is item.
-    matcher    *filter; // NULL-able, filter keys during ADD.
 
     uint64_t tot_get_hits;
     uint64_t tot_get_expires;
@@ -123,7 +122,8 @@ struct proxy {
 
     proxy *next; // Modified/accessed only by main listener thread.
 
-    mcache front_cache;
+    mcache  front_cache;
+    matcher front_cache_matcher;
 
     proxy_td *thread_data;     // Immutable.
     int       thread_data_num; // Immutable.
@@ -428,7 +428,7 @@ void cproxy_del_front_cache_key_ascii_response(downstream *d,
                                                char *command);
 
 void  mcache_init(mcache *m, bool multithreaded);
-void  mcache_start(mcache *m, char *spec);
+void  mcache_start(mcache *m);
 bool  mcache_started(mcache *m);
 void  mcache_stop(mcache *m);
 void  mcache_reset_stats(mcache *m);

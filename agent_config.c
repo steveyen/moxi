@@ -526,6 +526,7 @@ void cproxy_on_new_pool(proxy_main *m,
         // Turn off the front_cache while we're reconfiguring.
         //
         mcache_stop(&p->front_cache);
+        matcher_uninit(&p->front_cache_matcher);
 
         // Track whether we really changed while reconfiguring.
         //
@@ -621,9 +622,14 @@ void cproxy_on_new_pool(proxy_main *m,
 
         // Restart the front_cache, if necessary.
         //
-        if (behavior_head.front_cache_lifespan > 0)
-            mcache_start(&p->front_cache,
-                         behavior_head.front_cache_spec);
+        if (behavior_head.front_cache_lifespan > 0) {
+            mcache_start(&p->front_cache);
+
+            if (strlen(behavior_head.front_cache_spec) > 0) {
+                matcher_init(&p->front_cache_matcher,
+                             behavior_head.front_cache_spec);
+            }
+        }
     }
 }
 

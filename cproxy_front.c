@@ -16,8 +16,7 @@ void mcache_item_free(gpointer value);
 void mcache_init(mcache *m, bool multithreaded) {
     assert(m);
 
-    m->map    = NULL;
-    m->filter = NULL;
+    m->map = NULL;
 
     if (multithreaded) {
         m->lock = malloc(sizeof(pthread_mutex_t));
@@ -46,10 +45,9 @@ void mcache_reset_stats(mcache *m) {
         pthread_mutex_unlock(m->lock);
 }
 
-void mcache_start(mcache *m, char *spec) {
+void mcache_start(mcache *m) {
     assert(m);
     assert(m->map == NULL);
-    assert(m->filter == NULL);
 
     if (m->lock)
         pthread_mutex_lock(m->lock);
@@ -58,17 +56,6 @@ void mcache_start(mcache *m, char *spec) {
                                    skey_equal,
                                    helper_g_free,
                                    mcache_item_free);
-    if (m->map != NULL) {
-        if (spec != NULL && strlen(spec) > 0) {
-            m->filter = calloc(1, sizeof(matcher));
-            if (m->filter != NULL) {
-                matcher_init(m->filter, spec);
-            } else {
-                g_hash_table_destroy(m->map);
-                m->map = NULL;
-            }
-        }
-    }
 
     if (m->lock)
         pthread_mutex_unlock(m->lock);
@@ -93,12 +80,6 @@ void mcache_stop(mcache *m) {
 
     if (m->lock)
         pthread_mutex_lock(m->lock);
-
-    if (m->filter != NULL) {
-        matcher_free(m->filter);
-        free(m->filter);
-        m->filter = NULL;
-    }
 
     if (m->map != NULL) {
         g_hash_table_destroy(m->map);
@@ -182,42 +163,39 @@ void mcache_add(mcache *m, item *it,
         pthread_mutex_lock(m->lock);
 
     if (m->map != NULL) {
-        if (m->filter == NULL ||
-            matcher_check(m->filter, ITEM_key(it), it->nkey)) {
-            // The ITEM_key is not NULL or space terminated,
-            // and we need a copy, too, for hashtable ownership.
+        // The ITEM_key is not NULL or space terminated,
+        // and we need a copy, too, for hashtable ownership.
+        //
+        char *key_buf = malloc(it->nkey + 1);
+        if (key_buf != NULL) {
+            memcpy(key_buf, ITEM_key(it), it->nkey);
+            key_buf[it->nkey] = '\0';
+
+            // TODO: Would be nice if there was a g_hash_table_add().
             //
-            char *key_buf = malloc(it->nkey + 1);
-            if (key_buf != NULL) {
-                memcpy(key_buf, ITEM_key(it), it->nkey);
-                key_buf[it->nkey] = '\0';
-
-                // TODO: Would be nice if there was a g_hash_table_add().
+            if (g_hash_table_lookup(m->map,
+                                    key_buf) == NULL) {
+                // TODO: Need configurable L1 cache expiry.
                 //
-                if (g_hash_table_lookup(m->map,
-                                        key_buf) == NULL) {
-                    // TODO: Need configurable L1 cache expiry.
-                    //
-                    it->time = curr_time + lifespan;
+                it->time = curr_time + lifespan;
 
-                    it->refcount++; // TODO: Need item lock here?
+                it->refcount++; // TODO: Need item lock here?
 
-                    g_hash_table_insert(m->map, key_buf, it);
+                g_hash_table_insert(m->map, key_buf, it);
 
-                    m->tot_adds++;
+                m->tot_adds++;
 
-                    if (settings.verbose > 1)
-                        fprintf(stderr,
-                                "mcache add: %s\n", key_buf);
-                } else {
-                    m->tot_add_skips++;
+                if (settings.verbose > 1)
+                    fprintf(stderr,
+                            "mcache add: %s\n", key_buf);
+            } else {
+                m->tot_add_skips++;
 
-                    if (settings.verbose > 1)
-                        fprintf(stderr,
-                                "mcache add-skip: %s\n", key_buf);
+                if (settings.verbose > 1)
+                    fprintf(stderr,
+                            "mcache add-skip: %s\n", key_buf);
 
-                    free(key_buf);
-                }
+                free(key_buf);
             }
         }
     }

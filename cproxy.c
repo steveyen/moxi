@@ -133,9 +133,14 @@ proxy *cproxy_create(char    *name,
 
         mcache_init(&p->front_cache, true);
 
-        if (behavior_head.front_cache_lifespan > 0)
-            mcache_start(&p->front_cache,
-                         behavior_head.front_cache_spec);
+        if (behavior_head.front_cache_lifespan > 0) {
+            mcache_start(&p->front_cache);
+
+            if (strlen(behavior_head.front_cache_spec) > 0) {
+                matcher_init(&p->front_cache_matcher,
+                             behavior_head.front_cache_spec);
+            }
+        }
 
         p->thread_data_num = nthreads;
         p->thread_data = (proxy_td *) calloc(p->thread_data_num,

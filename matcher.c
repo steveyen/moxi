@@ -10,13 +10,12 @@
 #include "matcher.h"
 
 #define MATCHER_MAGIC 0xa135b21a
-#define IS_INITTED(m) (m->initted == MATCHER_MAGIC)
 
 void matcher_add(matcher *m, char *pattern);
 
 void matcher_init(matcher *m, char *spec) {
     assert(m);
-    assert(!IS_INITTED(m));
+    assert(!matcher_initted(m));
     memset(m, 0, sizeof(matcher));
     m->initted = MATCHER_MAGIC;
 
@@ -39,14 +38,18 @@ void matcher_init(matcher *m, char *spec) {
     }
 }
 
+bool matcher_initted(matcher *m) {
+    return m != NULL && m->initted == MATCHER_MAGIC;
+}
+
 matcher *matcher_clone(matcher *m, matcher *copy) {
     assert(m);
-    assert(IS_INITTED(m));
-    if (!IS_INITTED(m)) return NULL;
+    assert(matcher_initted(m));
+    if (!matcher_initted(m)) return NULL;
     assert(m->patterns_num <= m->patterns_max);
 
     assert(copy);
-    assert(!IS_INITTED(copy));
+    assert(!matcher_initted(copy));
     matcher_init(copy, NULL);
 
     copy->version = m->version;
@@ -76,12 +79,12 @@ matcher *matcher_clone(matcher *m, matcher *copy) {
         return copy;
 
  fail:
-    matcher_free(copy);
+    matcher_uninit(copy);
 
     return NULL;
 }
 
-void matcher_free(matcher *m) {
+void matcher_uninit(matcher *m) {
     if (m == NULL)
         return;
 
@@ -100,7 +103,7 @@ void matcher_free(matcher *m) {
 
 void matcher_add(matcher *m, char *pattern) {
     assert(m);
-    assert(IS_INITTED(m));
+    assert(matcher_initted(m));
     assert(m->patterns_num <= m->patterns_max);
     assert(pattern);
 
@@ -140,7 +143,7 @@ void matcher_add(matcher *m, char *pattern) {
 
 bool matcher_check(matcher *m, char *str, int str_len) {
     assert(m);
-    if (!IS_INITTED(m)) return false;
+    if (!matcher_initted(m)) return false;
     assert(m->patterns_num <= m->patterns_max);
 
     for (int i = 0; i < m->patterns_num; i++) {
