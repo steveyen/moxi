@@ -412,6 +412,9 @@ void protocol_stats_foreach_write(gpointer key,
                                   gpointer value,
                                   gpointer user_data);
 
+void front_cache_start(proxy *p, proxy_behavior *behavior);
+void front_cache_stop(proxy *p);
+
 // TODO: The following generic items should be broken out into util file.
 //
 bool  add_conn_item(conn *c, item *it);

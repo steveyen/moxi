@@ -523,6 +523,14 @@ void cproxy_on_new_pool(proxy_main *m,
             fprintf(stderr, "cproxy main existing config change %u\n",
                     p->port);
 
+        // Turn off the front_cache while we're reconfiguring.
+        //
+        front_cache_stop(p);
+
+        // Track whether we really changed while reconfiguring.
+        //
+        bool changed = false;
+
         pthread_mutex_lock(&p->proxy_lock);
 
         if (settings.verbose > 1) {
@@ -544,12 +552,14 @@ void cproxy_on_new_pool(proxy_main *m,
              strcmp(p->name, name) != 0)) {
             free(p->name);
             p->name = NULL;
+            changed = true;
 
             if (settings.verbose > 1)
                 fprintf(stderr, "agent_config name changed\n");
         }
         if (p->name == NULL && name != NULL) {
             p->name = strdup(name);
+            changed = true;
         }
 
         if ((p->config != NULL) &&
@@ -557,13 +567,21 @@ void cproxy_on_new_pool(proxy_main *m,
              strcmp(p->config, config) != 0)) {
             free(p->config);
             p->config = NULL;
+            changed = true;
 
             if (settings.verbose > 1)
                 fprintf(stderr, "agent_config config changed\n");
         }
         if (p->config == NULL && config != NULL) {
             p->config = strdup(config);
+            changed = true;
         }
+
+        changed = changed ||
+            (p->behavior_head.front_cache_lifespan !=
+             behavior_head.front_cache_lifespan) ||
+            (strcmp(p->behavior_head.front_cache_spec,
+                    behavior_head.front_cache_spec) != 0);
 
         p->behavior_head = behavior_head;
 
@@ -576,6 +594,7 @@ void cproxy_on_new_pool(proxy_main *m,
             free(p->behaviors);
             p->behaviors = NULL;
             p->behaviors_num = 0;
+            changed = true;
 
             if (settings.verbose > 1)
                 fprintf(stderr, "agent_config behaviors changed\n");
@@ -584,6 +603,7 @@ void cproxy_on_new_pool(proxy_main *m,
             p->behaviors = cproxy_copy_behaviors(behaviors_num,
                                                  behaviors);
             p->behaviors_num = behaviors_num;
+            changed = true;
         }
 
         if (p->name != NULL &&
@@ -598,6 +618,10 @@ void cproxy_on_new_pool(proxy_main *m,
         p->config_ver = config_ver;
 
         pthread_mutex_unlock(&p->proxy_lock);
+
+        // Restart the front_cache, if necessary.
+        //
+        front_cache_start(p, &behavior_head);
     }
 }
 
