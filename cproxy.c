@@ -131,10 +131,13 @@ proxy *cproxy_create(char    *name,
 
         pthread_mutex_init(&p->proxy_lock, NULL);
 
-        p->front_cache = g_hash_table_new_full(skey_hash,
-                                               skey_equal,
-                                               helper_g_free,
-                                               NULL);
+        if (p->behavior_head.front_cache_lifespan > 0)
+            p->front_cache = g_hash_table_new_full(skey_hash,
+                                                   skey_equal,
+                                                   helper_g_free,
+                                                   NULL);
+        else
+            p->front_cache = NULL;
 
         pthread_mutex_init(&p->front_cache_lock, NULL);
 

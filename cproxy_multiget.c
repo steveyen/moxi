@@ -290,37 +290,46 @@ void multiget_ascii_downstream_response(downstream *d, item *it) {
     proxy *p = ptd->proxy;
     assert(p);
 
-    pthread_mutex_lock(&p->front_cache_lock);
+    pthread_mutex_lock(&p->proxy_lock);
+    uint32_t front_cache_lifespan = p->behavior_head.front_cache_lifespan;
+    pthread_mutex_unlock(&p->proxy_lock);
 
-    if (p->front_cache != NULL) {
-        if (matcher_check(&p->front_cache_matcher,
-                          ITEM_key(it), it->nkey)) {
-            // The ITEM_key is not NULL or space terminated,
-            // and we need a copy, too, for hashtable ownership.
-            //
-            char *key_buf = malloc(it->nkey + 1);
-            if (key_buf != NULL) {
-                memcpy(key_buf, ITEM_key(it), it->nkey);
-                key_buf[it->nkey] = '\0';
+    if (front_cache_lifespan > 0) {
+        // TODO: The front_cache_lock area is too wide.
+        //
+        pthread_mutex_lock(&p->front_cache_lock);
 
-                // TODO: Would be nice if there was a g_hash_table_add().
+        if (p->front_cache != NULL) {
+            if (matcher_check(&p->front_cache_matcher,
+                              ITEM_key(it), it->nkey)) {
+                // The ITEM_key is not NULL or space terminated,
+                // and we need a copy, too, for hashtable ownership.
                 //
-                if (g_hash_table_lookup(p->front_cache, key_buf) == NULL) {
-                    // TODO: Need configurable L1 cache expiry.
+                char *key_buf = malloc(it->nkey + 1);
+                if (key_buf != NULL) {
+                    memcpy(key_buf, ITEM_key(it), it->nkey);
+                    key_buf[it->nkey] = '\0';
+
+                    // TODO: Would be nice if there was a g_hash_table_add().
                     //
-                    it->time = msec_current_time + 2000;
+                    if (g_hash_table_lookup(p->front_cache,
+                                            key_buf) == NULL) {
+                        // TODO: Need configurable L1 cache expiry.
+                        //
+                        it->time = msec_current_time + front_cache_lifespan;
 
-                    it->refcount++; // TODO: Need item lock here?
+                        it->refcount++; // TODO: Need item lock here?
 
-                    g_hash_table_insert(p->front_cache, key_buf, it);
-                } else {
-                    free(key_buf);
+                        g_hash_table_insert(p->front_cache, key_buf, it);
+                    } else {
+                        free(key_buf);
+                    }
                 }
             }
         }
-    }
 
-    pthread_mutex_unlock(&p->front_cache_lock);
+        pthread_mutex_unlock(&p->front_cache_lock);
+    }
 
     if (d->multiget != NULL) {
         // The ITEM_key is not NULL or space terminated.
