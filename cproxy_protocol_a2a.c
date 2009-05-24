@@ -44,6 +44,7 @@ void cproxy_process_a2a_downstream(conn *c, char *line) {
 
     assert(d != NULL);
     assert(d->ptd != NULL);
+    assert(d->ptd->proxy != NULL);
 
     if (strncmp(line, "VALUE ", 6) == 0) {
         token_t      tokens[MAX_TOKENS];
@@ -156,6 +157,10 @@ void cproxy_process_a2a_downstream(conn *c, char *line) {
                 d->ptd->stats.err_oom++;
                 cproxy_close_conn(uc);
             }
+
+            cproxy_del_front_cache_key_ascii_response(d, line,
+                                                      NULL, 0,
+                                                      uc->cmd_start);
         }
     }
 }
@@ -304,6 +309,14 @@ bool cproxy_forward_a2a_simple_downstream(downstream *d,
                     cproxy_start_downstream_timeout(d, c);
                 } else {
                     c->write_and_go = conn_pause;
+
+                    // Do mcache_delete() here only during a noreply,
+                    // otherwise for with-reply requests, we could
+                    // be in a race with other clients repopulating
+                    // the front_cache.  For with-reply requests, we
+                    // clear the front_cache when we get a success reply.
+                    //
+                    mcache_delete(&d->ptd->proxy->front_cache, key, key_len);
                 }
 
                 return true;
@@ -406,6 +419,7 @@ bool cproxy_forward_a2a_item_downstream(downstream *d, short cmd,
                                         item *it, conn *uc) {
     assert(d != NULL);
     assert(d->ptd != NULL);
+    assert(d->ptd->proxy != NULL);
     assert(d->downstream_conns != NULL);
     assert(it != NULL);
     assert(uc != NULL);
@@ -462,6 +476,9 @@ bool cproxy_forward_a2a_item_downstream(downstream *d, short cmd,
                             cproxy_start_downstream_timeout(d, c);
                         } else {
                             c->write_and_go = conn_pause;
+
+                            mcache_delete(&d->ptd->proxy->front_cache,
+                                          ITEM_key(it), it->nkey);
                         }
 
                         return true;

@@ -74,6 +74,20 @@ void mcache_start(mcache *m, char *spec) {
         pthread_mutex_unlock(m->lock);
 }
 
+bool mcache_started(mcache *m) {
+    assert(m);
+
+    if (m->lock)
+        pthread_mutex_lock(m->lock);
+
+    bool rv = m->map != NULL;
+
+    if (m->lock)
+        pthread_mutex_unlock(m->lock);
+
+    return rv;
+}
+
 void mcache_stop(mcache *m) {
     assert(m);
 
@@ -241,3 +255,4 @@ void mcache_item_free(gpointer value) {
     if (value != NULL)
         item_remove((item *) value);
 }
+

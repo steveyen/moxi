@@ -649,6 +649,9 @@ void a2b_process_downstream_response(conn *c) {
                 break;
             }
 
+            cproxy_del_front_cache_key_ascii(d, NULL, 0,
+                                             uc->cmd_start);
+
             if (update_event(uc, EV_WRITE | EV_PERSIST)) {
                 conn_set_state(c, conn_pause);
             } else {
@@ -682,6 +685,9 @@ void a2b_process_downstream_response(conn *c) {
                 out_string(uc, "NOT_FOUND");
                 break;
             }
+
+            cproxy_del_front_cache_key_ascii(d, NULL, 0,
+                                             uc->cmd_start);
 
             if (update_event(uc, EV_WRITE | EV_PERSIST)) {
                 conn_set_state(c, conn_pause);
@@ -734,6 +740,9 @@ void a2b_process_downstream_response(conn *c) {
                 out_string(uc, "SERVER_ERROR a2b arith error");
                 break;
             }
+
+            cproxy_del_front_cache_key_ascii(d, NULL, 0,
+                                             uc->cmd_start);
 
             if (update_event(uc, EV_WRITE | EV_PERSIST)) {
                 conn_set_state(c, conn_pause);
@@ -991,6 +1000,11 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
                         cproxy_start_downstream_timeout(d, c);
                     } else {
                         c->write_and_go = conn_pause;
+
+                        if (key != NULL &&
+                            key_len > 0)
+                            mcache_delete(&d->ptd->proxy->front_cache,
+                                          key, key_len);
                     }
 
                     return true;
@@ -1176,6 +1190,7 @@ bool cproxy_forward_a2b_item_downstream(downstream *d, short cmd,
                                         item *it, conn *uc) {
     assert(d != NULL);
     assert(d->ptd != NULL);
+    assert(d->ptd->proxy != NULL);
     assert(d->downstream_conns != NULL);
     assert(it != NULL);
     assert(it->nbytes >= 2);
@@ -1283,6 +1298,9 @@ bool cproxy_forward_a2b_item_downstream(downstream *d, short cmd,
                                 cproxy_start_downstream_timeout(d, c);
                             } else {
                                 c->write_and_go = conn_pause;
+
+                                mcache_delete(&d->ptd->proxy->front_cache,
+                                              ITEM_key(it), it->nkey);
                             }
 
                             return true;

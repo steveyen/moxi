@@ -420,8 +420,20 @@ void protocol_stats_foreach_write(gpointer key,
                                   gpointer value,
                                   gpointer user_data);
 
+void cproxy_del_front_cache_key_ascii(downstream *d,
+                                      char *key,
+                                      int   key_len,
+                                      char *command);
+
+void cproxy_del_front_cache_key_ascii_response(downstream *d,
+                                               char *response,
+                                               char *key,
+                                               int   key_len,
+                                               char *command);
+
 void  mcache_init(mcache *m, bool multithreaded);
 void  mcache_start(mcache *m, char *spec);
+bool  mcache_started(mcache *m);
 void  mcache_stop(mcache *m);
 void  mcache_reset_stats(mcache *m);
 item *mcache_get(mcache *m, char *key, int key_len,

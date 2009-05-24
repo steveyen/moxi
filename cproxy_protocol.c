@@ -206,3 +206,61 @@ void cproxy_upstream_ascii_item_response(item *it, conn *uc) {
     }
 }
 
+/**
+ * When we're sending an ascii response line back upstream to
+ * an ascii protocol client, keep the front_cache sync'ed.
+ */
+void cproxy_del_front_cache_key_ascii_response(downstream *d,
+                                               char *response,
+                                               char *key,
+                                               int   key_len,
+                                               char *command) {
+    assert(d);
+    assert(d->ptd);
+    assert(d->ptd->proxy);
+    assert(response);
+
+    if (!mcache_started(&d->ptd->proxy->front_cache))
+        return;
+
+    // TODO: Not sure if we need all these checks, or just
+    // clear the cache item no matter what.
+    //
+    if (strncmp(response, "DELETED", 7) == 0 ||
+        strncmp(response, "STORED", 6) == 0 ||
+        strncmp(response, "EXISTS", 6) == 0 ||
+        strncmp(response, "NOT_FOUND", 9) == 0 ||
+        strncmp(response, "NOT_STORED", 10) == 0 ||
+        strncmp(response, "ERROR", 5) == 0 ||
+        strncmp(response, "SERVER_ERROR", 12) == 0 ||
+        (response[0] == '-') ||
+        (response[0] >= '0' && response[0] <= '9')) {
+        cproxy_del_front_cache_key_ascii(d, key, key_len, command);
+    }
+}
+
+void cproxy_del_front_cache_key_ascii(downstream *d,
+                                      char *key,
+                                      int   key_len,
+                                      char *command) {
+    assert(d);
+    assert(d->ptd);
+    assert(d->ptd->proxy);
+
+    if (mcache_started(&d->ptd->proxy->front_cache)) {
+        if (key == NULL &&
+            command != NULL) {
+            char *spc = strchr(command, ' ');
+            if (spc != NULL) {
+                key = spc + 1;
+                key_len = skey_len(key);
+            }
+        }
+
+        if (key != NULL &&
+            key_len > 0) {
+            mcache_delete(&d->ptd->proxy->front_cache,
+                          key, key_len);
+        }
+    }
+}
