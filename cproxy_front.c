@@ -109,7 +109,7 @@ item *mcache_get(mcache *m, char *key, int key_len,
             // TODO: Need configurable cache oldest_live
             // mark to implement fast FLUSH_ALL.
             //
-            if (it->time > curr_time) {
+            if (it->exptime > curr_time) {
                 // TODO: Stats for front cache hit.
                 //
                 it->refcount++; // TODO: Need locking here?
@@ -177,7 +177,7 @@ void mcache_add(mcache *m, item *it,
                                     key_buf) == NULL) {
                 // TODO: Need configurable L1 cache expiry.
                 //
-                it->time = curr_time + lifespan;
+                it->exptime = curr_time + lifespan;
 
                 it->refcount++; // TODO: Need item lock here?
 
