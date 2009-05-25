@@ -142,7 +142,7 @@ matcher *matcher_clone(matcher *m, matcher *copy) {
 }
 
 void matcher_add(matcher *m, char *pattern) {
-    // Assuming we're locked, if m->lock.
+    // Assuming caller has m->lock already.
     //
     assert(m);
     assert(m->patterns_num <= m->patterns_max);
@@ -153,7 +153,7 @@ void matcher_add(matcher *m, char *pattern) {
         return;
 
     if (m->patterns_num >= m->patterns_max) {
-        int    nmax = (m->patterns_max * 2) + 4; // 4 is slop when 0.
+        int    nmax = (m->patterns_num * 2) + 4; // 4 is slop when 0.
         char **npatterns = realloc(m->patterns, nmax * sizeof(char *));
         int   *nlengths  = realloc(m->lengths,  nmax * sizeof(int));
         uint64_t *nhits  = realloc(m->hits,     nmax * sizeof(uint64_t));
