@@ -19,6 +19,8 @@ int cproxy_init(char *cfg_str,
 
 #define CPROXY_NOT_CAS -1
 
+// TODO: Millisecond capacity in 32-bit field not enough?
+//
 extern volatile uint32_t msec_current_time;
 
 // -------------------------------
@@ -26,7 +28,9 @@ extern volatile uint32_t msec_current_time;
 typedef struct {
     pthread_mutex_t *lock; // NULL-able, for non-multithreaded.
 
-    GHashTable *map;    // NULL-able, keyed by string, value is item.
+    GHashTable *map;       // NULL-able, keyed by string, value is item.
+
+    uint32_t oldest_live;  // In millisecs, relative to msec_current_time.
 
     uint64_t tot_get_hits;
     uint64_t tot_get_expires;
@@ -438,6 +442,7 @@ void  mcache_add(mcache *m, item *it,
                  uint32_t lifespan,
                  uint32_t curr_time);
 void  mcache_delete(mcache *m, char *key, int key_len);
+void  mcache_flush_all(mcache *m, uint32_t msec_exp);
 
 // TODO: The following generic items should be broken out into util file.
 //

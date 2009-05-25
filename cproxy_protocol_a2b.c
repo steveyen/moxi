@@ -557,6 +557,8 @@ void a2b_process_downstream_response(conn *c) {
     //
     downstream *d = c->extra;
     assert(d != NULL);
+    assert(d->ptd != NULL);
+    assert(d->ptd->proxy != NULL);
 
     item *it = c->item;
 
@@ -609,7 +611,21 @@ void a2b_process_downstream_response(conn *c) {
         item_remove(it);
         break;
 
-    case PROTOCOL_BINARY_CMD_FLUSH: /* FALLTHROUGH */
+    case PROTOCOL_BINARY_CMD_FLUSH:
+        conn_set_state(c, conn_pause);
+
+        // TODO: Handle flush_all's expiration parameter against
+        // the front_cache.
+        //
+        // TODO: We flush the front_cache too often, inefficiently
+        // on every downstream FLUSH response, rather than on
+        // just the last FLUSH response.
+        //
+        if (uc != NULL) {
+            mcache_flush_all(&d->ptd->proxy->front_cache, 0);
+        }
+        break;
+
     case PROTOCOL_BINARY_CMD_NOOP:
         conn_set_state(c, conn_pause);
         break;
@@ -1106,6 +1122,7 @@ bool cproxy_broadcast_a2b_downstream(downstream *d,
                                      char *suffix) {
     assert(d != NULL);
     assert(d->ptd != NULL);
+    assert(d->ptd->proxy != NULL);
     assert(d->downstream_conns != NULL);
     assert(req != NULL);
     assert(req_size >= sizeof(req));
@@ -1175,6 +1192,14 @@ bool cproxy_broadcast_a2b_downstream(downstream *d,
         d->upstream_suffix = suffix;
 
         cproxy_start_downstream_timeout(d, NULL);
+    } else {
+        // TODO: Handle flush_all's expiration parameter against
+        // the front_cache.
+        //
+        if (req->request.opcode == PROTOCOL_BINARY_CMD_FLUSH ||
+            req->request.opcode == PROTOCOL_BINARY_CMD_FLUSHQ) {
+            mcache_flush_all(&d->ptd->proxy->front_cache, 0);
+        }
     }
 
     return nwrite > 0;

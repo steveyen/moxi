@@ -1420,6 +1420,8 @@ void wait_queue_timeout(const int fd,
 
         struct timeval wqt = cproxy_get_wait_queue_timeout(p);
 
+        // TODO: Millisecond capacity in 32-bit field not enough?
+        //
         uint32_t wqt_msec = (wqt.tv_sec * 1000) +
                             (wqt.tv_usec / 1000);
 

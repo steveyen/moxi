@@ -16,7 +16,8 @@ void mcache_item_free(gpointer value);
 void mcache_init(mcache *m, bool multithreaded) {
     assert(m);
 
-    m->map = NULL;
+    m->map         = NULL;
+    m->oldest_live = 0;
 
     if (multithreaded) {
         m->lock = malloc(sizeof(pthread_mutex_t));
@@ -56,6 +57,7 @@ void mcache_start(mcache *m) {
                                    skey_equal,
                                    helper_g_free,
                                    mcache_item_free);
+    m->oldest_live = 0;
 
     if (m->lock)
         pthread_mutex_unlock(m->lock);
@@ -86,6 +88,8 @@ void mcache_stop(mcache *m) {
         m->map = NULL;
     }
 
+    m->oldest_live = 0;
+
     if (m->lock)
         pthread_mutex_unlock(m->lock);
 }
@@ -109,7 +113,8 @@ item *mcache_get(mcache *m, char *key, int key_len,
             // TODO: Need configurable cache oldest_live
             // mark to implement fast FLUSH_ALL.
             //
-            if (it->exptime > curr_time) {
+            if (it->exptime >= curr_time &&
+                it->exptime >= m->oldest_live) {
                 // TODO: Stats for front cache hit.
                 //
                 it->refcount++; // TODO: Need locking here?
@@ -223,6 +228,23 @@ void mcache_delete(mcache *m, char *key, int key_len) {
         // TODO: Track mcache size.
         //
         g_hash_table_remove(m->map, key);
+    }
+
+    if (m->lock)
+        pthread_mutex_unlock(m->lock);
+}
+
+void mcache_flush_all(mcache *m, uint32_t msec_exp) {
+    if (m == NULL)
+        return;
+
+    if (m->lock)
+        pthread_mutex_lock(m->lock);
+
+    if (m->map != NULL) {
+        g_hash_table_remove_all(m->map);
+
+        m->oldest_live = msec_exp;
     }
 
     if (m->lock)

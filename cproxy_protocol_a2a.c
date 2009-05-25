@@ -102,9 +102,24 @@ void cproxy_process_a2a_downstream(conn *c, char *line) {
             //
             conn_set_state(c, conn_closing);
         }
-    } else if (strncmp(line, "END", 3) == 0 ||
-               strncmp(line, "OK", 2) == 0) {
+    } else if (strncmp(line, "END", 3) == 0) {
         conn_set_state(c, conn_pause);
+    } else if (strncmp(line, "OK", 2) == 0) {
+        conn_set_state(c, conn_pause);
+
+        // TODO: Handle flush_all's expiration parameter against
+        // the front_cache.
+        //
+        // TODO: We flush the front_cache too often, inefficiently
+        // on every downstream flush_all OK response, rather than
+        // on just the last flush_all OK response.
+        //
+        conn *uc = d->upstream_conn;
+        if (uc != NULL &&
+            uc->cmd_start != NULL &&
+            strncmp(uc->cmd_start, "flush_all", 9) == 0) {
+            mcache_flush_all(&d->ptd->proxy->front_cache, 0);
+        }
     } else if (strncmp(line, "STAT ", 5) == 0 ||
                strncmp(line, "ITEM ", 5) == 0 ||
                strncmp(line, "PREFIX ", 7) == 0) {
@@ -357,6 +372,7 @@ bool cproxy_broadcast_a2a_downstream(downstream *d,
                                      char *suffix) {
     assert(d != NULL);
     assert(d->ptd != NULL);
+    assert(d->ptd->proxy != NULL);
     assert(d->downstream_conns != NULL);
     assert(command != NULL);
     assert(uc != NULL);
@@ -406,6 +422,13 @@ bool cproxy_broadcast_a2a_downstream(downstream *d,
         d->upstream_suffix = suffix;
 
         cproxy_start_downstream_timeout(d, NULL);
+    } else {
+        // TODO: Handle flush_all's expiration parameter against
+        // the front_cache.
+        //
+        if (strncmp(command, "flush_all", 9) == 0) {
+            mcache_flush_all(&d->ptd->proxy->front_cache, 0);
+        }
     }
 
     return nwrite > 0;
