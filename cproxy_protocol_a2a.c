@@ -496,6 +496,16 @@ bool cproxy_forward_a2a_item_downstream(downstream *d, short cmd,
 
                         if (cproxy_dettach_if_noreply(d, uc) == false) {
                             cproxy_start_downstream_timeout(d, c);
+
+                            // During a synchronous (with-reply) SET,
+                            // handle fire-&-forget SET optimization.
+                            //
+                            if (cmd == NREAD_SET &&
+                                cproxy_optimize_set_ascii(d, uc,
+                                                          ITEM_key(it),
+                                                          it->nkey)) {
+                                // TODO: Have stats for SET optimization.
+                            }
                         } else {
                             c->write_and_go = conn_pause;
 

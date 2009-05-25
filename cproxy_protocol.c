@@ -258,3 +258,39 @@ void cproxy_del_front_cache_key_ascii(downstream *d,
         }
     }
 }
+
+/**
+ * Depending on our configuration, we can optimize SET's
+ * on certain keys by making them fire-and-forget and
+ * immediately transmitting a success response to the
+ * upstream client.
+ */
+bool cproxy_optimize_set_ascii(downstream *d, conn *uc,
+                               char *key, int key_len) {
+    assert(d);
+    assert(d->ptd);
+    assert(d->ptd->proxy);
+    assert(uc);
+    assert(uc->next == NULL);
+
+    if (false) {
+        d->upstream_conn = NULL;
+        d->upstream_suffix = NULL;
+
+        out_string(uc, "STORED");
+
+        if (!update_event(uc, EV_WRITE | EV_PERSIST)) {
+            if (settings.verbose > 1)
+                fprintf(stderr,
+                        "Can't update upstream write event\n");
+
+            d->ptd->stats.err_oom++;
+            cproxy_close_conn(uc);
+        }
+
+        return true;
+    }
+
+    return false;
+}
+

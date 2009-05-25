@@ -73,6 +73,8 @@ struct proxy_behavior {
     uint32_t front_cache_lifespan;  // PL: In millisecs.
     char     front_cache_spec[400]; // PL.
 
+    char optimize_set[400]; // PL.
+
     char usr[250];    // SL.
     char pwd[900];    // SL.
     char host[250];   // SL.
@@ -139,6 +141,8 @@ struct proxy {
 
     mcache  front_cache;
     matcher front_cache_matcher;
+
+    matcher optimize_set_matcher;
 
     proxy_td *thread_data;     // Immutable.
     int       thread_data_num; // Immutable.
@@ -442,6 +446,9 @@ void protocol_stats_foreach_free(gpointer key,
 void protocol_stats_foreach_write(gpointer key,
                                   gpointer value,
                                   gpointer user_data);
+
+bool cproxy_optimize_set_ascii(downstream *d, conn *uc,
+                               char *key, int key_len);
 
 void cproxy_del_front_cache_key_ascii(downstream *d,
                                       char *command);

@@ -51,6 +51,7 @@ proxy_behavior behavior_default_g = {
     .front_cache_max = 200,
     .front_cache_lifespan = 0,
     .front_cache_spec = {0},
+    .optimize_set = {0},
     .host = {0},
     .port = 0,
     .bucket = {0},
@@ -324,6 +325,10 @@ void cproxy_parse_behavior_key_val(char *key,
             if (strlen(val) < sizeof(behavior->front_cache_spec) + 1) {
                 strcpy(behavior->front_cache_spec, val);
             }
+        } else if (strcmp(key, "optimize_set") == 0) {
+            if (strlen(val) < sizeof(behavior->optimize_set) + 1) {
+                strcpy(behavior->optimize_set, val);
+            }
         } else if (strcmp(key, "usr") == 0) {
             if (strlen(val) < sizeof(behavior->usr) + 1) {
                 strcpy(behavior->usr, val);
@@ -430,6 +435,8 @@ void cproxy_dump_behavior_ex(proxy_behavior *b, char *prefix, int level,
         vdump("front_cache_lifespan", "%u", b->front_cache_lifespan);
     if (level >= 1)
         vdump("front_cache_spec", "%s", b->front_cache_spec);
+    if (level >= 1)
+        vdump("optimize_set", "%s", b->optimize_set);
 
     vdump("usr",    "%s", b->usr);
     vdump("host",   "%s", b->host);

@@ -133,15 +133,23 @@ proxy *cproxy_create(char    *name,
 
         mcache_init(&p->front_cache, true);
 
+        matcher_init(&p->front_cache_matcher, true);
+        matcher_init(&p->optimize_set_matcher, true);
+
         if (behavior_head.front_cache_max > 0 &&
             behavior_head.front_cache_lifespan > 0) {
             mcache_start(&p->front_cache,
                          behavior_head.front_cache_max);
 
             if (strlen(behavior_head.front_cache_spec) > 0) {
-                matcher_init(&p->front_cache_matcher,
-                             behavior_head.front_cache_spec);
+                matcher_start(&p->front_cache_matcher,
+                              behavior_head.front_cache_spec);
             }
+        }
+
+        if (strlen(behavior_head.optimize_set) > 0) {
+            matcher_start(&p->optimize_set_matcher,
+                          behavior_head.optimize_set);
         }
 
         p->thread_data_num = nthreads;

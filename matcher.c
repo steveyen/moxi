@@ -9,20 +9,28 @@
 #include <assert.h>
 #include "matcher.h"
 
-#define MATCHER_MAGIC 0xa135b21a
-
 void matcher_add(matcher *m, char *pattern);
 
-void matcher_init(matcher *m, char *spec) {
+void matcher_init(matcher *m, bool multithreaded) {
     assert(m);
-    assert(!matcher_initted(m));
-    memset(m, 0, sizeof(matcher));
-    m->initted = MATCHER_MAGIC;
 
-    struct timeval timer;
-    gettimeofday(&timer, NULL);
-    m->version = ((timer.tv_sec * 1000) +
-                  (timer.tv_usec / 1000));
+    memset(m, 0, sizeof(matcher));
+
+    if (multithreaded) {
+        m->lock = malloc(sizeof(pthread_mutex_t));
+        if (m->lock != NULL) {
+            pthread_mutex_init(m->lock, NULL);
+        }
+    } else {
+        m->lock = NULL;
+    }
+}
+
+void matcher_start(matcher *m, char *spec) {
+    assert(m);
+
+    if (m->lock)
+        pthread_mutex_lock(m->lock);
 
     // The spec currently is a string of '|' separated prefixes.
     //
@@ -36,23 +44,66 @@ void matcher_init(matcher *m, char *spec) {
             }
         }
     }
+
+    if (m->lock)
+        pthread_mutex_unlock(m->lock);
 }
 
-bool matcher_initted(matcher *m) {
-    return m != NULL && m->initted == MATCHER_MAGIC;
+bool matcher_started(matcher *m) {
+    assert(m);
+
+    if (m->lock)
+        pthread_mutex_lock(m->lock);
+
+    bool rv = m->patterns != NULL && m->patterns_num > 0;
+
+    if (m->lock)
+        pthread_mutex_unlock(m->lock);
+
+    return rv;
+}
+
+void matcher_stop(matcher *m) {
+    assert(m);
+
+    if (m->lock)
+        pthread_mutex_lock(m->lock);
+
+    if (m->patterns != NULL) {
+        for (int i = 0; i < m->patterns_num; i++) {
+            free(m->patterns[i]);
+        }
+    }
+
+    m->patterns_max = 0;
+    m->patterns_num = 0;
+
+    free(m->patterns);
+    m->patterns = NULL;
+
+    free(m->lengths);
+    m->lengths = NULL;
+
+    free(m->hits);
+    m->hits = NULL;
+
+    m->misses = 0;
+
+    if (m->lock)
+        pthread_mutex_unlock(m->lock);
 }
 
 matcher *matcher_clone(matcher *m, matcher *copy) {
     assert(m);
-    assert(matcher_initted(m));
-    if (!matcher_initted(m)) return NULL;
+
+    if (m->lock)
+        pthread_mutex_lock(m->lock);
+
     assert(m->patterns_num <= m->patterns_max);
 
     assert(copy);
-    assert(!matcher_initted(copy));
-    matcher_init(copy, NULL);
+    matcher_init(copy, m->lock != NULL);
 
-    copy->version = m->version;
     copy->patterns_max = m->patterns_num; // Optimize copy's array size.
     copy->patterns_num = m->patterns_num;
 
@@ -73,37 +124,27 @@ matcher *matcher_clone(matcher *m, matcher *copy) {
 
                 // Note we don't copy statistics.
             }
+
+            if (m->lock)
+                pthread_mutex_unlock(m->lock);
+
             return copy;
         }
-    } else
-        return copy;
+    }
 
  fail:
-    matcher_uninit(copy);
+    if (m->lock)
+        pthread_mutex_unlock(m->lock);
+
+    matcher_stop(copy);
 
     return NULL;
 }
 
-void matcher_uninit(matcher *m) {
-    if (m == NULL)
-        return;
-
-    if (m->patterns != NULL) {
-        for (int i = 0; i < m->patterns_num; i++) {
-            free(m->patterns[i]);
-        }
-    }
-
-    free(m->patterns);
-    free(m->lengths);
-    free(m->hits);
-
-    memset(m, 0, sizeof(matcher)); // Helps clear m->initted.
-}
-
 void matcher_add(matcher *m, char *pattern) {
+    // Assuming we're locked, if m->lock.
+    //
     assert(m);
-    assert(matcher_initted(m));
     assert(m->patterns_num <= m->patterns_max);
     assert(pattern);
 
@@ -127,7 +168,8 @@ void matcher_add(matcher *m, char *pattern) {
             free(npatterns);
             free(nlengths);
             free(nhits);
-            return;
+
+            return; // Failed to alloc.
         }
     }
 
@@ -137,13 +179,15 @@ void matcher_add(matcher *m, char *pattern) {
     if (m->patterns[m->patterns_num] != NULL) {
         m->lengths[m->patterns_num] = strlen(pattern);
         m->patterns_num++;
-        m->version++;
     }
 }
 
 bool matcher_check(matcher *m, char *str, int str_len) {
     assert(m);
-    if (!matcher_initted(m)) return false;
+
+    if (m->lock)
+        pthread_mutex_lock(m->lock);
+
     assert(m->patterns_num <= m->patterns_max);
 
     for (int i = 0; i < m->patterns_num; i++) {
@@ -162,7 +206,9 @@ bool matcher_check(matcher *m, char *str, int str_len) {
 
     m->misses++;
 
+    if (m->lock)
+        pthread_mutex_unlock(m->lock);
+
     return false;
 }
-
 
