@@ -185,6 +185,8 @@ void matcher_add(matcher *m, char *pattern) {
 bool matcher_check(matcher *m, char *str, int str_len) {
     assert(m);
 
+    bool found = false;
+
     if (m->lock)
         pthread_mutex_lock(m->lock);
 
@@ -199,16 +201,17 @@ bool matcher_check(matcher *m, char *str, int str_len) {
         if (n <= str_len) {
             if (strncmp(str, m->patterns[i], n) == 0) {
                 m->hits[i]++;
-                return true;
+                found = true;
             }
         }
     }
 
-    m->misses++;
+    if (!found)
+        m->misses++;
 
     if (m->lock)
         pthread_mutex_unlock(m->lock);
 
-    return false;
+    return found;
 }
 

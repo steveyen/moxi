@@ -273,7 +273,9 @@ bool cproxy_optimize_set_ascii(downstream *d, conn *uc,
     assert(uc);
     assert(uc->next == NULL);
 
-    if (false) {
+    if (matcher_started(&d->ptd->proxy->optimize_set_matcher) &&
+        matcher_check(&d->ptd->proxy->optimize_set_matcher,
+                      key, key_len)) {
         d->upstream_conn = NULL;
         d->upstream_suffix = NULL;
 
