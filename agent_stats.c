@@ -289,6 +289,10 @@ static void main_stats_collect(void *data0, void *data1) {
         //
         pthread_mutex_lock(p->front_cache.lock);
 
+        if (p->front_cache.map != NULL)
+            emit_f(p->port, "front_cache_size",
+                   "%u", g_hash_table_size(p->front_cache.map));
+
         emit_f(p->port, "front_cache_tot_get_hits",
                "%llu",
                (long long unsigned int) p->front_cache.tot_get_hits);
