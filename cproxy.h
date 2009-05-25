@@ -30,13 +30,21 @@ typedef struct {
 
     GHashTable *map;       // NULL-able, keyed by string, value is item.
 
+    uint32_t max_size;     // Maxiumum number of items to keep.
+
+    item *lru_head;        // Most recently used.
+    item *lru_tail;        // Least recently used.
+
     uint32_t oldest_live;  // In millisecs, relative to msec_current_time.
 
+    // Statistics.
+    //
     uint64_t tot_get_hits;
     uint64_t tot_get_expires;
     uint64_t tot_get_misses;
     uint64_t tot_adds;
     uint64_t tot_add_skips;
+    uint64_t tot_evictions;
 } mcache;
 
 typedef struct proxy          proxy;
@@ -434,7 +442,7 @@ void cproxy_del_front_cache_key_ascii_response(downstream *d,
 // Functions for the front cache.
 //
 void  mcache_init(mcache *m, bool multithreaded);
-void  mcache_start(mcache *m);
+void  mcache_start(mcache *m, uint32_t max_size);
 bool  mcache_started(mcache *m);
 void  mcache_stop(mcache *m);
 void  mcache_reset_stats(mcache *m);

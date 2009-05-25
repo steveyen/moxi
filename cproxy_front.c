@@ -12,17 +12,23 @@
 #include "cproxy.h"
 
 void mcache_item_free(gpointer value);
+void mcache_item_unlink(mcache *m, item *it);
+void mcache_item_touch(mcache *m, item *it);
 
 void mcache_init(mcache *m, bool multithreaded) {
     assert(m);
 
     m->map         = NULL;
+    m->max_size    = 0;
+    m->lru_head    = NULL;
+    m->lru_tail    = NULL;
     m->oldest_live = 0;
 
     if (multithreaded) {
         m->lock = malloc(sizeof(pthread_mutex_t));
-        if (m->lock != NULL)
+        if (m->lock != NULL) {
             pthread_mutex_init(m->lock, NULL);
+        }
     } else {
         m->lock = NULL;
     }
@@ -36,28 +42,39 @@ void mcache_reset_stats(mcache *m) {
     if (m->lock)
         pthread_mutex_lock(m->lock);
 
-    m->tot_get_hits = 0;
+    m->tot_get_hits    = 0;
     m->tot_get_expires = 0;
-    m->tot_get_misses = 0;
-    m->tot_adds = 0;
-    m->tot_add_skips = 0;
+    m->tot_get_misses  = 0;
+    m->tot_adds        = 0;
+    m->tot_add_skips   = 0;
+    m->tot_evictions   = 0;
 
     if (m->lock)
         pthread_mutex_unlock(m->lock);
 }
 
-void mcache_start(mcache *m) {
+void mcache_start(mcache *m, uint32_t max_size) {
     assert(m);
-    assert(m->map == NULL);
 
     if (m->lock)
         pthread_mutex_lock(m->lock);
+
+    assert(m->map == NULL);
+    assert(m->max_size == 0);
+    assert(m->lru_head == NULL);
+    assert(m->lru_tail == NULL);
+    assert(m->oldest_live == 0);
 
     m->map = g_hash_table_new_full(skey_hash,
                                    skey_equal,
                                    helper_g_free,
                                    mcache_item_free);
-    m->oldest_live = 0;
+    if (m->map != NULL) {
+        m->max_size    = max_size;
+        m->lru_head    = NULL;
+        m->lru_tail    = NULL;
+        m->oldest_live = 0;
+    }
 
     if (m->lock)
         pthread_mutex_unlock(m->lock);
@@ -83,11 +100,13 @@ void mcache_stop(mcache *m) {
     if (m->lock)
         pthread_mutex_lock(m->lock);
 
-    if (m->map != NULL) {
+    if (m->map != NULL)
         g_hash_table_destroy(m->map);
-        m->map = NULL;
-    }
 
+    m->map         = NULL;
+    m->max_size    = 0;
+    m->lru_head    = NULL;
+    m->lru_tail    = NULL;
     m->oldest_live = 0;
 
     if (m->lock)
@@ -105,7 +124,7 @@ item *mcache_get(mcache *m, char *key, int key_len,
         pthread_mutex_lock(m->lock);
 
     if (m->map != NULL) {
-        item *it = g_hash_table_lookup(m->map, key);
+        item *it = (item *) g_hash_table_lookup(m->map, key);
         if (it != NULL) {
             assert(it->nkey == key_len);
             assert(strncmp(ITEM_key(it), key, it->nkey) == 0);
@@ -113,10 +132,14 @@ item *mcache_get(mcache *m, char *key, int key_len,
             // TODO: Need configurable cache oldest_live
             // mark to implement fast FLUSH_ALL.
             //
+            mcache_item_unlink(m, it);
+
             if (it->exptime >= curr_time &&
                 it->exptime >= m->oldest_live) {
                 // TODO: Stats for front cache hit.
                 //
+                mcache_item_touch(m, it);
+
                 it->refcount++; // TODO: Need locking here?
 
                 m->tot_get_hits++;
@@ -158,6 +181,8 @@ void mcache_add(mcache *m, item *it,
                 uint32_t lifespan,
                 uint32_t curr_time) {
     assert(it);
+    assert(it->next == NULL);
+    assert(it->prev == NULL);
 
     if (m == NULL)
         return;
@@ -178,8 +203,19 @@ void mcache_add(mcache *m, item *it,
 
             // TODO: Would be nice if there was a g_hash_table_add().
             //
-            if (g_hash_table_lookup(m->map,
-                                    key_buf) == NULL) {
+            item *existing = (item *) g_hash_table_lookup(m->map, key_buf);
+            if (existing != NULL) {
+                mcache_item_unlink(m, existing);
+                mcache_item_touch(m, existing);
+
+                m->tot_add_skips++;
+
+                if (settings.verbose > 1)
+                    fprintf(stderr,
+                            "mcache add-skip: %s\n", key_buf);
+
+                free(key_buf);
+            } else {
                 // TODO: Need configurable L1 cache expiry.
                 //
                 it->exptime = curr_time + lifespan;
@@ -193,14 +229,6 @@ void mcache_add(mcache *m, item *it,
                 if (settings.verbose > 1)
                     fprintf(stderr,
                             "mcache add: %s\n", key_buf);
-            } else {
-                m->tot_add_skips++;
-
-                if (settings.verbose > 1)
-                    fprintf(stderr,
-                            "mcache add-skip: %s\n", key_buf);
-
-                free(key_buf);
             }
         }
     }
@@ -227,7 +255,12 @@ void mcache_delete(mcache *m, char *key, int key_len) {
         // TODO: Stats for mcache expiry.
         // TODO: Track mcache size.
         //
-        g_hash_table_remove(m->map, key);
+        item *existing = (item *) g_hash_table_lookup(m->map, key);
+        if (existing != NULL) {
+            mcache_item_unlink(m, existing);
+
+            g_hash_table_remove(m->map, key);
+        }
     }
 
     if (m->lock)
@@ -244,6 +277,9 @@ void mcache_flush_all(mcache *m, uint32_t msec_exp) {
     if (m->map != NULL) {
         g_hash_table_remove_all(m->map);
 
+        m->lru_head = NULL;
+        m->lru_tail = NULL;
+
         m->oldest_live = msec_exp;
     }
 
@@ -256,3 +292,39 @@ void mcache_item_free(gpointer value) {
         item_remove((item *) value);
 }
 
+void mcache_item_unlink(mcache *m, item *it) {
+    assert(m);
+    assert(it);
+
+    if (m->lru_head == it)
+        m->lru_head = it->next;
+
+    if (m->lru_tail == it)
+        m->lru_tail = it->prev;
+
+    if (it->next != NULL)
+        it->next->prev = it->prev;
+
+    if (it->prev != NULL)
+        it->prev->next = it->next;
+
+    it->next = NULL;
+    it->prev = NULL;
+}
+
+/**
+ * Push the item onto the head of the lru list.
+ */
+void mcache_item_touch(mcache *m, item *it) {
+    assert(m);
+    assert(it);
+    assert(it->next == NULL);
+    assert(it->prev == NULL);
+
+    if (m->lru_head != NULL)
+        m->lru_head->prev = it;
+    it->next = m->lru_head;
+    m->lru_head = it;
+    if (m->lru_tail == NULL)
+        m->lru_tail = it;
+}

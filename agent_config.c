@@ -623,7 +623,7 @@ void cproxy_on_new_pool(proxy_main *m,
         // Restart the front_cache, if necessary.
         //
         if (behavior_head.front_cache_lifespan > 0) {
-            mcache_start(&p->front_cache);
+            mcache_start(&p->front_cache, 50); // TODO.
 
             if (strlen(behavior_head.front_cache_spec) > 0) {
                 matcher_init(&p->front_cache_matcher,
