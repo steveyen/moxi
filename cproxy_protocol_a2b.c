@@ -635,6 +635,8 @@ void a2b_process_downstream_response(conn *c) {
     case PROTOCOL_BINARY_CMD_REPLACE:
     case PROTOCOL_BINARY_CMD_APPEND:
     case PROTOCOL_BINARY_CMD_PREPEND:
+        conn_set_state(c, conn_pause);
+
         assert(c->noreply == false);
 
         if (uc != NULL) {
@@ -667,9 +669,7 @@ void a2b_process_downstream_response(conn *c) {
 
             cproxy_del_front_cache_key_ascii(d, uc->cmd_start);
 
-            if (update_event(uc, EV_WRITE | EV_PERSIST)) {
-                conn_set_state(c, conn_pause);
-            } else {
+            if (!update_event(uc, EV_WRITE | EV_PERSIST)) {
                 if (settings.verbose > 1)
                     fprintf(stderr,
                             "Can't write upstream a2b event\n");
@@ -681,6 +681,8 @@ void a2b_process_downstream_response(conn *c) {
         break;
 
     case PROTOCOL_BINARY_CMD_DELETE:
+        conn_set_state(c, conn_pause);
+
         assert(c->noreply == false);
 
         if (uc != NULL) {
@@ -703,9 +705,7 @@ void a2b_process_downstream_response(conn *c) {
 
             cproxy_del_front_cache_key_ascii(d, uc->cmd_start);
 
-            if (update_event(uc, EV_WRITE | EV_PERSIST)) {
-                conn_set_state(c, conn_pause);
-            } else {
+            if (!update_event(uc, EV_WRITE | EV_PERSIST)) {
                 if (settings.verbose > 1)
                     fprintf(stderr,
                             "Can't write upstream a2b event\n");
@@ -718,6 +718,8 @@ void a2b_process_downstream_response(conn *c) {
 
     case PROTOCOL_BINARY_CMD_INCREMENT: /* FALLTHROUGH */
     case PROTOCOL_BINARY_CMD_DECREMENT:
+        conn_set_state(c, conn_pause);
+
         if (uc != NULL) {
             assert(uc->next == NULL);
 
@@ -757,9 +759,7 @@ void a2b_process_downstream_response(conn *c) {
 
             cproxy_del_front_cache_key_ascii(d, uc->cmd_start);
 
-            if (update_event(uc, EV_WRITE | EV_PERSIST)) {
-                conn_set_state(c, conn_pause);
-            } else {
+            if (!update_event(uc, EV_WRITE | EV_PERSIST)) {
                 if (settings.verbose > 1)
                     fprintf(stderr,
                             "Can't write upstream a2b arith event\n");
@@ -1318,6 +1318,13 @@ bool cproxy_forward_a2b_item_downstream(downstream *d, short cmd,
 
                             if (cproxy_dettach_if_noreply(d, uc) == false) {
                                 cproxy_start_downstream_timeout(d, c);
+
+                                if (cmd == NREAD_SET &&
+                                    cproxy_optimize_set_ascii(d, uc,
+                                                              ITEM_key(it),
+                                                              it->nkey)) {
+                                    d->ptd->stats.tot_optimize_sets++;
+                                }
                             } else {
                                 c->write_and_go = conn_pause;
 
