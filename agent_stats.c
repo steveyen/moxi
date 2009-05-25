@@ -13,10 +13,6 @@
 #include "work.h"
 #include "agent.h"
 
-// From libmemcached.
-//
-uint32_t murmur_hash(const char *key, size_t length);
-
 // Local declarations.
 //
 static void add_stat_behavior_info(void *dump_opaque,
@@ -93,25 +89,25 @@ void on_conflate_get_stats(void *userdata, void *opaque,
     snprintf(buf, sizeof(buf), spec, val); \
     add_stat(opaque, key, buf);
 
-    more_stat("%s", "version",
+    more_stat("%s", "main_version",
               VERSION);
-    more_stat("%u", "nthreads",
+    more_stat("%u", "main_nthreads",
               m->nthreads);
 
-    cproxy_dump_behavior_ex(&m->behavior, "default", 2,
+    cproxy_dump_behavior_ex(&m->behavior, "main_behavior", 2,
                             add_stat_behavior_info, &ase);
 
-    more_stat("%llu", "configs",
+    more_stat("%llu", "main_configs",
               (long long unsigned int) m->stat_configs);
-    more_stat("%llu", "config_fails",
+    more_stat("%llu", "main_config_fails",
               (long long unsigned int) m->stat_config_fails);
-    more_stat("%llu", "proxy_starts",
+    more_stat("%llu", "main_proxy_starts",
               (long long unsigned int) m->stat_proxy_starts);
-    more_stat("%llu", "proxy_start_fails",
+    more_stat("%llu", "main_proxy_start_fails",
               (long long unsigned int) m->stat_proxy_start_fails);
-    more_stat("%llu", "proxy_existings",
+    more_stat("%llu", "main_proxy_existings",
               (long long unsigned int) m->stat_proxy_existings);
-    more_stat("%llu", "proxy_shutdowns",
+    more_stat("%llu", "main_proxy_shutdowns",
               (long long unsigned int) m->stat_proxy_shutdowns);
 
     // Alloc here so the main listener thread has less work.
@@ -234,41 +230,45 @@ static void main_stats_collect(void *data0, void *data1) {
     char bufk[200];
     char bufv[4000];
 
-#define emit_s(num, key, val)                        \
-    snprintf(bufk, sizeof(bufk), "%u:%s", num, key); \
-    msci->add_stat(msci->opaque, bufk, val);
-
-#define emit_f(num, key, fmtv, val)                  \
-    snprintf(bufv, sizeof(bufv), fmtv, val);         \
-    emit_s(num, key, bufv);
-
     for (proxy *p = m->proxy_head; p != NULL; p = p->next) {
         nproxy++;
 
+#define emit_s(key, val)                           \
+    snprintf(bufk, sizeof(bufk), "%u:%s:%s",       \
+             p->port,                              \
+             p->name != NULL ? p->name : "", key); \
+    msci->add_stat(msci->opaque, bufk, val);
+
+#define emit_f(key, fmtv, val)               \
+    snprintf(bufv, sizeof(bufv), fmtv, val); \
+    emit_s(key, bufv);
+
         pthread_mutex_lock(&p->proxy_lock);
 
-        emit_f(p->port, "port", "%u", p->port);
-        emit_s(p->port, "name",   p->name);
-        emit_s(p->port, "config", p->config);
-        emit_f(p->port, "config_ver",    "%u", p->config_ver);
-        emit_f(p->port, "behaviors_num", "%u", p->behaviors_num);
+        emit_f("port",          "%u", p->port);
+        emit_s("name",                p->name);
+        emit_s("config",              p->config);
+        emit_f("config_ver",    "%u", p->config_ver);
+        emit_f("behaviors_num", "%u", p->behaviors_num);
 
-        snprintf(bufk, sizeof(bufk), "%u", p->port);
+        snprintf(bufk, sizeof(bufk),
+                 "%u:%s:behavior", p->port, p->name);
 
         cproxy_dump_behavior_ex(&p->behavior_head, bufk, 1,
                                 add_stat_behavior_info, &ase);
 
         for (int i = 0; i < p->behaviors_num; i++) {
-            snprintf(bufk, sizeof(bufk), "%u:%u", p->port, i);
+            snprintf(bufk, sizeof(bufk),
+                     "%u:%s:behavior-%u", p->port, p->name, i);
 
             cproxy_dump_behavior_ex(&p->behaviors[i], bufk, 0,
                                     add_stat_behavior_info, &ase);
         }
 
-        emit_f(p->port, "listening",
-             "%llu", (long long unsigned int) p->listening);
-        emit_f(p->port, "listening_failed",
-             "%llu", (long long unsigned int) p->listening_failed);
+        emit_f("listening",
+               "%llu", (long long unsigned int) p->listening);
+        emit_f("listening_failed",
+               "%llu", (long long unsigned int) p->listening_failed);
 
         pthread_mutex_unlock(&p->proxy_lock);
 
@@ -277,36 +277,36 @@ static void main_stats_collect(void *data0, void *data1) {
         pthread_mutex_lock(p->front_cache.lock);
 
         if (p->front_cache.map != NULL)
-            emit_f(p->port, "front_cache_size",
+            emit_f("front_cache_size",
                    "%u", g_hash_table_size(p->front_cache.map));
 
-        emit_f(p->port, "front_cache_max",
+        emit_f("front_cache_max",
                "%u", p->front_cache.max);
-        emit_f(p->port, "front_cache_oldest_live",
+        emit_f("front_cache_oldest_live",
                "%u", p->front_cache.oldest_live);
 
-        emit_f(p->port, "front_cache_tot_get_hits",
+        emit_f("front_cache_tot_get_hits",
                "%llu",
                (long long unsigned int) p->front_cache.tot_get_hits);
-        emit_f(p->port, "front_cache_tot_get_expires",
+        emit_f("front_cache_tot_get_expires",
                "%llu",
                (long long unsigned int) p->front_cache.tot_get_expires);
-        emit_f(p->port, "front_cache_tot_get_misses",
+        emit_f("front_cache_tot_get_misses",
                "%llu",
                (long long unsigned int) p->front_cache.tot_get_misses);
-        emit_f(p->port, "front_cache_tot_adds",
+        emit_f("front_cache_tot_adds",
                "%llu",
                (long long unsigned int) p->front_cache.tot_adds);
-        emit_f(p->port, "front_cache_tot_add_skips",
+        emit_f("front_cache_tot_add_skips",
                "%llu",
                (long long unsigned int) p->front_cache.tot_add_skips);
-        emit_f(p->port, "front_cache_tot_add_fails",
+        emit_f("front_cache_tot_add_fails",
                "%llu",
                (long long unsigned int) p->front_cache.tot_add_fails);
-        emit_f(p->port, "front_cache_tot_deletes",
+        emit_f("front_cache_tot_deletes",
                "%llu",
                (long long unsigned int) p->front_cache.tot_deletes);
-        emit_f(p->port, "front_cache_tot_evictions",
+        emit_f("front_cache_tot_evictions",
                "%llu",
                (long long unsigned int) p->front_cache.tot_evictions);
 
@@ -466,7 +466,7 @@ void map_proxy_stats_foreach_emit(gpointer key,
 
 #define more_thread_stat(key, val)                  \
     snprintf(buf_key, sizeof(buf_key),              \
-             "%s-%s", name, key);                   \
+             "%s:stats_%s", name, key);             \
     snprintf(buf_val, sizeof(buf_val),              \
              "%llu", (long long unsigned int) val); \
     emit->add_stat(emit->opaque, buf_key, buf_val);
