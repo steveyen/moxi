@@ -176,8 +176,8 @@ static void stats_reset(void) {
 static void settings_init(void) {
     settings.use_cas = true;
     settings.access = 0700;
-    settings.port = 0;    // Formerly 11211.
-    settings.udpport = 0; // Formerly 11211.
+    settings.port = -1;    // Formerly 11211.
+    settings.udpport = -1; // Formerly 11211.
     /* By default this string should be NULL for getaddrinfo() */
     settings.inter = NULL;
     settings.maxbytes = 64 * 1024 * 1024; /* default is 64MB */
@@ -4260,9 +4260,9 @@ int main (int argc, char **argv) {
     if (settings.socketpath == NULL) {
         int udp_port;
         errno = 0;
-        if (settings.port && server_socket(settings.port,
-                                           settings.binding_protocol,
-                                           tcp_transport)) {
+        if (settings.port > 0 && server_socket(settings.port,
+                                               settings.binding_protocol,
+                                               tcp_transport)) {
             fprintf(stderr, "failed to listen on TCP port %d\n", settings.port);
             if (errno != 0)
                 perror("tcp listen");
@@ -4279,9 +4279,9 @@ int main (int argc, char **argv) {
 
         /* create the UDP listening socket and bind it */
         errno = 0;
-        if (settings.udpport && server_socket(settings.udpport,
-                                              settings.binding_protocol,
-                                              udp_transport)) {
+        if (settings.udpport > 0 && server_socket(settings.udpport,
+                                                  settings.binding_protocol,
+                                                  udp_transport)) {
             fprintf(stderr, "failed to listen on UDP port %d\n", settings.udpport);
             if (errno != 0)
                 perror("udp listen");
@@ -4310,8 +4310,8 @@ int main (int argc, char **argv) {
             i--;
         }
         if (i <= 0 &&
-            settings.port == 0 &&
-            settings.udpport == 0) {
+            settings.port <= 0 &&
+            settings.udpport <= 0) {
             fprintf(stderr,
                     "error: need proxy configuration.  See usage (-h).\n");
             return 1;
