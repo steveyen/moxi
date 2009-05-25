@@ -388,50 +388,57 @@ bool cproxy_equal_behavior(proxy_behavior *x,
 }
 
 void cproxy_dump_behavior(proxy_behavior *b, char *prefix, int level) {
+    cproxy_dump_behavior_ex(b, prefix, level, cproxy_dump_behavior_stderr);
+}
+
+void cproxy_dump_behavior_ex(proxy_behavior *b, char *prefix, int level,
+                             void (*dump)(char *prefix,
+                                          char *key,
+                                          char *buf)) {
+    char vbuf[8000];
+
+#define vdump(key, vfmt, val)                \
+    snprintf(vbuf, sizeof(vbuf), vfmt, val); \
+    dump(prefix, key, vbuf);
+
+    if (level >= 2)
+        vdump("cycle", "%u", b->cycle);
+    if (level >= 1)
+        vdump("downstream_max", "%u", b->downstream_max);
+
+    vdump("downstream_weight",   "%u", b->downstream_weight);
+    vdump("downstream_retry",    "%u", b->downstream_retry);
+    vdump("downstream_protocol", "%d", b->downstream_protocol);
+    vdump("downstream_timeout", "%ld", // In millisecs.
+          (b->downstream_timeout.tv_sec * 1000 +
+           b->downstream_timeout.tv_usec / 1000));
+
+    if (level >= 1)
+        vdump("wait_queue_timeout", "%ld", // In millisecs.
+              (b->wait_queue_timeout.tv_sec * 1000 +
+               b->wait_queue_timeout.tv_usec / 1000));
+    if (level >= 1)
+        vdump("front_cache_max", "%u", b->front_cache_max);
+    if (level >= 1)
+        vdump("front_cache_lifespan", "%u", b->front_cache_lifespan);
+    if (level >= 1)
+        vdump("front_cache_spec", "%s", b->front_cache_spec);
+
+    vdump("usr",    "%s", b->usr);
+    vdump("host",   "%s", b->host);
+    vdump("port",   "%d", b->port);
+    vdump("bucket", "%s", b->bucket);
+}
+
+void cproxy_dump_behavior_stderr(char *prefix, char *key, char *val) {
+    assert(key);
+    assert(val);
+
     if (prefix == NULL)
         prefix = "";
 
-    if (level >= 2)
-        fprintf(stderr, "%s cycle: %u\n",
-                prefix, b->cycle);
-    if (level >= 1)
-        fprintf(stderr, "%s downstream_max: %u\n",
-                prefix, b->downstream_max);
-
-    fprintf(stderr, "%s downstream_weight: %u\n",
-            prefix, b->downstream_weight);
-    fprintf(stderr, "%s downstream_retry: %u\n",
-            prefix, b->downstream_retry);
-    fprintf(stderr, "%s downstream_protocol: %d\n",
-            prefix, b->downstream_protocol);
-    fprintf(stderr, "%s downstream_timeout: %ld\n", // In millisecs.
-            prefix,
-            b->downstream_timeout.tv_sec * 1000 +
-            b->downstream_timeout.tv_usec / 1000);
-
-    if (level >= 1)
-        fprintf(stderr, "%s wait_queue_timeout: %ld\n", // In millisecs.
-                prefix,
-                b->wait_queue_timeout.tv_sec * 1000 +
-                b->wait_queue_timeout.tv_usec / 1000);
-    if (level >= 1)
-        fprintf(stderr, "%s front_cache_max: %u\n",
-                prefix, b->front_cache_max);
-    if (level >= 1)
-        fprintf(stderr, "%s front_cache_lifespan: %u\n",
-                prefix, b->front_cache_lifespan);
-    if (level >= 1)
-        fprintf(stderr, "%s front_cache_spec: %s\n",
-                prefix, b->front_cache_spec);
-
-    fprintf(stderr, "%s usr: %s\n",
-            prefix, b->usr);
-    fprintf(stderr, "%s host: %s\n",
-            prefix, b->host);
-    fprintf(stderr, "%s port: %d\n",
-            prefix, b->port);
-    fprintf(stderr, "%s bucket: %s\n",
-            prefix, b->bucket);
+    fprintf(stderr, "%s %s: %s\n",
+            prefix, key, val);
 }
 
 // ---------------------------------------
