@@ -19,7 +19,7 @@ void mcache_init(mcache *m, bool multithreaded) {
     assert(m);
 
     m->map         = NULL;
-    m->max_size    = 0;
+    m->max         = 0;
     m->lru_head    = NULL;
     m->lru_tail    = NULL;
     m->oldest_live = 0;
@@ -55,14 +55,14 @@ void mcache_reset_stats(mcache *m) {
         pthread_mutex_unlock(m->lock);
 }
 
-void mcache_start(mcache *m, uint32_t max_size) {
+void mcache_start(mcache *m, uint32_t max) {
     assert(m);
 
     if (m->lock)
         pthread_mutex_lock(m->lock);
 
     assert(m->map == NULL);
-    assert(m->max_size == 0);
+    assert(m->max == 0);
     assert(m->lru_head == NULL);
     assert(m->lru_tail == NULL);
     assert(m->oldest_live == 0);
@@ -72,7 +72,7 @@ void mcache_start(mcache *m, uint32_t max_size) {
                                    helper_g_free,
                                    mcache_item_free);
     if (m->map != NULL) {
-        m->max_size    = max_size;
+        m->max         = max;
         m->lru_head    = NULL;
         m->lru_tail    = NULL;
         m->oldest_live = 0;
@@ -106,7 +106,7 @@ void mcache_stop(mcache *m) {
         g_hash_table_destroy(m->map);
 
     m->map         = NULL;
-    m->max_size    = 0;
+    m->max         = 0;
     m->lru_head    = NULL;
     m->lru_tail    = NULL;
     m->oldest_live = 0;
@@ -190,7 +190,7 @@ void mcache_add(mcache *m, item *it,
         // Evict some items if necessary.
         //
         for (int i = 0; m->lru_tail != NULL && i < 20; i++) {
-            if (g_hash_table_size(m->map) < m->max_size)
+            if (g_hash_table_size(m->map) < m->max)
                 break;
 
             item *last_it = m->lru_tail;
@@ -205,7 +205,7 @@ void mcache_add(mcache *m, item *it,
             m->tot_evictions++;
         }
 
-        if (g_hash_table_size(m->map) < m->max_size) {
+        if (g_hash_table_size(m->map) < m->max) {
             // The ITEM_key is not NULL or space terminated,
             // and we need a copy, too, for hashtable ownership.
             //

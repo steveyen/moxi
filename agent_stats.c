@@ -295,6 +295,11 @@ static void main_stats_collect(void *data0, void *data1) {
             emit_f(p->port, "front_cache_size",
                    "%u", g_hash_table_size(p->front_cache.map));
 
+        emit_f(p->port, "front_cache_max",
+               "%u", p->front_cache.max);
+        emit_f(p->port, "front_cache_oldest_live",
+               "%u", p->front_cache.oldest_live);
+
         emit_f(p->port, "front_cache_tot_get_hits",
                "%llu",
                (long long unsigned int) p->front_cache.tot_get_hits);
@@ -310,6 +315,15 @@ static void main_stats_collect(void *data0, void *data1) {
         emit_f(p->port, "front_cache_tot_add_skips",
                "%llu",
                (long long unsigned int) p->front_cache.tot_add_skips);
+        emit_f(p->port, "front_cache_tot_add_fails",
+               "%llu",
+               (long long unsigned int) p->front_cache.tot_add_fails);
+        emit_f(p->port, "front_cache_tot_deletes",
+               "%llu",
+               (long long unsigned int) p->front_cache.tot_deletes);
+        emit_f(p->port, "front_cache_tot_evictions",
+               "%llu",
+               (long long unsigned int) p->front_cache.tot_evictions);
 
         pthread_mutex_unlock(p->front_cache.lock);
     }
