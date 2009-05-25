@@ -431,6 +431,8 @@ void cproxy_del_front_cache_key_ascii_response(downstream *d,
                                                char *response,
                                                char *command);
 
+// Functions for the front cache.
+//
 void  mcache_init(mcache *m, bool multithreaded);
 void  mcache_start(mcache *m);
 bool  mcache_started(mcache *m);
