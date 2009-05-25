@@ -504,7 +504,7 @@ bool cproxy_forward_a2a_item_downstream(downstream *d, short cmd,
                                 cproxy_optimize_set_ascii(d, uc,
                                                           ITEM_key(it),
                                                           it->nkey)) {
-                                // TODO: Have stats for SET optimization.
+                                d->ptd->stats.tot_optimize_sets++;
                             }
                         } else {
                             c->write_and_go = conn_pause;
