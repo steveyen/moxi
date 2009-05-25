@@ -1380,6 +1380,9 @@ bool cproxy_start_wait_queue_timeout(proxy_td *ptd, conn *uc) {
     ptd->timeout_tv = cproxy_get_wait_queue_timeout(p);
     if (ptd->timeout_tv.tv_sec != 0 ||
         ptd->timeout_tv.tv_usec != 0) {
+        if (settings.verbose > 1)
+            fprintf(stderr, "wait_queue_timeout started\n");
+
         evtimer_set(&ptd->timeout_event, wait_queue_timeout, ptd);
 
         event_base_set(uc->thread->base, &ptd->timeout_event);
@@ -1417,8 +1420,10 @@ void wait_queue_timeout(const int fd,
 
         struct timeval wqt = cproxy_get_wait_queue_timeout(p);
 
-        uint32_t wqt_msec =
-            (wqt.tv_sec - process_started) * 1000 + (wqt.tv_usec / 1000);
+        uint32_t wqt_msec = (wqt.tv_sec * 1000) +
+                            (wqt.tv_usec / 1000);
+
+        uint32_t cut_msec = msec_current_time - wqt_msec;
 
         // Run through all the old upstream conn's in
         // the wait queue, remove them, and emit errors
@@ -1432,7 +1437,12 @@ void wait_queue_timeout(const int fd,
 
             // Check if upstream conn is old and should be removed.
             //
-            if (uc->cmd_start_time <= (msec_current_time - wqt_msec)) {
+            if (settings.verbose > 1)
+                fprintf(stderr,
+                        "wait_queue_timeout compare %u to %u cutoff\n",
+                        uc->cmd_start_time, cut_msec);
+
+            if (uc->cmd_start_time <= cut_msec) {
                 if (settings.verbose > 1)
                     fprintf(stderr, "proxy_td_timeout sending error %d\n",
                             uc->sfd);
