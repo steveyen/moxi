@@ -2,6 +2,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <unistd.h>
 #include <errno.h>
 #include <sysexits.h>
 #include <pthread.h>
@@ -84,6 +85,7 @@ void on_conflate_get_stats(void *userdata, void *opaque,
     };
 
     char buf[800];
+    char bufx[400];
 
 #define more_stat(spec, key, val)          \
     snprintf(buf, sizeof(buf), spec, val); \
@@ -93,6 +95,12 @@ void on_conflate_get_stats(void *userdata, void *opaque,
               VERSION);
     more_stat("%u", "main_nthreads",
               m->nthreads);
+
+    bufx[0] = '\0';
+    if (gethostname(bufx, sizeof(bufx)) == 0 &&
+        strlen(bufx) > 0) {
+        more_stat("%s", "main_hostname", bufx);
+    }
 
     cproxy_dump_behavior_ex(&m->behavior, "main_behavior", 2,
                             add_stat_behavior_info, &ase);
