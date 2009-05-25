@@ -92,6 +92,8 @@ void on_conflate_get_stats(void *userdata, void *opaque,
     more_stat("%ld", "default_wait_queue_timeout", // In millisecs.
               m->behavior.wait_queue_timeout.tv_sec * 1000 +
               m->behavior.wait_queue_timeout.tv_usec / 1000);
+    more_stat("%u", "front_cache_max",
+              m->behavior.front_cache_max);
     more_stat("%u", "front_cache_lifespan",
               m->behavior.front_cache_lifespan);
     more_stat("%s", "front_cache_spec",

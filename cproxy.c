@@ -133,8 +133,10 @@ proxy *cproxy_create(char    *name,
 
         mcache_init(&p->front_cache, true);
 
-        if (behavior_head.front_cache_lifespan > 0) {
-            mcache_start(&p->front_cache, 50); // TODO.
+        if (behavior_head.front_cache_max > 0 &&
+            behavior_head.front_cache_lifespan > 0) {
+            mcache_start(&p->front_cache,
+                         behavior_head.front_cache_max);
 
             if (strlen(behavior_head.front_cache_spec) > 0) {
                 matcher_init(&p->front_cache_matcher,

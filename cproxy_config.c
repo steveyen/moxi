@@ -48,6 +48,7 @@ proxy_behavior behavior_default_g = {
         .tv_sec  = 0,
         .tv_usec = 0
     },
+    .front_cache_max = 200,
     .front_cache_lifespan = 0,
     .front_cache_spec = {0},
     .host = {0},
@@ -315,6 +316,8 @@ void cproxy_parse_behavior_key_val(char *key,
             int ms = strtol(val, NULL, 10);
             behavior->wait_queue_timeout.tv_sec  = floor(ms / 1000.0);
             behavior->wait_queue_timeout.tv_usec = (ms % 1000) * 1000;
+        } else if (strcmp(key, "front_cache_max") == 0) {
+            behavior->front_cache_max = strtol(val, NULL, 10);
         } else if (strcmp(key, "front_cache_lifespan") == 0) {
             behavior->front_cache_lifespan = strtol(val, NULL, 10);
         } else if (strcmp(key, "front_cache_spec") == 0) {
@@ -389,15 +392,15 @@ void cproxy_dump_behavior(proxy_behavior *b, char *prefix, int level) {
         prefix = "";
 
     if (level >= 2)
-        fprintf(stderr, "%s cycle: %d\n",
+        fprintf(stderr, "%s cycle: %u\n",
                 prefix, b->cycle);
     if (level >= 1)
-        fprintf(stderr, "%s downstream_max: %d\n",
+        fprintf(stderr, "%s downstream_max: %u\n",
                 prefix, b->downstream_max);
 
-    fprintf(stderr, "%s downstream_weight: %d\n",
+    fprintf(stderr, "%s downstream_weight: %u\n",
             prefix, b->downstream_weight);
-    fprintf(stderr, "%s downstream_retry: %d\n",
+    fprintf(stderr, "%s downstream_retry: %u\n",
             prefix, b->downstream_retry);
     fprintf(stderr, "%s downstream_protocol: %d\n",
             prefix, b->downstream_protocol);
@@ -412,7 +415,10 @@ void cproxy_dump_behavior(proxy_behavior *b, char *prefix, int level) {
                 b->wait_queue_timeout.tv_sec * 1000 +
                 b->wait_queue_timeout.tv_usec / 1000);
     if (level >= 1)
-        fprintf(stderr, "%s front_cache_lifespan: %d\n",
+        fprintf(stderr, "%s front_cache_max: %u\n",
+                prefix, b->front_cache_max);
+    if (level >= 1)
+        fprintf(stderr, "%s front_cache_lifespan: %u\n",
                 prefix, b->front_cache_lifespan);
     if (level >= 1)
         fprintf(stderr, "%s front_cache_spec: %s\n",

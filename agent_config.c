@@ -579,6 +579,8 @@ void cproxy_on_new_pool(proxy_main *m,
         }
 
         changed = changed ||
+            (p->behavior_head.front_cache_max !=
+             behavior_head.front_cache_max) ||
             (p->behavior_head.front_cache_lifespan !=
              behavior_head.front_cache_lifespan) ||
             (strcmp(p->behavior_head.front_cache_spec,
@@ -622,8 +624,10 @@ void cproxy_on_new_pool(proxy_main *m,
 
         // Restart the front_cache, if necessary.
         //
-        if (behavior_head.front_cache_lifespan > 0) {
-            mcache_start(&p->front_cache, 50); // TODO.
+        if (behavior_head.front_cache_max > 0 &&
+            behavior_head.front_cache_lifespan > 0) {
+            mcache_start(&p->front_cache,
+                         behavior_head.front_cache_max);
 
             if (strlen(behavior_head.front_cache_spec) > 0) {
                 matcher_init(&p->front_cache_matcher,
