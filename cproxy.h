@@ -364,10 +364,13 @@ bool cproxy_equal_behavior(proxy_behavior *x,
 
 void cproxy_dump_behavior(proxy_behavior *b, char *prefix, int level);
 void cproxy_dump_behavior_ex(proxy_behavior *b, char *prefix, int level,
-                             void (*dump)(char *prefix,
+                             void (*dump)(void *dump_opaque,
+                                          char *prefix,
                                           char *key,
-                                          char *buf));
-void cproxy_dump_behavior_stderr(char *prefix, char *key, char *val);
+                                          char *buf),
+                             void *dump_opaque);
+void cproxy_dump_behavior_stderr(void *dump_opaque,
+                                 char *prefix, char *key, char *val);
 
 // ---------------------------------------------------------------
 

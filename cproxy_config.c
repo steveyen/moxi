@@ -388,18 +388,25 @@ bool cproxy_equal_behavior(proxy_behavior *x,
 }
 
 void cproxy_dump_behavior(proxy_behavior *b, char *prefix, int level) {
-    cproxy_dump_behavior_ex(b, prefix, level, cproxy_dump_behavior_stderr);
+    cproxy_dump_behavior_ex(b, prefix, level,
+                            cproxy_dump_behavior_stderr, NULL);
 }
 
 void cproxy_dump_behavior_ex(proxy_behavior *b, char *prefix, int level,
-                             void (*dump)(char *prefix,
+                             void (*dump)(void *dump_opaque,
+                                          char *prefix,
                                           char *key,
-                                          char *buf)) {
+                                          char *buf),
+                             void *dump_opaque) {
+    assert(b);
+    assert(dump);
+
     char vbuf[8000];
 
-#define vdump(key, vfmt, val)                \
+#define vdump(key, vfmt, val) {              \
     snprintf(vbuf, sizeof(vbuf), vfmt, val); \
-    dump(prefix, key, vbuf);
+    dump(dump_opaque, prefix, key, vbuf);    \
+}
 
     if (level >= 2)
         vdump("cycle", "%u", b->cycle);
@@ -430,7 +437,8 @@ void cproxy_dump_behavior_ex(proxy_behavior *b, char *prefix, int level,
     vdump("bucket", "%s", b->bucket);
 }
 
-void cproxy_dump_behavior_stderr(char *prefix, char *key, char *val) {
+void cproxy_dump_behavior_stderr(void *dump_opaque,
+                                 char *prefix, char *key, char *val) {
     assert(key);
     assert(val);
 

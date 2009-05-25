@@ -17,6 +17,11 @@
 //
 uint32_t murmur_hash(const char *key, size_t length);
 
+// Local declarations.
+//
+static void add_stat_behavior_info(void *dump_opaque,
+                                   char *prefix, char *key, char *val);
+
 static void main_stats_collect(void *data0, void *data1);
 static void work_stats_collect(void *data0, void *data1);
 
@@ -48,6 +53,17 @@ struct main_stats_collect_info {
     void             *opaque;
 };
 
+static void add_stat_behavior_info(void *dump_opaque,
+                                   char *prefix, char *key, char *val) {
+    struct add_stat_emit *ase = dump_opaque;
+    assert(ase);
+
+    char buf[2000];
+    snprintf(buf, sizeof(buf), "%s_%s", prefix, key);
+
+    ase->add_stat(ase->opaque, buf, val);
+}
+
 /* This callback is invoked by conflate on a conflate thread
  * when it wants proxy stats.
  *
@@ -66,6 +82,11 @@ void on_conflate_get_stats(void *userdata, void *opaque,
     assert(mthread);
     assert(mthread->work_queue);
 
+    struct add_stat_emit ase = {
+        .add_stat = add_stat,
+        .opaque   = opaque
+    };
+
     char buf[800];
 
 #define more_stat(spec, key, val)          \
@@ -76,28 +97,10 @@ void on_conflate_get_stats(void *userdata, void *opaque,
               VERSION);
     more_stat("%u", "nthreads",
               m->nthreads);
-    more_stat("%u", "cycle",
-              m->behavior.cycle);
-    more_stat("%u", "default_downstream_max",
-              m->behavior.downstream_max);
-    more_stat("%u", "default_downstream_weight",
-              m->behavior.downstream_weight);
-    more_stat("%u", "default_downstream_retry",
-              m->behavior.downstream_retry);
-    more_stat("%u", "default_downstream_protocol",
-              m->behavior.downstream_protocol);
-    more_stat("%ld", "default_downstream_timeout", // In millisecs.
-              m->behavior.downstream_timeout.tv_sec * 1000 +
-              m->behavior.downstream_timeout.tv_usec / 1000);
-    more_stat("%ld", "default_wait_queue_timeout", // In millisecs.
-              m->behavior.wait_queue_timeout.tv_sec * 1000 +
-              m->behavior.wait_queue_timeout.tv_usec / 1000);
-    more_stat("%u", "front_cache_max",
-              m->behavior.front_cache_max);
-    more_stat("%u", "front_cache_lifespan",
-              m->behavior.front_cache_lifespan);
-    more_stat("%s", "front_cache_spec",
-              m->behavior.front_cache_spec);
+
+    cproxy_dump_behavior_ex(&m->behavior, "default", 2,
+                            add_stat_behavior_info, &ase);
+
     more_stat("%llu", "configs",
               (long long unsigned int) m->stat_configs);
     more_stat("%llu", "config_fails",
@@ -163,14 +166,9 @@ void on_conflate_get_stats(void *userdata, void *opaque,
                     }
                 }
 
-                struct add_stat_emit emit;
-
-                emit.add_stat = add_stat;
-                emit.opaque   = opaque;
-
                 g_hash_table_foreach(end_proxy_stats,
                                      map_proxy_stats_foreach_emit,
-                                     &emit);
+                                     &ase);
             }
         }
 
@@ -225,10 +223,15 @@ static void main_stats_collect(void *data0, void *data1) {
 
     assert(is_listen_thread());
 
+    struct add_stat_emit ase = {
+        .add_stat = msci->add_stat,
+        .opaque   = msci->opaque
+    };
+
     int sent   = 0;
     int nproxy = 0;
 
-    char bufk[100];
+    char bufk[200];
     char bufv[4000];
 
 #define emit_s(num, key, val)                        \
@@ -250,34 +253,16 @@ static void main_stats_collect(void *data0, void *data1) {
         emit_f(p->port, "config_ver",    "%u", p->config_ver);
         emit_f(p->port, "behaviors_num", "%u", p->behaviors_num);
 
+        snprintf(bufk, sizeof(bufk), "%u", p->port);
+
+        cproxy_dump_behavior_ex(&p->behavior_head, bufk, 1,
+                                add_stat_behavior_info, &ase);
+
         for (int i = 0; i < p->behaviors_num; i++) {
-            char bufb[100];
+            snprintf(bufk, sizeof(bufk), "%u:%u", p->port, i);
 
-#define emit_xs(key, val)                                  \
-            snprintf(bufb, sizeof(bufb), "%u:%s", i, key); \
-            emit_s(p->port, bufb, val);
-
-#define emit_xf(key, fmtv, val)                            \
-            snprintf(bufb, sizeof(bufb), "%u:%s", i, key); \
-            emit_f(p->port, bufb, fmtv, val);
-
-            emit_xs("usr",        p->behaviors[i].usr);
-            emit_xs("host",       p->behaviors[i].host);
-            emit_xf("port", "%u", p->behaviors[i].port);
-            emit_xs("bucket",     p->behaviors[i].bucket);
-
-            emit_xf("downstream_max",
-                   "%u", p->behaviors[i].downstream_max);
-            emit_xf("downstream_weight",
-                   "%u", p->behaviors[i].downstream_weight);
-            emit_xf("downstream_protocol",
-                   "%u", p->behaviors[i].downstream_protocol);
-            emit_xf("downstream_timeout", "%ld", // In millisecs.
-                    p->behaviors[i].downstream_timeout.tv_sec * 1000 +
-                    p->behaviors[i].downstream_timeout.tv_usec / 1000);
-            emit_xf("wait_queue_timeout", "%ld", // In millisecs.
-                    p->behaviors[i].wait_queue_timeout.tv_sec * 1000 +
-                    p->behaviors[i].wait_queue_timeout.tv_usec / 1000);
+            cproxy_dump_behavior_ex(&p->behaviors[i], bufk, 0,
+                                    add_stat_behavior_info, &ase);
         }
 
         emit_f(p->port, "listening",
