@@ -47,6 +47,8 @@ void mcache_reset_stats(mcache *m) {
     m->tot_get_misses  = 0;
     m->tot_adds        = 0;
     m->tot_add_skips   = 0;
+    m->tot_add_fails   = 0;
+    m->tot_deletes     = 0;
     m->tot_evictions   = 0;
 
     if (m->lock)
@@ -129,15 +131,10 @@ item *mcache_get(mcache *m, char *key, int key_len,
             assert(it->nkey == key_len);
             assert(strncmp(ITEM_key(it), key, it->nkey) == 0);
 
-            // TODO: Need configurable cache oldest_live
-            // mark to implement fast FLUSH_ALL.
-            //
             mcache_item_unlink(m, it);
 
             if (it->exptime >= curr_time &&
                 it->exptime >= m->oldest_live) {
-                // TODO: Stats for front cache hit.
-                //
                 mcache_item_touch(m, it);
 
                 it->refcount++; // TODO: Need locking here?
@@ -154,17 +151,14 @@ item *mcache_get(mcache *m, char *key, int key_len,
                 return it;
             }
 
+            // Handle item expiration.
+            //
             m->tot_get_expires++;
 
             if (settings.verbose > 1)
                 fprintf(stderr,
                         "mcache expire: %s\n", key);
 
-            // Handle item expiry.
-            //
-            // TODO: Stats for mcache expiry.
-            // TODO: Track mcache size.
-            //
             g_hash_table_remove(m->map, key);
         } else {
             m->tot_get_misses++;
@@ -187,49 +181,70 @@ void mcache_add(mcache *m, item *it,
     if (m == NULL)
         return;
 
-    // TODO: Our lock areas are too wide.
+    // TODO: Our lock areas are possibly too wide.
     //
     if (m->lock)
         pthread_mutex_lock(m->lock);
 
     if (m->map != NULL) {
-        // The ITEM_key is not NULL or space terminated,
-        // and we need a copy, too, for hashtable ownership.
+        // Evict some items if necessary.
         //
-        char *key_buf = malloc(it->nkey + 1);
-        if (key_buf != NULL) {
-            memcpy(key_buf, ITEM_key(it), it->nkey);
-            key_buf[it->nkey] = '\0';
+        for (int i = 0; m->lru_tail != NULL && i < 20; i++) {
+            if (g_hash_table_size(m->map) < m->max_size)
+                break;
 
-            // TODO: Would be nice if there was a g_hash_table_add().
+            item *last_it = m->lru_tail;
+            mcache_item_unlink(m, last_it);
+
+            char buf[KEY_MAX_LENGTH + 10];
+            memcpy(buf, ITEM_key(last_it), last_it->nkey);
+            buf[last_it->nkey] = '\0';
+
+            g_hash_table_remove(m->map, buf);
+
+            m->tot_evictions++;
+        }
+
+        if (g_hash_table_size(m->map) < m->max_size) {
+            // The ITEM_key is not NULL or space terminated,
+            // and we need a copy, too, for hashtable ownership.
             //
-            item *existing = (item *) g_hash_table_lookup(m->map, key_buf);
-            if (existing != NULL) {
-                mcache_item_unlink(m, existing);
-                mcache_item_touch(m, existing);
+            char *key_buf = malloc(it->nkey + 1);
+            if (key_buf != NULL) {
+                memcpy(key_buf, ITEM_key(it), it->nkey);
+                key_buf[it->nkey] = '\0';
 
-                m->tot_add_skips++;
+                item *existing =
+                    (item *) g_hash_table_lookup(m->map, key_buf);
+                if (existing != NULL) {
+                    mcache_item_unlink(m, existing);
+                    mcache_item_touch(m, existing);
 
-                if (settings.verbose > 1)
-                    fprintf(stderr,
-                            "mcache add-skip: %s\n", key_buf);
+                    m->tot_add_skips++;
 
-                free(key_buf);
+                    if (settings.verbose > 1)
+                        fprintf(stderr,
+                                "mcache add-skip: %s\n", key_buf);
+
+                    free(key_buf);
+                } else {
+                    it->exptime = curr_time + lifespan;
+
+                    it->refcount++; // TODO: Need item lock here?
+
+                    g_hash_table_insert(m->map, key_buf, it);
+
+                    m->tot_adds++;
+
+                    if (settings.verbose > 1)
+                        fprintf(stderr,
+                                "mcache add: %s\n", key_buf);
+                }
             } else {
-                // TODO: Need configurable L1 cache expiry.
-                //
-                it->exptime = curr_time + lifespan;
-
-                it->refcount++; // TODO: Need item lock here?
-
-                g_hash_table_insert(m->map, key_buf, it);
-
-                m->tot_adds++;
-
-                if (settings.verbose > 1)
-                    fprintf(stderr,
-                            "mcache add: %s\n", key_buf);
+                m->tot_add_fails++;
             }
+        } else {
+            m->tot_add_fails++;
         }
     }
 
@@ -250,16 +265,13 @@ void mcache_delete(mcache *m, char *key, int key_len) {
         pthread_mutex_lock(m->lock);
 
     if (m->map != NULL) {
-        // Handle item expiry.
-        //
-        // TODO: Stats for mcache expiry.
-        // TODO: Track mcache size.
-        //
         item *existing = (item *) g_hash_table_lookup(m->map, key);
         if (existing != NULL) {
             mcache_item_unlink(m, existing);
 
             g_hash_table_remove(m->map, key);
+
+            m->tot_deletes++;
         }
     }
 
