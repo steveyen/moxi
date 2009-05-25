@@ -398,11 +398,11 @@ void cproxy_dump_behavior(proxy_behavior *b, char *prefix, int level) {
 }
 
 void cproxy_dump_behavior_ex(proxy_behavior *b, char *prefix, int level,
-                             void (*dump)(void *dump_opaque,
-                                          char *prefix,
-                                          char *key,
-                                          char *buf),
-                             void *dump_opaque) {
+                             void (*dump)(const void *dump_opaque,
+                                          const char *prefix,
+                                          const char *key,
+                                          const char *buf),
+                             const void *dump_opaque) {
     assert(b);
     assert(dump);
 
@@ -444,8 +444,10 @@ void cproxy_dump_behavior_ex(proxy_behavior *b, char *prefix, int level,
     vdump("bucket", "%s", b->bucket);
 }
 
-void cproxy_dump_behavior_stderr(void *dump_opaque,
-                                 char *prefix, char *key, char *val) {
+void cproxy_dump_behavior_stderr(const void *dump_opaque,
+                                 const char *prefix,
+                                 const char *key,
+                                 const char *val) {
     assert(key);
     assert(val);
 

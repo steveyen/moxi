@@ -72,9 +72,6 @@ static enum try_read_result try_read_udp(conn *c);
 
 /* stats */
 static void stats_init(void);
-static void server_stats(ADD_STAT add_stats, conn *c);
-static void process_stat_settings(ADD_STAT add_stats, void *c);
-
 
 /* defaults */
 static void settings_init(void);
@@ -2090,7 +2087,7 @@ inline static void process_stats_detail(conn *c, const char *command) {
 }
 
 /* return server specific stats only */
-static void server_stats(ADD_STAT add_stats, conn *c) {
+void server_stats(ADD_STAT add_stats, conn *c) {
     pid_t pid = getpid();
     rel_time_t now = current_time;
 
@@ -2147,7 +2144,7 @@ static void server_stats(ADD_STAT add_stats, conn *c) {
     STATS_UNLOCK();
 }
 
-static void process_stat_settings(ADD_STAT add_stats, void *c) {
+void process_stat_settings(ADD_STAT add_stats, void *c) {
     assert(add_stats);
     APPEND_STAT("maxbytes", "%u", (unsigned int)settings.maxbytes);
     APPEND_STAT("maxconns", "%d", settings.maxconns);

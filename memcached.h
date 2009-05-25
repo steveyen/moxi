@@ -556,6 +556,9 @@ void slab_stats_aggregate(struct thread_stats *stats, struct slab_stats *out);
 void append_stat(const char *name, ADD_STAT add_stats, conn *c,
                  const char *fmt, ...);
 
+void server_stats(ADD_STAT add_stats, conn *c);
+void process_stat_settings(ADD_STAT add_stats, void *c);
+
 enum store_item_type store_item(item *item, int comm, conn *c);
 
 #if HAVE_DROP_PRIVILEGES

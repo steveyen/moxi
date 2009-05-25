@@ -16,8 +16,14 @@
 
 // Local declarations.
 //
-static void add_stat_behavior_info(void *dump_opaque,
-                                   char *prefix, char *key, char *val);
+static void add_stat_prefix(const void *dump_opaque,
+                            const char *prefix,
+                            const char *key,
+                            const char *val);
+
+static void add_stat_prefix_ase(const char *key, const uint16_t klen,
+                                const char *val, const uint32_t vlen,
+                                const void *cookie);
 
 static void main_stats_collect(void *data0, void *data1);
 static void work_stats_collect(void *data0, void *data1);
@@ -41,7 +47,8 @@ void map_proxy_stats_foreach_merge(gpointer key,
 
 struct add_stat_emit {
     conflate_add_stat add_stat;
-    void             *opaque;
+    void *opaque;
+    char *prefix;
 };
 
 struct main_stats_collect_info {
@@ -49,17 +56,6 @@ struct main_stats_collect_info {
     conflate_add_stat add_stat;
     void             *opaque;
 };
-
-static void add_stat_behavior_info(void *dump_opaque,
-                                   char *prefix, char *key, char *val) {
-    struct add_stat_emit *ase = dump_opaque;
-    assert(ase);
-
-    char buf[2000];
-    snprintf(buf, sizeof(buf), "%s_%s", prefix, key);
-
-    ase->add_stat(ase->opaque, buf, val);
-}
 
 /* This callback is invoked by conflate on a conflate thread
  * when it wants proxy stats.
@@ -81,7 +77,8 @@ void on_conflate_get_stats(void *userdata, void *opaque,
 
     struct add_stat_emit ase = {
         .add_stat = add_stat,
-        .opaque   = opaque
+        .opaque   = opaque,
+        .prefix   = ""
     };
 
     char buf[800];
@@ -103,7 +100,7 @@ void on_conflate_get_stats(void *userdata, void *opaque,
     }
 
     cproxy_dump_behavior_ex(&m->behavior, "main_behavior", 2,
-                            add_stat_behavior_info, &ase);
+                            add_stat_prefix, &ase);
 
     more_stat("%llu", "main_configs",
               (long long unsigned int) m->stat_configs);
@@ -117,6 +114,14 @@ void on_conflate_get_stats(void *userdata, void *opaque,
               (long long unsigned int) m->stat_proxy_existings);
     more_stat("%llu", "main_proxy_shutdowns",
               (long long unsigned int) m->stat_proxy_shutdowns);
+
+    struct add_stat_emit ase_memcached = {
+        .add_stat = add_stat,
+        .opaque   = opaque,
+        .prefix   = "memcached_settings"
+    };
+
+    process_stat_settings(add_stat_prefix_ase, &ase_memcached);
 
     // Alloc here so the main listener thread has less work.
     //
@@ -263,14 +268,14 @@ static void main_stats_collect(void *data0, void *data1) {
                  "%u:%s:behavior", p->port, p->name);
 
         cproxy_dump_behavior_ex(&p->behavior_head, bufk, 1,
-                                add_stat_behavior_info, &ase);
+                                add_stat_prefix, &ase);
 
         for (int i = 0; i < p->behaviors_num; i++) {
             snprintf(bufk, sizeof(bufk),
                      "%u:%s:behavior-%u", p->port, p->name, i);
 
             cproxy_dump_behavior_ex(&p->behaviors[i], bufk, 0,
-                                    add_stat_behavior_info, &ase);
+                                    add_stat_prefix, &ase);
         }
 
         emit_f("listening",
@@ -671,3 +676,24 @@ static void work_stats_reset(void *data0, void *data1) {
     work_collect_one(c);
 }
 
+static void add_stat_prefix(const void *dump_opaque,
+                            const char *prefix,
+                            const char *key,
+                            const char *val) {
+    const struct add_stat_emit *ase = dump_opaque;
+    assert(ase);
+
+    char buf[2000];
+    snprintf(buf, sizeof(buf), "%s_%s", prefix, key);
+
+    ase->add_stat(ase->opaque, buf, val);
+}
+
+static void add_stat_prefix_ase(const char *key, const uint16_t klen,
+                                const char *val, const uint32_t vlen,
+                                const void *cookie) {
+    const struct add_stat_emit *ase = cookie;
+    assert(ase);
+
+    add_stat_prefix(cookie, ase->prefix, key, val);
+}
