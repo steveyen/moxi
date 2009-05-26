@@ -1,9 +1,16 @@
 #!/usr/bin/perl
 
-print `./t/moxi.pl simple   ascii`;
-print `./t/moxi.pl chain    ascii`;
-print `./t/moxi.pl fanout   ascii`;
-print `./t/moxi.pl fanoutin ascii`;
+sub go {
+  my ($topology, $protocol) = @_;
+  print "testing $topology $protocol\n";
+  print system("./t/moxi.pl $topology $protocol");
+}
 
-print `./t/moxi.pl simple binary`;
-print `./t/moxi.pl fanout binary`;
+go('simple',   'ascii');
+go('chain',    'ascii');
+go('fanout',   'ascii');
+go('fanoutin', 'ascii');
+
+go('simple', 'binary');
+go('fanout', 'binary');
+

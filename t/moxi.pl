@@ -4,11 +4,14 @@ use strict;
 
 # Invoke like this to test ascii protocol, with all the topologies.
 #
-# ./t/moxi.pl simple ascii && ./t/moxi.pl chain ascii && ./t/moxi.pl fanout ascii && ./t/moxi.pl fanoutin ascii
+# ./t/moxi.pl simple ascii && ./t/moxi.pl chain ascii &&
+# ./t/moxi.pl fanout ascii && ./t/moxi.pl fanoutin ascii
 #
 # Invoke like this to test binary protocol.
 #
 # ./t/moxi.pl simple binary && ./t/moxi.pl fanout binary
+#
+# See: ./t/moxi_all.pl
 #
 # TODO: We can't pass chain and fanoutin topologies with binary protocol
 #       until moxi supports upstream binary protocol.
