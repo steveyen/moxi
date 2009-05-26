@@ -477,6 +477,8 @@ void* binary_get_request(conn *c);
 uint64_t swap64(uint64_t in);
 void reset_cmd_handler(conn *c);
 void complete_nread(conn *c);
+void complete_nread_binary(conn *c);
+void complete_nread_ascii(conn *c);
 int ensure_iov_space(conn *c);
 int add_iov(conn *c, const void *buf, int len);
 int add_msghdr(conn *c);

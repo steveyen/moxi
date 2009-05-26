@@ -108,9 +108,6 @@ enum transmit_result {
 
 static enum transmit_result transmit(conn *c);
 
-static void complete_nread_binary(conn *c);
-static void complete_nread_ascii(conn *c);
-
 conn_funcs conn_funcs_default = {
     .conn_init                   = NULL,
     .conn_close                  = NULL,
@@ -801,7 +798,7 @@ void out_string(conn *c, const char *str) {
  * we get here after reading the value in set/add/replace commands. The command
  * has been stored in c->cmd, and the item is ready in c->item.
  */
-static void complete_nread_ascii(conn *c) {
+void complete_nread_ascii(conn *c) {
     assert(c != NULL);
 
     item *it = c->item;
@@ -1773,7 +1770,7 @@ static void process_bin_delete(conn *c) {
     }
 }
 
-static void complete_nread_binary(conn *c) {
+void complete_nread_binary(conn *c) {
     assert(c != NULL);
     assert(c->cmd >= 0);
 

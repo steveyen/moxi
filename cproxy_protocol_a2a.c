@@ -310,8 +310,8 @@ bool cproxy_forward_a2a_simple_downstream(downstream *d,
                                           &self);
     if (c != NULL) {
         if (self) {
-            cproxy_optimize_ascii_to_self(d, uc, command);
-
+            cproxy_optimize_to_self(d, uc, command);
+            process_command(uc, command);
             return true;
         }
 
@@ -463,6 +463,12 @@ bool cproxy_forward_a2a_item_downstream(downstream *d, short cmd,
     conn *c = cproxy_find_downstream_conn(d, ITEM_key(it), it->nkey,
                                           &self);
     if (c != NULL) {
+        if (self) {
+            cproxy_optimize_to_self(d, uc, uc->cmd_start);
+            complete_nread_ascii(uc);
+            return true;
+        }
+
         if (cproxy_prep_conn_for_write(c)) {
             assert(c->state == conn_pause);
 
