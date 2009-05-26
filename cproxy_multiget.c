@@ -217,11 +217,7 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
                         c->icurr = c->ilist;
                         c->ileft = 0;
 
-                        // TODO: Possible bug here where later uc's
-                        // are the first to hash to a certain downstream.
-                        //
-                        if (uc_num <= 0 &&
-                            c->msgused <= 1 &&
+                        if (c->msgused <= 1 &&
                             c->msgbytes <= 0) {
                             emit_start(c, command, cmd_len);
                         }
