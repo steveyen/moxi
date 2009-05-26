@@ -151,6 +151,34 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
                 conn *c = cproxy_find_downstream_conn(d, key, key_len,
                                                       &self);
                 if (c != NULL) {
+                    if (self) {
+                        // Optimization for talking with ourselves,
+                        // to avoid extra network hop.
+                        //
+                        // TODO: Stats.
+                        //
+                        it = item_get(key, key_len);
+                        if (it != NULL) {
+                            cproxy_upstream_ascii_item_response(it, uc_cur);
+
+                            // The refcount was inc'ed by item_get() for us.
+                            //
+                            item_remove(it);
+
+                            if (settings.verbose > 1)
+                                fprintf(stderr,
+                                        "optimize self multiget hit: %s\n",
+                                        key);
+                        } else {
+                            if (settings.verbose > 1)
+                                fprintf(stderr,
+                                        "optimize self multiget miss: %s\n",
+                                        key);
+                        }
+
+                        goto loop_next;
+                    }
+
                     // See if we've already requested this key via
                     // the multiget hash table, in order to
                     // de-deplicate repeated keys.

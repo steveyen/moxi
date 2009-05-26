@@ -1155,6 +1155,10 @@ void cproxy_assign_downstream(proxy_td *ptd) {
                     d->upstream_conn->sfd);
 
         if (d->propagate(d) == false) {
+            // TODO: This stat is incorrect, as we might reach here
+            // when we have entire front cache hit or talk-to-self
+            // optimization hit on multiget.
+            //
             ptd->stats.tot_downstream_propagate_failed++;
 
             // During propagate(), we might have recursed,
