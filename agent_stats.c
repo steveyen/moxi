@@ -81,6 +81,10 @@ void on_conflate_get_stats(void *userdata, void *opaque,
         .prefix   = ""
     };
 
+    bool do_all      = (type == NULL || strlen(type) <= 0);
+    bool do_settings = (do_all || strcmp(type, "settings") == 0);
+    bool do_stats    = (do_all || strcmp(type, "stats") == 0);
+
     char buf[800];
     char bufx[400];
 
@@ -93,105 +97,124 @@ void on_conflate_get_stats(void *userdata, void *opaque,
     more_stat("%u", "main_nthreads",
               m->nthreads);
 
-    bufx[0] = '\0';
-    if (gethostname(bufx, sizeof(bufx)) == 0 &&
-        strlen(bufx) > 0) {
-        more_stat("%s", "main_hostname", bufx);
+    if (do_settings) {
+        bufx[0] = '\0';
+        if (gethostname(bufx, sizeof(bufx)) == 0 &&
+            strlen(bufx) > 0) {
+            more_stat("%s", "main_hostname", bufx);
+        }
+
+        cproxy_dump_behavior_ex(&m->behavior, "main_behavior", 2,
+                                add_stat_prefix, &ase);
     }
 
-    cproxy_dump_behavior_ex(&m->behavior, "main_behavior", 2,
-                            add_stat_prefix, &ase);
+    if (do_stats) {
+        more_stat("%llu", "main_configs",
+                  (long long unsigned int) m->stat_configs);
+        more_stat("%llu", "main_config_fails",
+                  (long long unsigned int) m->stat_config_fails);
+        more_stat("%llu", "main_proxy_starts",
+                  (long long unsigned int) m->stat_proxy_starts);
+        more_stat("%llu", "main_proxy_start_fails",
+                  (long long unsigned int) m->stat_proxy_start_fails);
+        more_stat("%llu", "main_proxy_existings",
+                  (long long unsigned int) m->stat_proxy_existings);
+        more_stat("%llu", "main_proxy_shutdowns",
+                  (long long unsigned int) m->stat_proxy_shutdowns);
+    }
 
-    more_stat("%llu", "main_configs",
-              (long long unsigned int) m->stat_configs);
-    more_stat("%llu", "main_config_fails",
-              (long long unsigned int) m->stat_config_fails);
-    more_stat("%llu", "main_proxy_starts",
-              (long long unsigned int) m->stat_proxy_starts);
-    more_stat("%llu", "main_proxy_start_fails",
-              (long long unsigned int) m->stat_proxy_start_fails);
-    more_stat("%llu", "main_proxy_existings",
-              (long long unsigned int) m->stat_proxy_existings);
-    more_stat("%llu", "main_proxy_shutdowns",
-              (long long unsigned int) m->stat_proxy_shutdowns);
+    if (do_settings) {
+        struct add_stat_emit ase_memcached = {
+            .add_stat = add_stat,
+            .opaque   = opaque,
+            .prefix   = "memcached_settings"
+        };
 
-    struct add_stat_emit ase_memcached = {
-        .add_stat = add_stat,
-        .opaque   = opaque,
-        .prefix   = "memcached_settings"
-    };
+        process_stat_settings(add_stat_prefix_ase, &ase_memcached);
+    }
 
-    process_stat_settings(add_stat_prefix_ase, &ase_memcached);
+    if (do_stats) {
+        struct add_stat_emit ase_memcached = {
+            .add_stat = add_stat,
+            .opaque   = opaque,
+            .prefix   = "memcached_stats"
+        };
+
+        server_stats(add_stat_prefix_ase, &ase_memcached);
+    }
 
     // Alloc here so the main listener thread has less work.
     //
-    work_collect *ca = calloc(m->nthreads, sizeof(work_collect));
-    if (ca != NULL) {
-        int i;
+    if (do_stats) {
+        work_collect *ca = calloc(m->nthreads, sizeof(work_collect));
+        if (ca != NULL) {
+            int i;
 
-        for (i = 1; i < m->nthreads; i++) {
-            // Each thread gets its own collection hashmap, which
-            // is keyed by each proxy's "binding:name", and whose
-            // values are proxy_stats.
-            //
-            GHashTable *map_proxy_stats =
-                g_hash_table_new(g_str_hash,
-                                 g_str_equal);
-            if (map_proxy_stats != NULL)
-                work_collect_init(&ca[i], -1, map_proxy_stats);
-            else
-                break;
-        }
-
-        // Continue on the main listener thread.
-        //
-        struct main_stats_collect_info msci = {
-            .m        = m,
-            .add_stat = add_stat,
-            .opaque   = opaque
-        };
-
-        if (i >= m->nthreads &&
-            work_send(mthread->work_queue, main_stats_collect, &msci, ca)) {
-            // Wait for all the stats collecting to finish.
-            //
             for (i = 1; i < m->nthreads; i++) {
-                work_collect_wait(&ca[i]);
+                // Each thread gets its own collection hashmap, which
+                // is keyed by each proxy's "binding:name", and whose
+                // values are proxy_stats.
+                //
+                GHashTable *map_proxy_stats =
+                    g_hash_table_new(g_str_hash,
+                                     g_str_equal);
+                if (map_proxy_stats != NULL)
+                    work_collect_init(&ca[i], -1, map_proxy_stats);
+                else
+                    break;
             }
 
-            assert(m->nthreads > 0);
+            // Continue on the main listener thread.
+            //
+            struct main_stats_collect_info msci = {
+                .m        = m,
+                .add_stat = add_stat,
+                .opaque   = opaque
+            };
 
-            GHashTable *end_proxy_stats = ca[1].data;
-            if (end_proxy_stats != NULL) {
-                // Skip the first worker thread (index 1)'s results,
-                // because that's where we'll aggregate final results.
+            if (i >= m->nthreads &&
+                work_send(mthread->work_queue, main_stats_collect,
+                          &msci, ca)) {
+                // Wait for all the stats collecting to finish.
                 //
-                for (i = 2; i < m->nthreads; i++) {
-                    GHashTable *map_proxy_stats = ca[i].data;
-                    if (map_proxy_stats != NULL) {
-                        g_hash_table_foreach(map_proxy_stats,
-                                             map_proxy_stats_foreach_merge,
-                                             end_proxy_stats);
-                    }
+                for (i = 1; i < m->nthreads; i++) {
+                    work_collect_wait(&ca[i]);
                 }
 
-                g_hash_table_foreach(end_proxy_stats,
-                                     map_proxy_stats_foreach_emit,
-                                     &ase);
-            }
-        }
+                assert(m->nthreads > 0);
 
-        for (i = 1; i < m->nthreads; i++) {
-            GHashTable *map_proxy_stats = ca[i].data;
-            if (map_proxy_stats != NULL) {
-                g_hash_table_foreach(map_proxy_stats,
-                                     map_proxy_stats_foreach_free,
-                                     NULL);
-                g_hash_table_destroy(map_proxy_stats);
-            }
-        }
+                GHashTable *end_proxy_stats = ca[1].data;
+                if (end_proxy_stats != NULL) {
+                    // Skip the first worker thread (index 1)'s results,
+                    // because that's where we'll aggregate final results.
+                    //
+                    for (i = 2; i < m->nthreads; i++) {
+                        GHashTable *map_proxy_stats = ca[i].data;
+                        if (map_proxy_stats != NULL) {
+                            g_hash_table_foreach(map_proxy_stats,
+                                                 map_proxy_stats_foreach_merge,
+                                                 end_proxy_stats);
+                        }
+                    }
 
-        free(ca);
+                    g_hash_table_foreach(end_proxy_stats,
+                                         map_proxy_stats_foreach_emit,
+                                         &ase);
+                }
+            }
+
+            for (i = 1; i < m->nthreads; i++) {
+                GHashTable *map_proxy_stats = ca[i].data;
+                if (map_proxy_stats != NULL) {
+                    g_hash_table_foreach(map_proxy_stats,
+                                         map_proxy_stats_foreach_free,
+                                         NULL);
+                    g_hash_table_destroy(map_proxy_stats);
+                }
+            }
+
+            free(ca);
+        }
     }
 
     add_stat(opaque, NULL, NULL);

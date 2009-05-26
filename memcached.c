@@ -2047,7 +2047,7 @@ void set_noreply_maybe(conn *c, token_t *tokens, size_t ntokens) {
     }
 }
 
-void append_stat(const char *name, ADD_STAT add_stats, conn *c,
+void append_stat(const char *name, ADD_STAT add_stats, void *c,
                  const char *fmt, ...) {
     char val_str[128];
     int vlen;
@@ -2087,7 +2087,7 @@ inline static void process_stats_detail(conn *c, const char *command) {
 }
 
 /* return server specific stats only */
-void server_stats(ADD_STAT add_stats, conn *c) {
+void server_stats(ADD_STAT add_stats, void *c) {
     pid_t pid = getpid();
     rel_time_t now = current_time;
 
