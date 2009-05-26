@@ -453,6 +453,9 @@ void protocol_stats_foreach_write(gpointer key,
                                   gpointer value,
                                   gpointer user_data);
 
+void cproxy_optimize_ascii_to_self(downstream *d, conn *uc,
+                                   char *command);
+
 bool cproxy_optimize_set_ascii(downstream *d, conn *uc,
                                char *key, int key_len);
 

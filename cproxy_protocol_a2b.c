@@ -970,6 +970,12 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
     conn *c = cproxy_find_downstream_conn(d, key, key_len,
                                           &self);
     if (c != NULL) {
+        if (self) {
+            cproxy_optimize_ascii_to_self(d, uc, command);
+
+            return true;
+        }
+
         if (cproxy_prep_conn_for_write(c)) {
             assert(c->state == conn_pause);
             assert(c->wbuf);

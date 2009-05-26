@@ -296,3 +296,24 @@ bool cproxy_optimize_set_ascii(downstream *d, conn *uc,
     return false;
 }
 
+/**
+ * Optimization when we're talking with ourselves,
+ * so we don't need to go through network hop,
+ * for a simple one-liner command.
+ */
+void cproxy_optimize_ascii_to_self(downstream *d, conn *uc,
+                                   char *command) {
+    assert(d);
+    assert(uc);
+    assert(uc->next == NULL);
+
+    if (settings.verbose > 1)
+        fprintf(stderr, "optimize to self: %s\n", command);
+
+    d->upstream_conn   = NULL;
+    d->upstream_suffix = NULL;
+
+    process_command(uc, command);
+
+    cproxy_release_downstream(d, false);
+}
