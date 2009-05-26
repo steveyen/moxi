@@ -38,11 +38,6 @@ TODO ideas...
     - or net-split.
     - or different moxi/clients see different old/new servers.
 
-- servers owned by others.
-
-- optimized connection to self, where moxi is running
-  as a memcached server.
-
 - doxygen for moxi
 
 - allow apikey to not be on the cmdline, readable from secure 600 file
@@ -55,13 +50,6 @@ TODO ideas...
       might wait forever, if there's no timeout.
   - need timeout for downstream requests -- DONE
     - on timeout, closes the downstream connection
-
-- submodules, easy low-dependency build steps.
-  - talked to Dustin about this, and he knows the
-    git submodule and script magic to make the
-    right metaproject.  this is proxybuild.
-  - need a faster way to test end-to-end, with mcp.
-    faster edit-compile-test-debug cycle
 
 - pipelining/streaming
   - instead of 100% store-and-forward
@@ -110,16 +98,6 @@ TODO ideas...
 
 - should mcp/libconflate msgs have version numbers?
   - added note to mcp issue tracker.
-
-- test command, described by dustin.
-  - ping timings
-  - time between request and response on each downstream conn.
-  - initial version DONE.
-  - need version that can use small "ping test" buckets.
-
-- bucket selection
-  - after auth -- DONE.
-  - need server side of this.
 
 - message aggregation
   - aka, get key squashing or key-dedupe.
@@ -257,12 +235,32 @@ known bugs
     - also, more complexity when downstreams and upstreams go down.
     - also, need more pointers to track the assignment preference?
 
+------------------------------------------------------------
+
+- submodules, easy low-dependency build steps.
+  - git submodule and script magic to make the
+    right metaproject.  this is proxybuild.
+  - need a faster way to test end-to-end, with mcp.
+    faster edit-compile-test-debug cycle
+
+- servers owned by others.
+
 - on proxy config change of a proxy's name, but which keeps the
   same port as an old proxy, we should close any old
   upstream connections.
 
 - proxy shtudown thru agent_config doesn't close the
   listening port?
+
+- test command, described by dustina.
+  - ping timings
+  - time between request and response on each downstream conn.
+  - initial version DONE.
+  - need version that can use small "ping test" buckets.
+
+- bucket selection
+  - after auth -- DONE.
+  - need server side of this.
 
 ------------------------------------------------------------
 
@@ -295,4 +293,7 @@ known bugs
 - DONE: agent_stats returns current config and VERSION.
 
 - DONE: no thread-id in agent_stats.  Now aggregating results.
+
+- DONE: optimized connection to self, where moxi is running
+  as a memcached server.
 
