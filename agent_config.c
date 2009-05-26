@@ -148,8 +148,6 @@ int cproxy_init_agent_start(char *jid,
         m->nthreads   = nthreads;
         m->behavior   = behavior;
 
-        gethostname(m->hostname, sizeof(m->hostname));
-
         m->stat_configs      = 0;
         m->stat_config_fails = 0;
         m->stat_proxy_starts      = 0;

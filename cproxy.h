@@ -23,6 +23,8 @@ int cproxy_init(char *cfg_str,
 //
 extern volatile uint32_t msec_current_time;
 
+extern char cproxy_hostname[300]; // Immutable after init.
+
 // -------------------------------
 
 typedef struct {
@@ -93,8 +95,7 @@ struct proxy_main {
     //
     proxy *proxy_head;
 
-    int  nthreads;      // Immutable.
-    char hostname[300]; // Immutable.
+    int nthreads; // Immutable.
 
     // Updated by main listener thread only,
     // so no extra locking needed.
@@ -302,7 +303,8 @@ bool  cproxy_bucket_downstream(memcached_server_st *server,
                                proxy_behavior *behavior);
 
 void  cproxy_pause_upstream_for_downstream(proxy_td *ptd, conn *upstream);
-conn *cproxy_find_downstream_conn(downstream *d, char *key, int key_length);
+conn *cproxy_find_downstream_conn(downstream *d, char *key, int key_length,
+                                  bool *self);
 int   cproxy_server_index(downstream *d, char *key, size_t key_length);
 bool  cproxy_prep_conn_for_write(conn *c);
 bool  cproxy_dettach_if_noreply(downstream *d, conn *uc);

@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
+#include <unistd.h>
 #include <sysexits.h>
 #include <pthread.h>
 #include <assert.h>
@@ -22,6 +23,8 @@ volatile uint32_t  msec_current_time = 0;
 int                msec_cycle = 200;
 struct event       msec_clockevent;
 struct event_base *msec_clockevent_base = NULL;
+
+char cproxy_hostname[300] = {0}; // Immutable after init.
 
 void msec_clock_handler(const int fd, const short which, void *arg);
 void msec_set_current_time(void);
@@ -112,6 +115,8 @@ int cproxy_init(char *cfg_str,
 
     if (settings.verbose > 1)
         fprintf(stderr, "cproxy_init (%s)\n", cfg_str);
+
+    gethostname(cproxy_hostname, sizeof(cproxy_hostname));
 
     cproxy_init_a2a();
     cproxy_init_a2b();

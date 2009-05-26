@@ -965,7 +965,10 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
 
     // Assuming we're already connected to downstream.
     //
-    conn *c = cproxy_find_downstream_conn(d, key, key_len);
+    bool self = false;
+
+    conn *c = cproxy_find_downstream_conn(d, key, key_len,
+                                          &self);
     if (c != NULL) {
         if (cproxy_prep_conn_for_write(c)) {
             assert(c->state == conn_pause);
@@ -1222,7 +1225,10 @@ bool cproxy_forward_a2b_item_downstream(downstream *d, short cmd,
 
     // Assuming we're already connected to downstream.
     //
-    conn *c = cproxy_find_downstream_conn(d, ITEM_key(it), it->nkey);
+    bool self = false;
+
+    conn *c = cproxy_find_downstream_conn(d, ITEM_key(it), it->nkey,
+                                          &self);
     if (c != NULL) {
         if (cproxy_prep_conn_for_write(c)) {
             assert(c->state == conn_pause);

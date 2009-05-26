@@ -169,7 +169,10 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
                 }
 
                 if (first_request) {
-                    conn *c = cproxy_find_downstream_conn(d, key, key_len);
+                    bool self = false;
+
+                    conn *c = cproxy_find_downstream_conn(d, key, key_len,
+                                                          &self);
                     if (c != NULL) {
                         assert(c->item == NULL);
                         assert(c->state == conn_pause);

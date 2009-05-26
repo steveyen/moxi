@@ -980,15 +980,26 @@ int cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread) {
 }
 
 conn *cproxy_find_downstream_conn(downstream *d,
-                                  char *key, int key_length) {
+                                  char *key, int key_length,
+                                  bool *self) {
     assert(d != NULL);
     assert(d->downstream_conns != NULL);
     assert(key != NULL);
     assert(key_length > 0);
 
+    if (self != NULL)
+        *self = false;
+
     int s = cproxy_server_index(d, key, key_length);
     if (s >= 0 &&
         s < memcached_server_count(&d->mst)) {
+        if (self != NULL &&
+            settings.port > 0 &&
+            settings.port == d->mst.hosts[s].port &&
+            strcmp(d->mst.hosts[s].hostname, cproxy_hostname) == 0) {
+            *self = true;
+        }
+
         return d->downstream_conns[s];
     }
     return NULL;
