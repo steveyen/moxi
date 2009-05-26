@@ -97,7 +97,6 @@ void on_conflate_get_stats(void *userdata, void *opaque,
     };
 
     char buf[800];
-    char bufx[400];
 
 #define more_stat(spec, key, val)          \
     snprintf(buf, sizeof(buf), spec, val); \
@@ -109,11 +108,7 @@ void on_conflate_get_stats(void *userdata, void *opaque,
               m->nthreads);
 
     if (msci.do_settings) {
-        bufx[0] = '\0';
-        if (gethostname(bufx, sizeof(bufx)) == 0 &&
-            strlen(bufx) > 0) {
-            more_stat("%s", "main_hostname", bufx);
-        }
+        more_stat("%s", "main_hostname", m->hostname);
 
         cproxy_dump_behavior_ex(&m->behavior, "main_behavior", 2,
                                 add_stat_prefix, &ase);

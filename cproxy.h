@@ -93,7 +93,8 @@ struct proxy_main {
     //
     proxy *proxy_head;
 
-    int nthreads; // Immutable.
+    int  nthreads;      // Immutable.
+    char hostname[300]; // Immutable.
 
     // Updated by main listener thread only,
     // so no extra locking needed.
