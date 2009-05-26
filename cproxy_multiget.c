@@ -146,34 +146,35 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
                     goto loop_next;
                 }
 
-                // See if we've already requested this key via
-                // the multiget hash table, in order to
-                // de-deplicate repeated keys.
-                //
-                bool first_request = true;
+                bool self = false;
 
-                if (d->multiget != NULL) {
-                    multiget_entry *entry = calloc(1, sizeof(multiget_entry));
-                    if (entry != NULL) {
-                        entry->upstream_conn = uc_cur;
-                        entry->opaque = 0;
-                        entry->next = g_hash_table_lookup(d->multiget, key);
+                conn *c = cproxy_find_downstream_conn(d, key, key_len,
+                                                      &self);
+                if (c != NULL) {
+                    // See if we've already requested this key via
+                    // the multiget hash table, in order to
+                    // de-deplicate repeated keys.
+                    //
+                    bool first_request = true;
 
-                        g_hash_table_insert(d->multiget, key, entry);
+                    if (d->multiget != NULL) {
+                        multiget_entry *entry =
+                            calloc(1, sizeof(multiget_entry));
+                        if (entry != NULL) {
+                            entry->upstream_conn = uc_cur;
+                            entry->opaque = 0;
+                            entry->next = g_hash_table_lookup(d->multiget, key);
 
-                        if (entry->next != NULL)
-                            first_request = false;
-                    } else {
-                        // TODO: Handle out of multiget entry memory.
+                            g_hash_table_insert(d->multiget, key, entry);
+
+                            if (entry->next != NULL)
+                                first_request = false;
+                        } else {
+                            // TODO: Handle out of multiget entry memory.
+                        }
                     }
-                }
 
-                if (first_request) {
-                    bool self = false;
-
-                    conn *c = cproxy_find_downstream_conn(d, key, key_len,
-                                                          &self);
-                    if (c != NULL) {
+                    if (first_request) {
                         assert(c->item == NULL);
                         assert(c->state == conn_pause);
                         assert(IS_PROXY(c->protocol));
@@ -194,20 +195,20 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
                         //
                         emit_skey(c, key - 1, key_len + 1);
                     } else {
-                        // TODO: Handle when downstream conn is down.
+                        ptd->stats.tot_multiget_keys_dedupe++;
+
+                        if (settings.verbose > 1) {
+                            char buf[KEY_MAX_LENGTH + 10];
+                            memcpy(buf, key, key_len);
+                            buf[key_len] = '\0';
+
+                            fprintf(stderr,
+                                    "%d cproxy multiget dedpue: %s\n",
+                                    uc_cur->sfd, buf);
+                        }
                     }
                 } else {
-                    ptd->stats.tot_multiget_keys_dedupe++;
-
-                    if (settings.verbose > 1) {
-                        char buf[KEY_MAX_LENGTH + 10];
-                        memcpy(buf, key, key_len);
-                        buf[key_len] = '\0';
-
-                        fprintf(stderr,
-                                "%d cproxy multiget dedpue: %s\n",
-                                uc_cur->sfd, buf);
-                    }
+                    // TODO: Handle when downstream conn is down.
                 }
             }
 
