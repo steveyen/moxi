@@ -55,6 +55,10 @@ struct main_stats_collect_info {
     proxy_main       *m;
     conflate_add_stat add_stat;
     void             *opaque;
+
+    char *type;
+    bool  do_settings;
+    bool  do_stats;
 };
 
 /* This callback is invoked by conflate on a conflate thread
@@ -81,9 +85,16 @@ void on_conflate_get_stats(void *userdata, void *opaque,
         .prefix   = ""
     };
 
-    bool do_all      = (type == NULL || strlen(type) <= 0);
-    bool do_settings = (do_all || strcmp(type, "settings") == 0);
-    bool do_stats    = (do_all || strcmp(type, "stats") == 0);
+    bool do_all = (type == NULL || strlen(type) <= 0);
+
+    struct main_stats_collect_info msci = {
+        .m        = m,
+        .add_stat = add_stat,
+        .opaque   = opaque,
+        .type     = type,
+        .do_settings = (do_all || strcmp(type, "settings") == 0),
+        .do_stats    = (do_all || strcmp(type, "stats") == 0)
+    };
 
     char buf[800];
     char bufx[400];
@@ -97,7 +108,7 @@ void on_conflate_get_stats(void *userdata, void *opaque,
     more_stat("%u", "main_nthreads",
               m->nthreads);
 
-    if (do_settings) {
+    if (msci.do_settings) {
         bufx[0] = '\0';
         if (gethostname(bufx, sizeof(bufx)) == 0 &&
             strlen(bufx) > 0) {
@@ -108,7 +119,7 @@ void on_conflate_get_stats(void *userdata, void *opaque,
                                 add_stat_prefix, &ase);
     }
 
-    if (do_stats) {
+    if (msci.do_stats) {
         more_stat("%llu", "main_configs",
                   (long long unsigned int) m->stat_configs);
         more_stat("%llu", "main_config_fails",
@@ -123,7 +134,7 @@ void on_conflate_get_stats(void *userdata, void *opaque,
                   (long long unsigned int) m->stat_proxy_shutdowns);
     }
 
-    if (do_settings) {
+    if (msci.do_settings) {
         struct add_stat_emit ase_memcached = {
             .add_stat = add_stat,
             .opaque   = opaque,
@@ -133,7 +144,7 @@ void on_conflate_get_stats(void *userdata, void *opaque,
         process_stat_settings(add_stat_prefix_ase, &ase_memcached);
     }
 
-    if (do_stats) {
+    if (msci.do_stats) {
         struct add_stat_emit ase_memcached = {
             .add_stat = add_stat,
             .opaque   = opaque,
@@ -145,44 +156,38 @@ void on_conflate_get_stats(void *userdata, void *opaque,
 
     // Alloc here so the main listener thread has less work.
     //
-    if (do_stats) {
-        work_collect *ca = calloc(m->nthreads, sizeof(work_collect));
-        if (ca != NULL) {
-            int i;
+    work_collect *ca = calloc(m->nthreads, sizeof(work_collect));
+    if (ca != NULL) {
+        int i;
 
+        for (i = 1; i < m->nthreads; i++) {
+            // Each thread gets its own collection hashmap, which
+            // is keyed by each proxy's "binding:name", and whose
+            // values are proxy_stats.
+            //
+            GHashTable *map_proxy_stats =
+                g_hash_table_new(g_str_hash,
+                                 g_str_equal);
+            if (map_proxy_stats != NULL)
+                work_collect_init(&ca[i], -1, map_proxy_stats);
+            else
+                break;
+        }
+
+        // Continue on the main listener thread.
+        //
+        if (i >= m->nthreads &&
+            work_send(mthread->work_queue, main_stats_collect,
+                      &msci, ca)) {
+            // Wait for all the stats collecting to finish.
+            //
             for (i = 1; i < m->nthreads; i++) {
-                // Each thread gets its own collection hashmap, which
-                // is keyed by each proxy's "binding:name", and whose
-                // values are proxy_stats.
-                //
-                GHashTable *map_proxy_stats =
-                    g_hash_table_new(g_str_hash,
-                                     g_str_equal);
-                if (map_proxy_stats != NULL)
-                    work_collect_init(&ca[i], -1, map_proxy_stats);
-                else
-                    break;
+                work_collect_wait(&ca[i]);
             }
 
-            // Continue on the main listener thread.
-            //
-            struct main_stats_collect_info msci = {
-                .m        = m,
-                .add_stat = add_stat,
-                .opaque   = opaque
-            };
+            assert(m->nthreads > 0);
 
-            if (i >= m->nthreads &&
-                work_send(mthread->work_queue, main_stats_collect,
-                          &msci, ca)) {
-                // Wait for all the stats collecting to finish.
-                //
-                for (i = 1; i < m->nthreads; i++) {
-                    work_collect_wait(&ca[i]);
-                }
-
-                assert(m->nthreads > 0);
-
+            if (msci.do_stats) {
                 GHashTable *end_proxy_stats = ca[1].data;
                 if (end_proxy_stats != NULL) {
                     // Skip the first worker thread (index 1)'s results,
@@ -269,15 +274,15 @@ static void main_stats_collect(void *data0, void *data1) {
     for (proxy *p = m->proxy_head; p != NULL; p = p->next) {
         nproxy++;
 
-#define emit_s(key, val)                           \
-    snprintf(bufk, sizeof(bufk), "%u:%s:%s",       \
-             p->port,                              \
-             p->name != NULL ? p->name : "", key); \
-    msci->add_stat(msci->opaque, bufk, val);
+#define emit_s(key, val)                               \
+        snprintf(bufk, sizeof(bufk), "%u:%s:%s",       \
+                 p->port,                              \
+                 p->name != NULL ? p->name : "", key); \
+        msci->add_stat(msci->opaque, bufk, val);
 
-#define emit_f(key, fmtv, val)               \
-    snprintf(bufv, sizeof(bufv), fmtv, val); \
-    emit_s(key, bufv);
+#define emit_f(key, fmtv, val)                   \
+        snprintf(bufv, sizeof(bufv), fmtv, val); \
+        emit_s(key, bufv);
 
         pthread_mutex_lock(&p->proxy_lock);
 
@@ -287,66 +292,72 @@ static void main_stats_collect(void *data0, void *data1) {
         emit_f("config_ver",    "%u", p->config_ver);
         emit_f("behaviors_num", "%u", p->behaviors_num);
 
-        snprintf(bufk, sizeof(bufk),
-                 "%u:%s:behavior", p->port, p->name);
-
-        cproxy_dump_behavior_ex(&p->behavior_head, bufk, 1,
-                                add_stat_prefix, &ase);
-
-        for (int i = 0; i < p->behaviors_num; i++) {
+        if (msci->do_settings) {
             snprintf(bufk, sizeof(bufk),
-                     "%u:%s:behavior-%u", p->port, p->name, i);
+                     "%u:%s:behavior", p->port, p->name);
 
-            cproxy_dump_behavior_ex(&p->behaviors[i], bufk, 0,
+            cproxy_dump_behavior_ex(&p->behavior_head, bufk, 1,
                                     add_stat_prefix, &ase);
+
+            for (int i = 0; i < p->behaviors_num; i++) {
+                snprintf(bufk, sizeof(bufk),
+                         "%u:%s:behavior-%u", p->port, p->name, i);
+
+                cproxy_dump_behavior_ex(&p->behaviors[i], bufk, 0,
+                                        add_stat_prefix, &ase);
+            }
         }
 
-        emit_f("listening",
-               "%llu", (long long unsigned int) p->listening);
-        emit_f("listening_failed",
-               "%llu", (long long unsigned int) p->listening_failed);
+        if (msci->do_stats) {
+            emit_f("listening",
+                   "%llu", (long long unsigned int) p->listening);
+            emit_f("listening_failed",
+                   "%llu", (long long unsigned int) p->listening_failed);
+        }
 
         pthread_mutex_unlock(&p->proxy_lock);
 
         // Emit front_cache stats.
         //
-        pthread_mutex_lock(p->front_cache.lock);
+        if (msci->do_stats) {
+            pthread_mutex_lock(p->front_cache.lock);
 
-        if (p->front_cache.map != NULL)
-            emit_f("front_cache_size",
-                   "%u", g_hash_table_size(p->front_cache.map));
+            if (p->front_cache.map != NULL)
+                emit_f("front_cache_size",
+                       "%u", g_hash_table_size(p->front_cache.map));
 
-        emit_f("front_cache_max",
-               "%u", p->front_cache.max);
-        emit_f("front_cache_oldest_live",
-               "%u", p->front_cache.oldest_live);
+            emit_f("front_cache_max",
+                   "%u", p->front_cache.max);
+            emit_f("front_cache_oldest_live",
+                   "%u", p->front_cache.oldest_live);
 
-        emit_f("front_cache_tot_get_hits",
-               "%llu",
-               (long long unsigned int) p->front_cache.tot_get_hits);
-        emit_f("front_cache_tot_get_expires",
-               "%llu",
-               (long long unsigned int) p->front_cache.tot_get_expires);
-        emit_f("front_cache_tot_get_misses",
-               "%llu",
-               (long long unsigned int) p->front_cache.tot_get_misses);
-        emit_f("front_cache_tot_adds",
-               "%llu",
-               (long long unsigned int) p->front_cache.tot_adds);
-        emit_f("front_cache_tot_add_skips",
-               "%llu",
-               (long long unsigned int) p->front_cache.tot_add_skips);
-        emit_f("front_cache_tot_add_fails",
-               "%llu",
-               (long long unsigned int) p->front_cache.tot_add_fails);
-        emit_f("front_cache_tot_deletes",
-               "%llu",
-               (long long unsigned int) p->front_cache.tot_deletes);
-        emit_f("front_cache_tot_evictions",
-               "%llu",
-               (long long unsigned int) p->front_cache.tot_evictions);
+            emit_f("front_cache_tot_get_hits",
+                   "%llu",
+                   (long long unsigned int) p->front_cache.tot_get_hits);
+            emit_f("front_cache_tot_get_expires",
+                   "%llu",
+                   (long long unsigned int) p->front_cache.tot_get_expires);
+            emit_f("front_cache_tot_get_misses",
+                   "%llu",
+                   (long long unsigned int) p->front_cache.tot_get_misses);
+            emit_f("front_cache_tot_adds",
+                   "%llu",
+                   (long long unsigned int) p->front_cache.tot_adds);
+            emit_f("front_cache_tot_add_skips",
+                   "%llu",
+                   (long long unsigned int) p->front_cache.tot_add_skips);
+            emit_f("front_cache_tot_add_fails",
+                   "%llu",
+                   (long long unsigned int) p->front_cache.tot_add_fails);
+            emit_f("front_cache_tot_deletes",
+                   "%llu",
+                   (long long unsigned int) p->front_cache.tot_deletes);
+            emit_f("front_cache_tot_evictions",
+                   "%llu",
+                   (long long unsigned int) p->front_cache.tot_evictions);
 
-        pthread_mutex_unlock(p->front_cache.lock);
+            pthread_mutex_unlock(p->front_cache.lock);
+        }
     }
 
     // Starting at 1 because 0 is the main listen thread.
