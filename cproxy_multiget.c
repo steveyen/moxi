@@ -110,6 +110,8 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
         int cmd_len = space - command;
         assert(cmd_len == 3 || cmd_len == 4); // Either get or gets.
 
+        int cas_emit = (command[3] == 's');
+
         if (settings.verbose > 1)
             fprintf(stderr, "forward multiget %s (%d %d)\n",
                     command, cmd_len, uc_num);
@@ -131,19 +133,21 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
 
                 // Handle a front cache hit by queuing response.
                 //
-                item *it = mcache_get(front_cache, key, key_len,
-                                      msec_current_time_snapshot);
-                if (it != NULL) {
-                    assert(it->nkey == key_len);
-                    assert(strncmp(ITEM_key(it), key, it->nkey) == 0);
+                if (!cas_emit) {
+                    item *it = mcache_get(front_cache, key, key_len,
+                                          msec_current_time_snapshot);
+                    if (it != NULL) {
+                        assert(it->nkey == key_len);
+                        assert(strncmp(ITEM_key(it), key, it->nkey) == 0);
 
-                    cproxy_upstream_ascii_item_response(it, uc_cur);
+                        cproxy_upstream_ascii_item_response(it, uc_cur, 0);
 
-                    // The refcount was inc'ed by mcache_get() for us.
-                    //
-                    item_remove(it);
+                        // The refcount was inc'ed by mcache_get() for us.
+                        //
+                        item_remove(it);
 
-                    goto loop_next;
+                        goto loop_next;
+                    }
                 }
 
                 bool self = false;
@@ -157,9 +161,10 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
                         //
                         // TODO: Stats.
                         //
-                        it = item_get(key, key_len);
+                        item *it = item_get(key, key_len);
                         if (it != NULL) {
-                            cproxy_upstream_ascii_item_response(it, uc_cur);
+                            cproxy_upstream_ascii_item_response(it, uc_cur,
+                                                                cas_emit);
 
                             // The refcount was inc'ed by item_get() for us.
                             //
@@ -212,6 +217,9 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
                         c->icurr = c->ilist;
                         c->ileft = 0;
 
+                        // TODO: Possible bug here where later uc's
+                        // are the first to hash to a certain downstream.
+                        //
                         if (uc_num <= 0 &&
                             c->msgused <= 1 &&
                             c->msgbytes <= 0) {
@@ -330,16 +338,20 @@ void multiget_ascii_downstream_response(downstream *d, item *it) {
         while (entry != NULL) {
             // The upstream might have been closed mid-request.
             //
+            // TODO: Revisit the -1 cas_emit parameter.
+            //
             conn *uc = entry->upstream_conn;
             if (uc != NULL)
-                cproxy_upstream_ascii_item_response(it, uc);
+                cproxy_upstream_ascii_item_response(it, uc, -1);
 
             entry = entry->next;
         }
     } else {
         conn *uc = d->upstream_conn;
         while (uc != NULL) {
-            cproxy_upstream_ascii_item_response(it, uc);
+            // TODO: Revisit the -1 cas_emit parameter.
+            //
+            cproxy_upstream_ascii_item_response(it, uc, -1);
             uc = uc->next;
         }
     }

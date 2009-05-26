@@ -384,7 +384,8 @@ void cproxy_dump_behavior_stderr(const void *dump_opaque,
 
 // ---------------------------------------------------------------
 
-void cproxy_upstream_ascii_item_response(item *it, conn *uc);
+void cproxy_upstream_ascii_item_response(item *it, conn *uc,
+                                         int cas_emit);
 
 struct timeval cproxy_get_downstream_timeout(downstream *d, conn *c);
 struct timeval cproxy_get_wait_queue_timeout(proxy *p);

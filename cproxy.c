@@ -1205,14 +1205,17 @@ void upstream_error(conn *uc) {
     //
     // Send an END on get/gets instead of generic SERVER_ERROR.
     //
+    char *msg = "SERVER_ERROR proxy write to downstream\r\n";
+
     if (uc->cmd == -1 &&
         uc->cmd_start != NULL &&
         strncmp(uc->cmd_start, "get", 3) == 0)
-        out_string(uc, "END");
-    else
-        out_string(uc, "SERVER_ERROR proxy write to downstream");
+        msg = "END\r\n";
 
-    if (!update_event(uc, EV_WRITE | EV_PERSIST)) {
+    if (add_iov(uc, msg, strlen(msg)) == 0 &&
+        update_event(uc, EV_WRITE | EV_PERSIST)) {
+        conn_set_state(uc, conn_mwrite);
+    } else {
         ptd->stats.err_oom++;
         cproxy_close_conn(uc);
     }

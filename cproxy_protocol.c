@@ -151,7 +151,13 @@ void cproxy_process_upstream_ascii_nread(conn *c) {
         out_string(c, "CLIENT_ERROR bad data chunk");
 }
 
-void cproxy_upstream_ascii_item_response(item *it, conn *uc) {
+/**
+ * @param cas_emit  1: emit CAS.
+ *                  0: do not emit CAS.
+ *                 -1: data driven.
+ */
+void cproxy_upstream_ascii_item_response(item *it, conn *uc,
+                                         int cas_emit) {
     assert(it != NULL);
     assert(uc != NULL);
     assert(uc->state == conn_pause);
@@ -164,7 +170,9 @@ void cproxy_upstream_ascii_item_response(item *it, conn *uc) {
         //       Consider closing the upstream_conns?
         //
         uint64_t cas = ITEM_get_cas(it);
-        if (cas == CPROXY_NOT_CAS) {
+        if ((cas_emit == 0) ||
+            (cas_emit < 0 &&
+             cas == CPROXY_NOT_CAS)) {
             if (add_conn_item(uc, it)) {
                 it->refcount++; // TODO: Need item lock here?
 
