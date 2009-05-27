@@ -86,7 +86,8 @@ memcached_return memcached_fetch_execute(memcached_st *ptr,
   memcached_return rc= MEMCACHED_FAILURE;
   unsigned int x;
 
-  while ((result= memcached_fetch_result(ptr, result, &rc)) != NULL) {
+  while ((result= memcached_fetch_result(ptr, result, &rc)) != NULL) 
+  {
     if (rc == MEMCACHED_SUCCESS)
     {
       for (x= 0; x < number_of_callbacks; x++)

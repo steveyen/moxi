@@ -33,6 +33,9 @@ typedef memcached_return (*memcached_trigger_key)(memcached_st *ptr,
 typedef memcached_return (*memcached_trigger_delete_key)(memcached_st *ptr,  
                                                          const char *key, size_t key_length);
 
+typedef memcached_return (*memcached_dump_func)(memcached_st *ptr,  
+                                                const char *key, size_t key_length, void *context);
+
 #ifdef __cplusplus
 }
 #endif

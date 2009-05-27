@@ -38,6 +38,7 @@ libmemcached_la_SOURCES = crc.c \
 			  memcached_connect.c \
 			  memcached_delete.c \
 			  memcached_do.c \
+			  memcached_dump.c \
 			  memcached_fetch.c \
 			  memcached_flush.c \
 			  memcached_get.c \
@@ -72,7 +73,7 @@ endif
 
 DEFS += -DMEMCACHED_INTERNAL
 libmemcached_la_DEPENDENCIES = @DTRACE_OBJ@
-libmemcached_la_LIBADD = @DTRACE_OBJ@
+libmemcached_la_LIBADD = @DTRACE_OBJ@ $(LIBM)
 libmemcached_la_LDFLAGS = -version-info $(MEMCACHED_LIBRARY_VERSION) $(LD_VERSION_SCRIPT) $(LIBM)
 
 dtrace_probes.h: libmemcached_probes.d

@@ -1,6 +1,6 @@
 =head1 NAME
 
-memcached_callback_get memcached_callback_set - Get and set a callback
+memcached_callback_get, memcached_callback_set - Get and set a callback
 
 =head1 LIBRARY
 

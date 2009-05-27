@@ -15,11 +15,11 @@ extern "C" {
 
 struct memcached_string_st {
   memcached_st *root;
-  bool is_allocated;
   char *end;
+  char *string;
   size_t current_size;
   size_t block_size;
-  char *string;
+  bool is_allocated;
 };
 
 #define memcached_string_length(A) (size_t)((A)->end - (A)->string)

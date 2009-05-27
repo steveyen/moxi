@@ -1,6 +1,6 @@
 LDADDS = $(top_builddir)/libmemcached/libmemcached.la
 
-bin_PROGRAMS = memcat memcp memstat memrm memflush memslap memerror
+bin_PROGRAMS = memcat memdump memcp memstat memrm memflush memslap memerror
 
 noinst_HEADERS = client_options.h \
 		utilities.h \
@@ -14,6 +14,10 @@ memcat_LDFLAGS = -rpath $(pkglibdir)
 memcp_SOURCES = memcp.c utilities.c
 memcp_LDADD = $(LDADDS)
 memcp_LDFLAGS = -rpath $(pkglibdir)
+
+memdump_SOURCES = memdump.c utilities.c
+memdump_LDADD = $(LDADDS)
+memdump_LDFLAGS = -rpath $(pkglibdir)
 
 memstat_SOURCES = memstat.c utilities.c
 memstat_LDADD = $(LDADDS)

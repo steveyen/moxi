@@ -4,6 +4,7 @@ CLEANFILES= *.1 *.3
 EXTRA_DIST = libmemcached.pod\
 	libmemcachedutil.pod\
 	memcached_flush.pod\
+	memcached_dump.pod\
 	memcached_stats.pod\
 	memrm.pod\
 	memerror.pod\
@@ -27,6 +28,7 @@ EXTRA_DIST = libmemcached.pod\
 	memcached_set.pod\
 	memcached_version.pod\
 	memflush.pod\
+	memdump.pod\
 	memcached_flush_buffers.pod\
         memcached_analyze.pod\
         memcached_generate_hash_value.pod
@@ -37,6 +39,7 @@ man_MANS = libmemcached.3\
 	memcp.1\
 	memerror.1\
 	memflush.1\
+	memdump.1\
 	memrm.1\
 	memslap.1\
 	memstat.1\
@@ -91,6 +94,7 @@ man_MANS = libmemcached.3\
 	memcached_lib_version.3\
 	memcached_version.3\
         memcached_flush_buffers.3\
+        memcached_dump.3\
         memcached_generate_hash_value.3
 
 if BUILD_LIBMEMCACHEDUTIL
@@ -173,6 +177,9 @@ memcached_decrement.3:
 
 memcached_decrement_with_initial.3:
 	@POD2MAN@ -c "libmemcached" -r "" -s 3 ${top_srcdir}/docs/memcached_auto.pod > memcached_decrement_with_initial.3
+
+memcached_dump.3: memcached_dump.pod
+	@POD2MAN@ -c "libmemcached" -r "" -s 3 ${top_srcdir}/docs/memcached_dump.pod > memcached_dump.3
 
 memcached_flush.3: memcached_flush.pod
 	@POD2MAN@ -c "libmemcached" -r "" -s 3 ${top_srcdir}/docs/memcached_flush.pod > memcached_flush.3
@@ -329,6 +336,9 @@ memrm.1: memrm.pod
 
 memerror.1: memerror.pod
 	@POD2MAN@ -c "libmemcached" -r "" -s 1 ${top_srcdir}/docs/memerror.pod > memerror.1
+
+memdump.1: memdump.pod
+	@POD2MAN@ -c "libmemcached" -r "" -s 1 ${top_srcdir}/docs/memdump.pod > memdump.1
 
 memflush.1: memflush.pod
 	@POD2MAN@ -c "libmemcached" -r "" -s 1 ${top_srcdir}/docs/memflush.pod > memflush.1

@@ -14,14 +14,14 @@ extern "C" {
 #endif
 
 struct memcached_result_st {
-  bool is_allocated;
-  memcached_st *root;
-  char key[MEMCACHED_MAX_KEY];
-  size_t key_length;
-  memcached_string_st value;
   uint32_t flags;
-  uint64_t cas;
+  bool is_allocated;
   time_t expiration;
+  memcached_st *root;
+  size_t key_length;
+  uint64_t cas;
+  memcached_string_st value;
+  char key[MEMCACHED_MAX_KEY];
   /* Add result callback function */
 };
 

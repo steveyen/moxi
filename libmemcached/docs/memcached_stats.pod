@@ -1,6 +1,6 @@
 =head1 NAME
 
-memcached_stat memcached_stat_servername memcached_stat_get_value memcached_stat_get_keys - Get statistics
+memcached_stat, memcached_stat_servername, memcached_stat_get_value, memcached_stat_get_keys - Get memcached statistics
 
 =head1 LIBRARY
 
