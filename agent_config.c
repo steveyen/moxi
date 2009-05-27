@@ -45,15 +45,31 @@ int cproxy_init_agent(char *cfg_str,
                       int nthreads) {
     assert(cfg_str);
 
-    char *buff = strdup(cfg_str);
-    char *next = buff;
-
-    // Each sec (or section) looks like...
+    // The cfg_str looks like...
     //
     //   apikey=jidname@jhostname%jpassword,config=config,host=host
+    //     or
+    //   jidname@jhostname%jpassword,config=config,host=host
     //
-    // Only the apikey is needed.
+    // Only the apikey is needed, so it can look like...
     //
+    //   jidname@jhostname%jpassword
+    //
+    int cfg_len = strlen(cfg_str);
+
+    char *buff;
+
+    if (strncmp(cfg_str, "apikey=", 7) == 0) {
+        buff = strdup(cfg_str);
+    } else {
+        buff = calloc(cfg_len + 50, sizeof(char));
+        if (buff != NULL) {
+            snprintf(buff, cfg_len + 50, "apikey=%s", cfg_str);
+        }
+    }
+
+    char *next = buff;
+
     int rv = 0;
 
     while (next != NULL) {

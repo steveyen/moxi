@@ -4298,7 +4298,8 @@ int main (int argc, char **argv) {
     } else {
         int i = argc - 1;
         while (i > 0) {
-            if (strncmp(argv[i], "apikey=", 7) == 0) {
+            if (strncmp(argv[i], "apikey=", 7) == 0 ||
+                strchr(argv[i], '@') != NULL) {
                 cproxy_init(argv[i], cproxy_behavior,
                             settings.num_threads,
                             main_base);
