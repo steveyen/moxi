@@ -306,6 +306,7 @@ memcached_return memcached_connect(memcached_server_st *ptr)
   LIBMEMCACHED_MEMCACHED_CONNECT_START();
 
   /* both retry_timeout and server_failure_limit must be set in order to delay retrying a server on error. */
+  WATCHPOINT_ASSERT(ptr->root);
   if (ptr->root->retry_timeout && ptr->root->server_failure_limit)
   {
     struct timeval next_time;

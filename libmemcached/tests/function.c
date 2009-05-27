@@ -872,7 +872,6 @@ static test_return  set_test2(memcached_st *memc)
 static test_return  set_test3(memcached_st *memc)
 {
   memcached_return rc;
-  char *key= "foo";
   char *value;
   size_t value_length= 8191;
   unsigned int x;
@@ -883,8 +882,13 @@ static test_return  set_test3(memcached_st *memc)
   for (x= 0; x < value_length; x++)
     value[x] = (char) (x % 127);
 
-  for (x= 0; x < 1; x++)
+  /* The dump test relies on there being at least 32 items in memcached */
+  for (x= 0; x < 32; x++)
   {
+    char key[16];
+
+    sprintf(key, "foo%u", x);
+
     rc= memcached_set(memc, key, strlen(key), 
                       value, value_length,
                       (time_t)0, (uint32_t)0);
@@ -3342,12 +3346,12 @@ static test_return noreply_test(memcached_st *memc)
   uint32_t flags;
   memcached_result_st results_obj;
   memcached_result_st *results;
-  ret=memcached_mget(memc, keys, lengths, 1);
+  ret= memcached_mget(memc, keys, lengths, 1);
   assert(ret == MEMCACHED_SUCCESS);
 
-  results=memcached_result_create(memc, &results_obj);
+  results= memcached_result_create(memc, &results_obj);
   assert(results);
-  results=memcached_fetch_result(memc, &results_obj, &ret);
+  results= memcached_fetch_result(memc, &results_obj, &ret);
   assert(results);
   assert(ret == MEMCACHED_SUCCESS);
   uint64_t cas= memcached_result_cas(results);
@@ -3386,6 +3390,45 @@ static test_return analyzer_test(memcached_st *memc)
 
   free(report);
   memcached_stat_free(NULL, stat);
+
+  return TEST_SUCCESS;
+}
+
+/* Count the objects */
+static memcached_return callback_dump_counter(memcached_st *ptr __attribute__((unused)),  
+                                              const char *key __attribute__((unused)), 
+                                              size_t key_length __attribute__((unused)), 
+                                              void *context)
+{
+  uint32_t *counter= (uint32_t *)context;
+
+  *counter= *counter + 1;
+
+  return MEMCACHED_SUCCESS;
+}
+
+static test_return dump_test(memcached_st *memc)
+{
+  memcached_return rc;
+  uint32_t counter= 0;
+  memcached_dump_func callbacks[1];
+  test_return main_rc;
+
+  callbacks[0]= &callback_dump_counter;
+
+  /* No support for Binary protocol yet */
+  if (memc->flags & MEM_BINARY_PROTOCOL)
+    return TEST_SUCCESS;
+
+  main_rc= set_test3(memc);
+
+  assert (main_rc == TEST_SUCCESS);
+
+  rc= memcached_dump(memc, callbacks, (void *)&counter, 1);
+  assert(rc == MEMCACHED_SUCCESS);
+
+  /* We may have more then 32 if our previous flush has not completed */
+  assert(counter >= 32);
 
   return TEST_SUCCESS;
 }
@@ -3832,6 +3875,7 @@ test_st tests[] ={
   {"set", 0, set_test },
   {"set2", 0, set_test2 },
   {"set3", 0, set_test3 },
+  {"dump", 1, dump_test},
   {"add", 1, add_test },
   {"replace", 1, replace_test },
   {"delete", 1, delete_test },

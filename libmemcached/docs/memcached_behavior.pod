@@ -1,6 +1,6 @@
 =head1 NAME
 
-memcached_behavior_get memcached_behavior_set - Manipulate behavior
+memcached_behavior_get, memcached_behavior_set - Manipulate behavior
 
 =head1 LIBRARY
 

@@ -12,6 +12,15 @@
 ^lib/libmemcachedPlus.la$
 ^tests/testplus$
 
+# Don't bother with TAGS files
+TAGS
+clients/TAGS
+clients/memdump
+libmemcached/TAGS
+libmemcachedutil/TAGS
+tests/TAGS
+
+
 
 # Build artifacts
 ^libmemcached/libmemcached.la$

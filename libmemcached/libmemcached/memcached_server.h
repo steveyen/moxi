@@ -15,30 +15,30 @@ extern "C" {
 
 struct memcached_server_st {
   bool is_allocated;
-  char hostname[MEMCACHED_MAX_HOST_LENGTH];
-  unsigned int port;
-  int fd;
-  int cached_errno;
-  unsigned int cursor_active;
-  char write_buffer[MEMCACHED_MAX_BUFFER];
-  size_t write_buffer_offset;
-  char read_buffer[MEMCACHED_MAX_BUFFER];
-  size_t read_data_length;
-  size_t read_buffer_length;
-  char *read_ptr;
   bool sockaddr_inited;
-  struct addrinfo *address_info;
-  memcached_connection type;
-  uint8_t major_version;
-  uint8_t minor_version;
-  uint8_t micro_version;
   uint16_t count;
+  unsigned int cursor_active;
+  unsigned int port;
+  int cached_errno;
+  int fd;
+  uint32_t io_bytes_sent; /* # bytes sent since last read */
+  uint32_t server_failure_counter;
+  uint32_t weight;
+  uint8_t major_version;
+  uint8_t micro_version;
+  uint8_t minor_version;
+  memcached_connection type;
+  char *read_ptr;
+  size_t read_buffer_length;
+  size_t read_data_length;
+  size_t write_buffer_offset;
+  struct addrinfo *address_info;
   time_t next_retry;
   memcached_st *root;
   uint64_t limit_maxbytes;
-  uint32_t server_failure_counter;
-  uint32_t io_bytes_sent; /* # bytes sent since last read */
-  uint32_t weight;
+  char read_buffer[MEMCACHED_MAX_BUFFER];
+  char write_buffer[MEMCACHED_MAX_BUFFER];
+  char hostname[MEMCACHED_MAX_HOST_LENGTH];
 };
 
 #define memcached_server_count(A) (A)->number_of_hosts

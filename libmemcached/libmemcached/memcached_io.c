@@ -227,9 +227,9 @@ ssize_t memcached_io_write(memcached_server_st *ptr,
         return -1;
 
       /* If io_flush calls memcached_purge, sent_length may be 0 */
-      if (sent_length != 0)
+      unlikely (sent_length != 0)
       {
-        WATCHPOINT_ASSERT(sent_length == buffer_end);
+        WATCHPOINT_ASSERT(sent_length == (ssize_t)buffer_end);
       }
     }
   }

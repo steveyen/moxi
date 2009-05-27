@@ -270,6 +270,10 @@ static memcached_return textual_read_one_response(memcached_server_st *ptr,
       else
         return MEMCACHED_UNKNOWN_READ_FAILURE;
     }
+  case 'I': /* CLIENT ERROR */
+      /* We add back in one because we will need to search for END */
+      memcached_server_response_increment(ptr);
+    return MEMCACHED_ITEM;
   case 'C': /* CLIENT ERROR */
     return MEMCACHED_CLIENT_ERROR;
   default:

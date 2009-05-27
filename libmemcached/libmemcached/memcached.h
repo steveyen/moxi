@@ -45,61 +45,71 @@ struct memcached_continuum_item_st {
 #define LIBMEMCACHED_VERSION_STRING "0.29"
 
 struct memcached_analysis_st {
-  uint64_t most_used_bytes;
-  uint64_t least_remaining_bytes;
   uint32_t average_item_size;
   uint32_t longest_uptime;
   uint32_t least_free_server;
   uint32_t most_consumed_server;
   uint32_t oldest_server;
   double pool_hit_ratio;
+  uint64_t most_used_bytes;
+  uint64_t least_remaining_bytes;
 };
 
 struct memcached_stat_st {
+  uint32_t connection_structures;
+  uint32_t curr_connections;
+  uint32_t curr_items;
   uint32_t pid;
-  uint32_t uptime;
+  uint32_t pointer_size;
+  uint32_t rusage_system_microseconds;
+  uint32_t rusage_system_seconds;
+  uint32_t rusage_user_microseconds;
+  uint32_t rusage_user_seconds;
   uint32_t threads;
   uint32_t time;
-  uint32_t pointer_size;
-  uint32_t rusage_user_seconds;
-  uint32_t rusage_user_microseconds;
-  uint32_t rusage_system_seconds;
-  uint32_t rusage_system_microseconds;
-  uint32_t curr_items;
-  uint32_t total_items;
-  uint64_t limit_maxbytes;
-  uint32_t curr_connections;
   uint32_t total_connections;
-  uint32_t connection_structures;
+  uint32_t total_items;
+  uint32_t uptime;
   uint64_t bytes;
-  uint64_t cmd_get;
-  uint64_t cmd_set;
-  uint64_t get_hits;
-  uint64_t get_misses;
-  uint64_t evictions;
   uint64_t bytes_read;
   uint64_t bytes_written;
+  uint64_t cmd_get;
+  uint64_t cmd_set;
+  uint64_t evictions;
+  uint64_t get_hits;
+  uint64_t get_misses;
+  uint64_t limit_maxbytes;
   char version[MEMCACHED_VERSION_STRING_LENGTH];
 };
 
 struct memcached_st {
   uint8_t purging;
   bool is_allocated;
+  uint8_t distribution;
+  uint8_t hash;
+  uint32_t continuum_points_counter;
   memcached_server_st *hosts;
+  int32_t snd_timeout;
+  int32_t rcv_timeout;
+  uint32_t server_failure_limit;
+  uint32_t io_msg_watermark;
+  uint32_t io_bytes_watermark;
+  uint32_t io_key_prefetch;
   uint32_t number_of_hosts;
   uint32_t cursor_server;
   int cached_errno;
   uint32_t flags;
-  int send_size;
-  int recv_size;
   int32_t poll_timeout;
   int32_t connect_timeout;
   int32_t retry_timeout;
-  memcached_result_st result;
-  memcached_hash hash;
-  memcached_server_distribution distribution;
-  void *user_data;
   uint32_t continuum_count;
+  int send_size;
+  int recv_size;
+  void *user_data;
+  time_t next_distribution_rebuild;
+  size_t prefix_key_length;
+  memcached_hash hash_continuum;
+  memcached_result_st result;
   memcached_continuum_item_st *continuum;
   memcached_clone_func on_clone;
   memcached_cleanup_func on_cleanup;
@@ -109,16 +119,6 @@ struct memcached_st {
   memcached_trigger_key get_key_failure;
   memcached_trigger_delete_key delete_trigger;
   char prefix_key[MEMCACHED_PREFIX_KEY_MAX_SIZE];
-  size_t prefix_key_length;
-  memcached_hash hash_continuum;
-  uint32_t continuum_points_counter;
-  int32_t snd_timeout;
-  int32_t rcv_timeout;
-  uint32_t server_failure_limit;
-  uint32_t io_msg_watermark;
-  uint32_t io_bytes_watermark;
-  uint32_t io_key_prefetch;
-  time_t next_distribution_rebuild;
 };
 
 
@@ -222,6 +222,8 @@ memcached_return memcached_callback_set(memcached_st *ptr,
 void *memcached_callback_get(memcached_st *ptr, 
                              memcached_callback flag,
                              memcached_return *error);
+
+memcached_return memcached_dump(memcached_st *ptr, memcached_dump_func *function, void *context, uint32_t number_of_callbacks);
 
 
 #ifdef __cplusplus
