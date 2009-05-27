@@ -31,19 +31,22 @@ static void work_stats_collect(void *data0, void *data1);
 static void main_stats_reset(void *data0, void *data1);
 static void work_stats_reset(void *data0, void *data1);
 
-static void add_proxy_stats(proxy_stats *agg, proxy_stats *x);
+static void add_proxy_stats(proxy_stats *agg,
+                            proxy_stats *x);
+static void add_stats_cmd(proxy_stats_cmd *agg,
+                          proxy_stats_cmd *x);
 
-void map_proxy_stats_foreach_free(gpointer key,
-                                  gpointer value,
-                                  gpointer user_data);
+void map_pstd_foreach_free(gpointer key,
+                           gpointer value,
+                           gpointer user_data);
 
-void map_proxy_stats_foreach_emit(gpointer key,
-                                  gpointer value,
-                                  gpointer user_data);
+void map_pstd_foreach_emit(gpointer key,
+                           gpointer value,
+                           gpointer user_data);
 
-void map_proxy_stats_foreach_merge(gpointer key,
-                                   gpointer value,
-                                   gpointer user_data);
+void map_pstd_foreach_merge(gpointer key,
+                            gpointer value,
+                            gpointer user_data);
 
 struct add_stat_emit {
     conflate_add_stat add_stat;
@@ -158,13 +161,13 @@ void on_conflate_get_stats(void *userdata, void *opaque,
         for (i = 1; i < m->nthreads; i++) {
             // Each thread gets its own collection hashmap, which
             // is keyed by each proxy's "binding:name", and whose
-            // values are proxy_stats.
+            // values are proxy_stats_td.
             //
-            GHashTable *map_proxy_stats =
+            GHashTable *map_pstd =
                 g_hash_table_new(g_str_hash,
                                  g_str_equal);
-            if (map_proxy_stats != NULL)
-                work_collect_init(&ca[i], -1, map_proxy_stats);
+            if (map_pstd != NULL)
+                work_collect_init(&ca[i], -1, map_pstd);
             else
                 break;
         }
@@ -183,33 +186,33 @@ void on_conflate_get_stats(void *userdata, void *opaque,
             assert(m->nthreads > 0);
 
             if (msci.do_stats) {
-                GHashTable *end_proxy_stats = ca[1].data;
-                if (end_proxy_stats != NULL) {
+                GHashTable *end_pstd = ca[1].data;
+                if (end_pstd != NULL) {
                     // Skip the first worker thread (index 1)'s results,
                     // because that's where we'll aggregate final results.
                     //
                     for (i = 2; i < m->nthreads; i++) {
-                        GHashTable *map_proxy_stats = ca[i].data;
-                        if (map_proxy_stats != NULL) {
-                            g_hash_table_foreach(map_proxy_stats,
-                                                 map_proxy_stats_foreach_merge,
-                                                 end_proxy_stats);
+                        GHashTable *map_pstd = ca[i].data;
+                        if (map_pstd != NULL) {
+                            g_hash_table_foreach(map_pstd,
+                                                 map_pstd_foreach_merge,
+                                                 end_pstd);
                         }
                     }
 
-                    g_hash_table_foreach(end_proxy_stats,
-                                         map_proxy_stats_foreach_emit,
+                    g_hash_table_foreach(end_pstd,
+                                         map_pstd_foreach_emit,
                                          &ase);
                 }
             }
 
             for (i = 1; i < m->nthreads; i++) {
-                GHashTable *map_proxy_stats = ca[i].data;
-                if (map_proxy_stats != NULL) {
-                    g_hash_table_foreach(map_proxy_stats,
-                                         map_proxy_stats_foreach_free,
+                GHashTable *map_pstd = ca[i].data;
+                if (map_pstd != NULL) {
+                    g_hash_table_foreach(map_pstd,
+                                         map_pstd_foreach_free,
                                          NULL);
-                    g_hash_table_destroy(map_proxy_stats);
+                    g_hash_table_destroy(map_pstd);
                 }
             }
 
@@ -220,19 +223,27 @@ void on_conflate_get_stats(void *userdata, void *opaque,
     add_stat(opaque, NULL, NULL);
 }
 
-void map_proxy_stats_foreach_merge(gpointer key,
-                                   gpointer value,
-                                   gpointer user_data) {
-    GHashTable *end_proxy_stats = user_data;
+void map_pstd_foreach_merge(gpointer key,
+                            gpointer value,
+                            gpointer user_data) {
+    GHashTable *map_end_pstd = user_data;
     if (key != NULL &&
-        end_proxy_stats != NULL) {
-        proxy_stats *cur_ps = (proxy_stats *) value;
-        proxy_stats *end_ps =
-            g_hash_table_lookup(end_proxy_stats,
+        map_end_pstd != NULL) {
+        proxy_stats_td *cur_pstd = (proxy_stats_td *) value;
+        proxy_stats_td *end_pstd =
+            g_hash_table_lookup(map_end_pstd,
                                 key);
-        if (cur_ps != NULL &&
-            end_ps != NULL) {
-            add_proxy_stats(end_ps, cur_ps);
+        if (cur_pstd != NULL &&
+            end_pstd != NULL) {
+            add_proxy_stats(&end_pstd->stats,
+                            &cur_pstd->stats);
+
+            for (int j = 0; j < STATS_CMD_TYPE_last; j++) {
+                for (int k = 0; k < STATS_CMD_last; k++) {
+                    add_stats_cmd(&end_pstd->stats_cmd[j][k],
+                                  &cur_pstd->stats_cmd[j][k]);
+                }
+            }
         }
     }
 }
@@ -403,8 +414,8 @@ static void work_stats_collect(void *data0, void *data1) {
 
     assert(is_listen_thread() == false); // Expecting a worker thread.
 
-    GHashTable *map_proxy_stats = c->data;
-    assert(map_proxy_stats != NULL);
+    GHashTable *map_pstd = c->data;
+    assert(map_pstd != NULL);
 
     pthread_mutex_lock(&p->proxy_lock);
     bool locked = true;
@@ -418,17 +429,29 @@ static void work_stats_collect(void *data0, void *data1) {
             pthread_mutex_unlock(&p->proxy_lock);
             locked = false;
 
-            proxy_stats *ps = g_hash_table_lookup(map_proxy_stats, key_buf);
-            if (ps == NULL) {
-                ps = calloc(1, sizeof(proxy_stats));
-                if (ps != NULL) {
-                    g_hash_table_insert(map_proxy_stats, key_buf, ps);
+            proxy_stats_td *pstd =
+                g_hash_table_lookup(map_pstd, key_buf);
+            if (pstd == NULL) {
+                pstd = calloc(1, sizeof(proxy_stats_td));
+                if (pstd != NULL) {
+                    g_hash_table_insert(map_pstd,
+                                        key_buf,
+                                        pstd);
                     key_buf = NULL;
                 }
             }
 
-            if (ps != NULL)
-                add_proxy_stats(ps, &ptd->stats);
+            if (pstd != NULL) {
+                add_proxy_stats(&pstd->stats,
+                                &ptd->stats.stats);
+
+                for (int j = 0; j < STATS_CMD_TYPE_last; j++) {
+                    for (int k = 0; k < STATS_CMD_last; k++) {
+                        add_stats_cmd(&pstd->stats_cmd[j][k],
+                                      &ptd->stats.stats_cmd[j][k]);
+                    }
+                }
+            }
 
             if (key_buf != NULL)
                 free(key_buf);
@@ -481,9 +504,22 @@ static void add_proxy_stats(proxy_stats *agg, proxy_stats *x) {
     agg->err_downstream_write_prep += x->err_downstream_write_prep;
 }
 
-void map_proxy_stats_foreach_free(gpointer key,
-                                  gpointer value,
-                                  gpointer user_data) {
+static void add_stats_cmd(proxy_stats_cmd *agg,
+                          proxy_stats_cmd *x) {
+    assert(agg);
+    assert(x);
+
+    agg->seen        += x->seen;
+    agg->hits        += x->hits;
+    agg->misses      += x->misses;
+    agg->read_bytes  += x->read_bytes;
+    agg->write_bytes += x->write_bytes;
+    agg->cas         += x->cas;
+}
+
+void map_pstd_foreach_free(gpointer key,
+                           gpointer value,
+                           gpointer user_data) {
     assert(key != NULL);
     free(key);
 
@@ -491,14 +527,14 @@ void map_proxy_stats_foreach_free(gpointer key,
     free(value);
 }
 
-void map_proxy_stats_foreach_emit(gpointer key,
-                                  gpointer value,
-                                  gpointer user_data) {
+void map_pstd_foreach_emit(gpointer key,
+                           gpointer value,
+                           gpointer user_data) {
     char *name = key;
     assert(name != NULL);
 
-    proxy_stats *ps = value;
-    assert(ps != NULL);
+    proxy_stats_td *pstd = value;
+    assert(pstd != NULL);
 
     struct add_stat_emit *emit = user_data;
     assert(emit != NULL);
@@ -515,67 +551,67 @@ void map_proxy_stats_foreach_emit(gpointer key,
     emit->add_stat(emit->opaque, buf_key, buf_val);
 
     more_thread_stat("num_upstream",
-                     ps->num_upstream);
+                     pstd->stats.num_upstream);
     more_thread_stat("tot_upstream",
-                     ps->tot_upstream);
+                     pstd->stats.tot_upstream);
     more_thread_stat("num_downstream_conn",
-                     ps->num_downstream_conn);
+                     pstd->stats.num_downstream_conn);
     more_thread_stat("tot_downstream_conn",
-                     ps->tot_downstream_conn);
+                     pstd->stats.tot_downstream_conn);
     more_thread_stat("tot_downstream_released",
-                     ps->tot_downstream_released);
+                     pstd->stats.tot_downstream_released);
     more_thread_stat("tot_downstream_reserved",
-                     ps->tot_downstream_reserved);
+                     pstd->stats.tot_downstream_reserved);
     more_thread_stat("tot_downstream_freed",
-                     ps->tot_downstream_freed);
+                     pstd->stats.tot_downstream_freed);
     more_thread_stat("tot_downstream_quit_server",
-                     ps->tot_downstream_quit_server);
+                     pstd->stats.tot_downstream_quit_server);
     more_thread_stat("tot_downstream_max_reached",
-                     ps->tot_downstream_max_reached);
+                     pstd->stats.tot_downstream_max_reached);
     more_thread_stat("tot_downstream_create_failed",
-                     ps->tot_downstream_create_failed);
+                     pstd->stats.tot_downstream_create_failed);
     more_thread_stat("tot_downstream_connect",
-                     ps->tot_downstream_connect);
+                     pstd->stats.tot_downstream_connect);
     more_thread_stat("tot_downstream_connect_failed",
-                     ps->tot_downstream_connect_failed);
+                     pstd->stats.tot_downstream_connect_failed);
     more_thread_stat("tot_downstream_auth",
-                     ps->tot_downstream_auth);
+                     pstd->stats.tot_downstream_auth);
     more_thread_stat("tot_downstream_auth_failed",
-                     ps->tot_downstream_auth_failed);
+                     pstd->stats.tot_downstream_auth_failed);
     more_thread_stat("tot_downstream_bucket",
-                     ps->tot_downstream_bucket);
+                     pstd->stats.tot_downstream_bucket);
     more_thread_stat("tot_downstream_bucket_failed",
-                     ps->tot_downstream_bucket_failed);
+                     pstd->stats.tot_downstream_bucket_failed);
     more_thread_stat("tot_downstream_propagate_failed",
-                     ps->tot_downstream_propagate_failed);
+                     pstd->stats.tot_downstream_propagate_failed);
     more_thread_stat("tot_downstream_close_on_upstream_close",
-                     ps->tot_downstream_close_on_upstream_close);
+                     pstd->stats.tot_downstream_close_on_upstream_close);
     more_thread_stat("tot_downstream_timeout",
-                     ps->tot_downstream_timeout);
+                     pstd->stats.tot_downstream_timeout);
     more_thread_stat("tot_wait_queue_timeout",
-                     ps->tot_wait_queue_timeout);
+                     pstd->stats.tot_wait_queue_timeout);
     more_thread_stat("tot_assign_downstream",
-                     ps->tot_assign_downstream);
+                     pstd->stats.tot_assign_downstream);
     more_thread_stat("tot_assign_upstream",
-                     ps->tot_assign_upstream);
+                     pstd->stats.tot_assign_upstream);
     more_thread_stat("tot_assign_recursion",
-                     ps->tot_assign_recursion);
+                     pstd->stats.tot_assign_recursion);
     more_thread_stat("tot_reset_upstream_avail",
-                     ps->tot_reset_upstream_avail);
+                     pstd->stats.tot_reset_upstream_avail);
     more_thread_stat("tot_multiget_keys",
-                     ps->tot_multiget_keys);
+                     pstd->stats.tot_multiget_keys);
     more_thread_stat("tot_multiget_keys_dedupe",
-                     ps->tot_multiget_keys_dedupe);
+                     pstd->stats.tot_multiget_keys_dedupe);
     more_thread_stat("tot_optimize_sets",
-                     ps->tot_optimize_sets);
+                     pstd->stats.tot_optimize_sets);
     more_thread_stat("tot_retry",
-                     ps->tot_retry);
+                     pstd->stats.tot_retry);
     more_thread_stat("err_oom",
-                     ps->err_oom);
+                     pstd->stats.err_oom);
     more_thread_stat("err_upstream_write_prep",
-                     ps->err_upstream_write_prep);
+                     pstd->stats.err_upstream_write_prep);
     more_thread_stat("err_downstream_write_prep",
-                     ps->err_downstream_write_prep);
+                     pstd->stats.err_downstream_write_prep);
 }
 
 /* This callback is invoked by conflate on a conflate thread
@@ -700,7 +736,7 @@ static void work_stats_reset(void *data0, void *data1) {
 
     assert(is_listen_thread() == false); // Expecting a worker thread.
 
-    cproxy_reset_stats(&ptd->stats);
+    cproxy_reset_stats_td(&ptd->stats);
 
     work_collect_one(c);
 }

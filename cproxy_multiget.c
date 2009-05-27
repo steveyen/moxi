@@ -71,7 +71,7 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
     for (int i = 0; i < nconns; i++) {
         if (d->downstream_conns[i] != NULL &&
             cproxy_prep_conn_for_write(d->downstream_conns[i]) == false) {
-            d->ptd->stats.err_downstream_write_prep++;
+            d->ptd->stats.stats.err_downstream_write_prep++;
             cproxy_close_conn(d->downstream_conns[i]);
             return false;
         }
@@ -129,7 +129,7 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
             // This key_len check helps skip consecutive spaces.
             //
             if (key_len > 0) {
-                ptd->stats.tot_multiget_keys++;
+                ptd->stats.stats.tot_multiget_keys++;
 
                 // Handle a front cache hit by queuing response.
                 //
@@ -227,7 +227,7 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
                         //
                         emit_skey(c, key - 1, key_len + 1);
                     } else {
-                        ptd->stats.tot_multiget_keys_dedupe++;
+                        ptd->stats.stats.tot_multiget_keys_dedupe++;
 
                         if (settings.verbose > 1) {
                             char buf[KEY_MAX_LENGTH + 10];
@@ -273,7 +273,7 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
                     fprintf(stderr,
                             "Couldn't update cproxy write event\n");
 
-                d->ptd->stats.err_oom++;
+                d->ptd->stats.stats.err_oom++;
                 cproxy_close_conn(c);
             }
         }

@@ -674,7 +674,7 @@ void a2b_process_downstream_response(conn *c) {
                     fprintf(stderr,
                             "Can't write upstream a2b event\n");
 
-                d->ptd->stats.err_oom++;
+                d->ptd->stats.stats.err_oom++;
                 cproxy_close_conn(uc);
             }
         }
@@ -710,7 +710,7 @@ void a2b_process_downstream_response(conn *c) {
                     fprintf(stderr,
                             "Can't write upstream a2b event\n");
 
-                d->ptd->stats.err_oom++;
+                d->ptd->stats.stats.err_oom++;
                 cproxy_close_conn(uc);
             }
         }
@@ -737,7 +737,7 @@ void a2b_process_downstream_response(conn *c) {
                     sprintf(s, "%llu", (unsigned long long) v);
                     out_string(uc, s);
                 } else {
-                    d->ptd->stats.err_oom++;
+                    d->ptd->stats.stats.err_oom++;
                     cproxy_close_conn(uc);
                 }
                 break;
@@ -764,7 +764,7 @@ void a2b_process_downstream_response(conn *c) {
                     fprintf(stderr,
                             "Can't write upstream a2b arith event\n");
 
-                d->ptd->stats.err_oom++;
+                d->ptd->stats.stats.err_oom++;
                 cproxy_close_conn(uc);
             }
         }
@@ -1050,10 +1050,10 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
                     d->upstream_suffix = "CLIENT_ERROR a2b parse request\r\n";
             }
 
-            d->ptd->stats.err_oom++;
+            d->ptd->stats.stats.err_oom++;
             cproxy_close_conn(c);
         } else {
-            d->ptd->stats.err_downstream_write_prep++;
+            d->ptd->stats.stats.err_downstream_write_prep++;
             cproxy_close_conn(c);
         }
     }
@@ -1176,7 +1176,7 @@ bool cproxy_broadcast_a2b_downstream(downstream *d,
                         fprintf(stderr,
                                 "Update cproxy write event failed\n");
 
-                    d->ptd->stats.err_oom++;
+                    d->ptd->stats.stats.err_oom++;
                     cproxy_close_conn(c);
                 }
             } else {
@@ -1184,7 +1184,7 @@ bool cproxy_broadcast_a2b_downstream(downstream *d,
                     fprintf(stderr,
                             "a2b broadcast prep conn failed\n");
 
-                d->ptd->stats.err_downstream_write_prep++;
+                d->ptd->stats.stats.err_downstream_write_prep++;
                 cproxy_close_conn(c);
             }
         }
@@ -1341,7 +1341,7 @@ bool cproxy_forward_a2b_item_downstream(downstream *d, short cmd,
                                     cproxy_optimize_set_ascii(d, uc,
                                                               ITEM_key(it),
                                                               it->nkey)) {
-                                    d->ptd->stats.tot_optimize_sets++;
+                                    d->ptd->stats.stats.tot_optimize_sets++;
                                 }
                             } else {
                                 c->write_and_go = conn_pause;
@@ -1358,10 +1358,10 @@ bool cproxy_forward_a2b_item_downstream(downstream *d, short cmd,
                 item_remove(it_hdr);
             }
 
-            d->ptd->stats.err_oom++;
+            d->ptd->stats.stats.err_oom++;
             cproxy_close_conn(c);
         } else {
-            d->ptd->stats.err_downstream_write_prep++;
+            d->ptd->stats.stats.err_downstream_write_prep++;
             cproxy_close_conn(c);
         }
     }

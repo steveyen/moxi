@@ -190,6 +190,43 @@ struct proxy_stats {
     uint64_t err_downstream_write_prep;
 };
 
+typedef struct {
+    uint64_t seen;        // Number of times a command was seen.
+    uint64_t hits;        // Number of hits or successes.
+    uint64_t misses;      // Number of misses or failures.
+    uint64_t read_bytes;  // Total bytes read.
+    uint64_t write_bytes; // Total bytes written.
+    uint64_t cas;         // Number that had or required cas-id.
+} proxy_stats_cmd;
+
+typedef enum {
+    STATS_CMD_GET = 0,
+    STATS_CMD_SET,
+    STATS_CMD_ADD,
+    STATS_CMD_REPLACE,
+    STATS_CMD_DELETE,
+    STATS_CMD_APPEND,
+    STATS_CMD_PREPEND,
+    STATS_CMD_INCR,
+    STATS_CMD_DECR,
+    STATS_CMD_FLUSH_ALL,
+    STATS_CMD_CAS,
+    STATS_CMD_QUIT,
+    STATS_CMD_VERSION,
+    STATS_CMD_last
+} enum_stats_cmd;
+
+typedef enum {
+    STATS_CMD_TYPE_REGULAR = 0,
+    STATS_CMD_TYPE_QUIET,
+    STATS_CMD_TYPE_last
+} enum_stats_cmd_type;
+
+typedef struct {
+    proxy_stats     stats;
+    proxy_stats_cmd stats_cmd[STATS_CMD_TYPE_last][STATS_CMD_last];
+} proxy_stats_td;
+
 /* We mirror memcached's threading model with a separate
  * proxy_td (td means "thread data") struct owned by each
  * worker thread.  The idea is to avoid extraneous locks.
@@ -219,7 +256,7 @@ struct proxy_td { // Per proxy, per worker-thread data struct.
     struct timeval timeout_tv;
     struct event   timeout_event;
 
-    proxy_stats stats;
+    proxy_stats_td stats;
 };
 
 /* Owned by worker thread.
@@ -398,7 +435,9 @@ rel_time_t cproxy_realtime(const time_t exptime);
 
 void cproxy_close_conn(conn *c);
 
+void cproxy_reset_stats_td(proxy_stats_td *pstd);
 void cproxy_reset_stats(proxy_stats *ps);
+void cproxy_reset_stats_cmd(proxy_stats_cmd *sc);
 
 // Multiget key de-duplication.
 //

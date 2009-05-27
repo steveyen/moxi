@@ -45,7 +45,7 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
      * directly into it, then continue in nread_complete().
      */
     if (!cproxy_prep_conn_for_write(c)) {
-        ptd->stats.err_upstream_write_prep++;
+        ptd->stats.stats.err_upstream_write_prep++;
         conn_set_state(c, conn_closing);
         return;
     }
@@ -294,7 +294,7 @@ bool cproxy_optimize_set_ascii(downstream *d, conn *uc,
                 fprintf(stderr,
                         "Can't update upstream write event\n");
 
-            d->ptd->stats.err_oom++;
+            d->ptd->stats.stats.err_oom++;
             cproxy_close_conn(uc);
         }
 

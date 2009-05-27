@@ -176,10 +176,10 @@ proxy *cproxy_create(char    *name,
                 ptd->downstream_assigns = 0;
                 ptd->timeout_tv.tv_sec = 0;
                 ptd->timeout_tv.tv_usec = 0;
-                ptd->stats.num_upstream = 0;
-                ptd->stats.num_downstream_conn = 0;
+                ptd->stats.stats.num_upstream = 0;
+                ptd->stats.stats.num_downstream_conn = 0;
 
-                cproxy_reset_stats(&ptd->stats);
+                cproxy_reset_stats_td(&ptd->stats);
             }
 
             return p;
@@ -193,6 +193,18 @@ proxy *cproxy_create(char    *name,
     }
 
     return NULL;
+}
+
+void cproxy_reset_stats_td(proxy_stats_td *pstd) {
+    assert(pstd);
+
+    cproxy_reset_stats(&pstd->stats);
+
+    for (int j = 0; j < STATS_CMD_TYPE_last; j++) {
+        for (int k = 0; k < STATS_CMD_last; k++) {
+            cproxy_reset_stats_cmd(&pstd->stats_cmd[j][k]);
+        }
+    }
 }
 
 void cproxy_reset_stats(proxy_stats *ps) {
@@ -229,6 +241,11 @@ void cproxy_reset_stats(proxy_stats *ps) {
     ps->err_oom = 0;
     ps->err_upstream_write_prep = 0;
     ps->err_downstream_write_prep = 0;
+}
+
+void cproxy_reset_stats_cmd(proxy_stats_cmd *sc) {
+    assert(sc);
+    memset(sc, 0, sizeof(proxy_stats_cmd));
 }
 
 /* Must be called on the main listener thread.
@@ -317,8 +334,8 @@ void cproxy_init_upstream_conn(conn *c) {
     proxy_td *ptd = cproxy_find_thread_data(p, pthread_self());
     assert(ptd != NULL);
 
-    ptd->stats.num_upstream++;
-    ptd->stats.tot_upstream++;
+    ptd->stats.stats.num_upstream++;
+    ptd->stats.stats.tot_upstream++;
 
     c->extra = ptd;
     c->funcs = &cproxy_upstream_funcs;
@@ -328,8 +345,8 @@ void cproxy_init_downstream_conn(conn *c) {
     downstream *d = c->extra;
     assert(d != NULL);
 
-    d->ptd->stats.num_downstream_conn++;
-    d->ptd->stats.tot_downstream_conn++;
+    d->ptd->stats.stats.num_downstream_conn++;
+    d->ptd->stats.stats.tot_downstream_conn++;
 }
 
 void cproxy_on_close_upstream_conn(conn *c) {
@@ -342,8 +359,8 @@ void cproxy_on_close_upstream_conn(conn *c) {
     assert(ptd != NULL);
     c->extra = NULL;
 
-    ptd->stats.num_upstream--;
-    assert(ptd->stats.num_upstream >= 0);
+    ptd->stats.stats.num_upstream--;
+    assert(ptd->stats.stats.num_upstream >= 0);
 
     // Delink from any reserved downstream.
     //
@@ -379,7 +396,7 @@ void cproxy_on_close_upstream_conn(conn *c) {
             // The safest, but inefficient, thing to do then is
             // to close any conn_mwrite downstream conns.
             //
-            ptd->stats.tot_downstream_close_on_upstream_close++;
+            ptd->stats.stats.tot_downstream_close_on_upstream_close++;
 
             int n = memcached_server_count(&d->mst);
 
@@ -434,7 +451,7 @@ void cproxy_on_close_downstream_conn(conn *c) {
                         "<%d cproxy_on_close_downstream_conn quit_server\n",
                         c->sfd);
 
-            d->ptd->stats.tot_downstream_quit_server++;
+            d->ptd->stats.stats.tot_downstream_quit_server++;
 
             assert(d->mst.hosts[i].fd == c->sfd);
             memcached_quit_server(&d->mst.hosts[i], 1);
@@ -447,8 +464,8 @@ void cproxy_on_close_downstream_conn(conn *c) {
     proxy_td *ptd = d->ptd;
     assert(ptd);
 
-    ptd->stats.num_downstream_conn--;
-    assert(ptd->stats.num_downstream_conn >= 0);
+    ptd->stats.stats.num_downstream_conn--;
+    assert(ptd->stats.stats.num_downstream_conn >= 0);
 
     conn *uc_retry = NULL;
 
@@ -521,7 +538,7 @@ void cproxy_on_close_downstream_conn(conn *c) {
         if (settings.verbose > 1)
             fprintf(stderr, "%d cproxy retrying\n", uc_retry->sfd);
 
-        ptd->stats.tot_retry++;
+        ptd->stats.stats.tot_retry++;
 
         assert(uc_retry->thread);
         assert(uc_retry->thread->work_queue);
@@ -585,14 +602,14 @@ void cproxy_add_downstream(proxy_td *ptd) {
                 ptd->downstream_num++;
                 cproxy_release_downstream(d, true);
             } else {
-                ptd->stats.tot_downstream_create_failed++;
+                ptd->stats.stats.tot_downstream_create_failed++;
             }
         }
 
         free(config);
         free(behaviors);
     } else {
-        ptd->stats.tot_downstream_max_reached++;
+        ptd->stats.stats.tot_downstream_max_reached++;
     }
 }
 
@@ -642,7 +659,7 @@ downstream *cproxy_reserve_downstream(proxy_td *ptd) {
             d->next = ptd->downstream_reserved;
             ptd->downstream_reserved = d;
 
-            ptd->stats.tot_downstream_reserved++;
+            ptd->stats.stats.tot_downstream_reserved++;
 
             return d;
         }
@@ -658,7 +675,7 @@ bool cproxy_release_downstream(downstream *d, bool force) {
     if (settings.verbose > 1)
         fprintf(stderr, "release_downstream\n");
 
-    d->ptd->stats.tot_downstream_released++;
+    d->ptd->stats.stats.tot_downstream_released++;
 
     // Delink upstream conns.
     //
@@ -673,7 +690,7 @@ bool cproxy_release_downstream(downstream *d, bool force) {
             if (update_event(d->upstream_conn, EV_WRITE | EV_PERSIST)) {
                 conn_set_state(d->upstream_conn, conn_mwrite);
             } else {
-                d->ptd->stats.err_oom++;
+                d->ptd->stats.stats.err_oom++;
                 cproxy_close_conn(d->upstream_conn);
             }
         }
@@ -690,7 +707,7 @@ bool cproxy_release_downstream(downstream *d, bool force) {
                 update_event(d->upstream_conn, EV_WRITE | EV_PERSIST)) {
                 conn_set_state(d->upstream_conn, conn_mwrite);
             } else {
-                d->ptd->stats.err_oom++;
+                d->ptd->stats.stats.err_oom++;
                 cproxy_close_conn(d->upstream_conn);
             }
         }
@@ -763,7 +780,7 @@ void cproxy_free_downstream(downstream *d) {
     if (settings.verbose > 1)
         fprintf(stderr, "cproxy_free_downstream\n");
 
-    d->ptd->stats.tot_downstream_freed++;
+    d->ptd->stats.stats.tot_downstream_freed++;
 
     d->ptd->downstream_reserved =
         downstream_list_remove(d->ptd->downstream_reserved, d);
@@ -935,15 +952,15 @@ int cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread) {
             if (rc == MEMCACHED_SUCCESS) {
                 int fd = d->mst.hosts[i].fd;
                 if (fd >= 0) {
-                    d->ptd->stats.tot_downstream_connect++;
+                    d->ptd->stats.stats.tot_downstream_connect++;
 
                     if (cproxy_auth_downstream(&d->mst.hosts[i],
                                                &d->behaviors[i])) {
-                        d->ptd->stats.tot_downstream_auth++;
+                        d->ptd->stats.stats.tot_downstream_auth++;
 
                         if (cproxy_bucket_downstream(&d->mst.hosts[i],
                                                      &d->behaviors[i])) {
-                            d->ptd->stats.tot_downstream_bucket++;
+                            d->ptd->stats.stats.tot_downstream_bucket++;
 
                             d->downstream_conns[i] =
                                 conn_new(fd, conn_pause, 0,
@@ -956,20 +973,20 @@ int cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread) {
                                 d->downstream_conns[i]->thread = thread;
                             }
                         } else {
-                            d->ptd->stats.tot_downstream_bucket_failed++;
+                            d->ptd->stats.stats.tot_downstream_bucket_failed++;
                         }
                     } else {
-                        d->ptd->stats.tot_downstream_auth_failed++;
+                        d->ptd->stats.stats.tot_downstream_auth_failed++;
                     }
                 } else {
-                    d->ptd->stats.tot_downstream_connect_failed++;
+                    d->ptd->stats.stats.tot_downstream_connect_failed++;
                 }
 
                 if (d->downstream_conns[i] == NULL) {
                     memcached_quit_server(&d->mst.hosts[i], 1);
                 }
             } else {
-                d->ptd->stats.tot_downstream_connect_failed++;
+                d->ptd->stats.stats.tot_downstream_connect_failed++;
             }
         }
         if (d->downstream_conns[i] != NULL)
@@ -1088,7 +1105,7 @@ void cproxy_assign_downstream(proxy_td *ptd) {
                 // might as well error out.
                 //
                 while (ptd->waiting_any_downstream_head != NULL) {
-                    ptd->stats.tot_downstream_propagate_failed++;
+                    ptd->stats.stats.tot_downstream_propagate_failed++;
 
                     conn *uc = ptd->waiting_any_downstream_head;
                     ptd->waiting_any_downstream_head =
@@ -1123,8 +1140,8 @@ void cproxy_assign_downstream(proxy_td *ptd) {
             ptd->waiting_any_downstream_tail = NULL;
         d->upstream_conn->next = NULL;
 
-        ptd->stats.tot_assign_downstream++;
-        ptd->stats.tot_assign_upstream++;
+        ptd->stats.stats.tot_assign_downstream++;
+        ptd->stats.stats.tot_assign_upstream++;
 
         // Add any compatible upstream conns to the downstream.
         // By compatible, for example, we mean multi-gets from
@@ -1147,7 +1164,7 @@ void cproxy_assign_downstream(proxy_td *ptd) {
             // Note: tot_assign_upstream - tot_assign_downstream
             // should get us how many requests we've piggybacked together.
             //
-            ptd->stats.tot_assign_upstream++;
+            ptd->stats.stats.tot_assign_upstream++;
         }
 
         if (settings.verbose > 1)
@@ -1159,7 +1176,7 @@ void cproxy_assign_downstream(proxy_td *ptd) {
             // when we have entire front cache hit or talk-to-self
             // optimization hit on multiget.
             //
-            ptd->stats.tot_downstream_propagate_failed++;
+            ptd->stats.stats.tot_downstream_propagate_failed++;
 
             // During propagate(), we might have recursed,
             // especially in error situation if a downstream
@@ -1167,7 +1184,7 @@ void cproxy_assign_downstream(proxy_td *ptd) {
             // before we touch d anymore.
             //
             if (da != ptd->downstream_assigns) {
-                ptd->stats.tot_assign_recursion++;
+                ptd->stats.stats.tot_assign_recursion++;
                 break;
             }
 
@@ -1216,7 +1233,7 @@ void upstream_error(conn *uc) {
         update_event(uc, EV_WRITE | EV_PERSIST)) {
         conn_set_state(uc, conn_mwrite);
     } else {
-        ptd->stats.err_oom++;
+        ptd->stats.stats.err_oom++;
         cproxy_close_conn(uc);
     }
 }
@@ -1231,7 +1248,7 @@ void cproxy_reset_upstream(conn *uc) {
 
     if (uc->rbytes <= 0) {
         if (!update_event(uc, EV_READ | EV_PERSIST)) {
-            ptd->stats.err_oom++;
+            ptd->stats.stats.err_oom++;
             cproxy_close_conn(uc);
         }
 
@@ -1250,7 +1267,7 @@ void cproxy_reset_upstream(conn *uc) {
     if (settings.verbose > 1)
         fprintf(stderr, "cproxy_reset_upstream with bytes available\n");
 
-    ptd->stats.tot_reset_upstream_avail++;
+    ptd->stats.stats.tot_reset_upstream_avail++;
 }
 
 bool cproxy_dettach_if_noreply(downstream *d, conn *uc) {
@@ -1325,7 +1342,7 @@ void cproxy_on_pause_downstream_conn(conn *c) {
     if (update_event(c, 0)) {
         cproxy_release_downstream_conn(d, c);
     } else {
-        d->ptd->stats.err_oom++;
+        d->ptd->stats.stats.err_oom++;
         cproxy_close_conn(c);
     }
 }
@@ -1478,7 +1495,7 @@ void wait_queue_timeout(const int fd,
                     fprintf(stderr, "proxy_td_timeout sending error %d\n",
                             uc->sfd);
 
-                ptd->stats.tot_wait_queue_timeout++;
+                ptd->stats.stats.tot_wait_queue_timeout++;
 
                 ptd->waiting_any_downstream_head =
                     conn_list_remove(ptd->waiting_any_downstream_head,
@@ -1777,7 +1794,7 @@ void downstream_timeout(const int fd,
         d->timeout_tv.tv_sec = 0;
         d->timeout_tv.tv_usec = 0;
 
-        d->ptd->stats.tot_downstream_timeout++;
+        d->ptd->stats.stats.tot_downstream_timeout++;
 
         int n = memcached_server_count(&d->mst);
 
