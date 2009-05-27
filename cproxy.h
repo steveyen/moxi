@@ -14,6 +14,7 @@ int cproxy_init(char *cfg_str,
                 struct event_base *main_base);
 
 #define IS_PROXY(x) (x == proxy_upstream_ascii_prot || \
+                     x == proxy_upstream_binary_prot || \
                      x == proxy_downstream_ascii_prot || \
                      x == proxy_downstream_binary_prot)
 

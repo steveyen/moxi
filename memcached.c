@@ -309,6 +309,9 @@ static const char *prot_text(enum protocol prot) {
         case proxy_upstream_ascii_prot:
             rv = "proxy-upstream-ascii";
             break;
+        case proxy_upstream_binary_prot:
+            rv = "proxy-upstream-binary";
+            break;
         case proxy_downstream_ascii_prot:
             rv = "proxy-downstream-ascii";
             break;

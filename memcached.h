@@ -164,6 +164,7 @@ enum protocol {
     ascii_prot = 3, /* arbitrary value. */
     binary_prot,
     proxy_upstream_ascii_prot,
+    proxy_upstream_binary_prot,
     proxy_downstream_ascii_prot,
     proxy_downstream_binary_prot,
     negotiating_prot /* Discovering the protocol */
@@ -180,6 +181,7 @@ enum network_transport {
                      x == proxy_upstream_ascii_prot || \
                      x == proxy_downstream_ascii_prot)
 #define IS_BINARY(x) (x == binary_prot || \
+                      x == proxy_upstream_binary_prot || \
                       x == proxy_downstream_binary_prot)
 
 #define NREAD_ADD 1
