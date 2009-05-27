@@ -1,11 +1,13 @@
+AUTOMAKE_OPTIONS = foreign
+
 bin_PROGRAMS = moxi
 pkginclude_HEADERS = protocol_binary.h
 noinst_PROGRAMS = moxi-debug sizes testapp
 
 ## INCLUDES is apparently not previously set, if you set it
 ##  change this
-INCLUDES = $(DEPS_CFLAGS)
-LIBS += $(DEPS_LIBS)
+INCLUDES = $(GLIB2_CFLAGS)
+LIBS += $(GLIB2_LIBS)
 
 BUILT_SOURCES=
 
@@ -44,20 +46,19 @@ moxi_SOURCES += cache.c
 testapp_SOURCES += cache.c
 endif
 
-if BUILD_CONFLATE
 moxi_SOURCES += agent.h agent_config.c agent_ping.c agent_stats.c
-endif
 
 if BUILD_SOLARIS_PRIVS
 moxi_SOURCES += solaris_priv.c
 endif
 
 moxi_debug_SOURCES = $(moxi_SOURCES)
-moxi_CPPFLAGS = -DNDEBUG
-moxi_debug_LDADD = @PROFILER_LDFLAGS@
+moxi_CPPFLAGS = -DNDEBUG $(moxi_debug_CPPFLAGS)
+moxi_debug_LDADD = @PROFILER_LDFLAGS@ \
+                   libmemcached/libmemcached/libmemcached.la
 moxi_debug_CFLAGS = @PROFILER_FLAGS@
 
-moxi_LDADD =
+moxi_LDADD = libmemcached/libmemcached/libmemcached.la
 moxi_DEPENDENCIES =
 moxi_debug_DEPENDENCIES =
 CLEANFILES=
@@ -88,7 +89,7 @@ memcached_debug_dtrace.o: $(moxi_debug_OBJECTS)
 	$(DTRACE) $(DTRACEFLAGS) -G -o memcached_debug_dtrace.o -s ${srcdir}/memcached_dtrace.d $(moxi_debug_OBJECTS)
 
 
-SUBDIRS = doc
+SUBDIRS = doc libmemcached
 DIST_DIRS = scripts
 EXTRA_DIST = doc scripts TODO t memcached.spec memcached_dtrace.d version.m4
 
