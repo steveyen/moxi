@@ -1,11 +1,5 @@
 #!/bin/sh
 #
-# This is hacky, because there are so many damn versions
-# of autoconf/automake.  It works with Debian woody, at least.
-#
-# Debian sarge:
-#    apt-get install automake1.7 autoconf
-#
 
 # Get the initial version.
 sh version.sh
@@ -16,6 +10,12 @@ if [ -d /opt/local/share/aclocal ] && [ $UNAME = "Darwin" ] ; then
 ACLOCALFLAGS=" -I /opt/local/share/aclocal"
 fi
 
+echo "libtoolize..."
+if [ $UNAME = "Darwin" ]; then
+glibtoolize --automake
+else
+libtoolize --automake
+fi
 
 echo "aclocal..."
 ACLOCAL=`which aclocal-1.10 || which aclocal-1.9 || which aclocal19 || which aclocal-1.7 || which aclocal17 || which aclocal-1.5 || which aclocal15`

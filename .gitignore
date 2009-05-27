@@ -42,3 +42,5 @@ doc/protocol-binary.txt
 /testapp
 /doc/doxy
 /check_util
+ltmain.sh
+libtool

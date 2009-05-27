@@ -7,6 +7,8 @@ AM_INIT_AUTOMAKE(AC_PACKAGE_NAME, AC_PACKAGE_VERSION)
 AM_CONFIG_HEADER(config.h)
 
 AC_PROG_CC
+AC_DISABLE_SHARED
+AM_PROG_LIBTOOL
 
 dnl **********************************************************************
 dnl DETECT_ICC ([ACTION-IF-YES], [ACTION-IF-NO])
@@ -233,7 +235,8 @@ AC_SEARCH_LIBS(socket, socket)
 AC_SEARCH_LIBS(gethostbyname, nsl)
 AC_SEARCH_LIBS(umem_cache_create, umem)
 
-PKG_CHECK_MODULES([DEPS], [ glib-2.0 >= 2.16.6 libmemcached >= 0.28 ])
+PKG_CHECK_MODULES([GLIB2], [ glib-2.0 >= 2.0.6 ])
+AC_SUBST(GLIB2)
 PKG_CHECK_MODULES([CHECK], [check >= 0.9.4])
 
 AC_SUBST(DEPS)
@@ -352,14 +355,6 @@ AC_CHECK_HEADER(umem.h, [
 
 AM_CONDITIONAL([BUILD_CACHE], [test "x$build_cache" = "xyes"])
 
-AC_CHECK_HEADER(conflate.h, [
-   AC_DEFINE([HAVE_CONFLATE_H], 1,
-         [Define this if you have conflate.h])
-   build_conflate=yes
-], [build_conflate=no])
-
-AM_CONDITIONAL([BUILD_CONFLATE], [test "x$build_conflate" = "xyes"])
-
 AC_ARG_ENABLE(docs,
   [AS_HELP_STRING([--disable-docs],[Disable documentation generation])])
 
@@ -391,10 +386,8 @@ fi
 
 AC_SEARCH_LIBS(memcached_create, memcached)
 
-if test $build_conflate = yes
-then
-   LIBS="$LIBS -lconflate -lsqlite3 -lstrophe -lexpat -lresolv -lssl"
-fi
+LIBS="$LIBS -lm -lconflate -lsqlite3 -lstrophe -lexpat -lresolv -lssl"
+LDFLAGS+=" -L../libconflate -L../libstrophe"
 
 AC_CONFIG_FILES(Makefile doc/Makefile)
 AC_OUTPUT
