@@ -566,13 +566,11 @@ void map_pstd_foreach_emit(gpointer key,
     char buf_val[100];
 
 #define more_stat(key, val)                             \
-    if (val != 0) {                                     \
         snprintf(buf_key, sizeof(buf_key),              \
                  "%s:stats_%s", name, key);             \
         snprintf(buf_val, sizeof(buf_val),              \
                  "%llu", (long long unsigned int) val); \
-        emit->add_stat(emit->opaque, buf_key, buf_val); \
-    }
+        emit->add_stat(emit->opaque, buf_key, buf_val);
 
     more_stat("num_upstream",
               pstd->stats.num_upstream);
@@ -637,13 +635,13 @@ void map_pstd_foreach_emit(gpointer key,
     more_stat("err_downstream_write_prep",
               pstd->stats.err_downstream_write_prep);
 
-#define more_cmd_stat(type, cmd, key, val)                          \
-    if (val != 0) {                                                 \
-        snprintf(buf_key, sizeof(buf_key),                          \
-                 "%s:stats_cmd_%s_%s_%s", name, type, cmd, key);    \
-        snprintf(buf_val, sizeof(buf_val),                          \
-                 "%llu", (long long unsigned int) val);             \
-        emit->add_stat(emit->opaque, buf_key, buf_val);             \
+#define more_cmd_stat(type, cmd, key, val)                       \
+    if (val != 0) {                                              \
+        snprintf(buf_key, sizeof(buf_key),                       \
+                 "%s:stats_cmd_%s_%s_%s", name, type, cmd, key); \
+        snprintf(buf_val, sizeof(buf_val),                       \
+                 "%llu", (long long unsigned int) val);          \
+        emit->add_stat(emit->opaque, buf_key, buf_val);          \
     }
 
     for (int j = 0; j < STATS_CMD_TYPE_last; j++) {
