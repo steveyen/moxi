@@ -11,6 +11,13 @@ TODO ideas...
 - histogram of request codes.
 - histogram of response codes.
 
+- stats of bandwidth
+- stats of front cache bandwidth
+- stats for inline latency, statistical
+- key-level stats, by command, with bandwidth
+
+- release downstreams back to head of list, not to tail
+
 - make clock timer resolution configurable
   - 1 second currently
 
