@@ -31,6 +31,8 @@ static void work_stats_collect(void *data0, void *data1);
 static void main_stats_reset(void *data0, void *data1);
 static void work_stats_reset(void *data0, void *data1);
 
+static void add_proxy_stats_td(proxy_stats_td *agg,
+                               proxy_stats_td *x);
 static void add_proxy_stats(proxy_stats *agg,
                             proxy_stats *x);
 static void add_stats_cmd(proxy_stats_cmd *agg,
@@ -235,15 +237,7 @@ void map_pstd_foreach_merge(gpointer key,
                                 key);
         if (cur_pstd != NULL &&
             end_pstd != NULL) {
-            add_proxy_stats(&end_pstd->stats,
-                            &cur_pstd->stats);
-
-            for (int j = 0; j < STATS_CMD_TYPE_last; j++) {
-                for (int k = 0; k < STATS_CMD_last; k++) {
-                    add_stats_cmd(&end_pstd->stats_cmd[j][k],
-                                  &cur_pstd->stats_cmd[j][k]);
-                }
-            }
+            add_proxy_stats_td(end_pstd, cur_pstd);
         }
     }
 }
@@ -442,15 +436,7 @@ static void work_stats_collect(void *data0, void *data1) {
             }
 
             if (pstd != NULL) {
-                add_proxy_stats(&pstd->stats,
-                                &ptd->stats.stats);
-
-                for (int j = 0; j < STATS_CMD_TYPE_last; j++) {
-                    for (int k = 0; k < STATS_CMD_last; k++) {
-                        add_stats_cmd(&pstd->stats_cmd[j][k],
-                                      &ptd->stats.stats_cmd[j][k]);
-                    }
-                }
+                add_proxy_stats_td(pstd, &ptd->stats);
             }
 
             if (key_buf != NULL)
@@ -462,6 +448,21 @@ static void work_stats_collect(void *data0, void *data1) {
         pthread_mutex_unlock(&p->proxy_lock);
 
     work_collect_one(c);
+}
+
+static void add_proxy_stats_td(proxy_stats_td *agg,
+                               proxy_stats_td *x) {
+    assert(agg);
+    assert(x);
+
+    add_proxy_stats(&agg->stats, &x->stats);
+
+    for (int j = 0; j < STATS_CMD_TYPE_last; j++) {
+        for (int k = 0; k < STATS_CMD_last; k++) {
+            add_stats_cmd(&agg->stats_cmd[j][k],
+                          &x->stats_cmd[j][k]);
+        }
+    }
 }
 
 static void add_proxy_stats(proxy_stats *agg, proxy_stats *x) {
