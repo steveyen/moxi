@@ -66,6 +66,25 @@ struct main_stats_collect_info {
     bool  do_stats;
 };
 
+static char *cmd_names[] = { // Keep sync'ed with enum_stats_cmd.
+    "get",
+    "set",
+    "add",
+    "replace",
+    "delete",
+    "append",
+    "prepend",
+    "incr",
+    "decr",
+    "flush_all",
+    "cas"
+};
+
+static char *cmd_type_names[] = { // Keep sync'ed with enum_stats_cmd_type.
+    "regular",
+    "quiet"
+};
+
 /* This callback is invoked by conflate on a conflate thread
  * when it wants proxy stats.
  *
@@ -133,6 +152,8 @@ void on_conflate_get_stats(void *userdata, void *opaque,
         more_stat("%llu", "main_proxy_shutdowns",
                   (long long unsigned int) m->stat_proxy_shutdowns);
     }
+
+#undef more_stat
 
     if (msci.do_settings) {
         struct add_stat_emit ase_memcached = {
@@ -544,75 +565,105 @@ void map_pstd_foreach_emit(gpointer key,
     char buf_key[200];
     char buf_val[100];
 
-#define more_thread_stat(key, val)                  \
+#define more_stat(key, val)                         \
     snprintf(buf_key, sizeof(buf_key),              \
              "%s:stats_%s", name, key);             \
     snprintf(buf_val, sizeof(buf_val),              \
              "%llu", (long long unsigned int) val); \
     emit->add_stat(emit->opaque, buf_key, buf_val);
 
-    more_thread_stat("num_upstream",
-                     pstd->stats.num_upstream);
-    more_thread_stat("tot_upstream",
-                     pstd->stats.tot_upstream);
-    more_thread_stat("num_downstream_conn",
-                     pstd->stats.num_downstream_conn);
-    more_thread_stat("tot_downstream_conn",
-                     pstd->stats.tot_downstream_conn);
-    more_thread_stat("tot_downstream_released",
-                     pstd->stats.tot_downstream_released);
-    more_thread_stat("tot_downstream_reserved",
-                     pstd->stats.tot_downstream_reserved);
-    more_thread_stat("tot_downstream_freed",
-                     pstd->stats.tot_downstream_freed);
-    more_thread_stat("tot_downstream_quit_server",
-                     pstd->stats.tot_downstream_quit_server);
-    more_thread_stat("tot_downstream_max_reached",
-                     pstd->stats.tot_downstream_max_reached);
-    more_thread_stat("tot_downstream_create_failed",
-                     pstd->stats.tot_downstream_create_failed);
-    more_thread_stat("tot_downstream_connect",
-                     pstd->stats.tot_downstream_connect);
-    more_thread_stat("tot_downstream_connect_failed",
-                     pstd->stats.tot_downstream_connect_failed);
-    more_thread_stat("tot_downstream_auth",
-                     pstd->stats.tot_downstream_auth);
-    more_thread_stat("tot_downstream_auth_failed",
-                     pstd->stats.tot_downstream_auth_failed);
-    more_thread_stat("tot_downstream_bucket",
-                     pstd->stats.tot_downstream_bucket);
-    more_thread_stat("tot_downstream_bucket_failed",
-                     pstd->stats.tot_downstream_bucket_failed);
-    more_thread_stat("tot_downstream_propagate_failed",
-                     pstd->stats.tot_downstream_propagate_failed);
-    more_thread_stat("tot_downstream_close_on_upstream_close",
-                     pstd->stats.tot_downstream_close_on_upstream_close);
-    more_thread_stat("tot_downstream_timeout",
-                     pstd->stats.tot_downstream_timeout);
-    more_thread_stat("tot_wait_queue_timeout",
-                     pstd->stats.tot_wait_queue_timeout);
-    more_thread_stat("tot_assign_downstream",
-                     pstd->stats.tot_assign_downstream);
-    more_thread_stat("tot_assign_upstream",
-                     pstd->stats.tot_assign_upstream);
-    more_thread_stat("tot_assign_recursion",
-                     pstd->stats.tot_assign_recursion);
-    more_thread_stat("tot_reset_upstream_avail",
-                     pstd->stats.tot_reset_upstream_avail);
-    more_thread_stat("tot_multiget_keys",
-                     pstd->stats.tot_multiget_keys);
-    more_thread_stat("tot_multiget_keys_dedupe",
-                     pstd->stats.tot_multiget_keys_dedupe);
-    more_thread_stat("tot_optimize_sets",
-                     pstd->stats.tot_optimize_sets);
-    more_thread_stat("tot_retry",
-                     pstd->stats.tot_retry);
-    more_thread_stat("err_oom",
-                     pstd->stats.err_oom);
-    more_thread_stat("err_upstream_write_prep",
-                     pstd->stats.err_upstream_write_prep);
-    more_thread_stat("err_downstream_write_prep",
-                     pstd->stats.err_downstream_write_prep);
+    more_stat("num_upstream",
+              pstd->stats.num_upstream);
+    more_stat("tot_upstream",
+              pstd->stats.tot_upstream);
+    more_stat("num_downstream_conn",
+              pstd->stats.num_downstream_conn);
+    more_stat("tot_downstream_conn",
+              pstd->stats.tot_downstream_conn);
+    more_stat("tot_downstream_released",
+              pstd->stats.tot_downstream_released);
+    more_stat("tot_downstream_reserved",
+              pstd->stats.tot_downstream_reserved);
+    more_stat("tot_downstream_freed",
+              pstd->stats.tot_downstream_freed);
+    more_stat("tot_downstream_quit_server",
+              pstd->stats.tot_downstream_quit_server);
+    more_stat("tot_downstream_max_reached",
+              pstd->stats.tot_downstream_max_reached);
+    more_stat("tot_downstream_create_failed",
+              pstd->stats.tot_downstream_create_failed);
+    more_stat("tot_downstream_connect",
+              pstd->stats.tot_downstream_connect);
+    more_stat("tot_downstream_connect_failed",
+              pstd->stats.tot_downstream_connect_failed);
+    more_stat("tot_downstream_auth",
+              pstd->stats.tot_downstream_auth);
+    more_stat("tot_downstream_auth_failed",
+              pstd->stats.tot_downstream_auth_failed);
+    more_stat("tot_downstream_bucket",
+              pstd->stats.tot_downstream_bucket);
+    more_stat("tot_downstream_bucket_failed",
+              pstd->stats.tot_downstream_bucket_failed);
+    more_stat("tot_downstream_propagate_failed",
+              pstd->stats.tot_downstream_propagate_failed);
+    more_stat("tot_downstream_close_on_upstream_close",
+              pstd->stats.tot_downstream_close_on_upstream_close);
+    more_stat("tot_downstream_timeout",
+              pstd->stats.tot_downstream_timeout);
+    more_stat("tot_wait_queue_timeout",
+              pstd->stats.tot_wait_queue_timeout);
+    more_stat("tot_assign_downstream",
+              pstd->stats.tot_assign_downstream);
+    more_stat("tot_assign_upstream",
+              pstd->stats.tot_assign_upstream);
+    more_stat("tot_assign_recursion",
+              pstd->stats.tot_assign_recursion);
+    more_stat("tot_reset_upstream_avail",
+              pstd->stats.tot_reset_upstream_avail);
+    more_stat("tot_multiget_keys",
+              pstd->stats.tot_multiget_keys);
+    more_stat("tot_multiget_keys_dedupe",
+              pstd->stats.tot_multiget_keys_dedupe);
+    more_stat("tot_optimize_sets",
+              pstd->stats.tot_optimize_sets);
+    more_stat("tot_retry",
+              pstd->stats.tot_retry);
+    more_stat("err_oom",
+              pstd->stats.err_oom);
+    more_stat("err_upstream_write_prep",
+              pstd->stats.err_upstream_write_prep);
+    more_stat("err_downstream_write_prep",
+              pstd->stats.err_downstream_write_prep);
+
+#define more_cmd_stat(type, cmd, key, val)                   \
+    snprintf(buf_key, sizeof(buf_key),                       \
+             "%s:stats_cmd_%s_%s_%s", name, type, cmd, key); \
+    snprintf(buf_val, sizeof(buf_val),                       \
+             "%llu", (long long unsigned int) val);          \
+    emit->add_stat(emit->opaque, buf_key, buf_val);
+
+    for (int j = 0; j < STATS_CMD_TYPE_last; j++) {
+        for (int k = 0; k < STATS_CMD_last; k++) {
+            more_cmd_stat(cmd_type_names[j], cmd_names[k],
+                          "seen",
+                          pstd->stats_cmd[j][k].seen);
+            more_cmd_stat(cmd_type_names[j], cmd_names[k],
+                          "hits",
+                          pstd->stats_cmd[j][k].hits);
+            more_cmd_stat(cmd_type_names[j], cmd_names[k],
+                          "misses",
+                          pstd->stats_cmd[j][k].misses);
+            more_cmd_stat(cmd_type_names[j], cmd_names[k],
+                          "read_bytes",
+                          pstd->stats_cmd[j][k].read_bytes);
+            more_cmd_stat(cmd_type_names[j], cmd_names[k],
+                          "write_bytes",
+                          pstd->stats_cmd[j][k].write_bytes);
+            more_cmd_stat(cmd_type_names[j], cmd_names[k],
+                          "cas",
+                          pstd->stats_cmd[j][k].cas);
+        }
+    }
 }
 
 /* This callback is invoked by conflate on a conflate thread

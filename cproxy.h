@@ -211,8 +211,6 @@ typedef enum {
     STATS_CMD_DECR,
     STATS_CMD_FLUSH_ALL,
     STATS_CMD_CAS,
-    STATS_CMD_QUIT,
-    STATS_CMD_VERSION,
     STATS_CMD_last
 } enum_stats_cmd;
 
