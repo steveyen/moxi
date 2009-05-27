@@ -53,6 +53,7 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
     token_t tokens[MAX_TOKENS];
     size_t  ntokens = scan_tokens(line, tokens, MAX_TOKENS);
     char   *cmd     = tokens[COMMAND_TOKEN].value;
+    int     cmdx    = -1;
     int     comm;
 
     if (ntokens >= 3 &&
@@ -62,26 +63,61 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
         //
         cproxy_pause_upstream_for_downstream(ptd, c);
 
+        int st = STATS_CMD_TYPE_REGULAR;
+        ptd->stats.stats_cmd[st][STATS_CMD_GET].seen++;
+        if (cmd[3] == 's')
+            ptd->stats.stats_cmd[st][STATS_CMD_GET].cas++;
+
     } else if ((ntokens == 6 || ntokens == 7) &&
-               ((strncmp(cmd, "add", 3) == 0     && (comm = NREAD_ADD)) ||
-                (strncmp(cmd, "set", 3) == 0     && (comm = NREAD_SET)) ||
-                (strncmp(cmd, "replace", 7) == 0 && (comm = NREAD_REPLACE)) ||
-                (strncmp(cmd, "prepend", 7) == 0 && (comm = NREAD_PREPEND)) ||
-                (strncmp(cmd, "append", 6) == 0  && (comm = NREAD_APPEND)) )) {
+               ((strncmp(cmd, "add", 3) == 0 &&
+                 (comm = NREAD_ADD) &&
+                 (cmdx = STATS_CMD_ADD)) ||
+                (strncmp(cmd, "set", 3) == 0 &&
+                 (comm = NREAD_SET) &&
+                 (cmdx = STATS_CMD_SET)) ||
+                (strncmp(cmd, "replace", 7) == 0 &&
+                 (comm = NREAD_REPLACE) &&
+                 (cmdx = STATS_CMD_REPLACE)) ||
+                (strncmp(cmd, "prepend", 7) == 0 &&
+                 (comm = NREAD_PREPEND) &&
+                 (cmdx = STATS_CMD_PREPEND)) ||
+                (strncmp(cmd, "append", 6) == 0 &&
+                 (comm = NREAD_APPEND) &&
+                 (cmdx = STATS_CMD_APPEND)))) {
 
         process_update_command(c, tokens, ntokens, comm, false);
+
+        if (cmdx >= 0) {
+            int st = c->noreply ? STATS_CMD_TYPE_QUIET : STATS_CMD_TYPE_REGULAR;
+            ptd->stats.stats_cmd[st][cmdx].seen++;
+        }
 
     } else if ((ntokens == 7 || ntokens == 8) &&
                (strncmp(cmd, "cas", 3) == 0 && (comm = NREAD_CAS))) {
 
         process_update_command(c, tokens, ntokens, comm, true);
 
+        int st = c->noreply ? STATS_CMD_TYPE_QUIET : STATS_CMD_TYPE_REGULAR;
+        ptd->stats.stats_cmd[st][STATS_CMD_CAS].seen++;
+        ptd->stats.stats_cmd[st][STATS_CMD_CAS].cas++;
+
     } else if ((ntokens == 4 || ntokens == 5) &&
-               (strncmp(cmd, "incr", 4) == 0 ||
-                strncmp(cmd, "decr", 4) == 0)) {
+               (strncmp(cmd, "incr", 4) == 0)) {
 
         set_noreply_maybe(c, tokens, ntokens);
         cproxy_pause_upstream_for_downstream(ptd, c);
+
+        int st = c->noreply ? STATS_CMD_TYPE_QUIET : STATS_CMD_TYPE_REGULAR;
+        ptd->stats.stats_cmd[st][STATS_CMD_INCR].seen++;
+
+    } else if ((ntokens == 4 || ntokens == 5) &&
+               (strncmp(cmd, "decr", 4) == 0)) {
+
+        set_noreply_maybe(c, tokens, ntokens);
+        cproxy_pause_upstream_for_downstream(ptd, c);
+
+        int st = c->noreply ? STATS_CMD_TYPE_QUIET : STATS_CMD_TYPE_REGULAR;
+        ptd->stats.stats_cmd[st][STATS_CMD_DECR].seen++;
 
     } else if (ntokens >= 3 && ntokens <= 4 &&
                (strncmp(cmd, "delete", 6) == 0)) {
@@ -89,11 +125,17 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
         set_noreply_maybe(c, tokens, ntokens);
         cproxy_pause_upstream_for_downstream(ptd, c);
 
+        int st = c->noreply ? STATS_CMD_TYPE_QUIET : STATS_CMD_TYPE_REGULAR;
+        ptd->stats.stats_cmd[st][STATS_CMD_DELETE].seen++;
+
     } else if (ntokens >= 2 && ntokens <= 4 &&
                (strncmp(cmd, "flush_all", 9) == 0)) {
 
         set_noreply_maybe(c, tokens, ntokens);
         cproxy_pause_upstream_for_downstream(ptd, c);
+
+        int st = c->noreply ? STATS_CMD_TYPE_QUIET : STATS_CMD_TYPE_REGULAR;
+        ptd->stats.stats_cmd[st][STATS_CMD_FLUSH_ALL].seen++;
 
     } else if (ntokens >= 2 && ntokens <= 3 &&
                (strcmp(cmd, "stats") == 0 ||
