@@ -20,6 +20,7 @@ TODO ideas...
 
 - make clock timer resolution configurable
   - 1 second currently
+  - too many gettimeofday()'s?
 
 - keepalive on the connections with a timer
   - add stats to see if this is a problem?
