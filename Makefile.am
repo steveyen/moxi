@@ -53,12 +53,16 @@ moxi_SOURCES += solaris_priv.c
 endif
 
 moxi_debug_SOURCES = $(moxi_SOURCES)
+moxi_debug_CPPFLAGS = -DHAVE_CONFLATE_H \
+                      -I$(top_srcdir)/libmemcached-0.29 \
+                      -I$(top_srcdir)/../libconflate \
+                      -I$(top_srcdir)/../libstrophe
 moxi_CPPFLAGS = -DNDEBUG $(moxi_debug_CPPFLAGS)
 moxi_debug_LDADD = @PROFILER_LDFLAGS@ \
-                   libmemcached/libmemcached/libmemcached.la
+                   libmemcached-0.29/libmemcached/libmemcached.la
 moxi_debug_CFLAGS = @PROFILER_FLAGS@
 
-moxi_LDADD = libmemcached/libmemcached/libmemcached.la
+moxi_LDADD = libmemcached-0.29/libmemcached/libmemcached.la
 moxi_DEPENDENCIES =
 moxi_debug_DEPENDENCIES =
 CLEANFILES=
@@ -89,7 +93,7 @@ memcached_debug_dtrace.o: $(moxi_debug_OBJECTS)
 	$(DTRACE) $(DTRACEFLAGS) -G -o memcached_debug_dtrace.o -s ${srcdir}/memcached_dtrace.d $(moxi_debug_OBJECTS)
 
 
-SUBDIRS = doc libmemcached
+SUBDIRS = doc libmemcached-0.29
 DIST_DIRS = scripts
 EXTRA_DIST = doc scripts TODO t memcached.spec memcached_dtrace.d version.m4
 
