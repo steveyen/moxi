@@ -88,7 +88,8 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
         process_update_command(c, tokens, ntokens, comm, false);
 
         if (cmdx >= 0) {
-            int st = c->noreply ? STATS_CMD_TYPE_QUIET : STATS_CMD_TYPE_REGULAR;
+            int st = c->noreply ?
+                STATS_CMD_TYPE_QUIET : STATS_CMD_TYPE_REGULAR;
             ptd->stats.stats_cmd[st][cmdx].seen++;
         }
 
@@ -97,7 +98,8 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
 
         process_update_command(c, tokens, ntokens, comm, true);
 
-        int st = c->noreply ? STATS_CMD_TYPE_QUIET : STATS_CMD_TYPE_REGULAR;
+        int st = c->noreply ?
+            STATS_CMD_TYPE_QUIET : STATS_CMD_TYPE_REGULAR;
         ptd->stats.stats_cmd[st][STATS_CMD_CAS].seen++;
         ptd->stats.stats_cmd[st][STATS_CMD_CAS].cas++;
 
@@ -107,7 +109,8 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
         set_noreply_maybe(c, tokens, ntokens);
         cproxy_pause_upstream_for_downstream(ptd, c);
 
-        int st = c->noreply ? STATS_CMD_TYPE_QUIET : STATS_CMD_TYPE_REGULAR;
+        int st = c->noreply ?
+            STATS_CMD_TYPE_QUIET : STATS_CMD_TYPE_REGULAR;
         ptd->stats.stats_cmd[st][STATS_CMD_INCR].seen++;
 
     } else if ((ntokens == 4 || ntokens == 5) &&
@@ -116,7 +119,8 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
         set_noreply_maybe(c, tokens, ntokens);
         cproxy_pause_upstream_for_downstream(ptd, c);
 
-        int st = c->noreply ? STATS_CMD_TYPE_QUIET : STATS_CMD_TYPE_REGULAR;
+        int st = c->noreply ?
+            STATS_CMD_TYPE_QUIET : STATS_CMD_TYPE_REGULAR;
         ptd->stats.stats_cmd[st][STATS_CMD_DECR].seen++;
 
     } else if (ntokens >= 3 && ntokens <= 4 &&
@@ -125,7 +129,8 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
         set_noreply_maybe(c, tokens, ntokens);
         cproxy_pause_upstream_for_downstream(ptd, c);
 
-        int st = c->noreply ? STATS_CMD_TYPE_QUIET : STATS_CMD_TYPE_REGULAR;
+        int st = c->noreply ?
+            STATS_CMD_TYPE_QUIET : STATS_CMD_TYPE_REGULAR;
         ptd->stats.stats_cmd[st][STATS_CMD_DELETE].seen++;
 
     } else if (ntokens >= 2 && ntokens <= 4 &&
@@ -134,7 +139,8 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
         set_noreply_maybe(c, tokens, ntokens);
         cproxy_pause_upstream_for_downstream(ptd, c);
 
-        int st = c->noreply ? STATS_CMD_TYPE_QUIET : STATS_CMD_TYPE_REGULAR;
+        int st = c->noreply ?
+            STATS_CMD_TYPE_QUIET : STATS_CMD_TYPE_REGULAR;
         ptd->stats.stats_cmd[st][STATS_CMD_FLUSH_ALL].seen++;
 
     } else if (ntokens >= 2 && ntokens <= 3 &&
