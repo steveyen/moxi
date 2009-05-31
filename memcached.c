@@ -173,8 +173,8 @@ static void stats_reset(void) {
 static void settings_init(void) {
     settings.use_cas = true;
     settings.access = 0700;
-    settings.port = -1;    // Formerly 11211.
-    settings.udpport = -1; // Formerly 11211.
+    settings.port = -1;    // Formerly 11211, -1 means unspecified, 0 means off.
+    settings.udpport = -1; // Formerly 11211, -1 means unspecified, 0 means off.
     /* By default this string should be NULL for getaddrinfo() */
     settings.inter = NULL;
     settings.maxbytes = 64 * 1024 * 1024; /* default is 64MB */
@@ -4123,6 +4123,15 @@ int main (int argc, char **argv) {
             fprintf(stderr, "Illegal argument \"%c\"\n", c);
             return 1;
         }
+    }
+
+    if (cproxy_cfg &&
+        settings.port == -1 &&
+        settings.udpport == -1) {
+        // Default behavior when we're a proxy is to also
+        // behave as a memcached on port 11210.
+        //
+        settings.port = 11210;
     }
 
     if (maxcore != 0) {
