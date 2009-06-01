@@ -44,3 +44,5 @@ doc/protocol-binary.txt
 /check_util
 ltmain.sh
 libtool
+libmemcached-0.29/*
+libmemcached-0.29
