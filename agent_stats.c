@@ -68,6 +68,7 @@ struct main_stats_collect_info {
 
 static char *cmd_names[] = { // Keep sync'ed with enum_stats_cmd.
     "get",
+    "get_key",
     "set",
     "add",
     "replace",
@@ -95,6 +96,9 @@ static char *cmd_type_names[] = { // Keep sync'ed with enum_stats_cmd_type.
 void on_conflate_get_stats(void *userdata, void *opaque,
                            char *type, kvpair_t *form,
                            conflate_add_stat add_stat) {
+    assert(sizeof(cmd_names)      == STATS_CMD_last);
+    assert(sizeof(cmd_type_names) == STATS_CMD_TYPE_last);
+
     proxy_main *m = userdata;
     assert(m);
     assert(m->nthreads > 1);

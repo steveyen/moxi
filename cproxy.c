@@ -195,59 +195,6 @@ proxy *cproxy_create(char    *name,
     return NULL;
 }
 
-void cproxy_reset_stats_td(proxy_stats_td *pstd) {
-    assert(pstd);
-
-    cproxy_reset_stats(&pstd->stats);
-
-    for (int j = 0; j < STATS_CMD_TYPE_last; j++) {
-        for (int k = 0; k < STATS_CMD_last; k++) {
-            cproxy_reset_stats_cmd(&pstd->stats_cmd[j][k]);
-        }
-    }
-}
-
-void cproxy_reset_stats(proxy_stats *ps) {
-    assert(ps);
-
-    // Only clear the tot_xxx stats, not the num_xxx ones.
-    //
-    ps->tot_upstream = 0;
-    ps->tot_downstream_conn = 0;
-    ps->tot_downstream_released = 0;
-    ps->tot_downstream_reserved = 0;
-    ps->tot_downstream_freed = 0;
-    ps->tot_downstream_quit_server = 0;
-    ps->tot_downstream_max_reached = 0;
-    ps->tot_downstream_create_failed = 0;
-    ps->tot_downstream_connect = 0;
-    ps->tot_downstream_connect_failed = 0;
-    ps->tot_downstream_auth = 0;
-    ps->tot_downstream_auth_failed = 0;
-    ps->tot_downstream_bucket = 0;
-    ps->tot_downstream_bucket_failed = 0;
-    ps->tot_downstream_propagate_failed = 0;
-    ps->tot_downstream_close_on_upstream_close = 0;
-    ps->tot_downstream_timeout = 0;
-    ps->tot_wait_queue_timeout = 0;
-    ps->tot_assign_downstream = 0;
-    ps->tot_assign_upstream = 0;
-    ps->tot_assign_recursion = 0;
-    ps->tot_reset_upstream_avail = 0;
-    ps->tot_retry = 0;
-    ps->tot_multiget_keys = 0;
-    ps->tot_multiget_keys_dedupe = 0;
-    ps->tot_optimize_sets = 0;
-    ps->err_oom = 0;
-    ps->err_upstream_write_prep = 0;
-    ps->err_downstream_write_prep = 0;
-}
-
-void cproxy_reset_stats_cmd(proxy_stats_cmd *sc) {
-    assert(sc);
-    memset(sc, 0, sizeof(proxy_stats_cmd));
-}
-
 /* Must be called on the main listener thread.
  */
 int cproxy_listen(proxy *p) {

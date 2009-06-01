@@ -200,7 +200,8 @@ typedef struct {
 } proxy_stats_cmd;
 
 typedef enum {
-    STATS_CMD_GET = 0,
+    STATS_CMD_GET = 0, // For each "get" cmd, even if multikey get.
+    STATS_CMD_GET_KEY, // For each key in a "get".
     STATS_CMD_SET,
     STATS_CMD_ADD,
     STATS_CMD_REPLACE,
