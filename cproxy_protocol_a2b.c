@@ -872,6 +872,8 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
 
     assert(uc->next == NULL);
 
+    // TODO: Inefficient repeated scan_tokens.
+    //
     token_t  tokens[MAX_TOKENS];
     size_t   ntokens = scan_tokens(command, tokens, MAX_TOKENS);
     char    *key     = tokens[KEY_TOKEN].value;
