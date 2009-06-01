@@ -113,9 +113,6 @@ int cproxy_init(char *cfg_str,
         strlen(cfg_str) <= 0)
         return 0;
 
-    if (settings.verbose > 1)
-        fprintf(stderr, "cproxy_init (%s)\n", cfg_str);
-
     gethostname(cproxy_hostname, sizeof(cproxy_hostname));
 
     cproxy_init_a2a();

@@ -85,17 +85,14 @@ int cproxy_init_agent(char *cfg_str,
                 char *key = strsep(&key_val, "=");
                 char *val = key_val;
 
-                if (settings.verbose > 1)
-                    fprintf(stderr, "cproxy_init kv %s %s\n", key, val);
-
                 if (val != NULL) {
                     if (strcmp(key, "apikey") == 0) {
                         jid = strsep(&val, "%");
                         jpw = val;
 
                         if (settings.verbose > 1)
-                            fprintf(stderr, "cproxy_init apikey %s %s\n",
-                                    jid, jpw);
+                            fprintf(stderr, "cproxy_init jid %s\n",
+                                    jid);
                     }
                     if (strcmp(key, "config") == 0)
                         config = val;
