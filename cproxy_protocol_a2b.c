@@ -971,6 +971,10 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
                                           &self);
     if (c != NULL) {
         if (self) {
+            // TODO: This optimization could be done much earlier,
+            // even before the upstream conn was assigned
+            // to a downstream.
+            //
             cproxy_optimize_to_self(d, uc, command);
             process_command(uc, command);
             return true;
