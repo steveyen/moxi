@@ -54,7 +54,15 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
     size_t  ntokens = scan_tokens(line, tokens, MAX_TOKENS);
     char   *cmd     = tokens[COMMAND_TOKEN].value;
     int     cmdx    = -1;
+    int     cmd_st;
     int     comm;
+
+#define SEEN(cmd_id, is_cas)                           \
+    cmd_st = c->noreply ?                              \
+        STATS_CMD_TYPE_QUIET : STATS_CMD_TYPE_REGULAR; \
+    ptd->stats.stats_cmd[cmd_st][cmd_id].seen++;       \
+    if (is_cas)                                        \
+        ptd->stats.stats_cmd[cmd_st][cmd_id].cas++;
 
     if (ntokens >= 3 &&
         (strncmp(cmd, "get", 3) == 0)) {
@@ -63,10 +71,7 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
         //
         cproxy_pause_upstream_for_downstream(ptd, c);
 
-        int st = STATS_CMD_TYPE_REGULAR;
-        ptd->stats.stats_cmd[st][STATS_CMD_GET].seen++;
-        if (cmd[3] == 's')
-            ptd->stats.stats_cmd[st][STATS_CMD_GET].cas++;
+        SEEN(STATS_CMD_GET, cmd[3] == 's');
 
     } else if ((ntokens == 6 || ntokens == 7) &&
                ((strncmp(cmd, "add", 3) == 0 &&
@@ -88,9 +93,7 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
         process_update_command(c, tokens, ntokens, comm, false);
 
         if (cmdx >= 0) {
-            int st = c->noreply ?
-                STATS_CMD_TYPE_QUIET : STATS_CMD_TYPE_REGULAR;
-            ptd->stats.stats_cmd[st][cmdx].seen++;
+            SEEN(cmdx, false);
         }
 
     } else if ((ntokens == 7 || ntokens == 8) &&
@@ -98,10 +101,7 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
 
         process_update_command(c, tokens, ntokens, comm, true);
 
-        int st = c->noreply ?
-            STATS_CMD_TYPE_QUIET : STATS_CMD_TYPE_REGULAR;
-        ptd->stats.stats_cmd[st][STATS_CMD_CAS].seen++;
-        ptd->stats.stats_cmd[st][STATS_CMD_CAS].cas++;
+        SEEN(STATS_CMD_CAS, true);
 
     } else if ((ntokens == 4 || ntokens == 5) &&
                (strncmp(cmd, "incr", 4) == 0)) {
@@ -109,9 +109,7 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
         set_noreply_maybe(c, tokens, ntokens);
         cproxy_pause_upstream_for_downstream(ptd, c);
 
-        int st = c->noreply ?
-            STATS_CMD_TYPE_QUIET : STATS_CMD_TYPE_REGULAR;
-        ptd->stats.stats_cmd[st][STATS_CMD_INCR].seen++;
+        SEEN(STATS_CMD_INCR, false);
 
     } else if ((ntokens == 4 || ntokens == 5) &&
                (strncmp(cmd, "decr", 4) == 0)) {
@@ -119,9 +117,7 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
         set_noreply_maybe(c, tokens, ntokens);
         cproxy_pause_upstream_for_downstream(ptd, c);
 
-        int st = c->noreply ?
-            STATS_CMD_TYPE_QUIET : STATS_CMD_TYPE_REGULAR;
-        ptd->stats.stats_cmd[st][STATS_CMD_DECR].seen++;
+        SEEN(STATS_CMD_DECR, false);
 
     } else if (ntokens >= 3 && ntokens <= 4 &&
                (strncmp(cmd, "delete", 6) == 0)) {
@@ -129,9 +125,7 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
         set_noreply_maybe(c, tokens, ntokens);
         cproxy_pause_upstream_for_downstream(ptd, c);
 
-        int st = c->noreply ?
-            STATS_CMD_TYPE_QUIET : STATS_CMD_TYPE_REGULAR;
-        ptd->stats.stats_cmd[st][STATS_CMD_DELETE].seen++;
+        SEEN(STATS_CMD_DELETE, false);
 
     } else if (ntokens >= 2 && ntokens <= 4 &&
                (strncmp(cmd, "flush_all", 9) == 0)) {
@@ -139,13 +133,17 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
         set_noreply_maybe(c, tokens, ntokens);
         cproxy_pause_upstream_for_downstream(ptd, c);
 
-        int st = c->noreply ?
-            STATS_CMD_TYPE_QUIET : STATS_CMD_TYPE_REGULAR;
-        ptd->stats.stats_cmd[st][STATS_CMD_FLUSH_ALL].seen++;
+        SEEN(STATS_CMD_FLUSH_ALL, false);
 
-    } else if (ntokens >= 2 && ntokens <= 3 &&
-               (strcmp(cmd, "stats") == 0 ||
-                strcmp(cmd, "stats reset") == 0)) {
+    } else if (ntokens == 3 &&
+               (strcmp(cmd, "stats reset") == 0)) {
+
+        cproxy_pause_upstream_for_downstream(ptd, c);
+
+        SEEN(STATS_CMD_STATS_RESET, false);
+
+    } else if (ntokens == 2 &&
+               (strcmp(cmd, "stats") == 0)) {
 
         // Even though we've coded to handle advanced stats
         // like stats cachedump, prevent those here to avoid
@@ -153,23 +151,33 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
         //
         cproxy_pause_upstream_for_downstream(ptd, c);
 
+        SEEN(STATS_CMD_STATS, false);
+
     } else if (ntokens == 2 &&
                (strncmp(cmd, "version", 7) == 0)) {
 
         out_string(c, "VERSION " VERSION);
+
+        SEEN(STATS_CMD_VERSION, false);
 
     } else if ((ntokens == 3 || ntokens == 4) &&
                (strncmp(cmd, "verbosity", 9) == 0)) {
 
         process_verbosity_command(c, tokens, ntokens);
 
+        SEEN(STATS_CMD_VERBOSITY, false);
+
     } else if (ntokens == 2 &&
                (strncmp(cmd, "quit", 4) == 0)) {
 
         conn_set_state(c, conn_closing);
 
+        SEEN(STATS_CMD_QUIT, false);
+
     } else {
         out_string(c, "ERROR");
+
+        SEEN(STATS_CMD_ERROR, false);
     }
 }
 

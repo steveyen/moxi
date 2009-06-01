@@ -78,7 +78,13 @@ static char *cmd_names[] = { // Keep sync'ed with enum_stats_cmd.
     "incr",
     "decr",
     "flush_all",
-    "cas"
+    "cas",
+    "stats",
+    "stats_reset",
+    "version",
+    "verbosity",
+    "quit",
+    "ERROR"
 };
 
 static char *cmd_type_names[] = { // Keep sync'ed with enum_stats_cmd_type.
