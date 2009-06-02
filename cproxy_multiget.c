@@ -161,8 +161,8 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
                         // Optimization for talking with ourselves,
                         // to avoid extra network hop.
                         //
-                        // TODO: Stats.
-                        //
+                        ptd->stats.stats.tot_optimize_self++;
+
                         item *it = item_get(key, key_len);
                         if (it != NULL) {
                             cproxy_upstream_ascii_item_response(it, uc_cur,
