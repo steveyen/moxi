@@ -288,8 +288,8 @@ struct downstream {
     // an upstream request to a downstream.  Eg, ascii vs binary,
     // replicating or not, etc.
     //
-    // TODO: Move this to a per-downstream-conn level,
-    // so we can have non-uniform downstream conns.
+    // TODO: Move propagate func ptr to a per-downstream-conn
+    // level, so we can have non-uniform downstream conns.
     // For example, some downstream conn's are ascii, some binary.
     //
     bool (*propagate)(downstream *d);
