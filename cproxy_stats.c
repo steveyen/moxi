@@ -338,7 +338,9 @@ void cproxy_reset_stats(proxy_stats *ps) {
     ps->tot_retry = 0;
     ps->tot_multiget_keys = 0;
     ps->tot_multiget_keys_dedupe = 0;
+    ps->tot_multiget_bytes_dedupe = 0;
     ps->tot_optimize_sets = 0;
+    ps->tot_optimize_self = 0;
     ps->err_oom = 0;
     ps->err_upstream_write_prep = 0;
     ps->err_downstream_write_prep = 0;

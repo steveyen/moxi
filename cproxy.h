@@ -186,6 +186,7 @@ struct proxy_stats {
     uint64_t tot_retry;
     uint64_t tot_multiget_keys;
     uint64_t tot_multiget_keys_dedupe;
+    uint64_t tot_multiget_bytes_dedupe;
     uint64_t tot_optimize_sets;
     uint64_t tot_optimize_self;
     uint64_t err_oom;

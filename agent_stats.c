@@ -535,6 +535,7 @@ static void add_proxy_stats(proxy_stats *agg, proxy_stats *x) {
     agg->tot_reset_upstream_avail += x->tot_reset_upstream_avail;
     agg->tot_multiget_keys        += x->tot_multiget_keys;
     agg->tot_multiget_keys_dedupe += x->tot_multiget_keys_dedupe;
+    agg->tot_multiget_bytes_dedupe += x->tot_multiget_bytes_dedupe;
     agg->tot_optimize_sets        += x->tot_optimize_sets;
     agg->tot_optimize_self        += x->tot_optimize_self;
     agg->tot_retry += x->tot_retry;
@@ -641,6 +642,8 @@ void map_pstd_foreach_emit(gpointer key,
               pstd->stats.tot_multiget_keys);
     more_stat("tot_multiget_keys_dedupe",
               pstd->stats.tot_multiget_keys_dedupe);
+    more_stat("tot_multiget_bytes_dedupe",
+              pstd->stats.tot_multiget_bytes_dedupe);
     more_stat("tot_optimize_sets",
               pstd->stats.tot_optimize_sets);
     more_stat("tot_optimize_self",

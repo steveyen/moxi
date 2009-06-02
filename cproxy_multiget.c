@@ -330,8 +330,10 @@ void multiget_ascii_downstream_response(downstream *d, item *it) {
         memcpy(key_buf, ITEM_key(it), it->nkey);
         key_buf[it->nkey] = '\0';
 
-        multiget_entry *entry =
+        multiget_entry *entry_first =
             g_hash_table_lookup(d->multiget, key_buf);
+
+        multiget_entry *entry = entry_first;
 
         while (entry != NULL) {
             // The upstream might have been closed mid-request.
@@ -339,8 +341,13 @@ void multiget_ascii_downstream_response(downstream *d, item *it) {
             // TODO: Revisit the -1 cas_emit parameter.
             //
             conn *uc = entry->upstream_conn;
-            if (uc != NULL)
+            if (uc != NULL) {
                 cproxy_upstream_ascii_item_response(it, uc, -1);
+
+                if (entry != entry_first) {
+                    ptd->stats.stats.tot_multiget_bytes_dedupe += it->nbytes;
+                }
+            }
 
             entry = entry->next;
         }
