@@ -371,6 +371,9 @@ static void main_stats_collect(void *data0, void *data1) {
             emit_f("front_cache_tot_get_misses",
                    "%llu",
                    (long long unsigned int) p->front_cache.tot_get_misses);
+            emit_f("front_cache_tot_get_bytes",
+                   "%llu",
+                   (long long unsigned int) p->front_cache.tot_get_bytes);
             emit_f("front_cache_tot_adds",
                    "%llu",
                    (long long unsigned int) p->front_cache.tot_adds);
@@ -380,6 +383,9 @@ static void main_stats_collect(void *data0, void *data1) {
             emit_f("front_cache_tot_add_fails",
                    "%llu",
                    (long long unsigned int) p->front_cache.tot_add_fails);
+            emit_f("front_cache_tot_add_bytes",
+                   "%llu",
+                   (long long unsigned int) p->front_cache.tot_add_bytes);
             emit_f("front_cache_tot_deletes",
                    "%llu",
                    (long long unsigned int) p->front_cache.tot_deletes);

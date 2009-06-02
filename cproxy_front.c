@@ -45,9 +45,11 @@ void mcache_reset_stats(mcache *m) {
     m->tot_get_hits    = 0;
     m->tot_get_expires = 0;
     m->tot_get_misses  = 0;
+    m->tot_get_bytes   = 0;
     m->tot_adds        = 0;
     m->tot_add_skips   = 0;
     m->tot_add_fails   = 0;
+    m->tot_add_bytes   = 0;
     m->tot_deletes     = 0;
     m->tot_evictions   = 0;
 
@@ -140,6 +142,7 @@ item *mcache_get(mcache *m, char *key, int key_len,
                 it->refcount++; // TODO: Need locking here?
 
                 m->tot_get_hits++;
+                m->tot_get_bytes += it->nbytes;
 
                 if (m->lock)
                     pthread_mutex_unlock(m->lock);
@@ -235,6 +238,7 @@ void mcache_add(mcache *m, item *it,
                     g_hash_table_insert(m->map, key_buf, it);
 
                     m->tot_adds++;
+                    m->tot_add_bytes += it->nbytes;
 
                     if (settings.verbose > 1)
                         fprintf(stderr,

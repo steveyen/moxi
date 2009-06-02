@@ -133,7 +133,7 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
 
                 // Handle a front cache hit by queuing response.
                 //
-                // TODO: Stats on front cache hit.
+                // Note, front cache stats are part of mcache.
                 //
                 if (!cas_emit) {
                     item *it = mcache_get(front_cache, key, key_len,

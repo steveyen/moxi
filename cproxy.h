@@ -45,9 +45,11 @@ typedef struct {
     uint64_t tot_get_hits;
     uint64_t tot_get_expires;
     uint64_t tot_get_misses;
+    uint64_t tot_get_bytes;
     uint64_t tot_adds;
     uint64_t tot_add_skips;
     uint64_t tot_add_fails;
+    uint64_t tot_add_bytes;
     uint64_t tot_deletes;
     uint64_t tot_evictions;
 } mcache;
