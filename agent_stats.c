@@ -132,9 +132,11 @@ void on_conflate_get_stats(void *userdata, void *opaque,
 
     char buf[800];
 
-#define more_stat(spec, key, val)          \
-    snprintf(buf, sizeof(buf), spec, val); \
-    add_stat(opaque, key, buf);
+#define more_stat(spec, key, val)              \
+    if (val) {                                 \
+        snprintf(buf, sizeof(buf), spec, val); \
+        add_stat(opaque, key, buf);            \
+    }
 
     more_stat("%s", "main_version",
               VERSION);
@@ -584,11 +586,13 @@ void map_pstd_foreach_emit(gpointer key,
     char buf_val[100];
 
 #define more_stat(key, val)                             \
+    if (val) {                                          \
         snprintf(buf_key, sizeof(buf_key),              \
                  "%s:stats_%s", name, key);             \
         snprintf(buf_val, sizeof(buf_val),              \
                  "%llu", (long long unsigned int) val); \
-        emit->add_stat(emit->opaque, buf_key, buf_val);
+        emit->add_stat(emit->opaque, buf_key, buf_val); \
+    }
 
     more_stat("num_upstream",
               pstd->stats.num_upstream);
