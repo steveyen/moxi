@@ -368,11 +368,12 @@ bool cproxy_optimize_set_ascii(downstream *d, conn *uc,
 void cproxy_optimize_to_self(downstream *d, conn *uc,
                              char *command) {
     assert(d);
+    assert(d->ptd);
     assert(uc);
     assert(uc->next == NULL);
 
-    // TODO: Stats.
-    //
+    d->ptd->stats.stats.tot_optimize_self++;
+
     if (command != NULL &&
         settings.verbose > 1)
         fprintf(stderr, "optimize to self: %s\n", command);
