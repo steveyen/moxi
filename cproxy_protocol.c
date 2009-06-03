@@ -95,19 +95,29 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
                 (strncmp(cmd, "append", 6) == 0 &&
                  (comm = NREAD_APPEND) &&
                  (cmdx = STATS_CMD_APPEND)))) {
+        assert(c->item == NULL);
+        c->item = NULL;
 
         process_update_command(c, tokens, ntokens, comm, false);
 
         if (cmdx >= 0) {
-            SEEN(cmdx, false, cmd_len);
+            item *it = c->item;
+            if (it != NULL) {
+                SEEN(cmdx, false, cmd_len + it->nbytes);
+            }
         }
 
     } else if ((ntokens == 7 || ntokens == 8) &&
                (strncmp(cmd, "cas", 3) == 0 && (comm = NREAD_CAS))) {
+        assert(c->item == NULL);
+        c->item = NULL;
 
         process_update_command(c, tokens, ntokens, comm, true);
 
-        SEEN(STATS_CMD_CAS, true, cmd_len);
+        item *it = c->item;
+        if (it != NULL) {
+            SEEN(STATS_CMD_CAS, true, cmd_len + it->nbytes);
+        }
 
     } else if ((ntokens == 4 || ntokens == 5) &&
                (strncmp(cmd, "incr", 4) == 0)) {
