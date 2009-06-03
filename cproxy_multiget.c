@@ -65,6 +65,11 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
     proxy_td *ptd = d->ptd;
     assert(ptd != NULL);
 
+    proxy_stats_cmd *psc_get =
+        &ptd->stats.stats_cmd[STATS_CMD_TYPE_REGULAR][STATS_CMD_GET];
+    proxy_stats_cmd *psc_get_key =
+        &ptd->stats.stats_cmd[STATS_CMD_TYPE_REGULAR][STATS_CMD_GET_KEY];
+
     int nwrite = 0;
     int nconns = memcached_server_count(&d->mst);
 
@@ -121,15 +126,23 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
             char *next_space = strchr(key, ' ');
             int   key_len;
 
-            if (next_space != NULL)
+            if (next_space != NULL) {
                 key_len = next_space - key;
-            else
+            } else {
                 key_len = strlen(key);
+
+                // We've reached the last key.
+                //
+                psc_get->read_bytes += (key - command + key_len);
+            }
 
             // This key_len check helps skip consecutive spaces.
             //
             if (key_len > 0) {
                 ptd->stats.stats.tot_multiget_keys++;
+
+                psc_get_key->seen++;
+                psc_get_key->read_bytes += key_len;
 
                 // Handle a front cache hit by queuing response.
                 //
@@ -143,6 +156,9 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
                         assert(strncmp(ITEM_key(it), key, it->nkey) == 0);
 
                         cproxy_upstream_ascii_item_response(it, uc_cur, 0);
+
+                        psc_get_key->hits++;
+                        psc_get_key->write_bytes += it->nbytes;
 
                         // The refcount was inc'ed by mcache_get() for us.
                         //
@@ -168,6 +184,9 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
                             cproxy_upstream_ascii_item_response(it, uc_cur,
                                                                 cas_emit);
 
+                            psc_get_key->hits++;
+                            psc_get_key->write_bytes += it->nbytes;
+
                             // The refcount was inc'ed by item_get() for us.
                             //
                             item_remove(it);
@@ -177,6 +196,8 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
                                         "optimize self multiget hit: %s\n",
                                         key);
                         } else {
+                            psc_get_key->misses++;
+
                             if (settings.verbose > 1)
                                 fprintf(stderr,
                                         "optimize self multiget miss: %s\n",
@@ -193,6 +214,8 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
                     bool first_request = true;
 
                     if (d->multiget != NULL) {
+                        // TODO: Use Trond's allocator here.
+                        //
                         multiget_entry *entry =
                             calloc(1, sizeof(multiget_entry));
                         if (entry != NULL) {
@@ -306,6 +329,9 @@ void multiget_ascii_downstream_response(downstream *d, item *it) {
     proxy_td *ptd = d->ptd;
     assert(ptd);
 
+    proxy_stats_cmd *psc_get_key =
+        &ptd->stats.stats_cmd[STATS_CMD_TYPE_REGULAR][STATS_CMD_GET_KEY];
+
     proxy *p = ptd->proxy;
     assert(p);
 
@@ -344,6 +370,9 @@ void multiget_ascii_downstream_response(downstream *d, item *it) {
             if (uc != NULL) {
                 cproxy_upstream_ascii_item_response(it, uc, -1);
 
+                psc_get_key->hits++;
+                psc_get_key->write_bytes += it->nbytes;
+
                 if (entry != entry_first) {
                     ptd->stats.stats.tot_multiget_bytes_dedupe += it->nbytes;
                 }
@@ -357,6 +386,10 @@ void multiget_ascii_downstream_response(downstream *d, item *it) {
             // TODO: Revisit the -1 cas_emit parameter.
             //
             cproxy_upstream_ascii_item_response(it, uc, -1);
+
+            psc_get_key->hits++;
+            psc_get_key->write_bytes += it->nbytes;
+
             uc = uc->next;
         }
     }
