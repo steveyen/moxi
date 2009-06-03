@@ -58,7 +58,7 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
     int     cmd_st;
     int     comm;
 
-#define SEEN(cmd_id, is_cas)                                    \
+#define SEEN(cmd_id, is_cas, cmd_len)                           \
     cmd_st = c->noreply ?                                       \
         STATS_CMD_TYPE_QUIET : STATS_CMD_TYPE_REGULAR;          \
     ptd->stats.stats_cmd[cmd_st][cmd_id].seen++;                \
@@ -73,7 +73,11 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
         //
         cproxy_pause_upstream_for_downstream(ptd, c);
 
-        SEEN(STATS_CMD_GET, cmd[3] == 's');
+        // The cmd_len from scan_tokens might not include
+        // all the keys, so cmd_len might not == strlen(command).
+        // Handle read_bytes during multiget broadcast.
+        //
+        SEEN(STATS_CMD_GET, cmd[3] == 's', 0);
 
     } else if ((ntokens == 6 || ntokens == 7) &&
                ((strncmp(cmd, "add", 3) == 0 &&
@@ -95,7 +99,7 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
         process_update_command(c, tokens, ntokens, comm, false);
 
         if (cmdx >= 0) {
-            SEEN(cmdx, false);
+            SEEN(cmdx, false, cmd_len);
         }
 
     } else if ((ntokens == 7 || ntokens == 8) &&
@@ -103,7 +107,7 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
 
         process_update_command(c, tokens, ntokens, comm, true);
 
-        SEEN(STATS_CMD_CAS, true);
+        SEEN(STATS_CMD_CAS, true, cmd_len);
 
     } else if ((ntokens == 4 || ntokens == 5) &&
                (strncmp(cmd, "incr", 4) == 0)) {
@@ -111,7 +115,7 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
         set_noreply_maybe(c, tokens, ntokens);
         cproxy_pause_upstream_for_downstream(ptd, c);
 
-        SEEN(STATS_CMD_INCR, false);
+        SEEN(STATS_CMD_INCR, false, cmd_len);
 
     } else if ((ntokens == 4 || ntokens == 5) &&
                (strncmp(cmd, "decr", 4) == 0)) {
@@ -119,7 +123,7 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
         set_noreply_maybe(c, tokens, ntokens);
         cproxy_pause_upstream_for_downstream(ptd, c);
 
-        SEEN(STATS_CMD_DECR, false);
+        SEEN(STATS_CMD_DECR, false, cmd_len);
 
     } else if (ntokens >= 3 && ntokens <= 4 &&
                (strncmp(cmd, "delete", 6) == 0)) {
@@ -127,7 +131,7 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
         set_noreply_maybe(c, tokens, ntokens);
         cproxy_pause_upstream_for_downstream(ptd, c);
 
-        SEEN(STATS_CMD_DELETE, false);
+        SEEN(STATS_CMD_DELETE, false, cmd_len);
 
     } else if (ntokens >= 2 && ntokens <= 4 &&
                (strncmp(cmd, "flush_all", 9) == 0)) {
@@ -135,14 +139,14 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
         set_noreply_maybe(c, tokens, ntokens);
         cproxy_pause_upstream_for_downstream(ptd, c);
 
-        SEEN(STATS_CMD_FLUSH_ALL, false);
+        SEEN(STATS_CMD_FLUSH_ALL, false, cmd_len);
 
     } else if (ntokens == 3 &&
                (strcmp(cmd, "stats reset") == 0)) {
 
         cproxy_pause_upstream_for_downstream(ptd, c);
 
-        SEEN(STATS_CMD_STATS_RESET, false);
+        SEEN(STATS_CMD_STATS_RESET, false, cmd_len);
 
     } else if (ntokens == 2 &&
                (strcmp(cmd, "stats") == 0)) {
@@ -153,33 +157,33 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
         //
         cproxy_pause_upstream_for_downstream(ptd, c);
 
-        SEEN(STATS_CMD_STATS, false);
+        SEEN(STATS_CMD_STATS, false, cmd_len);
 
     } else if (ntokens == 2 &&
                (strncmp(cmd, "version", 7) == 0)) {
 
         out_string(c, "VERSION " VERSION);
 
-        SEEN(STATS_CMD_VERSION, false);
+        SEEN(STATS_CMD_VERSION, false, cmd_len);
 
     } else if ((ntokens == 3 || ntokens == 4) &&
                (strncmp(cmd, "verbosity", 9) == 0)) {
 
         process_verbosity_command(c, tokens, ntokens);
 
-        SEEN(STATS_CMD_VERBOSITY, false);
+        SEEN(STATS_CMD_VERBOSITY, false, cmd_len);
 
     } else if (ntokens == 2 &&
                (strncmp(cmd, "quit", 4) == 0)) {
 
         conn_set_state(c, conn_closing);
 
-        SEEN(STATS_CMD_QUIT, false);
+        SEEN(STATS_CMD_QUIT, false, cmd_len);
 
     } else {
         out_string(c, "ERROR");
 
-        SEEN(STATS_CMD_ERROR, false);
+        SEEN(STATS_CMD_ERROR, false, cmd_len);
     }
 }
 
