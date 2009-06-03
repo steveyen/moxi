@@ -16,11 +16,7 @@ TODO ideas...
 - stats for inline latency, statistical
 - key-level stats, by command, with bandwidth
 
-- release downstreams back to head of list, not to tail
-
-- make clock timer resolution configurable
-  - 1 second currently
-  - too many gettimeofday()'s?
+- too many gettimeofday()'s?
 
 - keepalive on the connections with a timer
   - add stats to see if this is a problem?
@@ -31,6 +27,8 @@ TODO ideas...
 - revisit settings.verbose levels
 
 - revisit error msg strings
+
+- revisit DONE list, add tests as necessary
 
 - optimization: use trond's allocator instead of malloc/free
   - for multiget hashtable
@@ -304,4 +302,8 @@ known bugs
 
 - DONE: optimized connection to self, where moxi is running
   as a memcached server.
+
+- DONE: release downstreams back to head of list, not to tail
+
+- DONE: make clock timer resolution configurable
 
