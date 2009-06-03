@@ -398,6 +398,10 @@ void multiget_ascii_downstream_response(downstream *d, item *it) {
             }
         }
     } else {
+        // TODO: We're not tracking miss stats in the simple case.
+        // Do we always need to use a multiget hashtable?
+        // Or, perhaps misses equals number of requests - number of hits.
+        //
         conn *uc = d->upstream_conn;
         while (uc != NULL) {
             // TODO: Revisit the -1 cas_emit parameter.
