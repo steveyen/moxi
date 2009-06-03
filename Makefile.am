@@ -93,7 +93,7 @@ memcached_debug_dtrace.o: $(moxi_debug_OBJECTS)
 	$(DTRACE) $(DTRACEFLAGS) -G -o memcached_debug_dtrace.o -s ${srcdir}/memcached_dtrace.d $(moxi_debug_OBJECTS)
 
 
-SUBDIRS = doc libmemcached-0.29
+SUBDIRS = doc libmemcached-0.29/libmemcached
 DIST_DIRS = scripts
 EXTRA_DIST = doc scripts TODO t memcached.spec memcached_dtrace.d version.m4
 

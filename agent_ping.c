@@ -207,7 +207,7 @@ static void perform_ping_test(struct ping_test_recipe recipe,
         if (retrieved) {
             free(retrieved);
         } else {
-            *failures++;
+            (*failures)++;
         }
     }
 
