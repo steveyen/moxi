@@ -159,7 +159,7 @@ void cproxy_init_a2b() {
 
             spec->ntokens = scan_tokens(spec->line,
                                         spec->tokens,
-                                        MAX_TOKENS);
+                                        MAX_TOKENS, NULL);
             assert(spec->ntokens > 2);
 
             int noreply_index = spec->ntokens - 2;
@@ -855,6 +855,8 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
     assert(d->multiget == NULL);
     assert(d->merger == NULL);
 
+    // TODO: Wasteful repetition of strncmps().
+    //
     // Handles get and gets.
     //
     if (strncmp(command, "get", 3) == 0) {
@@ -874,8 +876,9 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
 
     // TODO: Inefficient repeated scan_tokens.
     //
+    int      cmd_len = 0;
     token_t  tokens[MAX_TOKENS];
-    size_t   ntokens = scan_tokens(command, tokens, MAX_TOKENS);
+    size_t   ntokens = scan_tokens(command, tokens, MAX_TOKENS, &cmd_len);
     char    *key     = tokens[KEY_TOKEN].value;
     int      key_len = tokens[KEY_TOKEN].length;
 

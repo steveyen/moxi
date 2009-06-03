@@ -50,10 +50,11 @@ void cproxy_process_a2a_downstream(conn *c, char *line) {
         token_t      tokens[MAX_TOKENS];
         size_t       ntokens;
         unsigned int flags;
+        int          clen = 0;
         int          vlen;
         uint64_t     cas = CPROXY_NOT_CAS;
 
-        ntokens = scan_tokens(line, tokens, MAX_TOKENS);
+        ntokens = scan_tokens(line, tokens, MAX_TOKENS, &clen);
         if (ntokens >= 5 && // Accounts for extra termimation token.
             ntokens <= 6 &&
             tokens[KEY_TOKEN].length <= KEY_MAX_LENGTH &&
@@ -258,6 +259,8 @@ bool cproxy_forward_a2a_simple_downstream(downstream *d,
     assert(d->multiget == NULL);
     assert(d->merger == NULL);
 
+    // TODO: Wasteful repetition of strncmps().
+    //
     if (strncmp(command, "get", 3) == 0) {
         // Only use front_cache for 'get', not for 'gets'.
         //
@@ -294,8 +297,9 @@ bool cproxy_forward_a2a_simple_downstream(downstream *d,
 
     // TODO: Inefficient repeated scan_tokens.
     //
+    int      cmd_len = 0;
     token_t  tokens[MAX_TOKENS];
-    size_t   ntokens = scan_tokens(command, tokens, MAX_TOKENS);
+    size_t   ntokens = scan_tokens(command, tokens, MAX_TOKENS, &cmd_len);
     char    *key     = tokens[KEY_TOKEN].value;
     int      key_len = tokens[KEY_TOKEN].length;
 

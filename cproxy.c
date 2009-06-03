@@ -1581,7 +1581,7 @@ char *nread_text(short x) {
  *
  * Usage example:
  *
- *  while (scan_tokens(command, tokens, max_tokens) > 0) {
+ *  while (scan_tokens(command, tokens, max_tokens, NULL) > 0) {
  *      for(int ix = 0; tokens[ix].length != 0; ix++) {
  *          ...
  *      }
@@ -1589,9 +1589,13 @@ char *nread_text(short x) {
  *  }
  */
 size_t scan_tokens(char *command, token_t *tokens,
-                   const size_t max_tokens) {
+                   const size_t max_tokens,
+                   int *command_len) {
     char *s, *e;
     size_t ntokens = 0;
+
+    if (command_len != NULL)
+        *command_len = 0;
 
     assert(command != NULL && tokens != NULL && max_tokens > 1);
 
@@ -1602,8 +1606,11 @@ size_t scan_tokens(char *command, token_t *tokens,
                 tokens[ntokens].length = e - s;
                 ntokens++;
             }
-            if (*e == '\0')
+            if (*e == '\0') {
+                if (command_len != NULL)
+                    *command_len = (e - command);
                 break; /* string end */
+            }
             s = e + 1;
         }
     }

@@ -58,7 +58,7 @@ bool protocol_stats_merge_line(GHashTable *merger, char *line) {
         return false;
 
     token_t tokens[MAX_TOKENS];
-    size_t  ntokens = scan_tokens(line, tokens, MAX_TOKENS);
+    size_t  ntokens = scan_tokens(line, tokens, MAX_TOKENS, NULL);
 
     if (ntokens != 4) // 3 + 1 for the terminal token.
         return false;
@@ -139,7 +139,8 @@ bool protocol_stats_merge_name_val(GHashTable *merger,
         }
 
         token_t prev_tokens[MAX_TOKENS];
-        size_t  prev_ntokens = scan_tokens(prev, prev_tokens, MAX_TOKENS);
+        size_t  prev_ntokens = scan_tokens(prev, prev_tokens,
+                                           MAX_TOKENS, NULL);
 
         if (prev_ntokens != 4)
             return true;

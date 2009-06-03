@@ -536,7 +536,8 @@ void  mcache_flush_all(mcache *m, uint32_t msec_exp);
 bool  add_conn_item(conn *c, item *it);
 char *add_conn_suffix(conn *c);
 
-size_t scan_tokens(char *command, token_t *tokens, const size_t max_tokens);
+size_t scan_tokens(char *command, token_t *tokens, const size_t max_tokens,
+                   int *command_len);
 
 char *nread_text(short x);
 

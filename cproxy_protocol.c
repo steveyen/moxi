@@ -50,8 +50,9 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
         return;
     }
 
+    int     cmd_len = 0;
     token_t tokens[MAX_TOKENS];
-    size_t  ntokens = scan_tokens(line, tokens, MAX_TOKENS);
+    size_t  ntokens = scan_tokens(line, tokens, MAX_TOKENS, &cmd_len);
     char   *cmd     = tokens[COMMAND_TOKEN].value;
     int     cmdx    = -1;
     int     cmd_st;
