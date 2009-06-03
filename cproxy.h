@@ -455,6 +455,7 @@ typedef struct multiget_entry multiget_entry;
 struct multiget_entry {
     conn           *upstream_conn;
     uint32_t        opaque; // For binary protocol.
+    uint64_t        hits;
     multiget_entry *next;
 };
 

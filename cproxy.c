@@ -667,7 +667,7 @@ bool cproxy_release_downstream(downstream *d, bool force) {
     // Free extra hash tables.
     //
     if (d->multiget != NULL) {
-        g_hash_table_foreach(d->multiget, multiget_foreach_free, NULL);
+        g_hash_table_foreach(d->multiget, multiget_foreach_free, d);
         g_hash_table_destroy(d->multiget);
         d->multiget = NULL;
     }

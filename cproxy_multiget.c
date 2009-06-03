@@ -16,10 +16,23 @@
 void multiget_foreach_free(gpointer key,
                            gpointer value,
                            gpointer user_data) {
+    downstream *d = user_data;
+    assert(d);
+
+    proxy_td *ptd = d->ptd;
+    assert(ptd);
+
+    proxy_stats_cmd *psc_get_key =
+        &ptd->stats.stats_cmd[STATS_CMD_TYPE_REGULAR][STATS_CMD_GET_KEY];
+
     multiget_entry *entry = value;
     assert(entry != NULL);
 
     while (entry != NULL) {
+        if (entry->hits == 0) {
+            psc_get_key->misses++;
+        }
+
         multiget_entry *curr = entry;
         entry = entry->next;
         free(curr);
@@ -221,6 +234,7 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
                         if (entry != NULL) {
                             entry->upstream_conn = uc_cur;
                             entry->opaque = 0;
+                            entry->hits = 0;
                             entry->next = g_hash_table_lookup(d->multiget, key);
 
                             g_hash_table_insert(d->multiget, key, entry);
@@ -359,26 +373,29 @@ void multiget_ascii_downstream_response(downstream *d, item *it) {
         multiget_entry *entry_first =
             g_hash_table_lookup(d->multiget, key_buf);
 
-        multiget_entry *entry = entry_first;
+        if (entry_first != NULL) {
+            entry_first->hits++;
 
-        while (entry != NULL) {
-            // The upstream might have been closed mid-request.
-            //
-            // TODO: Revisit the -1 cas_emit parameter.
-            //
-            conn *uc = entry->upstream_conn;
-            if (uc != NULL) {
-                cproxy_upstream_ascii_item_response(it, uc, -1);
+            multiget_entry *entry = entry_first;
+            while (entry != NULL) {
+                // The upstream might have been closed mid-request.
+                //
+                // TODO: Revisit the -1 cas_emit parameter.
+                //
+                conn *uc = entry->upstream_conn;
+                if (uc != NULL) {
+                    cproxy_upstream_ascii_item_response(it, uc, -1);
 
-                psc_get_key->hits++;
-                psc_get_key->write_bytes += it->nbytes;
+                    psc_get_key->hits++;
+                    psc_get_key->write_bytes += it->nbytes;
 
-                if (entry != entry_first) {
-                    ptd->stats.stats.tot_multiget_bytes_dedupe += it->nbytes;
+                    if (entry != entry_first) {
+                        ptd->stats.stats.tot_multiget_bytes_dedupe += it->nbytes;
+                    }
                 }
-            }
 
-            entry = entry->next;
+                entry = entry->next;
+            }
         }
     } else {
         conn *uc = d->upstream_conn;
