@@ -55,7 +55,7 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
     size_t  ntokens = scan_tokens(line, tokens, MAX_TOKENS, &cmd_len);
     char   *cmd     = tokens[COMMAND_TOKEN].value;
     int     cmdx    = -1;
-    int     cmd_st;
+    int     cmd_st  = STATS_CMD_TYPE_REGULAR;
     int     comm;
 
 #define SEEN(cmd_id, is_cas, cmd_len)                           \
@@ -104,6 +104,9 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
             item *it = c->item;
             if (it != NULL) {
                 SEEN(cmdx, false, cmd_len + it->nbytes);
+            } else {
+                SEEN(cmdx, false, cmd_len);
+                ptd->stats.stats_cmd[cmd_st][cmdx].misses++;
             }
         }
 
@@ -117,6 +120,9 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
         item *it = c->item;
         if (it != NULL) {
             SEEN(STATS_CMD_CAS, true, cmd_len + it->nbytes);
+        } else {
+            SEEN(STATS_CMD_CAS, true, cmd_len);
+            ptd->stats.stats_cmd[cmd_st][STATS_CMD_CAS].misses++;
         }
 
     } else if ((ntokens == 4 || ntokens == 5) &&
