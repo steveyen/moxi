@@ -198,8 +198,8 @@ typedef struct {
     uint64_t seen;        // Number of times a command was seen.
     uint64_t hits;        // Number of hits or successes.
     uint64_t misses;      // Number of misses or failures.
-    uint64_t read_bytes;  // Total bytes read.
-    uint64_t write_bytes; // Total bytes written.
+    uint64_t read_bytes;  // Total bytes read, incoming into proxy.
+    uint64_t write_bytes; // Total bytes written, outgoing from proxy.
     uint64_t cas;         // Number that had or required cas-id.
 } proxy_stats_cmd;
 

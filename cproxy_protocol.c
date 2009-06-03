@@ -58,11 +58,12 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
     int     cmd_st;
     int     comm;
 
-#define SEEN(cmd_id, is_cas)                           \
-    cmd_st = c->noreply ?                              \
-        STATS_CMD_TYPE_QUIET : STATS_CMD_TYPE_REGULAR; \
-    ptd->stats.stats_cmd[cmd_st][cmd_id].seen++;       \
-    if (is_cas)                                        \
+#define SEEN(cmd_id, is_cas)                                    \
+    cmd_st = c->noreply ?                                       \
+        STATS_CMD_TYPE_QUIET : STATS_CMD_TYPE_REGULAR;          \
+    ptd->stats.stats_cmd[cmd_st][cmd_id].seen++;                \
+    ptd->stats.stats_cmd[cmd_st][cmd_id].read_bytes += cmd_len; \
+    if (is_cas)                                                 \
         ptd->stats.stats_cmd[cmd_st][cmd_id].cas++;
 
     if (ntokens >= 3 &&
