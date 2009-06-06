@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
+#include <ctype.h>
 #include <unistd.h>
 #include <sysexits.h>
 #include <pthread.h>
@@ -19,6 +20,9 @@ uint32_t murmur_hash(const char *key, size_t length);
 
 // Local declarations.
 //
+char *skipspace(char *s);
+bool  wordeq(char *s, char *word);
+
 volatile uint32_t  msec_current_time = 0;
 int                msec_cycle = 200;
 struct event       msec_clockevent;
@@ -62,8 +66,8 @@ proxy_behavior behavior_default_g = {
     .pwd = {0}
 };
 
-// Key may be zero or space terminated.
-//
+/** Length of key that may be zero or space terminated.
+ */
 size_t skey_len(const char *key) {
     assert(key);
 
@@ -74,6 +78,8 @@ size_t skey_len(const char *key) {
     return x - key;
 }
 
+/** Hash of key that may be zero or space terminated.
+ */
 guint skey_hash(gconstpointer v) {
     assert(v);
 
@@ -83,6 +89,9 @@ guint skey_hash(gconstpointer v) {
     return murmur_hash(key, len);
 }
 
+/** Returns true if two keys are equal, where the
+ *  keys may be zero or space terminated.
+ */
 gboolean skey_equal(gconstpointer v1, gconstpointer v2) {
     assert(v1);
     assert(v2);
@@ -98,6 +107,26 @@ gboolean skey_equal(gconstpointer v1, gconstpointer v2) {
 
 void helper_g_free(gpointer data) {
     free(data);
+}
+
+char *skipspace(char *s) {
+    assert(s);
+    while (isspace(*s) && *s != '\0')
+        s++;
+    return s;
+}
+
+/** Returns true if first word in a string equals a given word.
+ */
+bool wordeq(char *s, char *word) {
+    assert(s);
+    assert(word);
+
+    char *end = s;
+    while (!isspace(*end) && *end != '\0')
+        end++;
+
+    return strncmp(s, word, end - s) == 0;
 }
 
 // ---------------------------------------
@@ -170,12 +199,12 @@ int cproxy_init_string(char *cfg_str,
         cproxy_dump_behavior(&behavior, "init_string", 2);
     }
 
-    buff = strdup(cfg_str);
+    buff = strdup(skipspace(cfg_str));
     next = buff;
     while (next != NULL) {
-        proxy_sect = strsep(&next, ";");
+        proxy_sect = skipspace(strsep(&next, ";"));
 
-        proxy_port_str = strsep(&proxy_sect, "=");
+        proxy_port_str = skipspace(strsep(&proxy_sect, "="));
         if (proxy_sect == NULL) {
             fprintf(stderr, "bad moxi config, missing =\n");
             exit(EXIT_FAILURE);
@@ -249,11 +278,11 @@ proxy_behavior cproxy_parse_behavior(char          *behavior_str,
 
     // Parse the key-value behavior_str, to override the defaults.
     //
-    char *buff = strdup(behavior_str);
+    char *buff = strdup(skipspace(behavior_str));
     char *next = buff;
 
     while (next != NULL) {
-        char *key_val = strsep(&next, ",");
+        char *key_val = skipspace(strsep(&next, ","));
         if (key_val != NULL) {
             cproxy_parse_behavior_key_val_str(key_val, &behavior);
         }
@@ -284,68 +313,71 @@ void cproxy_parse_behavior_key_val(char *key,
 
     if (key != NULL &&
         val != NULL) {
-        if (strcmp(key, "cycle") == 0) {
+        key = skipspace(key);
+        val = skipspace(val);
+
+        if (wordeq(key, "cycle")) {
             behavior->cycle = strtol(val, NULL, 10);
             assert(behavior->cycle > 0);
-        } else if (strcmp(key, "downstream_max") == 0) {
+        } else if (wordeq(key, "downstream_max")) {
             behavior->downstream_max = strtol(val, NULL, 10);
             assert(behavior->downstream_max >= 0);
-        } else if (strcmp(key, "weight") == 0 ||
-                   strcmp(key, "downstream_weight") == 0) {
+        } else if (wordeq(key, "weight") ||
+                   wordeq(key, "downstream_weight")) {
             behavior->downstream_weight = strtol(val, NULL, 10);
             assert(behavior->downstream_max >= 0);
-        } else if (strcmp(key, "retry") == 0 ||
-                   strcmp(key, "downstream_retry") == 0) {
+        } else if (wordeq(key, "retry") ||
+                   wordeq(key, "downstream_retry")) {
             behavior->downstream_retry = strtol(val, NULL, 10);
             assert(behavior->downstream_retry >= 0);
-        } else if (strcmp(key, "protocol") == 0 ||
-                   strcmp(key, "downstream_protocol") == 0) {
-            if (strcmp(val, "ascii") == 0)
+        } else if (wordeq(key, "protocol") ||
+                   wordeq(key, "downstream_protocol")) {
+            if (wordeq(val, "ascii"))
                 behavior->downstream_protocol =
                     proxy_downstream_ascii_prot;
-            else if (strcmp(val, "binary") == 0)
+            else if (wordeq(val, "binary"))
                 behavior->downstream_protocol =
                     proxy_downstream_binary_prot;
             else {
                 if (settings.verbose > 1)
                     fprintf(stderr, "unknown behavior prot: %s\n", val);
             }
-        } else if (strcmp(key, "timeout") == 0 ||
-                   strcmp(key, "downstream_timeout") == 0) {
+        } else if (wordeq(key, "timeout") ||
+                   wordeq(key, "downstream_timeout")) {
             int ms = strtol(val, NULL, 10);
             behavior->downstream_timeout.tv_sec  = floor(ms / 1000.0);
             behavior->downstream_timeout.tv_usec = (ms % 1000) * 1000;
-        } else if (strcmp(key, "wait_queue_timeout") == 0) {
+        } else if (wordeq(key, "wait_queue_timeout")) {
             int ms = strtol(val, NULL, 10);
             behavior->wait_queue_timeout.tv_sec  = floor(ms / 1000.0);
             behavior->wait_queue_timeout.tv_usec = (ms % 1000) * 1000;
-        } else if (strcmp(key, "front_cache_max") == 0) {
+        } else if (wordeq(key, "front_cache_max")) {
             behavior->front_cache_max = strtol(val, NULL, 10);
-        } else if (strcmp(key, "front_cache_lifespan") == 0) {
+        } else if (wordeq(key, "front_cache_lifespan")) {
             behavior->front_cache_lifespan = strtol(val, NULL, 10);
-        } else if (strcmp(key, "front_cache_spec") == 0) {
+        } else if (wordeq(key, "front_cache_spec")) {
             if (strlen(val) < sizeof(behavior->front_cache_spec) + 1) {
                 strcpy(behavior->front_cache_spec, val);
             }
-        } else if (strcmp(key, "optimize_set") == 0) {
+        } else if (wordeq(key, "optimize_set")) {
             if (strlen(val) < sizeof(behavior->optimize_set) + 1) {
                 strcpy(behavior->optimize_set, val);
             }
-        } else if (strcmp(key, "usr") == 0) {
+        } else if (wordeq(key, "usr")) {
             if (strlen(val) < sizeof(behavior->usr) + 1) {
                 strcpy(behavior->usr, val);
             }
-        } else if (strcmp(key, "pwd") == 0) {
+        } else if (wordeq(key, "pwd")) {
             if (strlen(val) < sizeof(behavior->pwd) + 1) {
                 strcpy(behavior->pwd, val);
             }
-        } else if (strcmp(key, "host") == 0) {
+        } else if (wordeq(key, "host")) {
             if (strlen(val) < sizeof(behavior->host) + 1) {
                 strcpy(behavior->host, val);
             }
-        } else if (strcmp(key, "port") == 0) {
+        } else if (wordeq(key, "port")) {
             behavior->port = strtol(val, NULL, 10);
-        } else if (strcmp(key, "bucket") == 0) {
+        } else if (wordeq(key, "bucket")) {
             if (strlen(val) < sizeof(behavior->bucket) + 1) {
                 strcpy(behavior->bucket, val);
             }
