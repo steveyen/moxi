@@ -22,6 +22,7 @@ uint32_t murmur_hash(const char *key, size_t length);
 //
 char *skipspace(char *s);
 bool  wordeq(char *s, char *word);
+char *trimstrdup(char *s);
 
 volatile uint32_t  msec_current_time = 0;
 int                msec_cycle = 200;
@@ -129,6 +130,22 @@ bool wordeq(char *s, char *word) {
     return strncmp(s, word, end - s) == 0;
 }
 
+/** Like strdup(), but trims spaces from start and end.
+ */
+char *trimstrdup(char *s) {
+    char *rs = strdup(skipspace(s));
+    if (rs == NULL)
+        return NULL;
+
+    char *re = rs + strlen(rs) - 1;
+    while (re >= rs && isspace(*re)) {
+        *re = '\0';
+        re--;
+    }
+
+    return rs;
+}
+
 // ---------------------------------------
 
 int cproxy_init(char *cfg_str,
@@ -143,6 +160,7 @@ int cproxy_init(char *cfg_str,
         return 0;
 
     gethostname(cproxy_hostname, sizeof(cproxy_hostname));
+
 
     cproxy_init_a2a();
     cproxy_init_a2b();
@@ -199,7 +217,7 @@ int cproxy_init_string(char *cfg_str,
         cproxy_dump_behavior(&behavior, "init_string", 2);
     }
 
-    buff = strdup(skipspace(cfg_str));
+    buff = trimstrdup(cfg_str);
     next = buff;
     while (next != NULL) {
         proxy_sect = skipspace(strsep(&next, ";"));
@@ -214,6 +232,7 @@ int cproxy_init_string(char *cfg_str,
             fprintf(stderr, "missing proxy port\n");
             exit(EXIT_FAILURE);
         }
+        proxy_sect = skipspace(proxy_sect);
 
         int behaviors_num = 1; // Number of servers.
         for (char *x = proxy_sect; *x != '\0'; x++)
@@ -278,7 +297,7 @@ proxy_behavior cproxy_parse_behavior(char          *behavior_str,
 
     // Parse the key-value behavior_str, to override the defaults.
     //
-    char *buff = strdup(skipspace(behavior_str));
+    char *buff = trimstrdup(behavior_str);
     char *next = buff;
 
     while (next != NULL) {
