@@ -114,9 +114,9 @@ proxy *cproxy_create(char    *name,
 
     proxy *p = (proxy *) calloc(1, sizeof(proxy));
     if (p != NULL) {
-        p->name       = strdup(name);
+        p->name       = trimstrdup(name);
         p->port       = port;
-        p->config     = strdup(config);
+        p->config     = trimstrdup(config);
         p->config_ver = config_ver;
 
         p->behavior_head = behavior_head;

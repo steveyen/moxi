@@ -30,6 +30,9 @@ TODO ideas...
 
 - revisit DONE list, add tests as necessary
 
+- optimization: have free item list per proxy_td
+  - so don't need to hit item/cache locks.
+
 - optimization: use trond's allocator instead of malloc/free
   - for multiget hashtable
   - for multiget hashtable entries.

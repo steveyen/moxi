@@ -542,4 +542,10 @@ size_t scan_tokens(char *command, token_t *tokens, const size_t max_tokens,
 
 char *nread_text(short x);
 
+char *skipspace(char *s);
+char *trailspace(char *s);
+char *trimstr(char *s);
+char *trimstrdup(char *s);
+bool  wordeq(char *s, char *word);
+
 #endif // CPROXY_H

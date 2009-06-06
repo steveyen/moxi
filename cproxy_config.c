@@ -20,10 +20,6 @@ uint32_t murmur_hash(const char *key, size_t length);
 
 // Local declarations.
 //
-char *skipspace(char *s);
-bool  wordeq(char *s, char *word);
-char *trimstrdup(char *s);
-
 volatile uint32_t  msec_current_time = 0;
 int                msec_cycle = 200;
 struct event       msec_clockevent;
@@ -110,11 +106,42 @@ void helper_g_free(gpointer data) {
     free(data);
 }
 
+/** Returns pointer to first non-space char in string.
+ */
 char *skipspace(char *s) {
-    assert(s);
+    if (s == NULL)
+        return NULL;
+
     while (isspace(*s) && *s != '\0')
         s++;
     return s;
+}
+
+/** Modifies string by zero'ing out any trailing spaces.
+ */
+char *trailspace(char *s) {
+    if (s == NULL)
+        return NULL;
+
+    for (char *e = s + strlen(s) - 1; e >= s && isspace(*e); e--)
+        *e = '\0';
+
+    return s;
+}
+
+/** Modifies string by removing prefix and suffix whitespace chars.
+ *  Returns the pointer into the string that you should use.
+ */
+char *trimstr(char *s) {
+    return trailspace(skipspace(s));
+}
+
+/** Like strdup(), but trims spaces from start and end.
+ *  Unlike with trimstr(strdup(s)), you can call free(trimstrdup(s)),
+ *  and the correct memory is free()'ed.
+ */
+char *trimstrdup(char *s) {
+    return trailspace(strdup(skipspace(s)));
 }
 
 /** Returns true if first word in a string equals a given word.
@@ -128,22 +155,6 @@ bool wordeq(char *s, char *word) {
         end++;
 
     return strncmp(s, word, end - s) == 0;
-}
-
-/** Like strdup(), but trims spaces from start and end.
- */
-char *trimstrdup(char *s) {
-    char *rs = strdup(skipspace(s));
-    if (rs == NULL)
-        return NULL;
-
-    char *re = rs + strlen(rs) - 1;
-    while (re >= rs && isspace(*re)) {
-        *re = '\0';
-        re--;
-    }
-
-    return rs;
 }
 
 // ---------------------------------------
@@ -220,9 +231,9 @@ int cproxy_init_string(char *cfg_str,
     buff = trimstrdup(cfg_str);
     next = buff;
     while (next != NULL) {
-        proxy_sect = skipspace(strsep(&next, ";"));
+        proxy_sect = strsep(&next, ";");
 
-        proxy_port_str = skipspace(strsep(&proxy_sect, "="));
+        proxy_port_str = trimstr(strsep(&proxy_sect, "="));
         if (proxy_sect == NULL) {
             fprintf(stderr, "bad moxi config, missing =\n");
             exit(EXIT_FAILURE);
@@ -232,7 +243,7 @@ int cproxy_init_string(char *cfg_str,
             fprintf(stderr, "missing proxy port\n");
             exit(EXIT_FAILURE);
         }
-        proxy_sect = skipspace(proxy_sect);
+        proxy_sect = trimstr(proxy_sect);
 
         int behaviors_num = 1; // Number of servers.
         for (char *x = proxy_sect; *x != '\0'; x++)
@@ -301,7 +312,7 @@ proxy_behavior cproxy_parse_behavior(char          *behavior_str,
     char *next = buff;
 
     while (next != NULL) {
-        char *key_val = skipspace(strsep(&next, ","));
+        char *key_val = trimstr(strsep(&next, ","));
         if (key_val != NULL) {
             cproxy_parse_behavior_key_val_str(key_val, &behavior);
         }
@@ -314,6 +325,8 @@ proxy_behavior cproxy_parse_behavior(char          *behavior_str,
     return behavior;
 }
 
+/** Note: the key_val param buffer is modified.
+ */
 void cproxy_parse_behavior_key_val_str(char *key_val,
                                        proxy_behavior *behavior) {
     assert(behavior != NULL);
@@ -325,6 +338,8 @@ void cproxy_parse_behavior_key_val_str(char *key_val,
     }
 }
 
+/** Note: the key and val param buffers are modified.
+ */
 void cproxy_parse_behavior_key_val(char *key,
                                    char *val,
                                    proxy_behavior *behavior) {
@@ -332,8 +347,8 @@ void cproxy_parse_behavior_key_val(char *key,
 
     if (key != NULL &&
         val != NULL) {
-        key = skipspace(key);
-        val = skipspace(val);
+        key = trimstr(key);
+        val = trimstr(val);
 
         if (wordeq(key, "cycle")) {
             behavior->cycle = strtol(val, NULL, 10);

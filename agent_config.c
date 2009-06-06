@@ -60,12 +60,13 @@ int cproxy_init_agent(char *cfg_str,
     char *buff;
 
     if (strncmp(cfg_str, "apikey=", 7) == 0) {
-        buff = strdup(cfg_str);
+        buff = trimstrdup(cfg_str);
     } else {
         buff = calloc(cfg_len + 50, sizeof(char));
         if (buff != NULL) {
             snprintf(buff, cfg_len + 50, "apikey=%s", cfg_str);
         }
+        buff = trimstr(buff);
     }
 
     char *next = buff;
@@ -78,15 +79,15 @@ int cproxy_init_agent(char *cfg_str,
         char *config = NULL;
         char *host   = NULL;
 
-        char *cur = strsep(&next, ";");
+        char *cur = trimstr(strsep(&next, ";"));
         while (cur != NULL) {
-            char *key_val = strsep(&cur, ",");
+            char *key_val = trimstr(strsep(&cur, ","));
             if (key_val != NULL) {
-                char *key = strsep(&key_val, "=");
-                char *val = key_val;
+                char *key = trimstr(strsep(&key_val, "="));
+                char *val = trimstr(key_val);
 
                 if (val != NULL) {
-                    if (strcmp(key, "apikey") == 0) {
+                    if (wordeq(key, "apikey")) {
                         jid = strsep(&val, "%");
                         jpw = val;
 
@@ -94,9 +95,9 @@ int cproxy_init_agent(char *cfg_str,
                             fprintf(stderr, "cproxy_init jid %s\n",
                                     jid);
                     }
-                    if (strcmp(key, "config") == 0)
+                    if (wordeq(key, "config"))
                         config = val;
-                    if (strcmp(key, "host") == 0)
+                    if (wordeq(key, "host"))
                         host = val;
                 }
             }
@@ -573,7 +574,7 @@ void cproxy_on_new_pool(proxy_main *m,
                 fprintf(stderr, "agent_config name changed\n");
         }
         if (p->name == NULL && name != NULL) {
-            p->name = strdup(name);
+            p->name = trimstrdup(name);
             changed = true;
         }
 
@@ -588,7 +589,7 @@ void cproxy_on_new_pool(proxy_main *m,
                 fprintf(stderr, "agent_config config changed\n");
         }
         if (p->config == NULL && config != NULL) {
-            p->config = strdup(config);
+            p->config = trimstrdup(config);
             changed = true;
         }
 
