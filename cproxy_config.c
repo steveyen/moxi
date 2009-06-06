@@ -20,6 +20,8 @@ uint32_t murmur_hash(const char *key, size_t length);
 
 // Local declarations.
 //
+static char *readfile(char *path);
+
 volatile uint32_t  msec_current_time = 0;
 int                msec_cycle = 200;
 struct event       msec_clockevent;
@@ -159,6 +161,22 @@ bool wordeq(char *s, char *word) {
 
 // ---------------------------------------
 
+/** The cfg_str may be a path to a file like...
+ *
+ *    /full/path
+ *      or...
+ *    ./relative/path
+ *      or...
+ *    ../another/relative/path
+ *
+ *  But not...
+ *
+ *    incorrect/relative/path
+ *
+ *  Paths are detected by the first character of  '/' or '.'.
+ *
+ *  The contents of the file should be in cfg_str format.
+ */
 int cproxy_init(char *cfg_str,
                 char *behavior_str,
                 int nthreads,
@@ -170,8 +188,20 @@ int cproxy_init(char *cfg_str,
         strlen(cfg_str) <= 0)
         return 0;
 
-    gethostname(cproxy_hostname, sizeof(cproxy_hostname));
+    if (cfg_str[0] == '.' ||
+        cfg_str[0] == '/') {
+        char *buf = readfile(cfg_str);
+        if (buf != NULL) {
+            int rv = cproxy_init(buf, behavior_str, nthreads, main_base);
+            free(buf);
+            return rv;
+        } else {
+            fprintf(stderr, "could not read cfg file: %s\n", cfg_str);
+            exit(EXIT_FAILURE);
+        }
+    }
 
+    gethostname(cproxy_hostname, sizeof(cproxy_hostname));
 
     cproxy_init_a2a();
     cproxy_init_a2b();
@@ -560,3 +590,27 @@ void msec_clock_handler(const int fd, const short which, void *arg) {
     msec_set_current_time();
 }
 
+// ---------------------------------------
+
+static char *readfile(char *path) {
+    FILE *fp = fopen(path, "r");
+    if (fp != NULL) {
+        if (fseek(fp, 0, SEEK_END) == 0) {
+            long len = ftell(fp);
+            if (len > 0 &&
+                fseek(fp, 0, SEEK_SET) == 0) {
+                char *buf = (char *) malloc(len + 1);
+                if (buf != NULL) {
+                    if (fread(buf, len, 1, fp) == 1) {
+                        fclose(fp);
+                        buf[len] = '\0';
+                        return buf;
+                    }
+                    free(buf);
+                }
+            }
+        }
+        fclose(fp);
+    }
+    return NULL;
+}

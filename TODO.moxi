@@ -49,8 +49,6 @@ TODO ideas...
 
 - doxygen for moxi
 
-- allow apikey to not be on the cmdline, readable from secure 600 file
-
 - timeouts
   - request is taking longer than X ms -- must be a failure.
   - need timeout for upstream conns waiting in the queue
@@ -309,4 +307,9 @@ known bugs
 - DONE: release downstreams back to head of list, not to tail
 
 - DONE: make clock timer resolution configurable
+
+- DONE: allow apikey to not be on the cmdline, instead optionally
+  readable from secure 600 file
+  - usage:
+    - moxi -z ./path/to/apikeyfile
 

@@ -40,22 +40,29 @@ static void agent_logger(void *userdata,
     va_end(ap);
 }
 
+/** The cfg_str looks like...
+ *
+ *    apikey=jidname@jhostname%jpassword,config=config,host=host
+ *      or...
+ *    jidname@jhostname%jpassword,config=config,host=host
+ *
+ *  Only the apikey is needed, so it can also look like...
+ *
+ *    jidname@jhostname%jpassword
+ */
 int cproxy_init_agent(char *cfg_str,
                       proxy_behavior behavior,
                       int nthreads) {
-    assert(cfg_str);
+    if (cfg_str == NULL) {
+        fprintf(stderr, "missing cfg\n");
+        exit(EXIT_FAILURE);
+    }
 
-    // The cfg_str looks like...
-    //
-    //   apikey=jidname@jhostname%jpassword,config=config,host=host
-    //     or
-    //   jidname@jhostname%jpassword,config=config,host=host
-    //
-    // Only the apikey is needed, so it can look like...
-    //
-    //   jidname@jhostname%jpassword
-    //
     int cfg_len = strlen(cfg_str);
+    if (cfg_len <= 0) {
+        fprintf(stderr, "empty cfg\n");
+        exit(EXIT_FAILURE);
+    }
 
     char *buff;
 
