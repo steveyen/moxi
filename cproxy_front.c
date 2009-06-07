@@ -164,8 +164,9 @@ void *mcache_get(mcache *m, char *key, int key_len,
             mcache_item_unlink(m, it);
 
             uint32_t exptime = m->funcs->item_get_exptime(it);
-            if (exptime >= curr_time &&
-                exptime >= m->oldest_live) {
+            if ((exptime <= 0) ||
+                (exptime >= curr_time &&
+                 exptime >= m->oldest_live)) {
                 mcache_item_touch(m, it);
 
                 m->funcs->item_add_ref(it); // TODO: Need lock here?
@@ -204,8 +205,7 @@ void *mcache_get(mcache *m, char *key, int key_len,
 }
 
 void mcache_add(mcache *m, void *it,
-                uint32_t lifespan,
-                uint32_t curr_time) {
+                uint32_t exptime) {
     assert(it);
     assert(m->funcs);
     assert(m->funcs->item_get_next(it) == NULL);
@@ -263,7 +263,7 @@ void mcache_add(mcache *m, void *it,
 
                     free(key_buf);
                 } else {
-                    m->funcs->item_set_exptime(it, curr_time + lifespan);
+                    m->funcs->item_set_exptime(it, exptime);
                     m->funcs->item_add_ref(it); // TODO: Need item lock here?
 
                     g_hash_table_insert(m->map, key_buf, it);
