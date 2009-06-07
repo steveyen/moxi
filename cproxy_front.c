@@ -399,7 +399,7 @@ static int item_len(void *it) {
 static void item_add_ref(void *it) {
     item *i = it;
     if (i != NULL)
-        i->refcount++;
+        i->refcount++; // TODO: Need item lock here?
 }
 
 static void item_dec_ref(void *it) {
