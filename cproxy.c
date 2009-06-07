@@ -131,10 +131,10 @@ proxy *cproxy_create(char    *name,
 
         pthread_mutex_init(&p->proxy_lock, NULL);
 
-        mcache_init(&p->front_cache, true);
+        mcache_init(&p->front_cache, true, &mcache_item_funcs);
         matcher_init(&p->front_cache_matcher, true);
 
-        mcache_init(&p->key_stats, true);
+        mcache_init(&p->key_stats, true, &mcache_item_funcs);
         matcher_init(&p->key_stats_matcher, true);
 
         matcher_init(&p->optimize_set_matcher, true);

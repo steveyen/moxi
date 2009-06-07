@@ -29,14 +29,32 @@ extern char cproxy_hostname[300]; // Immutable after init.
 // -------------------------------
 
 typedef struct {
+    char *(*item_key)(void *it);
+    int   (*item_key_len)(void *it);
+    int   (*item_len)(void *it);
+    void  (*item_add_ref)(void *it);
+    void  (*item_dec_ref)(void *it);
+    void *(*item_get_next)(void *it);
+    void  (*item_set_next)(void *it, void *next);
+    void *(*item_get_prev)(void *it);
+    void  (*item_set_prev)(void *it, void *prev);
+    uint32_t (*item_get_exptime)(void *it);
+    void     (*item_set_exptime)(void *it, uint32_t exptime);
+} mcache_funcs;
+
+extern mcache_funcs mcache_item_funcs;
+
+typedef struct {
+    mcache_funcs *funcs;
+
     pthread_mutex_t *lock; // NULL-able, for non-multithreaded.
 
     GHashTable *map;       // NULL-able, keyed by string, value is item.
 
     uint32_t max;          // Maxiumum number of items to keep.
 
-    item *lru_head;        // Most recently used.
-    item *lru_tail;        // Least recently used.
+    void *lru_head;        // Most recently used.
+    void *lru_tail;        // Least recently used.
 
     uint32_t oldest_live;  // In millisecs, relative to msec_current_time.
 
@@ -532,14 +550,14 @@ void cproxy_del_front_cache_key_ascii_response(downstream *d,
 
 // Functions for the front cache.
 //
-void  mcache_init(mcache *m, bool multithreaded);
+void  mcache_init(mcache *m, bool multithreaded, mcache_funcs *funcs);
 void  mcache_start(mcache *m, uint32_t max);
 bool  mcache_started(mcache *m);
 void  mcache_stop(mcache *m);
 void  mcache_reset_stats(mcache *m);
-item *mcache_get(mcache *m, char *key, int key_len,
+void *mcache_get(mcache *m, char *key, int key_len,
                  uint32_t curr_time);
-void  mcache_add(mcache *m, item *it,
+void  mcache_add(mcache *m, void *it,
                  uint32_t lifespan,
                  uint32_t curr_time);
 void  mcache_delete(mcache *m, char *key, int key_len);
