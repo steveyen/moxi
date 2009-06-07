@@ -46,6 +46,14 @@ TODO ideas...
     - or when old/new servers are flapping.
     - or net-split.
     - or different moxi/clients see different old/new servers.
+  - need configuration, possibly...
+    - svr-111
+      - host = aaa
+      - port = 11211
+      - drain = 222
+    - svr-222
+      - host = aaa
+      - port = 11211
 
 - doxygen for moxi
 
