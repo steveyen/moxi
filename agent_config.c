@@ -548,6 +548,10 @@ void cproxy_on_new_pool(proxy_main *m,
         //
         mcache_stop(&p->front_cache);
         matcher_stop(&p->front_cache_matcher);
+
+        mcache_stop(&p->key_stats);
+        matcher_stop(&p->key_stats_matcher);
+
         matcher_stop(&p->optimize_set_matcher);
 
         // Track whether we really changed while reconfiguring.
@@ -608,6 +612,14 @@ void cproxy_on_new_pool(proxy_main *m,
             (strcmp(p->behavior_head.front_cache_spec,
                     behavior_head.front_cache_spec) != 0);
 
+        changed = changed ||
+            (p->behavior_head.key_stats_max !=
+             behavior_head.key_stats_max) ||
+            (p->behavior_head.key_stats_lifespan !=
+             behavior_head.key_stats_lifespan) ||
+            (strcmp(p->behavior_head.key_stats_spec,
+                    behavior_head.key_stats_spec) != 0);
+
         p->behavior_head = behavior_head;
 
         if ((p->behaviors != NULL) &&
@@ -654,6 +666,17 @@ void cproxy_on_new_pool(proxy_main *m,
             if (strlen(behavior_head.front_cache_spec) > 0) {
                 matcher_start(&p->front_cache_matcher,
                               behavior_head.front_cache_spec);
+            }
+        }
+
+        if (behavior_head.key_stats_max > 0 &&
+            behavior_head.key_stats_lifespan > 0) {
+            mcache_start(&p->key_stats,
+                         behavior_head.key_stats_max);
+
+            if (strlen(behavior_head.key_stats_spec) > 0) {
+                matcher_start(&p->key_stats_matcher,
+                              behavior_head.key_stats_spec);
             }
         }
 

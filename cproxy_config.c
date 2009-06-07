@@ -57,6 +57,9 @@ proxy_behavior behavior_default_g = {
     .front_cache_max = 200,
     .front_cache_lifespan = 0,
     .front_cache_spec = {0},
+    .key_stats_max = 4000,
+    .key_stats_lifespan = 0,
+    .key_stats_spec = {0},
     .optimize_set = {0},
     .host = {0},
     .port = 0,
@@ -423,6 +426,14 @@ void cproxy_parse_behavior_key_val(char *key,
             if (strlen(val) < sizeof(behavior->front_cache_spec) + 1) {
                 strcpy(behavior->front_cache_spec, val);
             }
+        } else if (wordeq(key, "key_stats_max")) {
+            behavior->key_stats_max = strtol(val, NULL, 10);
+        } else if (wordeq(key, "key_stats_lifespan")) {
+            behavior->key_stats_lifespan = strtol(val, NULL, 10);
+        } else if (wordeq(key, "key_stats_spec")) {
+            if (strlen(val) < sizeof(behavior->key_stats_spec) + 1) {
+                strcpy(behavior->key_stats_spec, val);
+            }
         } else if (wordeq(key, "optimize_set")) {
             if (strlen(val) < sizeof(behavior->optimize_set) + 1) {
                 strcpy(behavior->optimize_set, val);
@@ -533,6 +544,12 @@ void cproxy_dump_behavior_ex(proxy_behavior *b, char *prefix, int level,
         vdump("front_cache_lifespan", "%u", b->front_cache_lifespan);
     if (level >= 1)
         vdump("front_cache_spec", "%s", b->front_cache_spec);
+    if (level >= 1)
+        vdump("key_stats_max", "%u", b->key_stats_max);
+    if (level >= 1)
+        vdump("key_stats_lifespan", "%u", b->key_stats_lifespan);
+    if (level >= 1)
+        vdump("key_stats_spec", "%s", b->key_stats_spec);
     if (level >= 1)
         vdump("optimize_set", "%s", b->optimize_set);
 

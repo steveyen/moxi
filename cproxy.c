@@ -132,8 +132,11 @@ proxy *cproxy_create(char    *name,
         pthread_mutex_init(&p->proxy_lock, NULL);
 
         mcache_init(&p->front_cache, true);
-
         matcher_init(&p->front_cache_matcher, true);
+
+        mcache_init(&p->key_stats, true);
+        matcher_init(&p->key_stats_matcher, true);
+
         matcher_init(&p->optimize_set_matcher, true);
 
         if (behavior_head.front_cache_max > 0 &&
@@ -144,6 +147,17 @@ proxy *cproxy_create(char    *name,
             if (strlen(behavior_head.front_cache_spec) > 0) {
                 matcher_start(&p->front_cache_matcher,
                               behavior_head.front_cache_spec);
+            }
+        }
+
+        if (behavior_head.key_stats_max > 0 &&
+            behavior_head.key_stats_lifespan > 0) {
+            mcache_start(&p->key_stats,
+                         behavior_head.key_stats_max);
+
+            if (strlen(behavior_head.key_stats_spec) > 0) {
+                matcher_start(&p->key_stats_matcher,
+                              behavior_head.key_stats_spec);
             }
         }
 
