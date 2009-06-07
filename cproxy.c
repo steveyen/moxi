@@ -883,8 +883,6 @@ int cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread) {
     assert(thread != NULL);
     assert(thread->base != NULL);
 
-    memcached_return rc;
-
     int s = 0; // Number connected.
     int n = memcached_server_count(&d->mst);
 
@@ -895,52 +893,73 @@ int cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread) {
         assert(IS_PROXY(d->behaviors[i].downstream_protocol));
 
         if (d->downstream_conns[i] == NULL) {
-            rc = memcached_connect(&d->mst.hosts[i]);
-            if (rc == MEMCACHED_SUCCESS) {
-                int fd = d->mst.hosts[i].fd;
-                if (fd >= 0) {
-                    d->ptd->stats.stats.tot_downstream_connect++;
-
-                    if (cproxy_auth_downstream(&d->mst.hosts[i],
-                                               &d->behaviors[i])) {
-                        d->ptd->stats.stats.tot_downstream_auth++;
-
-                        if (cproxy_bucket_downstream(&d->mst.hosts[i],
-                                                     &d->behaviors[i])) {
-                            d->ptd->stats.stats.tot_downstream_bucket++;
-
-                            d->downstream_conns[i] =
-                                conn_new(fd, conn_pause, 0,
-                                         DATA_BUFFER_SIZE,
-                                         d->behaviors[i].downstream_protocol,
-                                         tcp_transport,
-                                         thread->base,
-                                         &cproxy_downstream_funcs, d);
-                            if (d->downstream_conns[i] != NULL) {
-                                d->downstream_conns[i]->thread = thread;
-                            }
-                        } else {
-                            d->ptd->stats.stats.tot_downstream_bucket_failed++;
-                        }
-                    } else {
-                        d->ptd->stats.stats.tot_downstream_auth_failed++;
-                    }
-                } else {
-                    d->ptd->stats.stats.tot_downstream_connect_failed++;
-                }
-
-                if (d->downstream_conns[i] == NULL) {
-                    memcached_quit_server(&d->mst.hosts[i], 1);
-                }
-            } else {
-                d->ptd->stats.stats.tot_downstream_connect_failed++;
-            }
+            d->downstream_conns[i] =
+                cproxy_connect_downstream_conn(d, thread,
+                                               &d->mst.hosts[i],
+                                               &d->behaviors[i]);
         }
-        if (d->downstream_conns[i] != NULL)
+
+        if (d->downstream_conns[i] != NULL) {
             s++;
+        } else {
+            memcached_quit_server(&d->mst.hosts[i], 1);
+        }
     }
 
     return s;
+}
+
+conn *cproxy_connect_downstream_conn(downstream *d,
+                                     LIBEVENT_THREAD *thread,
+                                     memcached_server_st *msst,
+                                     proxy_behavior *behavior) {
+    assert(d);
+    assert(d->ptd);
+    assert(d->ptd->downstream_released != d); // Should not be in free list.
+    assert(thread);
+    assert(thread->base);
+    assert(msst);
+    assert(behavior);
+
+    memcached_return rc;
+
+    rc = memcached_connect(msst);
+    if (rc == MEMCACHED_SUCCESS) {
+        int fd = msst->fd;
+        if (fd >= 0) {
+            d->ptd->stats.stats.tot_downstream_connect++;
+
+            if (cproxy_auth_downstream(msst, behavior)) {
+                d->ptd->stats.stats.tot_downstream_auth++;
+
+                if (cproxy_bucket_downstream(msst, behavior)) {
+                    d->ptd->stats.stats.tot_downstream_bucket++;
+
+                    conn *c = conn_new(fd, conn_pause, 0,
+                                       DATA_BUFFER_SIZE,
+                                       behavior->downstream_protocol,
+                                       tcp_transport,
+                                       thread->base,
+                                       &cproxy_downstream_funcs, d);
+                    if (c != NULL) {
+                        c->thread = thread;
+
+                        return c;
+                    }
+                } else {
+                    d->ptd->stats.stats.tot_downstream_bucket_failed++;
+                }
+            } else {
+                d->ptd->stats.stats.tot_downstream_auth_failed++;
+            }
+        } else {
+            d->ptd->stats.stats.tot_downstream_connect_failed++;
+        }
+    } else {
+        d->ptd->stats.stats.tot_downstream_connect_failed++;
+    }
+
+    return NULL;
 }
 
 conn *cproxy_find_downstream_conn(downstream *d,

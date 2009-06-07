@@ -340,7 +340,13 @@ bool        cproxy_release_downstream(downstream *d, bool force);
 void        cproxy_release_downstream_conn(downstream *d, conn *c);
 bool        cproxy_check_downstream_config(downstream *d);
 
-int   cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread);
+int   cproxy_connect_downstream(downstream *d,
+                                LIBEVENT_THREAD *thread);
+conn *cproxy_connect_downstream_conn(downstream *d,
+                                     LIBEVENT_THREAD *thread,
+                                     memcached_server_st *msst,
+                                     proxy_behavior *behavior);
+
 void  cproxy_wait_any_downstream(proxy_td *ptd, conn *c);
 void  cproxy_assign_downstream(proxy_td *ptd);
 
