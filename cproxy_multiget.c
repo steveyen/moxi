@@ -349,6 +349,8 @@ void multiget_ascii_downstream_response(downstream *d, item *it) {
     proxy *p = ptd->proxy;
     assert(p);
 
+    // TODO: Consider proxy_td copy to avoid lock.
+    //
     pthread_mutex_lock(&p->proxy_lock);
     uint32_t front_cache_lifespan = p->behavior_head.front_cache_lifespan;
     pthread_mutex_unlock(&p->proxy_lock);
