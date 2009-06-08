@@ -11,6 +11,18 @@
 #include <event.h>
 #include "work.h"
 
+/** A work queue is a mechanism to allow thread-to-thread
+ *  communication in a libevent-based, multithreaded system.
+ *
+ *  One thread can send work to another thread.  The receiving thread
+ *  should be libevent-based, with a processing loop handled by
+ *  libevent.
+ *
+ *  Use work_queue_init() to initialize a work_queue structure,
+ *  where the work_queue structure memory is owned by the caller.
+ *
+ *  Returns true on success.
+ */
 bool work_queue_init(work_queue *m, struct event_base *event_base) {
     assert(m != NULL);
 
@@ -43,6 +55,12 @@ bool work_queue_init(work_queue *m, struct event_base *event_base) {
     return false;
 }
 
+/** Use work_send() to place work on another thread's work queue.
+ *  The receiving thread will invoke the given function with
+ *  the given callback data.
+ *
+ *  Returns true on success.
+ */
 bool work_send(work_queue *m,
                void (*func)(void *data0, void *data1),
                void *data0, void *data1) {
@@ -82,7 +100,8 @@ bool work_send(work_queue *m,
     return rv;
 }
 
-/* Called by libevent.
+/** Called by libevent, on the receiving thread, when
+ *  there is work for the receiving thread to handle.
  */
 void work_recv(int fd, short which, void *arg) {
     work_queue *m = arg;
@@ -130,6 +149,19 @@ void work_recv(int fd, short which, void *arg) {
     }
 }
 
+// ------------------------------------
+
+/** The "work_collect" abstraction helps to make scatter/gather easier
+ *  when using work queue's.  The main caller uses work_collect_init()
+ *  to initialize the work_collect tracking data structure.  The
+ *  work_collect structure is then scattered across worker threads
+ *  (such as by using work_send()).  The main thread then calls
+ *  work_collect_wait() to wait for N responses.  A worker thread
+ *  invokes work_collect_one() when it's finished with its assigned
+ *  work and has one response to contribute.  When N responses have
+ *  been counted, work_collect_wait() returns control back to the
+ *  main caller.
+ */
 void work_collect_init(work_collect *c, int count, void *data) {
     assert(c);
 
