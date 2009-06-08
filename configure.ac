@@ -387,7 +387,7 @@ fi
 AC_SEARCH_LIBS(memcached_create, memcached)
 
 LIBS="$LIBS -lm -lconflate -lsqlite3 -lstrophe -lexpat -lresolv -lssl"
-LDFLAGS+=" -L../libconflate -L../libstrophe"
+LDFLAGS+=" -static -L../libconflate -L../libstrophe"
 
 AC_CONFIG_FILES(Makefile doc/Makefile)
 AC_OUTPUT
