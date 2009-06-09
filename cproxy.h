@@ -94,11 +94,13 @@ struct proxy_behavior {
 
     uint32_t front_cache_max;       // PL: Max # of front cachable items.
     uint32_t front_cache_lifespan;  // PL: In millisecs.
-    char     front_cache_spec[400]; // PL: Matcher prefixes for front caching.
+    char     front_cache_spec[300]; // PL: Matcher prefixes for front caching.
+    char     front_cache_unspec[100]; // PL: Don't front cache prefixes.
 
     uint32_t key_stats_max;       // PL: Max # of key stats entries.
     uint32_t key_stats_lifespan;  // PL: In millisecs.
-    char     key_stats_spec[400]; // PL: Matcher prefixes for key-level stats.
+    char     key_stats_spec[300]; // PL: Matcher prefixes for key-level stats.
+    char     key_stats_unspec[100]; // PL: Don't key stat prefixes.
 
     char optimize_set[400]; // PL: Matcher prefixes for SET optimization.
 
@@ -168,9 +170,11 @@ struct proxy {
 
     mcache  front_cache;
     matcher front_cache_matcher;
+    matcher front_cache_unmatcher;
 
     mcache  key_stats;
     matcher key_stats_matcher;
+    matcher key_stats_unmatcher;
 
     matcher optimize_set_matcher;
 

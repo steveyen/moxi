@@ -548,9 +548,11 @@ void cproxy_on_new_pool(proxy_main *m,
         //
         mcache_stop(&p->front_cache);
         matcher_stop(&p->front_cache_matcher);
+        matcher_stop(&p->front_cache_unmatcher);
 
         mcache_stop(&p->key_stats);
         matcher_stop(&p->key_stats_matcher);
+        matcher_stop(&p->key_stats_unmatcher);
 
         matcher_stop(&p->optimize_set_matcher);
 
@@ -610,7 +612,9 @@ void cproxy_on_new_pool(proxy_main *m,
             (p->behavior_head.front_cache_lifespan !=
              behavior_head.front_cache_lifespan) ||
             (strcmp(p->behavior_head.front_cache_spec,
-                    behavior_head.front_cache_spec) != 0);
+                    behavior_head.front_cache_spec) != 0) ||
+            (strcmp(p->behavior_head.front_cache_unspec,
+                    behavior_head.front_cache_unspec) != 0);
 
         changed = changed ||
             (p->behavior_head.key_stats_max !=
@@ -618,7 +622,9 @@ void cproxy_on_new_pool(proxy_main *m,
             (p->behavior_head.key_stats_lifespan !=
              behavior_head.key_stats_lifespan) ||
             (strcmp(p->behavior_head.key_stats_spec,
-                    behavior_head.key_stats_spec) != 0);
+                    behavior_head.key_stats_spec) != 0) ||
+            (strcmp(p->behavior_head.key_stats_unspec,
+                    behavior_head.key_stats_unspec) != 0);
 
         p->behavior_head = behavior_head;
 
@@ -667,6 +673,11 @@ void cproxy_on_new_pool(proxy_main *m,
                 matcher_start(&p->front_cache_matcher,
                               behavior_head.front_cache_spec);
             }
+
+            if (strlen(behavior_head.front_cache_unspec) > 0) {
+                matcher_start(&p->front_cache_unmatcher,
+                              behavior_head.front_cache_unspec);
+            }
         }
 
         if (behavior_head.key_stats_max > 0 &&
@@ -677,6 +688,11 @@ void cproxy_on_new_pool(proxy_main *m,
             if (strlen(behavior_head.key_stats_spec) > 0) {
                 matcher_start(&p->key_stats_matcher,
                               behavior_head.key_stats_spec);
+            }
+
+            if (strlen(behavior_head.key_stats_unspec) > 0) {
+                matcher_start(&p->key_stats_unmatcher,
+                              behavior_head.key_stats_unspec);
             }
         }
 

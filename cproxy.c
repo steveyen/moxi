@@ -133,9 +133,11 @@ proxy *cproxy_create(char    *name,
 
         mcache_init(&p->front_cache, true, &mcache_item_funcs);
         matcher_init(&p->front_cache_matcher, true);
+        matcher_init(&p->front_cache_unmatcher, true);
 
         mcache_init(&p->key_stats, true, &mcache_item_funcs);
         matcher_init(&p->key_stats_matcher, true);
+        matcher_init(&p->key_stats_unmatcher, true);
 
         matcher_init(&p->optimize_set_matcher, true);
 
@@ -148,6 +150,11 @@ proxy *cproxy_create(char    *name,
                 matcher_start(&p->front_cache_matcher,
                               behavior_head.front_cache_spec);
             }
+
+            if (strlen(behavior_head.front_cache_unspec) > 0) {
+                matcher_start(&p->front_cache_unmatcher,
+                              behavior_head.front_cache_unspec);
+            }
         }
 
         if (behavior_head.key_stats_max > 0 &&
@@ -158,6 +165,11 @@ proxy *cproxy_create(char    *name,
             if (strlen(behavior_head.key_stats_spec) > 0) {
                 matcher_start(&p->key_stats_matcher,
                               behavior_head.key_stats_spec);
+            }
+
+            if (strlen(behavior_head.key_stats_unspec) > 0) {
+                matcher_start(&p->key_stats_unmatcher,
+                              behavior_head.key_stats_unspec);
             }
         }
 

@@ -356,9 +356,12 @@ void multiget_ascii_downstream_response(downstream *d, item *it) {
     pthread_mutex_unlock(&p->proxy_lock);
 
     if (front_cache_lifespan > 0) {
-        if (matcher_started(&p->front_cache_matcher) == false ||
-            matcher_check(&p->front_cache_matcher,
-                          ITEM_key(it), it->nkey)) {
+        if ((matcher_started(&p->front_cache_matcher) == false ||
+             matcher_check(&p->front_cache_matcher,
+                           ITEM_key(it), it->nkey) == true) &&
+            (matcher_started(&p->front_cache_unmatcher) == false ||
+             matcher_check(&p->front_cache_unmatcher,
+                           ITEM_key(it), it->nkey) == false)) {
             mcache_add(&p->front_cache, it,
                        front_cache_lifespan + msec_current_time);
         }
