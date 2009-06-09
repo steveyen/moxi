@@ -41,11 +41,12 @@ mcache_funcs mcache_item_funcs = {
 };
 
 void mcache_init(mcache *m, bool multithreaded,
-                 mcache_funcs *funcs) {
+                 mcache_funcs *funcs, bool key_alloc) {
     assert(m);
     assert(funcs);
 
     m->funcs       = funcs;
+    m->key_alloc   = key_alloc;
     m->map         = NULL;
     m->max         = 0;
     m->lru_head    = NULL;
@@ -100,7 +101,7 @@ void mcache_start(mcache *m, uint32_t max) {
 
     m->map = g_hash_table_new_full(skey_hash,
                                    skey_equal,
-                                   helper_g_free,
+                                   m->key_alloc ? helper_g_free : NULL,
                                    m->funcs->item_dec_ref);
     if (m->map != NULL) {
         m->max         = max;
@@ -227,30 +228,46 @@ void mcache_add(mcache *m, void *it,
                 break;
 
             void *last_it = m->lru_tail;
+
             mcache_item_unlink(m, last_it);
 
-            int  len = m->funcs->item_key_len(last_it);
-            char buf[KEY_MAX_LENGTH + 10];
-            memcpy(buf, m->funcs->item_key(last_it), len);
-            buf[len] = '\0';
+            if (m->key_alloc) {
+                int  len = m->funcs->item_key_len(last_it);
+                char buf[KEY_MAX_LENGTH + 10];
+                memcpy(buf, m->funcs->item_key(last_it), len);
+                buf[len] = '\0';
 
-            g_hash_table_remove(m->map, buf);
+                g_hash_table_remove(m->map, buf);
+            } else {
+                g_hash_table_remove(m->map,
+                                    m->funcs->item_key(last_it));
+            }
 
             m->tot_evictions++;
         }
 
         if (g_hash_table_size(m->map) < m->max) {
-            // The ITEM_key is not NULL or space terminated,
-            // and we need a copy, too, for hashtable ownership.
-            //
+            char *key     = m->funcs->item_key(it);
             int   key_len = m->funcs->item_key_len(it);
-            char *key_buf = malloc(key_len + 1);
-            if (key_buf != NULL) {
-                memcpy(key_buf, m->funcs->item_key(it), key_len);
-                key_buf[key_len] = '\0';
+            char *key_buf = NULL;
 
+            if (m->key_alloc) {
+                // The ITEM_key is not NULL or space terminated,
+                // and we need a copy, too, for hashtable ownership.
+                //
+                key_buf = malloc(key_len + 1);
+                if (key_buf != NULL) {
+                    memcpy(key_buf, key, key_len);
+                    key_buf[key_len] = '\0';
+                    key = key_buf;
+                } else {
+                    key = NULL;
+                }
+            }
+
+            if (key != NULL) {
                 void *existing =
-                    (void *) g_hash_table_lookup(m->map, key_buf);
+                    (void *) g_hash_table_lookup(m->map, key);
                 if (existing != NULL) {
                     mcache_item_unlink(m, existing);
                     mcache_item_touch(m, existing);
@@ -259,21 +276,22 @@ void mcache_add(mcache *m, void *it,
 
                     if (settings.verbose > 1)
                         fprintf(stderr,
-                                "mcache add-skip: %s\n", key_buf);
+                                "mcache add-skip: %s\n", key);
 
-                    free(key_buf);
+                    if (key_buf != NULL)
+                        free(key_buf);
                 } else {
                     m->funcs->item_set_exptime(it, exptime);
-                    m->funcs->item_add_ref(it); // TODO: Need item lock here?
+                    m->funcs->item_add_ref(it);
 
-                    g_hash_table_insert(m->map, key_buf, it);
+                    g_hash_table_insert(m->map, key, it);
 
                     m->tot_adds++;
                     m->tot_add_bytes += m->funcs->item_len(it);
 
                     if (settings.verbose > 1)
                         fprintf(stderr,
-                                "mcache add: %s\n", key_buf);
+                                "mcache add: %s\n", key);
                 }
             } else {
                 m->tot_add_fails++;

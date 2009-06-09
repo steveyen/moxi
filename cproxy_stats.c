@@ -383,67 +383,68 @@ void cproxy_reset_stats_cmd(proxy_stats_cmd *sc) {
 // -------------------------------------------------
 
 static char *key_stat_key(void *it) {
-    item *i = it;
+    key_stat *i = it;
     assert(i);
-    return ITEM_key(i);
+    return i->key;
 }
 
 static int key_stat_key_len(void *it) {
-    item *i = it;
+    key_stat *i = it;
     assert(i);
-    return i->nkey;
+    return strlen(i->key);
 }
 
 static int key_stat_len(void *it) {
-    item *i = it;
-    assert(i);
-    return i->nbytes;
+    return sizeof(key_stat);
 }
 
 static void key_stat_add_ref(void *it) {
-    item *i = it;
+    key_stat *i = it;
     if (i != NULL)
-        i->refcount++; // TODO: Need item lock here?
+        i->refcount++;
 }
 
 static void key_stat_dec_ref(void *it) {
-    item *i = it;
-    if (i != NULL)
-        item_remove(i);
+    key_stat *i = it;
+    if (i != NULL) {
+        i->refcount--;
+        if (i->refcount <= 0)
+            free(it);
+    }
 }
 
 static void *key_stat_get_next(void *it) {
-    item *i = it;
+    key_stat *i = it;
     assert(i);
     return i->next;
 }
 
 static void key_stat_set_next(void *it, void *next) {
-    item *i = it;
+    key_stat *i = it;
     assert(i);
-    i->next = (item *) next;
+    i->next = (key_stat *) next;
 }
 
 static void *key_stat_get_prev(void *it) {
-    item *i = it;
+    key_stat *i = it;
     assert(i);
     return i->prev;
 }
 
 static void key_stat_set_prev(void *it, void *prev) {
-    item *i = it;
+    key_stat *i = it;
     assert(i);
-    i->prev = (item *) prev;
+    i->prev = (key_stat *) prev;
 }
 
 static uint32_t key_stat_get_exptime(void *it) {
-    item *i = it;
+    key_stat *i = it;
     assert(i);
     return i->exptime;
 }
 
 static void key_stat_set_exptime(void *it, uint32_t exptime) {
-    item *i = it;
+    key_stat *i = it;
     assert(i);
     i->exptime = exptime;
 }

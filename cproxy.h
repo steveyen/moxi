@@ -50,6 +50,8 @@ typedef struct {
 
     pthread_mutex_t *lock; // NULL-able, for non-multithreaded.
 
+    bool key_alloc;        // True if mcache must alloc key memory.
+
     GHashTable *map;       // NULL-able, keyed by string, value is item.
 
     uint32_t max;          // Maxiumum number of items to keep.
@@ -79,6 +81,7 @@ typedef struct proxy_main     proxy_main;
 typedef struct proxy_stats    proxy_stats;
 typedef struct proxy_behavior proxy_behavior;
 typedef struct downstream     downstream;
+typedef struct key_stat       key_stat;
 
 struct proxy_behavior {
     // IL means startup, system initialization level behavior.
@@ -232,6 +235,15 @@ typedef struct {
     uint64_t write_bytes; // Total bytes written, outgoing from proxy.
     uint64_t cas;         // Number that had or required cas-id.
 } proxy_stats_cmd;
+
+struct key_stat {
+    char key[KEY_MAX_LENGTH + 1];
+    int  refcount;
+    uint32_t exptime;
+    key_stat *next;
+    key_stat *prev;
+    proxy_stats_cmd stat;
+};
 
 typedef enum {
     STATS_CMD_GET = 0, // For each "get" cmd, even if multikey get.
@@ -555,7 +567,8 @@ void cproxy_del_front_cache_key_ascii_response(downstream *d,
 
 // Functions for the front cache.
 //
-void  mcache_init(mcache *m, bool multithreaded, mcache_funcs *funcs);
+void  mcache_init(mcache *m, bool multithreaded,
+                  mcache_funcs *funcs, bool key_alloc);
 void  mcache_start(mcache *m, uint32_t max);
 bool  mcache_started(mcache *m);
 void  mcache_stop(mcache *m);
