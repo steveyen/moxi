@@ -383,7 +383,6 @@ static char *item_key(void *it) {
     return ITEM_key(i);
 }
 
-
 static int item_key_len(void *it) {
     item *i = it;
     assert(i);

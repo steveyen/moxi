@@ -17,6 +17,9 @@ uint32_t murmur_hash(const char *key, size_t length);
 
 // Protocol STATS command handling.
 //
+// Special STATS value merging rules, instead of the
+// default to just sum the values.  Note the trailing space.
+//
 char *protocol_stats_keys_first = "pid ";
 char *protocol_stats_keys_smallest =
     "uptime "
@@ -39,9 +42,34 @@ bool protocol_stats_merge_smallest(char *v1, int v1len,
 int count_dot_pair(char *x, int xlen, char *y, int ylen);
 int count_dot(char *x, int len);
 
-// Special STATS value merging rules, instead of the
-// default to just sum the values.  Note the trailing space.
+// Per-key stats.
 //
+static char *key_stat_key(void *it);
+static int key_stat_key_len(void *it);
+static int key_stat_len(void *it);
+static void key_stat_add_ref(void *it);
+static void key_stat_dec_ref(void *it);
+static void *key_stat_get_next(void *it);
+static void key_stat_set_next(void *it, void *next);
+static void *key_stat_get_prev(void *it);
+static void key_stat_set_prev(void *it, void *prev);
+static uint32_t key_stat_get_exptime(void *it);
+static void key_stat_set_exptime(void *it, uint32_t exptime);
+
+mcache_funcs mcache_key_stat_funcs = {
+    .item_key         = key_stat_key,
+    .item_key_len     = key_stat_key_len,
+    .item_len         = key_stat_len,
+    .item_add_ref     = key_stat_add_ref,
+    .item_dec_ref     = key_stat_dec_ref,
+    .item_get_next    = key_stat_get_next,
+    .item_set_next    = key_stat_set_next,
+    .item_get_prev    = key_stat_get_prev,
+    .item_set_prev    = key_stat_set_prev,
+    .item_get_exptime = key_stat_get_exptime,
+    .item_set_exptime = key_stat_set_exptime
+};
+
 #define MAX_TOKENS     5
 #define PREFIX_TOKEN   0
 #define NAME_TOKEN     1
@@ -350,5 +378,73 @@ void cproxy_reset_stats(proxy_stats *ps) {
 void cproxy_reset_stats_cmd(proxy_stats_cmd *sc) {
     assert(sc);
     memset(sc, 0, sizeof(proxy_stats_cmd));
+}
+
+// -------------------------------------------------
+
+static char *key_stat_key(void *it) {
+    item *i = it;
+    assert(i);
+    return ITEM_key(i);
+}
+
+static int key_stat_key_len(void *it) {
+    item *i = it;
+    assert(i);
+    return i->nkey;
+}
+
+static int key_stat_len(void *it) {
+    item *i = it;
+    assert(i);
+    return i->nbytes;
+}
+
+static void key_stat_add_ref(void *it) {
+    item *i = it;
+    if (i != NULL)
+        i->refcount++; // TODO: Need item lock here?
+}
+
+static void key_stat_dec_ref(void *it) {
+    item *i = it;
+    if (i != NULL)
+        item_remove(i);
+}
+
+static void *key_stat_get_next(void *it) {
+    item *i = it;
+    assert(i);
+    return i->next;
+}
+
+static void key_stat_set_next(void *it, void *next) {
+    item *i = it;
+    assert(i);
+    i->next = (item *) next;
+}
+
+static void *key_stat_get_prev(void *it) {
+    item *i = it;
+    assert(i);
+    return i->prev;
+}
+
+static void key_stat_set_prev(void *it, void *prev) {
+    item *i = it;
+    assert(i);
+    i->prev = (item *) prev;
+}
+
+static uint32_t key_stat_get_exptime(void *it) {
+    item *i = it;
+    assert(i);
+    return i->exptime;
+}
+
+static void key_stat_set_exptime(void *it, uint32_t exptime) {
+    item *i = it;
+    assert(i);
+    i->exptime = exptime;
 }
 

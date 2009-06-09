@@ -135,7 +135,7 @@ proxy *cproxy_create(char    *name,
         matcher_init(&p->front_cache_matcher, true);
         matcher_init(&p->front_cache_unmatcher, true);
 
-        mcache_init(&p->key_stats, true, &mcache_item_funcs);
+        mcache_init(&p->key_stats, true, &mcache_key_stat_funcs);
         matcher_init(&p->key_stats_matcher, true);
         matcher_init(&p->key_stats_unmatcher, true);
 

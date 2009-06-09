@@ -43,6 +43,7 @@ typedef struct {
 } mcache_funcs;
 
 extern mcache_funcs mcache_item_funcs;
+extern mcache_funcs mcache_key_stat_funcs;
 
 typedef struct {
     mcache_funcs *funcs;
