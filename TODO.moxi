@@ -15,6 +15,11 @@ TODO ideas...
 - stats of front cache bandwidth
 - stats for inline latency, statistical
 - key-level stats, by command, with bandwidth
+- prefix stats [A-Za-z][A-Za-z0-9]+
+- session stats (between session GET and SET)
+- command pattern/signature stats
+  - between GET and SET
+- cache miss latency, between GET miss and SET
 
 - too many gettimeofday()'s?
 
