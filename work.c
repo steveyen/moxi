@@ -122,11 +122,15 @@ void work_recv(int fd, short which, void *arg) {
 
     int readrv = read(fd, buf, 1);
     assert(readrv == 1);
-    if (readrv == 1) {
-        curr = m->work_head;
-        m->work_head = NULL;
-        m->work_tail = NULL;
+    if (readrv != 1) {
+        // Perhaps libevent called us in incorrect way.
+        //
+        fprintf(stderr, "unexpected work_recv read value\n");
     }
+
+    curr = m->work_head;
+    m->work_head = NULL;
+    m->work_tail = NULL;
 
     pthread_mutex_unlock(&m->work_lock);
 
