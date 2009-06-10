@@ -120,11 +120,13 @@ void work_recv(int fd, short which, void *arg) {
     //
     pthread_mutex_lock(&m->work_lock);
 
-    read(fd, buf, 1);
-
-    curr = m->work_head;
-    m->work_head = NULL;
-    m->work_tail = NULL;
+    int readrv = read(fd, buf, 1);
+    assert(readrv == 1);
+    if (readrv == 1) {
+        curr = m->work_head;
+        m->work_head = NULL;
+        m->work_tail = NULL;
+    }
 
     pthread_mutex_unlock(&m->work_lock);
 
