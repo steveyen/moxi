@@ -144,7 +144,7 @@ void on_conflate_get_stats(void *userdata, void *opaque,
               m->nthreads);
 
     if (msci.do_settings) {
-        more_stat("%s", "main_hostname", cproxy_hostname);
+        add_stat(opaque, "main_hostname", cproxy_hostname);
 
         cproxy_dump_behavior_ex(&m->behavior, "main_behavior", 2,
                                 add_stat_prefix, &ase);
