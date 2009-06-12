@@ -43,7 +43,7 @@ typedef struct {
 } mcache_funcs;
 
 extern mcache_funcs mcache_item_funcs;
-extern mcache_funcs mcache_key_stat_funcs;
+extern mcache_funcs mcache_key_stats_funcs;
 
 typedef struct {
     mcache_funcs *funcs;
@@ -81,7 +81,7 @@ typedef struct proxy_main     proxy_main;
 typedef struct proxy_stats    proxy_stats;
 typedef struct proxy_behavior proxy_behavior;
 typedef struct downstream     downstream;
-typedef struct key_stat       key_stat;
+typedef struct key_stats      key_stats;
 
 struct proxy_behavior {
     // IL means startup, system initialization level behavior.
@@ -236,15 +236,6 @@ typedef struct {
     uint64_t cas;         // Number that had or required cas-id.
 } proxy_stats_cmd;
 
-struct key_stat {
-    char key[KEY_MAX_LENGTH + 1];
-    int  refcount;
-    uint32_t exptime;
-    key_stat *next;
-    key_stat *prev;
-    proxy_stats_cmd stat;
-};
-
 typedef enum {
     STATS_CMD_GET = 0, // For each "get" cmd, even if multikey get.
     STATS_CMD_GET_KEY, // For each key in a "get".
@@ -308,6 +299,15 @@ struct proxy_td { // Per proxy, per worker-thread data struct.
     struct event   timeout_event;
 
     proxy_stats_td stats;
+};
+
+struct key_stats {
+    char key[KEY_MAX_LENGTH + 1];
+    int  refcount;
+    uint32_t exptime;
+    key_stats *next;
+    key_stats *prev;
+    proxy_stats_cmd stats_cmd[STATS_CMD_TYPE_last][STATS_CMD_last];
 };
 
 /* Owned by worker thread.

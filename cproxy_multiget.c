@@ -78,6 +78,9 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
     proxy_td *ptd = d->ptd;
     assert(ptd != NULL);
 
+    proxy *p = ptd->proxy;
+    assert(p != NULL);
+
     proxy_stats_cmd *psc_get =
         &ptd->stats.stats_cmd[STATS_CMD_TYPE_REGULAR][STATS_CMD_GET];
     proxy_stats_cmd *psc_get_key =
@@ -156,6 +159,17 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
 
                 psc_get_key->seen++;
                 psc_get_key->read_bytes += key_len;
+
+                if (matcher_check(&p->key_stats_matcher,
+                                  key, key_len, true) == true &&
+                    matcher_check(&p->key_stats_unmatcher,
+                                  key, key_len, false) == false) {
+                    key_stats *ks =
+                        mcache_get(&p->key_stats, key, key_len,
+                                   msec_current_time_snapshot);
+                    if (ks == NULL) {
+                    }
+                }
 
                 // Handle a front cache hit by queuing response.
                 //
@@ -359,7 +373,7 @@ void multiget_ascii_downstream_response(downstream *d, item *it) {
         if (matcher_check(&p->front_cache_matcher,
                           ITEM_key(it), it->nkey, true) == true &&
             matcher_check(&p->front_cache_unmatcher,
-                           ITEM_key(it), it->nkey, true) == false) {
+                           ITEM_key(it), it->nkey, false) == false) {
             mcache_add(&p->front_cache, it,
                        front_cache_lifespan + msec_current_time);
         }

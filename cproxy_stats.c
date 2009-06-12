@@ -44,30 +44,30 @@ int count_dot(char *x, int len);
 
 // Per-key stats.
 //
-static char *key_stat_key(void *it);
-static int key_stat_key_len(void *it);
-static int key_stat_len(void *it);
-static void key_stat_add_ref(void *it);
-static void key_stat_dec_ref(void *it);
-static void *key_stat_get_next(void *it);
-static void key_stat_set_next(void *it, void *next);
-static void *key_stat_get_prev(void *it);
-static void key_stat_set_prev(void *it, void *prev);
-static uint32_t key_stat_get_exptime(void *it);
-static void key_stat_set_exptime(void *it, uint32_t exptime);
+static char *key_stats_key(void *it);
+static int key_stats_key_len(void *it);
+static int key_stats_len(void *it);
+static void key_stats_add_ref(void *it);
+static void key_stats_dec_ref(void *it);
+static void *key_stats_get_next(void *it);
+static void key_stats_set_next(void *it, void *next);
+static void *key_stats_get_prev(void *it);
+static void key_stats_set_prev(void *it, void *prev);
+static uint32_t key_stats_get_exptime(void *it);
+static void key_stats_set_exptime(void *it, uint32_t exptime);
 
-mcache_funcs mcache_key_stat_funcs = {
-    .item_key         = key_stat_key,
-    .item_key_len     = key_stat_key_len,
-    .item_len         = key_stat_len,
-    .item_add_ref     = key_stat_add_ref,
-    .item_dec_ref     = key_stat_dec_ref,
-    .item_get_next    = key_stat_get_next,
-    .item_set_next    = key_stat_set_next,
-    .item_get_prev    = key_stat_get_prev,
-    .item_set_prev    = key_stat_set_prev,
-    .item_get_exptime = key_stat_get_exptime,
-    .item_set_exptime = key_stat_set_exptime
+mcache_funcs mcache_key_stats_funcs = {
+    .item_key         = key_stats_key,
+    .item_key_len     = key_stats_key_len,
+    .item_len         = key_stats_len,
+    .item_add_ref     = key_stats_add_ref,
+    .item_dec_ref     = key_stats_dec_ref,
+    .item_get_next    = key_stats_get_next,
+    .item_set_next    = key_stats_set_next,
+    .item_get_prev    = key_stats_get_prev,
+    .item_set_prev    = key_stats_set_prev,
+    .item_get_exptime = key_stats_get_exptime,
+    .item_set_exptime = key_stats_set_exptime
 };
 
 #define MAX_TOKENS     5
@@ -382,30 +382,30 @@ void cproxy_reset_stats_cmd(proxy_stats_cmd *sc) {
 
 // -------------------------------------------------
 
-static char *key_stat_key(void *it) {
-    key_stat *i = it;
+static char *key_stats_key(void *it) {
+    key_stats *i = it;
     assert(i);
     return i->key;
 }
 
-static int key_stat_key_len(void *it) {
-    key_stat *i = it;
+static int key_stats_key_len(void *it) {
+    key_stats *i = it;
     assert(i);
     return strlen(i->key);
 }
 
-static int key_stat_len(void *it) {
-    return sizeof(key_stat);
+static int key_stats_len(void *it) {
+    return sizeof(key_stats);
 }
 
-static void key_stat_add_ref(void *it) {
-    key_stat *i = it;
+static void key_stats_add_ref(void *it) {
+    key_stats *i = it;
     if (i != NULL)
         i->refcount++;
 }
 
-static void key_stat_dec_ref(void *it) {
-    key_stat *i = it;
+static void key_stats_dec_ref(void *it) {
+    key_stats *i = it;
     if (i != NULL) {
         i->refcount--;
         if (i->refcount <= 0)
@@ -413,38 +413,38 @@ static void key_stat_dec_ref(void *it) {
     }
 }
 
-static void *key_stat_get_next(void *it) {
-    key_stat *i = it;
+static void *key_stats_get_next(void *it) {
+    key_stats *i = it;
     assert(i);
     return i->next;
 }
 
-static void key_stat_set_next(void *it, void *next) {
-    key_stat *i = it;
+static void key_stats_set_next(void *it, void *next) {
+    key_stats *i = it;
     assert(i);
-    i->next = (key_stat *) next;
+    i->next = (key_stats *) next;
 }
 
-static void *key_stat_get_prev(void *it) {
-    key_stat *i = it;
+static void *key_stats_get_prev(void *it) {
+    key_stats *i = it;
     assert(i);
     return i->prev;
 }
 
-static void key_stat_set_prev(void *it, void *prev) {
-    key_stat *i = it;
+static void key_stats_set_prev(void *it, void *prev) {
+    key_stats *i = it;
     assert(i);
-    i->prev = (key_stat *) prev;
+    i->prev = (key_stats *) prev;
 }
 
-static uint32_t key_stat_get_exptime(void *it) {
-    key_stat *i = it;
+static uint32_t key_stats_get_exptime(void *it) {
+    key_stats *i = it;
     assert(i);
     return i->exptime;
 }
 
-static void key_stat_set_exptime(void *it, uint32_t exptime) {
-    key_stat *i = it;
+static void key_stats_set_exptime(void *it, uint32_t exptime) {
+    key_stats *i = it;
     assert(i);
     i->exptime = exptime;
 }
