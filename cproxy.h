@@ -575,8 +575,9 @@ void  mcache_stop(mcache *m);
 void  mcache_reset_stats(mcache *m);
 void *mcache_get(mcache *m, char *key, int key_len,
                  uint32_t curr_time);
-void  mcache_add(mcache *m, void *it,
-                 uint32_t exptime);
+void  mcache_set(mcache *m, void *it,
+                 uint32_t exptime,
+                 bool touch_if_exists);
 void  mcache_delete(mcache *m, char *key, int key_len);
 void  mcache_flush_all(mcache *m, uint32_t msec_exp);
 

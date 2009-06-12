@@ -374,8 +374,9 @@ void multiget_ascii_downstream_response(downstream *d, item *it) {
                           ITEM_key(it), it->nkey, true) == true &&
             matcher_check(&p->front_cache_unmatcher,
                            ITEM_key(it), it->nkey, false) == false) {
-            mcache_add(&p->front_cache, it,
-                       front_cache_lifespan + msec_current_time);
+            mcache_set(&p->front_cache, it,
+                       front_cache_lifespan + msec_current_time,
+                       true);
         }
     }
 

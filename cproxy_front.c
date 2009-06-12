@@ -209,8 +209,8 @@ void *mcache_get(mcache *m, char *key, int key_len,
     return NULL;
 }
 
-void mcache_add(mcache *m, void *it,
-                uint32_t exptime) {
+void mcache_set(mcache *m, void *it,
+                uint32_t exptime, bool touch_if_exists) {
     assert(it);
     assert(m->funcs);
     assert(m->funcs->item_get_next(it) == NULL);
@@ -271,7 +271,9 @@ void mcache_add(mcache *m, void *it,
 
             if (key != NULL) {
                 void *existing =
-                    (void *) g_hash_table_lookup(m->map, key);
+                    touch_if_exists ?
+                    (void *) g_hash_table_lookup(m->map, key) :
+                    NULL;
                 if (existing != NULL) {
                     mcache_item_unlink(m, existing);
                     mcache_item_touch(m, existing);
