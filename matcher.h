@@ -29,7 +29,8 @@ void     matcher_start(matcher *m, char *spec);
 bool     matcher_started(matcher *m);
 void     matcher_stop(matcher *m);
 matcher *matcher_clone(matcher *m, matcher *copy);
-bool     matcher_check(matcher *m, char *str, int str_len);
+bool     matcher_check(matcher *m, char *str, int str_len,
+                       bool default_when_unstarted);
 
 #endif /* MATCHER_H */
 

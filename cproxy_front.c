@@ -134,8 +134,7 @@ void mcache_stop(mcache *m) {
     if (m->lock)
         pthread_mutex_lock(m->lock);
 
-    if (m->map != NULL)
-        g_hash_table_destroy(m->map);
+    GHashTable *x = m->map;
 
     m->map         = NULL;
     m->max         = 0;
@@ -145,6 +144,11 @@ void mcache_stop(mcache *m) {
 
     if (m->lock)
         pthread_mutex_unlock(m->lock);
+
+    // Destroying hash table outside the lock.
+    //
+    if (x != NULL)
+        g_hash_table_destroy(x);
 }
 
 void *mcache_get(mcache *m, char *key, int key_len,

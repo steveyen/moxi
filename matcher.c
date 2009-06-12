@@ -141,9 +141,9 @@ matcher *matcher_clone(matcher *m, matcher *copy) {
     return NULL;
 }
 
+/** Assuming caller has m->lock already.
+ */
 void matcher_add(matcher *m, char *pattern) {
-    // Assuming caller has m->lock already.
-    //
     assert(m);
     assert(m->patterns_num <= m->patterns_max);
     assert(pattern);
@@ -182,7 +182,8 @@ void matcher_add(matcher *m, char *pattern) {
     }
 }
 
-bool matcher_check(matcher *m, char *str, int str_len) {
+bool matcher_check(matcher *m, char *str, int str_len,
+                   bool default_when_unstarted) {
     assert(m);
 
     bool found = false;
@@ -190,24 +191,29 @@ bool matcher_check(matcher *m, char *str, int str_len) {
     if (m->lock)
         pthread_mutex_lock(m->lock);
 
-    assert(m->patterns_num <= m->patterns_max);
+    if (m->patterns != NULL &&
+        m->patterns_num > 0) {
+        assert(m->patterns_num <= m->patterns_max);
 
-    for (int i = 0; i < m->patterns_num; i++) {
-        assert(m->patterns);
-        assert(m->lengths);
-        assert(m->hits);
+        for (int i = 0; i < m->patterns_num; i++) {
+            assert(m->patterns);
+            assert(m->lengths);
+            assert(m->hits);
 
-        int n = m->lengths[i];
-        if (n <= str_len) {
-            if (strncmp(str, m->patterns[i], n) == 0) {
-                m->hits[i]++;
-                found = true;
+            int n = m->lengths[i];
+            if (n <= str_len) {
+                if (strncmp(str, m->patterns[i], n) == 0) {
+                    m->hits[i]++;
+                    found = true;
+                }
             }
         }
-    }
 
-    if (!found)
-        m->misses++;
+        if (!found)
+            m->misses++;
+    } else {
+        found = default_when_unstarted;
+    }
 
     if (m->lock)
         pthread_mutex_unlock(m->lock);
