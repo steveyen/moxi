@@ -376,7 +376,7 @@ void multiget_ascii_downstream_response(downstream *d, item *it) {
                            ITEM_key(it), it->nkey, false) == false) {
             mcache_set(&p->front_cache, it,
                        front_cache_lifespan + msec_current_time,
-                       true);
+                       true, false);
         }
     }
 

@@ -210,7 +210,9 @@ void *mcache_get(mcache *m, char *key, int key_len,
 }
 
 void mcache_set(mcache *m, void *it,
-                uint32_t exptime, bool touch_if_exists) {
+                uint32_t exptime,
+                bool add_only,
+                bool mod_exptime_if_exists) {
     assert(it);
     assert(m->funcs);
     assert(m->funcs->item_get_next(it) == NULL);
@@ -259,6 +261,8 @@ void mcache_set(mcache *m, void *it,
                 // The ITEM_key is not NULL or space terminated,
                 // and we need a copy, too, for hashtable ownership.
                 //
+                // TODO: Move this outside the lock area?
+                //
                 key_buf = malloc(key_len + 1);
                 if (key_buf != NULL) {
                     memcpy(key_buf, key, key_len);
@@ -271,12 +275,15 @@ void mcache_set(mcache *m, void *it,
 
             if (key != NULL) {
                 void *existing =
-                    touch_if_exists ?
+                    add_only ?
                     (void *) g_hash_table_lookup(m->map, key) :
                     NULL;
                 if (existing != NULL) {
                     mcache_item_unlink(m, existing);
                     mcache_item_touch(m, existing);
+
+                    if (mod_exptime_if_exists)
+                        m->funcs->item_set_exptime(existing, exptime);
 
                     m->tot_add_skips++;
 
