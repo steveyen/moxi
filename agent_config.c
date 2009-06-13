@@ -561,10 +561,6 @@ void cproxy_on_new_pool(proxy_main *m,
         matcher_stop(&p->front_cache_matcher);
         matcher_stop(&p->front_cache_unmatcher);
 
-        mcache_stop(&p->key_stats);
-        matcher_stop(&p->key_stats_matcher);
-        matcher_stop(&p->key_stats_unmatcher);
-
         matcher_stop(&p->optimize_set_matcher);
 
         pthread_mutex_lock(&p->proxy_lock);
@@ -637,24 +633,6 @@ void cproxy_on_new_pool(proxy_main *m,
             }
         }
 
-        // Restart the key_stats, if necessary.
-        //
-        if (behavior_head.key_stats_max > 0 &&
-            behavior_head.key_stats_lifespan > 0) {
-            mcache_start(&p->key_stats,
-                         behavior_head.key_stats_max);
-
-            if (strlen(behavior_head.key_stats_spec) > 0) {
-                matcher_start(&p->key_stats_matcher,
-                              behavior_head.key_stats_spec);
-            }
-
-            if (strlen(behavior_head.key_stats_unspec) > 0) {
-                matcher_start(&p->key_stats_unmatcher,
-                              behavior_head.key_stats_unspec);
-            }
-        }
-
         if (strlen(behavior_head.optimize_set) > 0) {
             matcher_start(&p->optimize_set_matcher,
                           behavior_head.optimize_set);
@@ -697,29 +675,59 @@ static void update_ptd_config(void *data0, void *data1) {
 
     pthread_mutex_lock(&p->proxy_lock);
 
-    if (ptd->config_ver != p->config_ver) {
-        if (settings.verbose > 1)
-            fprintf(stderr, "update_ptd_config %u, %u to %u\n",
-                    p->port,
-                    ptd->config_ver, p->config_ver);
+    bool changed = false;
+    int  port = p->port;
+    int  prev = ptd->config_ver;
 
+    if (ptd->config_ver != p->config_ver) {
         ptd->config_ver = p->config_ver;
 
-        update_str_config(&ptd->config, p->config, NULL);
+        changed =
+            update_str_config(&ptd->config, p->config, NULL) ||
+            changed;
 
         ptd->behavior_head = p->behavior_head;
 
-        update_behaviors_config(&ptd->behaviors, &ptd->behaviors_num,
-                                p->behaviors, p->behaviors_num,
-                                NULL);
-    } else {
-        if (settings.verbose > 1)
-            fprintf(stderr, "update_ptd_config %u, %u = %u no change\n",
-                    p->port,
-                    ptd->config_ver, p->config_ver);
+        changed =
+            update_behaviors_config(&ptd->behaviors, &ptd->behaviors_num,
+                                    p->behaviors, p->behaviors_num,
+                                    NULL) ||
+            changed;
     }
 
     pthread_mutex_unlock(&p->proxy_lock);
+
+    // Restart the key_stats, if necessary.
+    //
+    if (changed) {
+        mcache_stop(&ptd->key_stats);
+        matcher_stop(&ptd->key_stats_matcher);
+        matcher_stop(&ptd->key_stats_unmatcher);
+
+        if (ptd->behavior_head.key_stats_max > 0 &&
+            ptd->behavior_head.key_stats_lifespan > 0) {
+            mcache_start(&ptd->key_stats,
+                         ptd->behavior_head.key_stats_max);
+
+            if (strlen(ptd->behavior_head.key_stats_spec) > 0) {
+                matcher_start(&ptd->key_stats_matcher,
+                              ptd->behavior_head.key_stats_spec);
+            }
+
+            if (strlen(ptd->behavior_head.key_stats_unspec) > 0) {
+                matcher_start(&ptd->key_stats_unmatcher,
+                              ptd->behavior_head.key_stats_unspec);
+            }
+        }
+
+        if (settings.verbose > 1)
+            fprintf(stderr, "update_ptd_config %u, %u to %u\n",
+                    port, prev, ptd->config_ver);
+    } else {
+        if (settings.verbose > 1)
+            fprintf(stderr, "update_ptd_config %u, %u = %u no change\n",
+                    port, prev, ptd->config_ver);
+    }
 
     work_collect_one(c);
 }

@@ -78,9 +78,6 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
     proxy_td *ptd = d->ptd;
     assert(ptd != NULL);
 
-    proxy *p = ptd->proxy;
-    assert(p != NULL);
-
     proxy_stats_cmd *psc_get =
         &ptd->stats.stats_cmd[STATS_CMD_TYPE_REGULAR][STATS_CMD_GET];
     proxy_stats_cmd *psc_get_key =
@@ -162,27 +159,32 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
 
                 // Update key-based statistics.
                 //
-                if (matcher_check(&p->key_stats_matcher,
+                if (matcher_check(&ptd->key_stats_matcher,
                                   key, key_len, true) == true &&
-                    matcher_check(&p->key_stats_unmatcher,
+                    matcher_check(&ptd->key_stats_unmatcher,
                                   key, key_len, false) == false) {
+#define REGULAR STATS_CMD_TYPE_REGULAR
+
                     key_stats *ks =
-                        mcache_get(&p->key_stats, key, key_len,
+                        mcache_get(&ptd->key_stats, key, key_len,
                                    msec_current_time_snapshot);
                     proxy_stats_cmd *psc = NULL;
+
                     if (ks != NULL) {
-                        psc = &ks->stats_cmd[STATS_CMD_TYPE_REGULAR][STATS_CMD_GET_KEY];
-                        key_stats_dec_ref(ks);
+                        psc = &ks->stats_cmd[REGULAR][STATS_CMD_GET_KEY];
                     } else {
                         ks = calloc(1, sizeof(key_stats));
                         if (ks != NULL) {
                             memcpy(ks->key, key, key_len);
                             ks->key[key_len] = '\0';
                             ks->refcount = 1;
-                            psc = &ks->stats_cmd[STATS_CMD_TYPE_REGULAR][STATS_CMD_GET_KEY];
-                            mcache_set(&p->key_stats, ks,
-                                       msec_current_time_snapshot + 1000,
+
+                            mcache_set(&ptd->key_stats, ks,
+                                       msec_current_time_snapshot +
+                                       ptd->behavior_head.key_stats_lifespan,
                                        true, false);
+
+                            psc = &ks->stats_cmd[REGULAR][STATS_CMD_GET_KEY];
                         }
                     }
 

@@ -176,10 +176,6 @@ struct proxy {
     matcher front_cache_matcher;
     matcher front_cache_unmatcher;
 
-    mcache  key_stats;
-    matcher key_stats_matcher;
-    matcher key_stats_unmatcher;
-
     matcher optimize_set_matcher;
 
     proxy_td *thread_data;     // Immutable.
@@ -269,6 +265,15 @@ typedef struct {
     proxy_stats_cmd stats_cmd[STATS_CMD_TYPE_last][STATS_CMD_last];
 } proxy_stats_td;
 
+struct key_stats {
+    char key[KEY_MAX_LENGTH + 1];
+    int  refcount;
+    uint32_t exptime;
+    key_stats *next;
+    key_stats *prev;
+    proxy_stats_cmd stats_cmd[STATS_CMD_TYPE_last][STATS_CMD_last];
+};
+
 /* We mirror memcached's threading model with a separate
  * proxy_td (td means "thread data") struct owned by each
  * worker thread.  The idea is to avoid extraneous locks.
@@ -307,16 +312,11 @@ struct proxy_td { // Per proxy, per worker-thread data struct.
     struct timeval timeout_tv;
     struct event   timeout_event;
 
-    proxy_stats_td stats;
-};
+    mcache  key_stats;
+    matcher key_stats_matcher;
+    matcher key_stats_unmatcher;
 
-struct key_stats {
-    char key[KEY_MAX_LENGTH + 1];
-    int  refcount;
-    uint32_t exptime;
-    key_stats *next;
-    key_stats *prev;
-    proxy_stats_cmd stats_cmd[STATS_CMD_TYPE_last][STATS_CMD_last];
+    proxy_stats_td stats;
 };
 
 /* Owned by worker thread.
