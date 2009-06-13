@@ -384,6 +384,7 @@ void        cproxy_add_downstream(proxy_td *ptd);
 void        cproxy_free_downstream(downstream *d);
 downstream *cproxy_create_downstream(char *config,
                                      uint32_t config_ver,
+                                     proxy_behavior *behavior_head,
                                      int   behaviors_num,
                                      proxy_behavior *behaviors);
 downstream *cproxy_reserve_downstream(proxy_td *ptd);

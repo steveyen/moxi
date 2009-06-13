@@ -549,31 +549,17 @@ void cproxy_add_downstream(proxy_td *ptd) {
                     ptd->downstream_num,
                     ptd->downstream_max);
 
-        // We're called on the worker thread associated with
-        // the proxy_td, so no locking needed.
-        //
-        char *config = NULL;
-
-        if (ptd->config != NULL)
-            config = strdup(ptd->config);
-
-        uint32_t config_ver = ptd->config_ver;
-
-        int             behaviors_num = ptd->behaviors_num;
-        proxy_behavior *behaviors =
-            cproxy_copy_behaviors(ptd->behaviors_num,
-                                  ptd->behaviors);
-
-        // The config/behavior_str will be NULL if the
+        // The config/behaviors will be NULL if the
         // proxy is shutting down.
         //
-        if (config != NULL &&
-            behaviors != NULL) {
+        if (ptd->config != NULL &&
+            ptd->behaviors != NULL) {
             downstream *d =
-                cproxy_create_downstream(config,
-                                         config_ver,
-                                         behaviors_num,
-                                         behaviors);
+                cproxy_create_downstream(ptd->config,
+                                         ptd->config_ver,
+                                         &ptd->behavior_head,
+                                         ptd->behaviors_num,
+                                         ptd->behaviors);
             if (d != NULL) {
                 d->ptd = ptd;
                 ptd->downstream_tot++;
@@ -583,9 +569,6 @@ void cproxy_add_downstream(proxy_td *ptd) {
                 ptd->stats.stats.tot_downstream_create_failed++;
             }
         }
-
-        free(config);
-        free(behaviors);
     } else {
         ptd->stats.stats.tot_downstream_max_reached++;
     }
@@ -804,9 +787,11 @@ void cproxy_free_downstream(downstream *d) {
  */
 downstream *cproxy_create_downstream(char *config,
                                      uint32_t config_ver,
+                                     proxy_behavior *behavior_head,
                                      int   behaviors_num,
                                      proxy_behavior *behaviors) {
     assert(config != NULL);
+    assert(behavior_head != NULL);
     assert(behaviors_num > 0);
     assert(behaviors != NULL);
 
@@ -822,9 +807,9 @@ downstream *cproxy_create_downstream(char *config,
 
         // TODO: Handle non-uniform downstream protocols.
         //
-        assert(IS_PROXY(behaviors[0].downstream_protocol)); // TODO.
+        assert(IS_PROXY(behavior_head->downstream_protocol));
 
-        if (IS_BINARY(behaviors[0].downstream_protocol))
+        if (IS_BINARY(behavior_head->downstream_protocol))
             d->propagate = cproxy_forward_a2b_downstream;
         else
             d->propagate = cproxy_forward_a2a_downstream;

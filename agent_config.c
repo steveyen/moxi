@@ -388,7 +388,7 @@ void cproxy_on_new_config(void *data0, void *data1) {
 
                         // Inherit default behavior.
                         //
-                        behaviors[j] = m->behavior;
+                        behaviors[j] = proxyb;
 
                         char **props = get_key_values(kvs, svr_key);
                         for (int k = 0; props && props[k]; k++) {
