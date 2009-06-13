@@ -380,6 +380,57 @@ void cproxy_reset_stats_cmd(proxy_stats_cmd *sc) {
 
 // -------------------------------------------------
 
+key_stats *find_key_stats(proxy_td *ptd, char *key, int key_len,
+                          uint32_t msec_time) {
+    assert(ptd);
+    assert(key);
+    assert(key_len > 0);
+
+    key_stats *ks = mcache_get(&ptd->key_stats, key, key_len,
+                               msec_time);
+    if (ks == NULL) {
+        ks = calloc(1, sizeof(key_stats));
+        if (ks != NULL) {
+            memcpy(ks->key, key, key_len);
+            ks->key[key_len] = '\0';
+            ks->refcount = 1;
+
+            mcache_set(&ptd->key_stats, ks,
+                       msec_time +
+                       ptd->behavior_head.key_stats_lifespan,
+                       true, false);
+        }
+    }
+
+    return ks;
+}
+
+void touch_key_stats(proxy_td *ptd, char *key, int key_len,
+                     uint32_t msec_time,
+                     enum_stats_cmd_type cmd_type,
+                     enum_stats_cmd cmd,
+                     int delta_seen,
+                     int delta_hits,
+                     int delta_misses,
+                     int delta_read_bytes,
+                     int delta_write_bytes) {
+    key_stats *ks = find_key_stats(ptd, key, key_len, msec_time);
+    if (ks != NULL) {
+        proxy_stats_cmd *psc = &ks->stats_cmd[cmd_type][cmd];
+        if (psc != NULL) {
+            psc->seen        += delta_seen;
+            psc->hits        += delta_hits;
+            psc->misses      += delta_misses;
+            psc->read_bytes  += delta_read_bytes;
+            psc->write_bytes += delta_write_bytes;
+        }
+
+        key_stats_dec_ref(ks);
+    }
+}
+
+// -------------------------------------------------
+
 static char *key_stats_key(void *it) {
     key_stats *i = it;
     assert(i);

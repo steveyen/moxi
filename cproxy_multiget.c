@@ -33,6 +33,8 @@ void multiget_foreach_free(gpointer key,
             psc_get_key->misses++;
         }
 
+        // TODO: Update key stats misses.
+
         multiget_entry *curr = entry;
         entry = entry->next;
         free(curr);
@@ -159,43 +161,19 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
 
                 // Update key-based statistics.
                 //
-                if (matcher_check(&ptd->key_stats_matcher,
+                bool do_key_stats =
+                    matcher_check(&ptd->key_stats_matcher,
                                   key, key_len, true) == true &&
                     matcher_check(&ptd->key_stats_unmatcher,
-                                  key, key_len, false) == false) {
-#define REGULAR STATS_CMD_TYPE_REGULAR
+                                  key, key_len, false) == false;
 
-                    key_stats *ks =
-                        mcache_get(&ptd->key_stats, key, key_len,
-                                   msec_current_time_snapshot);
-                    proxy_stats_cmd *psc = NULL;
-
-                    if (ks != NULL) {
-                        psc = &ks->stats_cmd[REGULAR][STATS_CMD_GET_KEY];
-                    } else {
-                        ks = calloc(1, sizeof(key_stats));
-                        if (ks != NULL) {
-                            memcpy(ks->key, key, key_len);
-                            ks->key[key_len] = '\0';
-                            ks->refcount = 1;
-
-                            mcache_set(&ptd->key_stats, ks,
-                                       msec_current_time_snapshot +
-                                       ptd->behavior_head.key_stats_lifespan,
-                                       true, false);
-
-                            psc = &ks->stats_cmd[REGULAR][STATS_CMD_GET_KEY];
-                        }
-                    }
-
-                    if (psc != NULL) {
-                        psc->seen++;
-                        psc->read_bytes += key_len;
-                    }
-
-                    if (ks != NULL)
-                        key_stats_dec_ref(ks);
-                }
+                if (do_key_stats)
+                    touch_key_stats(ptd, key, key_len,
+                                    msec_current_time_snapshot,
+                                    STATS_CMD_TYPE_REGULAR,
+                                    STATS_CMD_GET_KEY,
+                                    1, 0, 0,
+                                    key_len, 0);
 
                 // Handle a front cache hit by queuing response.
                 //
@@ -212,6 +190,14 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
 
                         psc_get_key->hits++;
                         psc_get_key->write_bytes += it->nbytes;
+
+                        if (do_key_stats)
+                            touch_key_stats(ptd, key, key_len,
+                                            msec_current_time_snapshot,
+                                            STATS_CMD_TYPE_REGULAR,
+                                            STATS_CMD_GET_KEY,
+                                            0, 1, 0,
+                                            0, it->nbytes);
 
                         // The refcount was inc'ed by mcache_get() for us.
                         //
@@ -240,6 +226,14 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
                             psc_get_key->hits++;
                             psc_get_key->write_bytes += it->nbytes;
 
+                            if (do_key_stats)
+                                touch_key_stats(ptd, key, key_len,
+                                                msec_current_time_snapshot,
+                                                STATS_CMD_TYPE_REGULAR,
+                                                STATS_CMD_GET_KEY,
+                                                0, 1, 0,
+                                                0, it->nbytes);
+
                             // The refcount was inc'ed by item_get() for us.
                             //
                             item_remove(it);
@@ -250,6 +244,14 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
                                         key);
                         } else {
                             psc_get_key->misses++;
+
+                            if (do_key_stats)
+                                touch_key_stats(ptd, key, key_len,
+                                                msec_current_time_snapshot,
+                                                STATS_CMD_TYPE_REGULAR,
+                                                STATS_CMD_GET_KEY,
+                                                0, 0, 1,
+                                                0, 0);
 
                             if (settings.verbose > 1)
                                 fprintf(stderr,
@@ -429,6 +431,17 @@ void multiget_ascii_downstream_response(downstream *d, item *it) {
                     psc_get_key->hits++;
                     psc_get_key->write_bytes += it->nbytes;
 
+                    if (matcher_check(&ptd->key_stats_matcher,
+                                      ITEM_key(it), it->nkey, true) == true &&
+                        matcher_check(&ptd->key_stats_unmatcher,
+                                      ITEM_key(it), it->nkey, false) == false)
+                        touch_key_stats(ptd, ITEM_key(it), it->nkey,
+                                        msec_current_time,
+                                        STATS_CMD_TYPE_REGULAR,
+                                        STATS_CMD_GET_KEY,
+                                        0, 1, 0,
+                                        0, it->nbytes);
+
                     if (entry != entry_first) {
                         ptd->stats.stats.tot_multiget_bytes_dedupe += it->nbytes;
                     }
@@ -451,7 +464,19 @@ void multiget_ascii_downstream_response(downstream *d, item *it) {
             psc_get_key->hits++;
             psc_get_key->write_bytes += it->nbytes;
 
+            if (matcher_check(&ptd->key_stats_matcher,
+                              ITEM_key(it), it->nkey, true) == true &&
+                matcher_check(&ptd->key_stats_unmatcher,
+                              ITEM_key(it), it->nkey, false) == false)
+                touch_key_stats(ptd, ITEM_key(it), it->nkey,
+                                msec_current_time,
+                                STATS_CMD_TYPE_REGULAR,
+                                STATS_CMD_GET_KEY,
+                                0, 1, 0,
+                                0, it->nbytes);
+
             uc = uc->next;
         }
     }
 }
+

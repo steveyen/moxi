@@ -591,6 +591,21 @@ void  mcache_set(mcache *m, void *it,
 void  mcache_delete(mcache *m, char *key, int key_len);
 void  mcache_flush_all(mcache *m, uint32_t msec_exp);
 
+// Functions for key stats.
+//
+key_stats *find_key_stats(proxy_td *ptd, char *key, int key_len,
+                          uint32_t msec_time);
+
+void touch_key_stats(proxy_td *ptd, char *key, int key_len,
+                     uint32_t msec_current_time,
+                     enum_stats_cmd_type cmd_type,
+                     enum_stats_cmd cmd,
+                     int delta_seen,
+                     int delta_hits,
+                     int delta_misses,
+                     int delta_read_bytes,
+                     int delta_write_bytes);
+
 void key_stats_add_ref(void *it);
 void key_stats_dec_ref(void *it);
 
