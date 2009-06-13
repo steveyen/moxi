@@ -805,6 +805,9 @@ downstream *cproxy_create_downstream(char *config,
         d->behaviors     = cproxy_copy_behaviors(behaviors_num,
                                                  behaviors);
 
+        // TODO: Test dynamic protocol changes, where currently
+        //       a protocol change might not be propagating correctly.
+        //
         // TODO: Handle non-uniform downstream protocols.
         //
         assert(IS_PROXY(behavior_head->downstream_protocol));
