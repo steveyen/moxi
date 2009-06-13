@@ -583,24 +583,24 @@ void cproxy_on_new_pool(proxy_main *m,
                         p->config, config);
         }
 
-        changed = changed ||
-            update_str_config(&p->name, name,
-                              "conp name changed\n");
+        changed = update_str_config(&p->name, name,
+                                    "conp name changed\n") || changed;
 
-        changed = changed ||
-            update_str_config(&p->config, config,
-                              "conp config changed\n");
+        changed = update_str_config(&p->config, config,
+                                    "conp config changed\n") || changed;
 
-        changed = changed ||
+        changed =
             (cproxy_equal_behaviors(1, &p->behavior_head,
-                                    1, &behavior_head) == false);
+                                    1, &behavior_head) == false) ||
+            changed;
 
         p->behavior_head = behavior_head;
 
-        changed = changed ||
+        changed =
             update_behaviors_config(&p->behaviors, &p->behaviors_num,
                                     behaviors, behaviors_num,
-                                    "conp behaviors changed\n");
+                                    "conp behaviors changed\n") ||
+            changed;
 
         if (p->name != NULL &&
             p->config != NULL &&
@@ -768,8 +768,9 @@ static bool update_behaviors_config(proxy_behavior **curr,
         rv = true;
 
         if (descrip != NULL &&
-            settings.verbose > 1)
+            settings.verbose > 1) {
             fprintf(stderr, descrip);
+        }
     }
     if (*curr == NULL && next != NULL) {
         *curr = cproxy_copy_behaviors(next_num,
