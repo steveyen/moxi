@@ -15,9 +15,9 @@
 // Integration with libconflate.
 //
 static void update_ptd_config(void *data0, void *data1);
-static void update_str_config(char **curr, char *next, char *descrip);
+static bool update_str_config(char **curr, char *next, char *descrip);
 
-static void update_behaviors_config(proxy_behavior **curr,
+static bool update_behaviors_config(proxy_behavior **curr,
                                     int  *curr_num,
                                     proxy_behavior  *next,
                                     int   next_num,
@@ -229,7 +229,7 @@ void on_conflate_new_config(void *userdata, kvpair_t *config) {
     assert(mthread != NULL);
 
     if (settings.verbose > 1)
-        fprintf(stderr, "agent_config on_conflate_new_config\n");
+        fprintf(stderr, "agent_config ocnc on_conflate_new_config\n");
 
     kvpair_t *copy = dup_kvpair(config);
     if (copy != NULL) {
@@ -356,7 +356,7 @@ void cproxy_on_new_config(void *data0, void *data1) {
 
                     if (settings.verbose > 1) {
                         cproxy_dump_behavior(&proxyb,
-                                             "proxy_behavior", 1);
+                                             "conc proxy_behavior", 1);
                     }
                 }
 
@@ -434,12 +434,12 @@ void cproxy_on_new_config(void *data0, void *data1) {
 
                         if (settings.verbose > 1) {
                             cproxy_dump_behavior(&behaviors[j],
-                                                 "on_new_config", 0);
+                                                 "conc on_new_config", 0);
                         }
                     }
 
                     if (settings.verbose > 1)
-                        fprintf(stderr, "agent_config: %s\n",
+                        fprintf(stderr, "conc config: %s\n",
                                 config_str);
 
                     cproxy_on_new_pool(m, pool_name, pool_port,
@@ -550,8 +550,10 @@ void cproxy_on_new_pool(proxy_main *m,
         }
     } else {
         if (settings.verbose > 1)
-            fprintf(stderr, "cproxy main existing config change %u\n",
+            fprintf(stderr, "conp existing config change %u\n",
                     p->port);
+
+        bool changed = false;
 
         // Turn off the front_cache while we're reconfiguring.
         //
@@ -571,24 +573,34 @@ void cproxy_on_new_pool(proxy_main *m,
             if (p->name && name &&
                 strcmp(p->name, name) != 0)
                 fprintf(stderr,
-                        "cproxy main name changed from %s to %s\n",
+                        "conp name changed from %s to %s\n",
                         p->name, name);
 
             if (p->config && config &&
                 strcmp(p->config, config) != 0)
                 fprintf(stderr,
-                        "cproxy main config changed from %s to %s\n",
+                        "conp config changed from %s to %s\n",
                         p->config, config);
         }
 
-        update_str_config(&p->name,   name,   "agent_config name changed\n");
-        update_str_config(&p->config, config, "agent_config config changed\n");
+        changed = changed ||
+            update_str_config(&p->name, name,
+                              "conp name changed\n");
+
+        changed = changed ||
+            update_str_config(&p->config, config,
+                              "conp config changed\n");
+
+        changed = changed ||
+            (cproxy_equal_behaviors(1, &p->behavior_head,
+                                    1, &behavior_head) == false);
 
         p->behavior_head = behavior_head;
 
-        update_behaviors_config(&p->behaviors, &p->behaviors_num,
-                                behaviors, behaviors_num,
-                                "agent_config behaviors changed\n");
+        changed = changed ||
+            update_behaviors_config(&p->behaviors, &p->behaviors_num,
+                                    behaviors, behaviors_num,
+                                    "conp behaviors changed\n");
 
         if (p->name != NULL &&
             p->config != NULL &&
@@ -602,6 +614,10 @@ void cproxy_on_new_pool(proxy_main *m,
         p->config_ver = config_ver;
 
         pthread_mutex_unlock(&p->proxy_lock);
+
+        if (settings.verbose > 1)
+            fprintf(stderr, "conp changed %s\n",
+                    changed ? "true" : "false");
 
         // Restart the front_cache, if necessary.
         //
@@ -678,6 +694,11 @@ static void update_ptd_config(void *data0, void *data1) {
     pthread_mutex_lock(&p->proxy_lock);
 
     if (ptd->config_ver != p->config_ver) {
+        if (settings.verbose > 1)
+            fprintf(stderr, "update_ptd_config %u, %u to %u\n",
+                    p->port,
+                    ptd->config_ver, p->config_ver);
+
         ptd->config_ver = p->config_ver;
 
         update_str_config(&ptd->config, p->config, NULL);
@@ -687,6 +708,11 @@ static void update_ptd_config(void *data0, void *data1) {
         update_behaviors_config(&ptd->behaviors, &ptd->behaviors_num,
                                 p->behaviors, p->behaviors_num,
                                 NULL);
+    } else {
+        if (settings.verbose > 1)
+            fprintf(stderr, "update_ptd_config %u, %u = %u no change\n",
+                    p->port,
+                    ptd->config_ver, p->config_ver);
     }
 
     pthread_mutex_unlock(&p->proxy_lock);
@@ -696,12 +722,16 @@ static void update_ptd_config(void *data0, void *data1) {
 
 // ----------------------------------------------------------
 
-static void update_str_config(char **curr, char *next, char *descrip) {
+static bool update_str_config(char **curr, char *next, char *descrip) {
+    bool rv = false;
+
     if ((*curr != NULL) &&
         (next == NULL ||
          strcmp(*curr, next) != 0)) {
         free(*curr);
         *curr = NULL;
+
+        rv = true;
 
         if (descrip != NULL &&
             settings.verbose > 1)
@@ -710,13 +740,17 @@ static void update_str_config(char **curr, char *next, char *descrip) {
     if (*curr == NULL && next != NULL) {
         *curr = trimstrdup(next);
     }
+
+    return rv;
 }
 
-static void update_behaviors_config(proxy_behavior **curr,
+static bool update_behaviors_config(proxy_behavior **curr,
                                     int  *curr_num,
                                     proxy_behavior  *next,
                                     int   next_num,
                                     char *descrip) {
+    bool rv = false;
+
     if ((*curr != NULL) &&
         (next == NULL ||
          cproxy_equal_behaviors(*curr_num,
@@ -727,14 +761,19 @@ static void update_behaviors_config(proxy_behavior **curr,
         *curr = NULL;
         *curr_num = 0;
 
-        if (settings.verbose > 1)
-            fprintf(stderr, "agent_config behaviors changed\n");
+        rv = true;
+
+        if (descrip != NULL &&
+            settings.verbose > 1)
+            fprintf(stderr, descrip);
     }
     if (*curr == NULL && next != NULL) {
         *curr = cproxy_copy_behaviors(next_num,
                                       next);
         *curr_num = next_num;
     }
+
+    return rv;
 }
 
 // ----------------------------------------------------------
