@@ -23,6 +23,11 @@ static bool update_behaviors_config(proxy_behavior **curr,
                                     int   next_num,
                                     char *descrip);
 
+char **parse_kvs_behavior(kvpair_t *kvs,
+                          char *prefix,
+                          char *name,
+                          proxy_behavior *behavior);
+
 static void agent_logger(void *userdata,
                          enum conflate_log_level lvl,
                          const char *msg, ...)
@@ -272,6 +277,10 @@ void cproxy_on_new_config(void *data0, void *data1) {
     //    bucket=buck1
     //    usr=test1
     //    pwd=password
+    //    drain=svrnameX
+    //  svr-svrnameX
+    //    host=mc2.foo.net
+    //    port=11211
     //  behavior-customer1-a
     //    wait_queue_timeout=1000
     //    downstream_max=10
@@ -333,6 +342,7 @@ void cproxy_on_new_config(void *data0, void *data1) {
 
             snprintf(buf, sizeof(buf),
                      "pool-%s", pool_name);
+
             char **servers = get_key_values(kvs, buf);
 
             assert(pool_name);
@@ -344,16 +354,7 @@ void cproxy_on_new_config(void *data0, void *data1) {
                 //
                 proxy_behavior proxyb = m->behavior;
 
-                snprintf(buf, sizeof(buf),
-                         "behavior-%s", pool_name);
-
-                char **proxyb_kvs = get_key_values(kvs, buf);
-                if (proxyb_kvs != NULL) {
-                    for (int k = 0; proxyb_kvs[k]; k++) {
-                        cproxy_parse_behavior_key_val_str(proxyb_kvs[k],
-                                                          &proxyb);
-                    }
-
+                if (parse_kvs_behavior(kvs, "behavior", pool_name, &proxyb)) {
                     if (settings.verbose > 1) {
                         cproxy_dump_behavior(&proxyb,
                                              "conc proxy_behavior", 1);
@@ -386,19 +387,23 @@ void cproxy_on_new_config(void *data0, void *data1) {
                     for (int j = 0; servers[j]; j++) {
                         assert(j < s);
 
-                        char svr_key[800];
-
-                        snprintf(svr_key, sizeof(svr_key),
-                                 "svr-%s", servers[j]);
-
                         // Inherit default behavior.
                         //
                         behaviors[j] = proxyb;
 
-                        char **props = get_key_values(kvs, svr_key);
-                        for (int k = 0; props && props[k]; k++) {
-                            cproxy_parse_behavior_key_val_str(props[k],
-                                                              &behaviors[j]);
+                        char **props =
+                            parse_kvs_behavior(kvs, "svr-", servers[j],
+                                               &behaviors[j]);
+
+                        // Parse drain server-level behavior that's
+                        // associated with the current main server.
+                        //
+                        for (int d = 0; props && props[d]; d++) {
+                            if (strcmp(props[d], "drain") == 0) {
+                                parse_kvs_behavior(kvs, "svr-", props[d],
+                                                   &behaviors[j + s]);
+                                break;
+                            }
                         }
 
                         // Grow config string for libmemcached.
@@ -425,8 +430,8 @@ void cproxy_on_new_config(void *data0, void *data1) {
                         } else {
                             if (settings.verbose > 1)
                                 fprintf(stderr,
-                                        "missing host:port for %s in %s\n",
-                                        svr_key, pool_name);
+                                        "missing host:port for svr-%s in %s\n",
+                                        servers[j], pool_name);
 
                             goto fail;
                         }
@@ -794,6 +799,32 @@ static bool update_behaviors_config(proxy_behavior **curr,
     }
 
     return rv;
+}
+
+// ----------------------------------------------------------
+
+/**
+ * Parse a "[prefix]-[name]" configuration section into a behavior.
+ */
+char **parse_kvs_behavior(kvpair_t *kvs,
+                          char *prefix,
+                          char *name,
+                          proxy_behavior *behavior) {
+    assert(kvs);
+    assert(prefix);
+    assert(name);
+    assert(behavior);
+
+    char key[800];
+
+    snprintf(key, sizeof(key), "%s-%s", prefix, name);
+
+    char **props = get_key_values(kvs, key);
+    for (int k = 0; props && props[k]; k++) {
+        cproxy_parse_behavior_key_val_str(props[k], behavior);
+    }
+
+    return props;
 }
 
 // ----------------------------------------------------------
