@@ -160,6 +160,8 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
                 psc_get_key->seen++;
                 psc_get_key->read_bytes += key_len;
 
+                // Update key-based statistics.
+                //
                 if (matcher_check(&p->key_stats_matcher,
                                   key, key_len, true) == true &&
                     matcher_check(&p->key_stats_unmatcher,
@@ -167,8 +169,30 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
                     key_stats *ks =
                         mcache_get(&p->key_stats, key, key_len,
                                    msec_current_time_snapshot);
-                    if (ks == NULL) {
+                    proxy_stats_cmd *psc = NULL;
+                    if (ks != NULL) {
+                        psc = &ks->stats_cmd[STATS_CMD_TYPE_REGULAR][STATS_CMD_GET_KEY];
+                        key_stats_dec_ref(ks);
+                    } else {
+                        ks = calloc(1, sizeof(key_stats));
+                        if (ks != NULL) {
+                            memcpy(ks->key, key, key_len);
+                            ks->key[key_len] = '\0';
+                            ks->refcount = 1;
+                            psc = &ks->stats_cmd[STATS_CMD_TYPE_REGULAR][STATS_CMD_GET_KEY];
+                            mcache_set(&p->key_stats, ks,
+                                       msec_current_time_snapshot + 1000,
+                                       true, false);
+                        }
                     }
+
+                    if (psc != NULL) {
+                        psc->seen++;
+                        psc->read_bytes += key_len;
+                    }
+
+                    if (ks != NULL)
+                        key_stats_dec_ref(ks);
                 }
 
                 // Handle a front cache hit by queuing response.

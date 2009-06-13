@@ -582,6 +582,9 @@ void  mcache_set(mcache *m, void *it,
 void  mcache_delete(mcache *m, char *key, int key_len);
 void  mcache_flush_all(mcache *m, uint32_t msec_exp);
 
+void key_stats_add_ref(void *it);
+void key_stats_dec_ref(void *it);
+
 // TODO: The following generic items should be broken out into util file.
 //
 bool  add_conn_item(conn *c, item *it);

@@ -47,8 +47,6 @@ int count_dot(char *x, int len);
 static char *key_stats_key(void *it);
 static int key_stats_key_len(void *it);
 static int key_stats_len(void *it);
-static void key_stats_add_ref(void *it);
-static void key_stats_dec_ref(void *it);
 static void *key_stats_get_next(void *it);
 static void key_stats_set_next(void *it, void *next);
 static void *key_stats_get_prev(void *it);
@@ -398,13 +396,13 @@ static int key_stats_len(void *it) {
     return sizeof(key_stats);
 }
 
-static void key_stats_add_ref(void *it) {
+void key_stats_add_ref(void *it) {
     key_stats *i = it;
     if (i != NULL)
         i->refcount++;
 }
 
-static void key_stats_dec_ref(void *it) {
+void key_stats_dec_ref(void *it) {
     key_stats *i = it;
     if (i != NULL) {
         i->refcount--;
