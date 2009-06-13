@@ -384,6 +384,8 @@ void cproxy_on_new_config(void *data0, void *data1) {
                 if (config_str != NULL &&
                     behaviors != NULL) {
                     for (int j = 0; servers[j]; j++) {
+                        assert(j < s);
+
                         char svr_key[800];
 
                         snprintf(svr_key, sizeof(svr_key),
@@ -399,6 +401,8 @@ void cproxy_on_new_config(void *data0, void *data1) {
                                                               &behaviors[j]);
                         }
 
+                        // Grow config string for libmemcached.
+                        //
                         int x = 40 + // For port and weight.
                             strlen(config_str) +
                             strlen(behaviors[j].host);
