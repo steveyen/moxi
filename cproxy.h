@@ -276,6 +276,15 @@ typedef struct {
 struct proxy_td { // Per proxy, per worker-thread data struct.
     proxy *proxy; // Immutable parent pointer.
 
+    // Snapshot of proxy-level configuration to avoid locks.
+    //
+    char    *config;
+    uint32_t config_ver;
+
+    proxy_behavior  behavior_head; // Proxy-level behavior.
+    int             behaviors_num; // Size of servers-level behaviors array.
+    proxy_behavior *behaviors;     // Array, size is number of servers.
+
     // Upstream conns that are paused, waiting for
     // an available, released downstream.
     //
@@ -483,7 +492,6 @@ void cproxy_upstream_ascii_item_response(item *it, conn *uc,
                                          int cas_emit);
 
 struct timeval cproxy_get_downstream_timeout(downstream *d, conn *c);
-struct timeval cproxy_get_wait_queue_timeout(proxy *p);
 
 bool cproxy_start_downstream_timeout(downstream *d, conn *c);
 bool cproxy_start_wait_queue_timeout(proxy_td *ptd, conn *uc);

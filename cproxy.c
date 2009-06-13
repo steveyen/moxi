@@ -192,6 +192,14 @@ proxy *cproxy_create(char    *name,
             for (int i = 1; i < p->thread_data_num; i++) {
                 proxy_td *ptd = &p->thread_data[i];
                 ptd->proxy = p;
+
+                ptd->config        = strdup(p->config);
+                ptd->config_ver    = p->config_ver;
+                ptd->behavior_head = p->behavior_head;
+                ptd->behaviors_num = p->behaviors_num;
+                ptd->behaviors     = cproxy_copy_behaviors(behaviors_num,
+                                                           behaviors);
+
                 ptd->waiting_any_downstream_head = NULL;
                 ptd->waiting_any_downstream_tail = NULL;
                 ptd->downstream_reserved = NULL;
@@ -541,23 +549,20 @@ void cproxy_add_downstream(proxy_td *ptd) {
                     ptd->downstream_num,
                     ptd->downstream_max);
 
+        // We're called on the worker thread associated with
+        // the proxy_td, so no locking needed.
+        //
         char *config = NULL;
 
-        int             behaviors_num;
-        proxy_behavior *behaviors = NULL;
+        if (ptd->config != NULL)
+            config = strdup(ptd->config);
 
-        pthread_mutex_lock(&ptd->proxy->proxy_lock);
+        uint32_t config_ver = ptd->config_ver;
 
-        if (ptd->proxy->config != NULL)
-            config = strdup(ptd->proxy->config);
-
-        uint32_t config_ver = ptd->proxy->config_ver;
-
-        behaviors_num = ptd->proxy->behaviors_num;
-        behaviors     = cproxy_copy_behaviors(ptd->proxy->behaviors_num,
-                                              ptd->proxy->behaviors);
-
-        pthread_mutex_unlock(&ptd->proxy->proxy_lock);
+        int             behaviors_num = ptd->behaviors_num;
+        proxy_behavior *behaviors =
+            cproxy_copy_behaviors(ptd->behaviors_num,
+                                  ptd->behaviors);
 
         // The config/behavior_str will be NULL if the
         // proxy is shutting down.
@@ -879,23 +884,19 @@ bool cproxy_check_downstream_config(downstream *d) {
 
     int rv = false;
 
-    pthread_mutex_lock(&d->ptd->proxy->proxy_lock);
-
-    if (d->config_ver == d->ptd->proxy->config_ver) {
+    if (d->config_ver == d->ptd->config_ver) {
         rv = true;
     } else if (d->config != NULL &&
-               d->ptd->proxy->config != NULL &&
+               d->ptd->config != NULL &&
                strcmp(d->config,
-                      d->ptd->proxy->config) == 0 &&
+                      d->ptd->config) == 0 &&
                cproxy_equal_behaviors(d->behaviors_num,
                                       d->behaviors,
-                                      d->ptd->proxy->behaviors_num,
-                                      d->ptd->proxy->behaviors)) {
-        d->config_ver = d->ptd->proxy->config_ver;
+                                      d->ptd->behaviors_num,
+                                      d->ptd->behaviors)) {
+        d->config_ver = d->ptd->config_ver;
         rv = true;
     }
-
-    pthread_mutex_unlock(&d->ptd->proxy->proxy_lock);
 
     return rv;
 }
@@ -1358,21 +1359,6 @@ void cproxy_pause_upstream_for_downstream(proxy_td *ptd, conn *upstream) {
     cproxy_assign_downstream(ptd);
 }
 
-struct timeval cproxy_get_wait_queue_timeout(proxy *p) {
-    assert(p);
-
-    struct timeval rv = {
-        .tv_sec = 0,
-        .tv_usec = 0
-    };
-
-    pthread_mutex_lock(&p->proxy_lock);
-    rv = p->behavior_head.wait_queue_timeout;
-    pthread_mutex_unlock(&p->proxy_lock);
-
-    return rv;
-}
-
 struct timeval cproxy_get_downstream_timeout(downstream *d, conn *c) {
     assert(d);
 
@@ -1396,12 +1382,7 @@ struct timeval cproxy_get_downstream_timeout(downstream *d, conn *c) {
     proxy_td *ptd = d->ptd;
     assert(ptd);
 
-    proxy *p = ptd->proxy;
-    assert(p);
-
-    pthread_mutex_lock(&p->proxy_lock);
-    rv = p->behavior_head.downstream_timeout;
-    pthread_mutex_unlock(&p->proxy_lock);
+    rv = ptd->behavior_head.downstream_timeout;
 
     return rv;
 }
@@ -1412,10 +1393,7 @@ bool cproxy_start_wait_queue_timeout(proxy_td *ptd, conn *uc) {
     assert(uc->thread);
     assert(uc->thread->base);
 
-    proxy *p = ptd->proxy;
-    assert(p != NULL);
-
-    ptd->timeout_tv = cproxy_get_wait_queue_timeout(p);
+    ptd->timeout_tv = ptd->behavior_head.wait_queue_timeout;
     if (ptd->timeout_tv.tv_sec != 0 ||
         ptd->timeout_tv.tv_usec != 0) {
         if (settings.verbose > 1)
@@ -1437,9 +1415,6 @@ void wait_queue_timeout(const int fd,
     proxy_td *ptd = arg;
     assert(ptd != NULL);
 
-    proxy *p = ptd->proxy;
-    assert(p != NULL);
-
     if (settings.verbose > 1)
         fprintf(stderr, "wait_queue_timeout\n");
 
@@ -1456,7 +1431,7 @@ void wait_queue_timeout(const int fd,
         if (settings.verbose > 1)
             fprintf(stderr, "wait_queue_timeout cleared\n");
 
-        struct timeval wqt = cproxy_get_wait_queue_timeout(p);
+        struct timeval wqt = ptd->behavior_head.wait_queue_timeout;
 
         // TODO: Millisecond capacity in 32-bit field not enough?
         //
