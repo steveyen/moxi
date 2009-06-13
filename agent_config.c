@@ -637,6 +637,8 @@ void cproxy_on_new_pool(proxy_main *m,
             }
         }
 
+        // Restart the key_stats, if necessary.
+        //
         if (behavior_head.key_stats_max > 0 &&
             behavior_head.key_stats_lifespan > 0) {
             mcache_start(&p->key_stats,
@@ -658,6 +660,8 @@ void cproxy_on_new_pool(proxy_main *m,
                           behavior_head.optimize_set);
         }
 
+        // Send update across worker threads, avoiding locks.
+        //
         work_collect wc = {0};
         work_collect_init(&wc, m->nthreads - 1, NULL);
 

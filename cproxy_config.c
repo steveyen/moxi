@@ -401,10 +401,12 @@ void cproxy_parse_behavior_key_val(char *key,
             assert(behavior->downstream_retry >= 0);
         } else if (wordeq(key, "protocol") ||
                    wordeq(key, "downstream_protocol")) {
-            if (wordeq(val, "ascii"))
+            if (wordeq(val, "ascii") ||
+                wordeq(val, "memcached-ascii"))
                 behavior->downstream_protocol =
                     proxy_downstream_ascii_prot;
-            else if (wordeq(val, "binary"))
+            else if (wordeq(val, "binary") ||
+                     wordeq(val, "memcached-binary"))
                 behavior->downstream_protocol =
                     proxy_downstream_binary_prot;
             else {
