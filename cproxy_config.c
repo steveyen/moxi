@@ -485,6 +485,12 @@ bool cproxy_equal_behaviors(int x_size, proxy_behavior *x,
     if (x_size != y_size)
         return false;
 
+    if (x == NULL && y == NULL)
+        return true;
+
+    if (x == NULL || y == NULL)
+        return false;
+
     for (int i = 0; i < x_size; i++) {
         if (cproxy_equal_behavior(&x[i], &y[i]) == false) {
             if (settings.verbose > 1) {

@@ -816,8 +816,9 @@ downstream *cproxy_create_downstream(char *config,
 
         if (settings.verbose > 1)
             fprintf(stderr,
-                    "cproxy_create_downstream: %s, %u\n",
-                    config, config_ver);
+                    "cproxy_create_downstream: %s, %u, %u\n",
+                    config, config_ver,
+                    behavior_head->downstream_protocol);
 
         if (d->config != NULL &&
             d->behaviors != NULL &&
@@ -882,6 +883,9 @@ bool cproxy_check_downstream_config(downstream *d) {
         d->config_ver = d->ptd->config_ver;
         rv = true;
     }
+
+    if (settings.verbose > 1)
+        fprintf(stderr, "check_downstream_config %u\n", rv);
 
     return rv;
 }
