@@ -375,8 +375,11 @@ void cproxy_on_new_config(void *data0, void *data1) {
                 // Parse server-level behaviors, so we'll have an
                 // array of behaviors, one entry for each server.
                 //
+                // The 2nd half of the array is for drain server
+                // behaviors, if any.
+                //
                 proxy_behavior *behaviors =
-                    calloc(s, sizeof(proxy_behavior));
+                    calloc(s * 2, sizeof(proxy_behavior));
 
                 if (config_str != NULL &&
                     behaviors != NULL) {
