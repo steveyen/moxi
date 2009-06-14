@@ -38,19 +38,22 @@ downstream *downstream_list_remove(downstream *head, downstream *d);
 
 int downstream_conn_index(downstream *d, conn *c);
 
-void  downstream_timeout(const int fd,
-                         const short which,
-                         void *arg);
-void  wait_queue_timeout(const int fd,
-                         const short which,
-                         void *arg);
-void  upstream_error(conn *uc);
-void  upstream_retry(void *data0, void *data1);
+void downstream_timeout(const int fd,
+                        const short which,
+                        void *arg);
+void wait_queue_timeout(const int fd,
+                        const short which,
+                        void *arg);
+
+void upstream_error(conn *uc);
+void upstream_retry(void *data0, void *data1);
 
 conn *conn_list_remove(conn *head, conn **tail,
                        conn *c, bool *found);
 
-bool  is_compatible_request(conn *existing, conn *candidate);
+bool is_compatible_request(conn *existing, conn *candidate);
+
+int init_memcached_st(memcached_st *mst, char *config);
 
 // Function tables.
 //
@@ -822,36 +825,17 @@ downstream *cproxy_create_downstream(char *config,
                     behavior_head->downstream_protocol);
 
         if (d->config != NULL &&
-            d->behaviors != NULL &&
-            memcached_create(&d->mst) != NULL) {
-            memcached_behavior_set(&d->mst, MEMCACHED_BEHAVIOR_NO_BLOCK, 1);
-            memcached_behavior_set(&d->mst, MEMCACHED_BEHAVIOR_KETAMA, 1);
-
-            memcached_server_st *mservers;
-
-            mservers = memcached_servers_parse(d->config);
-            if (mservers != NULL) {
-                memcached_server_push(&d->mst, mservers);
-                memcached_server_list_free(mservers);
-                mservers = NULL;
-
-                int nconns = memcached_server_count(&d->mst);
-
+            d->behaviors != NULL) {
+            int nconns = init_memcached_st(&d->mst, d->config);
+            if (nconns > 0) {
                 d->downstream_conns = (conn **)
                     calloc(nconns, sizeof(conn *));
                 if (d->downstream_conns != NULL) {
                     return d;
                 }
-            } else {
-                if (settings.verbose > 1)
-                    fprintf(stderr, "mserver_parse failed: %s\n",
-                            config);
+
+                memcached_free(&d->mst);
             }
-
-            if (mservers != NULL)
-                memcached_server_list_free(mservers);
-
-            memcached_free(&d->mst);
         }
 
         free(d->config);
@@ -860,6 +844,34 @@ downstream *cproxy_create_downstream(char *config,
     }
 
     return NULL;
+}
+
+int init_memcached_st(memcached_st *mst, char *config) {
+    assert(mst);
+    assert(config);
+
+    if (memcached_create(mst) != NULL) {
+        memcached_behavior_set(mst, MEMCACHED_BEHAVIOR_NO_BLOCK, 1);
+        memcached_behavior_set(mst, MEMCACHED_BEHAVIOR_KETAMA, 1);
+
+        memcached_server_st *mservers;
+
+        mservers = memcached_servers_parse(config);
+        if (mservers != NULL) {
+            memcached_server_push(mst, mservers);
+            memcached_server_list_free(mservers);
+
+            return memcached_server_count(mst);
+        } else {
+            if (settings.verbose > 1)
+                fprintf(stderr, "mserver_parse failed: %s\n",
+                        config);
+        }
+
+        memcached_free(mst);
+    }
+
+    return 0;
 }
 
 /* See if the downstream config matches the top-level proxy config.
