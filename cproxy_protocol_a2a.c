@@ -259,9 +259,9 @@ bool cproxy_forward_a2a_simple_downstream(downstream *d,
     assert(d->multiget == NULL);
     assert(d->merger == NULL);
 
-    // TODO: Wasteful repetition of strncmps().
+    // Handles get and gets.
     //
-    if (strncmp(command, "get", 3) == 0) {
+    if (uc->cmd_curr == PROTOCOL_BINARY_CMD_GET) {
         // Only use front_cache for 'get', not for 'gets'.
         //
         mcache *front_cache =
@@ -276,11 +276,11 @@ bool cproxy_forward_a2a_simple_downstream(downstream *d,
 
     assert(uc->next == NULL);
 
-    if (strncmp(command, "flush_all", 9) == 0)
+    if (uc->cmd_curr == PROTOCOL_BINARY_CMD_FLUSH)
         return cproxy_broadcast_a2a_downstream(d, command, uc,
                                                "OK\r\n");
 
-    if (strncmp(command, "stats", 5) == 0) {
+    if (uc->cmd_curr == PROTOCOL_BINARY_CMD_STAT) {
         if (strncmp(command + 5, " reset", 6) == 0)
             return cproxy_broadcast_a2a_downstream(d, command, uc,
                                                    "RESET\r\n");

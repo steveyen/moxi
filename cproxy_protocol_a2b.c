@@ -853,11 +853,9 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
     assert(d->multiget == NULL);
     assert(d->merger == NULL);
 
-    // TODO: Wasteful repetition of strncmps().
-    //
     // Handles get and gets.
     //
-    if (strncmp(command, "get", 3) == 0) {
+    if (uc->cmd_curr == PROTOCOL_BINARY_CMD_GET) {
         // Only use front_cache for 'get', not for 'gets'.
         //
         mcache *front_cache =
@@ -889,7 +887,7 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
     uint16_t out_keylen = 0;
     uint8_t  out_extlen = 0;
 
-    if (strncmp(command, "flush_all", 9) == 0) {
+    if (uc->cmd_curr == PROTOCOL_BINARY_CMD_FLUSH) {
         protocol_binary_request_flush req;
         memset(&req, 0, sizeof(req));
         protocol_binary_request_header *preq =
@@ -927,7 +925,7 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
         return false;
     }
 
-    if (strncmp(command, "stats", 5) == 0) {
+    if (uc->cmd_curr == PROTOCOL_BINARY_CMD_STAT) {
         protocol_binary_request_stats req;
         memset(&req, 0, sizeof(req));
         protocol_binary_request_header *preq =
