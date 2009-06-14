@@ -51,15 +51,13 @@ void map_pstd_foreach_merge(gpointer key,
                             gpointer user_data);
 
 struct add_stat_emit {
-    conflate_add_stat add_stat;
-    void *opaque;
-    char *prefix;
+    conflate_form_result *result;
+    char                 *prefix;
 };
 
 struct main_stats_collect_info {
-    proxy_main       *m;
-    conflate_add_stat add_stat;
-    void             *opaque;
+    proxy_main           *m;
+    conflate_form_result *result;
 
     char *type;
     bool  do_settings;
@@ -99,9 +97,13 @@ static char *cmd_type_names[] = { // Keep sync'ed with enum_stats_cmd_type.
  * runtime has fewer locks, at the cost of scatter/gather
  * complexity to handle the proxy stats request.
  */
-void on_conflate_get_stats(void *userdata, void *opaque,
-                           char *type, kvpair_t *form,
-                           conflate_add_stat add_stat) {
+enum conflate_mgmt_cb_result on_conflate_get_stats(void *userdata,
+                                                   conflate_handle_t *handle,
+                                                   const char *cmd,
+                                                   bool direct,
+                                                   kvpair_t *form,
+                                                   conflate_form_result *r)
+{
     assert(STATS_CMD_last      == sizeof(cmd_names) / sizeof(char *));
     assert(STATS_CMD_TYPE_last == sizeof(cmd_type_names) / sizeof(char *));
 
@@ -114,17 +116,16 @@ void on_conflate_get_stats(void *userdata, void *opaque,
     assert(mthread->work_queue);
 
     struct add_stat_emit ase = {
-        .add_stat = add_stat,
-        .opaque   = opaque,
-        .prefix   = ""
+        .result = r,
+        .prefix = ""
     };
 
+    char *type = get_simple_kvpair_val(form, "-subtype-");
     bool do_all = (type == NULL || strlen(type) <= 0);
 
     struct main_stats_collect_info msci = {
         .m        = m,
-        .add_stat = add_stat,
-        .opaque   = opaque,
+        .result   = r,
         .type     = type,
         .do_settings = (do_all || strcmp(type, "settings") == 0),
         .do_stats    = (do_all || strcmp(type, "stats") == 0)
@@ -135,7 +136,7 @@ void on_conflate_get_stats(void *userdata, void *opaque,
 #define more_stat(spec, key, val)              \
     if (val) {                                 \
         snprintf(buf, sizeof(buf), spec, val); \
-        add_stat(opaque, key, buf);            \
+        conflate_add_field(r, key, buf);       \
     }
 
     more_stat("%s", "main_version",
@@ -144,7 +145,7 @@ void on_conflate_get_stats(void *userdata, void *opaque,
               m->nthreads);
 
     if (msci.do_settings) {
-        add_stat(opaque, "main_hostname", cproxy_hostname);
+        conflate_add_field(r, "main_hostname", cproxy_hostname);
 
         cproxy_dump_behavior_ex(&m->behavior, "main_behavior", 2,
                                 add_stat_prefix, &ase);
@@ -169,9 +170,8 @@ void on_conflate_get_stats(void *userdata, void *opaque,
 
     if (msci.do_settings) {
         struct add_stat_emit ase_memcached = {
-            .add_stat = add_stat,
-            .opaque   = opaque,
-            .prefix   = "memcached_settings"
+            .result = r,
+            .prefix = "memcached_settings"
         };
 
         process_stat_settings(add_stat_prefix_ase, &ase_memcached);
@@ -179,9 +179,8 @@ void on_conflate_get_stats(void *userdata, void *opaque,
 
     if (msci.do_stats) {
         struct add_stat_emit ase_memcached = {
-            .add_stat = add_stat,
-            .opaque   = opaque,
-            .prefix   = "memcached_stats"
+            .result = r,
+            .prefix = "memcached_stats"
         };
 
         server_stats(add_stat_prefix_ase, &ase_memcached);
@@ -255,7 +254,7 @@ void on_conflate_get_stats(void *userdata, void *opaque,
         }
     }
 
-    add_stat(opaque, NULL, NULL);
+    return RV_OK;
 }
 
 void map_pstd_foreach_merge(gpointer key,
@@ -282,7 +281,7 @@ void map_pstd_foreach_merge(gpointer key,
 static void main_stats_collect(void *data0, void *data1) {
     struct main_stats_collect_info *msci = data0;
     assert(msci);
-    assert(msci->add_stat);
+    assert(msci->result);
 
     proxy_main *m = msci->m;
     assert(m);
@@ -294,8 +293,7 @@ static void main_stats_collect(void *data0, void *data1) {
     assert(is_listen_thread());
 
     struct add_stat_emit ase = {
-        .add_stat = msci->add_stat,
-        .opaque   = msci->opaque
+        .result = msci->result,
     };
 
     int sent   = 0;
@@ -311,7 +309,7 @@ static void main_stats_collect(void *data0, void *data1) {
         snprintf(bufk, sizeof(bufk), "%u:%s:%s",       \
                  p->port,                              \
                  p->name != NULL ? p->name : "", key); \
-        msci->add_stat(msci->opaque, bufk, val);
+        conflate_add_field(msci->result, bufk, val);
 
 #define emit_f(key, fmtv, val)                   \
         snprintf(bufv, sizeof(bufv), fmtv, val); \
@@ -580,7 +578,7 @@ void map_pstd_foreach_emit(gpointer key,
 
     struct add_stat_emit *emit = user_data;
     assert(emit != NULL);
-    assert(emit->add_stat != NULL);
+    assert(emit->result);
 
     char buf_key[200];
     char buf_val[100];
@@ -591,7 +589,7 @@ void map_pstd_foreach_emit(gpointer key,
                  "%s:stats_%s", name, key);             \
         snprintf(buf_val, sizeof(buf_val),              \
                  "%llu", (long long unsigned int) val); \
-        emit->add_stat(emit->opaque, buf_key, buf_val); \
+        conflate_add_field(emit->result, buf_key, buf_val); \
     }
 
     more_stat("num_upstream",
@@ -667,7 +665,7 @@ void map_pstd_foreach_emit(gpointer key,
                  "%s:stats_cmd_%s_%s_%s", name, type, cmd, key); \
         snprintf(buf_val, sizeof(buf_val),                       \
                  "%llu", (long long unsigned int) val);          \
-        emit->add_stat(emit->opaque, buf_key, buf_val);          \
+        conflate_add_field(emit->result, buf_key, buf_val);      \
     }
 
     for (int j = 0; j < STATS_CMD_TYPE_last; j++) {
@@ -701,8 +699,12 @@ void map_pstd_foreach_emit(gpointer key,
  * threads, so that normal runtime has fewer locks at the
  * cost of infrequent reset complexity.
  */
-void on_conflate_reset_stats(void *userdata,
-                             char *type, kvpair_t *form) {
+enum conflate_mgmt_cb_result on_conflate_reset_stats(void *userdata,
+                                                     conflate_handle_t *handle,
+                                                     const char *cmd,
+                                                     bool direct,
+                                                     kvpair_t *form,
+                                                     conflate_form_result *r) {
     proxy_main *m = userdata;
     assert(m);
     assert(m->nthreads > 1);
@@ -734,6 +736,8 @@ void on_conflate_reset_stats(void *userdata,
 
         free(ca);
     }
+
+    return RV_OK;
 }
 
 /* Must be invoked on the main listener thread.
@@ -831,7 +835,7 @@ static void add_stat_prefix(const void *dump_opaque,
     char buf[2000];
     snprintf(buf, sizeof(buf), "%s_%s", prefix, key);
 
-    ase->add_stat(ase->opaque, buf, val);
+    conflate_add_field(ase->result, buf, val);
 }
 
 static void add_stat_prefix_ase(const char *key, const uint16_t klen,

@@ -27,11 +27,10 @@ struct ping_test_recipe {
     int iterations;
 };
 
-void ping_server(char *server_name,
-                 struct ping_test_recipe *recipes,
-                 proxy_behavior *behavior,
-                 void *opaque,
-                 conflate_add_ping_report add_report);
+static void ping_server(char *server_name,
+                        struct ping_test_recipe *recipes,
+                        proxy_behavior *behavior,
+                        conflate_form_result *r);
 
 static int charlistlen(char **in) {
     int rv = 0;
@@ -78,11 +77,14 @@ static void load_ping_recipe(char **params,
     }
 }
 
-void on_conflate_ping_test(void *userdata, void *opaque,
-                           kvpair_t *form,
-                           conflate_add_ping_report add_report) {
+enum conflate_mgmt_cb_result on_conflate_ping_test(void *userdata,
+                                                   conflate_handle_t *handle,
+                                                   const char *cmd,
+                                                   bool direct,
+                                                   kvpair_t *form,
+                                                   conflate_form_result *r)
+                           {
     assert(userdata);
-    assert(add_report);
 
     // The form key-multivalues looks roughly like...
     //
@@ -112,51 +114,52 @@ void on_conflate_ping_test(void *userdata, void *opaque,
     //    ksize=64
     //    vsize=524288
     //    iterations=50
-    if (form != NULL) {
-        char   detail_key[200];
-
-        // Discover test configuration.
-        char **tests = get_key_values(form, "tests");
-        int nrecipes = charlistlen(tests);
-        struct ping_test_recipe recipes[nrecipes+1];
-        memset(recipes, 0x00, sizeof(struct ping_test_recipe) * (nrecipes+1));
-        for (int j = 0; j < nrecipes; j++) {
-            snprintf(detail_key, sizeof(detail_key), "def-%s", tests[j]);
-            recipes[j].name = strdup(detail_key);
-            assert(recipes[j].name);
-            load_ping_recipe(get_key_values(form, detail_key), &recipes[j]);
-        }
-
-        // Initialize each server and run the tests
-        char **servers = get_key_values(form, "servers");
-        for (int j = 0; servers != NULL && servers[j]; j++) {
-            snprintf(detail_key, sizeof(detail_key),
-                     "svr-%s", servers[j]);
-
-            if (settings.verbose > 1) {
-                fprintf(stderr, "ping_test %s\n", detail_key);
-            }
-
-            proxy_behavior behavior;
-
-            memset(&behavior, 0, sizeof(behavior));
-
-            char **props = get_key_values(form, detail_key);
-            for (int k = 0; props && props[k]; k++) {
-                cproxy_parse_behavior_key_val_str(props[k], &behavior);
-            }
-
-            ping_server(servers[j], recipes,
-                        &behavior, opaque, add_report);
-        }
-
-        /* The recipe memory allocations */
-        for (int j = 0; j < nrecipes; j++) {
-            free(recipes[j].name);
-        }
+    if (!form) {
+        return RV_BADARG;
     }
 
-    add_report(opaque, NULL, NULL);
+    char   detail_key[200];
+
+    // Discover test configuration.
+    char **tests = get_key_values(form, "tests");
+    int nrecipes = charlistlen(tests);
+    struct ping_test_recipe recipes[nrecipes+1];
+    memset(recipes, 0x00, sizeof(struct ping_test_recipe) * (nrecipes+1));
+    for (int j = 0; j < nrecipes; j++) {
+        snprintf(detail_key, sizeof(detail_key), "def-%s", tests[j]);
+        recipes[j].name = strdup(detail_key);
+        assert(recipes[j].name);
+        load_ping_recipe(get_key_values(form, detail_key), &recipes[j]);
+    }
+
+    // Initialize each server and run the tests
+    char **servers = get_key_values(form, "servers");
+    for (int j = 0; servers != NULL && servers[j]; j++) {
+        snprintf(detail_key, sizeof(detail_key),
+                 "svr-%s", servers[j]);
+
+        if (settings.verbose > 1) {
+            fprintf(stderr, "ping_test %s\n", detail_key);
+        }
+
+        proxy_behavior behavior;
+
+        memset(&behavior, 0, sizeof(behavior));
+
+        char **props = get_key_values(form, detail_key);
+        for (int k = 0; props && props[k]; k++) {
+            cproxy_parse_behavior_key_val_str(props[k], &behavior);
+        }
+
+        ping_server(servers[j], recipes, &behavior, r);
+    }
+
+    /* The recipe memory allocations */
+    for (int j = 0; j < nrecipes; j++) {
+        free(recipes[j].name);
+    }
+
+    return RV_OK;
 }
 
 static void perform_ping_test(struct ping_test_recipe recipe,
@@ -217,14 +220,13 @@ static void perform_ping_test(struct ping_test_recipe recipe,
     free(value);
 }
 
-void ping_server(char *server_name,
-                 struct ping_test_recipe *recipes,
-                 proxy_behavior *behavior,
-                 void *opaque,
-                 conflate_add_ping_report add_report) {
+static void ping_server(char *server_name,
+                        struct ping_test_recipe *recipes,
+                        proxy_behavior *behavior,
+                        conflate_form_result *r) {
     assert(server_name);
     assert(behavior);
-    assert(add_report);
+    assert(r);
 
     if (strlen(behavior->host) <= 0 ||
         behavior->port <= 0)
@@ -235,22 +237,18 @@ void ping_server(char *server_name,
 
     struct timeval timing;
 
-    char  buf[300] = { 0x00 };
-    char *bufa[2]  = { buf, NULL };
+    conflate_next_fieldset(r);
+    conflate_add_field(r, "-set-", server_name);
 
-    kvpair_t *kvr = NULL, *kvtmp = NULL;
+    char  buf[300] = { 0x00 };
 
 #define dbl_report(name, dval)                  \
     snprintf(buf, sizeof(buf), "%f", dval);     \
-    kvtmp = mk_kvpair(name, bufa);              \
-    kvtmp->next = kvr;                          \
-    kvr = kvtmp;
+    conflate_add_field(r, name, buf);
 
 #define int_report(name, ival)                  \
     snprintf(buf, sizeof(buf), "%d", ival);     \
-    kvtmp = mk_kvpair(name, bufa);              \
-    kvtmp->next = kvr;                          \
-    kvr = kvtmp;
+    conflate_add_field(r, name, buf);
 
 #define tv_report(name, mark, val)                  \
     timeval_subtract(&timing, &val, &mark);         \
@@ -330,16 +328,9 @@ void ping_server(char *server_name,
                     int_report(val_name, failures);
                 }
             }
+        } else {
+            conflate_add_field(r, "error", "Didn't work. :(");
         }
-
-        if (!kvr) {
-            snprintf(buf, sizeof(buf), "Didn't work. :(");
-            kvr = mk_kvpair("error", bufa);
-        }
-
-        assert(kvr);
-        add_report(opaque, server_name, kvr);
-        free_kvpair(kvr);
 
         memcached_free(&mst);
     }

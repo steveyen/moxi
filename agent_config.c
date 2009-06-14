@@ -54,6 +54,17 @@ static void agent_logger(void *userdata,
     va_end(ap);
 }
 
+static void init_extensions(void)
+{
+    conflate_register_mgmt_cb("client_stats", "Retrieves stats from the agent",
+                              on_conflate_get_stats);
+    conflate_register_mgmt_cb("reset_stats", "Reset stats on the agent",
+                              on_conflate_reset_stats);
+
+    conflate_register_mgmt_cb("ping_test", "Perform a ping test",
+                              on_conflate_ping_test);
+}
+
 /** The cfg_str looks like...
  *
  *    apikey=jidname@jhostname%jpassword,config=config,host=host
@@ -67,6 +78,8 @@ static void agent_logger(void *userdata,
 int cproxy_init_agent(char *cfg_str,
                       proxy_behavior behavior,
                       int nthreads) {
+    init_extensions();
+
     if (cfg_str == NULL) {
         fprintf(stderr, "missing cfg\n");
         exit(EXIT_FAILURE);
@@ -205,9 +218,6 @@ int cproxy_init_agent_start(char *jid,
         config.save_path  = config_path;
         config.userdata   = m;
         config.new_config  = on_conflate_new_config;
-        config.get_stats   = on_conflate_get_stats;
-        config.reset_stats = on_conflate_reset_stats;
-        config.ping_test   = on_conflate_ping_test;
         config.log         = agent_logger;
 
         if (start_conflate(config)) {
