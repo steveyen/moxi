@@ -1812,6 +1812,7 @@ void complete_nread_binary(conn *c) {
 
 void reset_cmd_handler(conn *c) {
     c->cmd = -1;
+    c->cmd_curr = -1;
     c->substate = bin_no_state;
     if(c->item != NULL) {
         item_remove(c->item);

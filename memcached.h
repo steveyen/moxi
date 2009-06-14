@@ -431,6 +431,8 @@ struct conn {
     conn_funcs *funcs;
     void *extra;
 
+    protocol_binary_command cmd_curr;
+
     char     *cmd_start;      // Pointer into rbuf, snapshot of rcurr.
     uint32_t  cmd_start_time; // Snapshot of msec_current_time.
     int       cmd_retries;

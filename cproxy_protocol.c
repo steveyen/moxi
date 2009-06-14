@@ -34,6 +34,7 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
 
     // Snapshot rcurr, because the caller, try_read_command(), changes it.
     //
+    c->cmd_curr       = -1;
     c->cmd_start      = c->rcurr;
     c->cmd_start_time = msec_current_time;
     c->cmd_retries    = 0;
@@ -68,6 +69,7 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
 
     if (ntokens >= 3 &&
         (strncmp(cmd, "get", 3) == 0)) {
+        c->cmd_curr = PROTOCOL_BINARY_CMD_GET; // Note: CMD_GET == 0.
 
         // Handles get and gets.
         //
@@ -82,19 +84,24 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
     } else if ((ntokens == 6 || ntokens == 7) &&
                ((strncmp(cmd, "add", 3) == 0 &&
                  (comm = NREAD_ADD) &&
-                 (cmdx = STATS_CMD_ADD)) ||
+                 (cmdx = STATS_CMD_ADD) &&
+                 (c->cmd_curr = PROTOCOL_BINARY_CMD_ADD)) ||
                 (strncmp(cmd, "set", 3) == 0 &&
                  (comm = NREAD_SET) &&
-                 (cmdx = STATS_CMD_SET)) ||
+                 (cmdx = STATS_CMD_SET) &&
+                 (c->cmd_curr = PROTOCOL_BINARY_CMD_SET)) ||
                 (strncmp(cmd, "replace", 7) == 0 &&
                  (comm = NREAD_REPLACE) &&
-                 (cmdx = STATS_CMD_REPLACE)) ||
+                 (cmdx = STATS_CMD_REPLACE) &&
+                 (c->cmd_curr = PROTOCOL_BINARY_CMD_REPLACE)) ||
                 (strncmp(cmd, "prepend", 7) == 0 &&
                  (comm = NREAD_PREPEND) &&
-                 (cmdx = STATS_CMD_PREPEND)) ||
+                 (cmdx = STATS_CMD_PREPEND) &&
+                 (c->cmd_curr = PROTOCOL_BINARY_CMD_PREPEND)) ||
                 (strncmp(cmd, "append", 6) == 0 &&
                  (comm = NREAD_APPEND) &&
-                 (cmdx = STATS_CMD_APPEND)))) {
+                 (cmdx = STATS_CMD_APPEND) &&
+                 (c->cmd_curr = PROTOCOL_BINARY_CMD_APPEND)))) {
         assert(c->item == NULL);
         c->item = NULL;
 
@@ -111,7 +118,9 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
         }
 
     } else if ((ntokens == 7 || ntokens == 8) &&
-               (strncmp(cmd, "cas", 3) == 0 && (comm = NREAD_CAS))) {
+               (strncmp(cmd, "cas", 3) == 0 &&
+                (comm = NREAD_CAS) &&
+                (c->cmd_curr = PROTOCOL_BINARY_CMD_SET))) {
         assert(c->item == NULL);
         c->item = NULL;
 
@@ -126,7 +135,8 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
         }
 
     } else if ((ntokens == 4 || ntokens == 5) &&
-               (strncmp(cmd, "incr", 4) == 0)) {
+               (strncmp(cmd, "incr", 4) == 0) &&
+               (c->cmd_curr = PROTOCOL_BINARY_CMD_INCREMENT)) {
 
         set_noreply_maybe(c, tokens, ntokens);
         cproxy_pause_upstream_for_downstream(ptd, c);
@@ -134,7 +144,8 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
         SEEN(STATS_CMD_INCR, false, cmd_len);
 
     } else if ((ntokens == 4 || ntokens == 5) &&
-               (strncmp(cmd, "decr", 4) == 0)) {
+               (strncmp(cmd, "decr", 4) == 0) &&
+               (c->cmd_curr = PROTOCOL_BINARY_CMD_DECREMENT)) {
 
         set_noreply_maybe(c, tokens, ntokens);
         cproxy_pause_upstream_for_downstream(ptd, c);
@@ -142,7 +153,8 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
         SEEN(STATS_CMD_DECR, false, cmd_len);
 
     } else if (ntokens >= 3 && ntokens <= 4 &&
-               (strncmp(cmd, "delete", 6) == 0)) {
+               (strncmp(cmd, "delete", 6) == 0) &&
+               (c->cmd_curr = PROTOCOL_BINARY_CMD_DELETE)) {
 
         set_noreply_maybe(c, tokens, ntokens);
         cproxy_pause_upstream_for_downstream(ptd, c);
@@ -150,7 +162,8 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
         SEEN(STATS_CMD_DELETE, false, cmd_len);
 
     } else if (ntokens >= 2 && ntokens <= 4 &&
-               (strncmp(cmd, "flush_all", 9) == 0)) {
+               (strncmp(cmd, "flush_all", 9) == 0) &&
+               (c->cmd_curr = PROTOCOL_BINARY_CMD_FLUSH)) {
 
         set_noreply_maybe(c, tokens, ntokens);
         cproxy_pause_upstream_for_downstream(ptd, c);
@@ -158,14 +171,16 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
         SEEN(STATS_CMD_FLUSH_ALL, false, cmd_len);
 
     } else if (ntokens == 3 &&
-               (strcmp(cmd, "stats reset") == 0)) {
+               (strcmp(cmd, "stats reset") == 0) &&
+               (c->cmd_curr = PROTOCOL_BINARY_CMD_STAT)) {
 
         cproxy_pause_upstream_for_downstream(ptd, c);
 
         SEEN(STATS_CMD_STATS_RESET, false, cmd_len);
 
     } else if (ntokens == 2 &&
-               (strcmp(cmd, "stats") == 0)) {
+               (strcmp(cmd, "stats") == 0) &&
+               (c->cmd_curr = PROTOCOL_BINARY_CMD_STAT)) {
 
         // Even though we've coded to handle advanced stats
         // like stats cachedump, prevent those here to avoid
