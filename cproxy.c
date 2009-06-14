@@ -930,6 +930,32 @@ int cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread) {
 
         if (d->downstream_conns[i] != NULL) {
             s++;
+
+            if (d->downstream_conns[i]->next == NULL) {
+                proxy_behavior *drain_behavior = &d->behaviors[n + i];
+                if (drain_behavior != NULL &&
+                    drain_behavior->host[0] &&
+                    drain_behavior->port > 0) {
+                    memcached_st drain_mst = {0};
+
+                    char drain_config[400];
+
+                    snprintf(drain_config, sizeof(drain_config),
+                             "%s:%u",
+                             drain_behavior->host,
+                             drain_behavior->port);
+
+                    if (init_memcached_st(&drain_mst, drain_config) == 1) {
+                        conn *drain_conn =
+                            cproxy_connect_downstream_conn(d, thread,
+                                                           &drain_mst.hosts[0],
+                                                           drain_behavior);
+                        if (drain_conn != NULL) {
+                            d->downstream_conns[i]->next = drain_conn;
+                        }
+                    }
+                }
+            }
         } else {
             memcached_quit_server(&d->mst.hosts[i], 1);
         }
