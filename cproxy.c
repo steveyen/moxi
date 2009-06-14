@@ -952,7 +952,13 @@ int cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread) {
                                                            drain_behavior);
                         if (drain_conn != NULL) {
                             d->downstream_conns[i]->next = drain_conn;
+
+                            // The drain conn holds onto the fd.
+                            //
+                            drain_mst.hosts[0].fd = -1;
                         }
+
+                        memcached_free(&drain_mst);
                     }
                 }
             }
@@ -1072,6 +1078,10 @@ bool cproxy_prep_conn_for_write(conn *c) {
     return false;
 }
 
+/**
+ * Do a hash through libmemcached to see which server (by index)
+ * should hold a given key.
+ */
 int cproxy_server_index(downstream *d, char *key, size_t key_length) {
     assert(d != NULL);
     assert(key != NULL);
