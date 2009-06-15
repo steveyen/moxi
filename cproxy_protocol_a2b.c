@@ -117,10 +117,11 @@ struct A2BSpec a2b_specs[] = {
 
 // These are immutable after init.
 //
-GHashTable *a2b_spec_map = NULL; // Key: command string, value: A2BSpec.
-int         a2b_size_max = 0;    // Max header + extra frame bytes size.
+struct A2BSpec *a2b_spec_map[0x80] = {0}; // Lookup table by A2BSpec->cmd.
+int             a2b_size_max = 0;         // Max header + extra frame bytes.
 
-int a2b_fill_request(token_t *cmd_tokens,
+int a2b_fill_request(short    cmd,
+                     token_t *cmd_tokens,
                      int      cmd_ntokens,
                      bool     noreply,
                      protocol_binary_request_header *header,
@@ -144,52 +145,48 @@ int a2b_multiget_skey(conn *c, char *skey, int skey_len);
 int a2b_multiget_end(conn *c);
 
 void cproxy_init_a2b() {
-    if (a2b_spec_map == NULL) {
-        a2b_spec_map = g_hash_table_new(skey_hash, skey_equal);
-        if (a2b_spec_map == NULL)
-            return; // TODO: Better oom error handling.
+    // Run through the a2b_specs to populate the a2b_spec_map.
+    //
+    int i = 0;
+    while (true) {
+        struct A2BSpec *spec = &a2b_specs[i];
+        if (spec->line == NULL)
+            break;
 
-        // Run through the a2b_specs to populate the a2b_spec_map.
-        //
-        int i = 0;
-        while (true) {
-            struct A2BSpec *spec = &a2b_specs[i];
-            if (spec->line == NULL)
-                break;
+        spec->ntokens = scan_tokens(spec->line,
+                                    spec->tokens,
+                                    MAX_TOKENS, NULL);
+        assert(spec->ntokens > 2);
 
-            spec->ntokens = scan_tokens(spec->line,
-                                        spec->tokens,
-                                        MAX_TOKENS, NULL);
-            assert(spec->ntokens > 2);
+        int noreply_index = spec->ntokens - 2;
+        if (spec->tokens[noreply_index].value &&
+            strcmp(spec->tokens[noreply_index].value,
+                   "[noreply]") == 0)
+            spec->noreply_allowed = true;
+        else
+            spec->noreply_allowed = false;
 
-            int noreply_index = spec->ntokens - 2;
-            if (spec->tokens[noreply_index].value &&
-                strcmp(spec->tokens[noreply_index].value,
-                       "[noreply]") == 0)
-                spec->noreply_allowed = true;
-            else
-                spec->noreply_allowed = false;
-
-            spec->num_optional = 0;
-            for (int j = 0; j < spec->ntokens; j++) {
-                if (spec->tokens[j].value &&
-                    spec->tokens[j].value[0] == '[')
-                    spec->num_optional++;
-            }
-
-            if (a2b_size_max < spec->size)
-                a2b_size_max = spec->size;
-
-            g_hash_table_insert(a2b_spec_map,
-                                spec->tokens[CMD_TOKEN].value,
-                                spec);
-
-            i = i + 1;
+        spec->num_optional = 0;
+        for (int j = 0; j < spec->ntokens; j++) {
+            if (spec->tokens[j].value &&
+                spec->tokens[j].value[0] == '[')
+                spec->num_optional++;
         }
+
+        if (a2b_size_max < spec->size)
+            a2b_size_max = spec->size;
+
+        assert(spec->cmd < (sizeof(a2b_spec_map) /
+                            sizeof(struct A2BSpec *)));
+
+        a2b_spec_map[spec->cmd] = spec;
+
+        i = i + 1;
     }
 }
 
-int a2b_fill_request(token_t *cmd_tokens,
+int a2b_fill_request(short    cmd,
+                     token_t *cmd_tokens,
                      int      cmd_ntokens,
                      bool     noreply,
                      protocol_binary_request_header *header,
@@ -204,10 +201,8 @@ int a2b_fill_request(token_t *cmd_tokens,
     assert(out_key);
     assert(out_keylen);
     assert(out_extlen);
-    assert(a2b_spec_map);
 
-    struct A2BSpec *spec = g_hash_table_lookup(a2b_spec_map,
-                                               cmd_tokens[CMD_TOKEN].value);
+    struct A2BSpec *spec = a2b_spec_map[cmd];
     if (spec != NULL) {
         if (cmd_ntokens >= (spec->ntokens - spec->num_optional) &&
             cmd_ntokens <= (spec->ntokens)) {
@@ -893,7 +888,8 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
         protocol_binary_request_header *preq =
             (protocol_binary_request_header *) &req;
 
-        int size = a2b_fill_request(tokens, ntokens,
+        int size = a2b_fill_request(uc->cmd_curr,
+                                    tokens, ntokens,
                                     uc->noreply, preq,
                                     &out_key,
                                     &out_keylen,
@@ -931,7 +927,8 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
         protocol_binary_request_header *preq =
             (protocol_binary_request_header *) &req;
 
-        int size = a2b_fill_request(tokens, ntokens,
+        int size = a2b_fill_request(uc->cmd_curr,
+                                    tokens, ntokens,
                                     uc->noreply, preq,
                                     &out_key,
                                     &out_keylen,
@@ -991,7 +988,8 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
 
             memset(header, 0, a2b_size_max);
 
-            int size = a2b_fill_request(tokens, ntokens,
+            int size = a2b_fill_request(uc->cmd_curr,
+                                        tokens, ntokens,
                                         uc->noreply,
                                         header,
                                         &out_key,
