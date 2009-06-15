@@ -116,8 +116,7 @@ void cproxy_process_a2a_downstream(conn *c, char *line) {
         //
         conn *uc = d->upstream_conn;
         if (uc != NULL &&
-            uc->cmd_start != NULL &&
-            strncmp(uc->cmd_start, "flush_all", 9) == 0) {
+            uc->cmd_curr == PROTOCOL_BINARY_CMD_FLUSH) {
             mcache_flush_all(&d->ptd->proxy->front_cache, 0);
         }
     } else if (strncmp(line, "STAT ", 5) == 0 ||
