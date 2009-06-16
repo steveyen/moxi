@@ -313,6 +313,8 @@ void cproxy_init_upstream_conn(conn *c) {
     // lifecycle, on the worker thread, so it's a good place
     // to record the proxy_td into the conn->extra.
     //
+    assert(!is_listen_thread());
+
     proxy *p = c->extra;
     assert(p != NULL);
 

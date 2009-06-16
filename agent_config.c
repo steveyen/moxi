@@ -56,11 +56,10 @@ static void agent_logger(void *userdata,
 
 static void init_extensions(void)
 {
-    conflate_register_mgmt_cb("client_stats", "Retrieves stats from the agent",
+    conflate_register_mgmt_cb("client_stats", "Retrieve stats from moxi",
                               on_conflate_get_stats);
-    conflate_register_mgmt_cb("reset_stats", "Reset stats on the agent",
+    conflate_register_mgmt_cb("reset_stats", "Reset moxi stats",
                               on_conflate_reset_stats);
-
     conflate_register_mgmt_cb("ping_test", "Perform a ping test",
                               on_conflate_ping_test);
 }
@@ -217,8 +216,8 @@ int cproxy_init_agent_start(char *jid,
         config.version    = VERSION;
         config.save_path  = config_path;
         config.userdata   = m;
-        config.new_config  = on_conflate_new_config;
-        config.log         = agent_logger;
+        config.new_config = on_conflate_new_config;
+        config.log        = agent_logger;
 
         if (start_conflate(config)) {
             if (settings.verbose > 1)
