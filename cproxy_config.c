@@ -475,14 +475,18 @@ void cproxy_parse_behavior_key_val(char *key,
     }
 }
 
+/**
+ * Size of array should be 2*arr_size.
+ */
 proxy_behavior *cproxy_copy_behaviors(int arr_size, proxy_behavior *arr) {
-    proxy_behavior *rv = calloc(arr_size, sizeof(proxy_behavior));
+    proxy_behavior *rv = calloc(arr_size * 2, sizeof(proxy_behavior));
     if (rv != NULL)
-        memcpy(rv, arr, arr_size * sizeof(proxy_behavior));
+        memcpy(rv, arr, arr_size * 2 * sizeof(proxy_behavior));
     return rv;
 }
 
-/** Size of array should be 2*size.
+/**
+ * Size of array should be 2*size.
  */
 bool cproxy_equal_behaviors(int x_size, proxy_behavior *x,
                             int y_size, proxy_behavior *y) {
