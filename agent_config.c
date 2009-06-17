@@ -401,18 +401,20 @@ void cproxy_on_new_config(void *data0, void *data1) {
                         behaviors[j] = proxyb;
 
                         char **props =
-                            parse_kvs_behavior(kvs, "svr-", servers[j],
+                            parse_kvs_behavior(kvs, "svr", servers[j],
                                                &behaviors[j]);
 
                         // Parse drain server-level behavior that's
                         // associated with the current main server.
                         //
                         for (int d = 0; props && props[d]; d++) {
-                            if (strcmp(props[d], "drain") == 0) {
-                                parse_kvs_behavior(kvs, "svr-", props[d],
+#ifdef NO_DRAIN_FILL_FOR_NOW
+                            if (strcmp(props[d], "drain=") == 0) {
+                                parse_kvs_behavior(kvs, "svr", props[d],
                                                    &behaviors[j + s]);
                                 break;
                             }
+#endif
                         }
 
                         // Grow config string for libmemcached.
@@ -607,8 +609,8 @@ void cproxy_on_new_pool(proxy_main *m,
                                     "conp config changed\n") || changed;
 
         changed =
-            (cproxy_equal_behaviors(1, &p->behavior_head,
-                                    1, &behavior_head) == false) ||
+            (cproxy_equal_behavior(&p->behavior_head,
+                                   &behavior_head) == false) ||
             changed;
 
         p->behavior_head = behavior_head;
