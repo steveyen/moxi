@@ -303,7 +303,7 @@ void cproxy_on_new_config(void *data0, void *data1) {
     //  behavior-customer1-b
     //    wait_queue_timeout=1000
     //    downstream_max=10
-    //  pool_prev-customer1-b
+    //  pool_drain-customer1-b
     //    svrname1
     //    svrname3
     //  pools
@@ -856,7 +856,11 @@ char **parse_kvs_behavior(kvpair_t *kvs,
 
     char **props = get_key_values(kvs, key);
     for (int k = 0; props && props[k]; k++) {
-        cproxy_parse_behavior_key_val_str(props[k], behavior);
+        char *key_val = trimstrdup(props[k]);
+        if (key_val != NULL) {
+            cproxy_parse_behavior_key_val_str(key_val, behavior);
+            free(key_val);
+        }
     }
 
     return props;
