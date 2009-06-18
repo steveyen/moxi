@@ -120,6 +120,10 @@ conn_funcs conn_funcs_default = {
     .conn_binary_command_magic   = PROTOCOL_BINARY_REQ
 };
 
+#ifdef MAIN_CHECK
+int main_check(int argc, char **argv);
+#endif
+
 /*
  * given time value that's either unix time or delta from current unix time, return
  * unix time. Use the fact that delta can't exceed one month (and real time value can't
@@ -4334,6 +4338,10 @@ int main (int argc, char **argv) {
 
     /* Drop privileges no longer needed */
     drop_privileges();
+
+#ifdef MAIN_CHECK
+    main_check(argc, argv);
+#endif
 
     /* enter the event loop */
     event_base_loop(main_base, 0);

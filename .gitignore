@@ -42,6 +42,7 @@ doc/protocol-binary.txt
 /testapp
 /doc/doxy
 /check_util
+/check_moxi
 ltmain.sh
 libtool
 libmemcached-0.29/*

@@ -35,7 +35,7 @@ moxi_SOURCES = memcached.c memcached.h \
 
 TESTS = check_util
 
-check_PROGRAMS = check_util
+check_PROGRAMS = check_util check_moxi
 
 check_util_SOURCES = check_util.c util.c util.h
 check_util_CFLAGS = @CHECK_CFLAGS@
@@ -132,3 +132,8 @@ docs:
 
 dist-hook:
 	rm -f $(distdir)/*/*~ $(distdir)/t/lib/*~ $(distdir)/*~
+
+check_moxi_SOURCES = check_moxi.c $(moxi_debug_SOURCES)
+check_moxi_CFLAGS = @CHECK_CFLAGS@ $(moxi_debug_CPPFLAGS) -DMAIN_CHECK
+check_moxi_LDADD = @CHECK_LIBS@ $(moxi_debug_LDADD)
+
