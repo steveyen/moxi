@@ -342,8 +342,11 @@ void cproxy_on_new_config(void *data0, void *data1) {
         proxy_behavior m_behavior = m->behavior;
 
         for (int k = 0; behavior_kvs[k]; k++) {
-            cproxy_parse_behavior_key_val_str(behavior_kvs[k],
-                                              &m_behavior);
+            char *bstr = trimstrdup(behavior_kvs[k]);
+            if (bstr != NULL) {
+                cproxy_parse_behavior_key_val_str(bstr, &m_behavior);
+                free(bstr);
+            }
         }
 
         m->behavior = m_behavior;
