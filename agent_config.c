@@ -171,7 +171,7 @@ int cproxy_init_agent(char *cfg_str,
 
         if (cproxy_init_agent_start(jid, jpw, config, host,
                                     behavior,
-                                    nthreads) == 0)
+                                    nthreads) != NULL)
             rv++;
 
         if (config_alloc > 0 &&
@@ -184,12 +184,12 @@ int cproxy_init_agent(char *cfg_str,
     return rv;
 }
 
-int cproxy_init_agent_start(char *jid,
-                            char *jpw,
-                            char *config_path,
-                            char *host,
-                            proxy_behavior behavior,
-                            int nthreads) {
+proxy_main *cproxy_init_agent_start(char *jid,
+                                    char *jpw,
+                                    char *config_path,
+                                    char *host,
+                                    proxy_behavior behavior,
+                                    int nthreads) {
     assert(jid);
     assert(jpw);
     assert(config_path);
@@ -231,14 +231,16 @@ int cproxy_init_agent_start(char *jid,
             if (settings.verbose > 1)
                 fprintf(stderr, "cproxy_init done\n");
 
-            return 0;
+            return m;
         }
+
+        free(m);
     }
 
     if (settings.verbose > 1)
         fprintf(stderr, "cproxy could not start conflate\n");
 
-    return 1;
+    return NULL;
 }
 
 void on_conflate_new_config(void *userdata, kvpair_t *config) {

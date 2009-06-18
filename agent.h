@@ -9,10 +9,10 @@ int cproxy_init_agent(char *cfg_str,
                       proxy_behavior behavior,
                       int nthreads);
 
-int cproxy_init_agent_start(char *jid, char *jpw,
-                            char *config, char *host,
-                            proxy_behavior behavior,
-                            int nthreads);
+proxy_main *cproxy_init_agent_start(char *jid, char *jpw,
+                                    char *config, char *host,
+                                    proxy_behavior behavior,
+                                    int nthreads);
 
 void on_conflate_new_config(void *userdata, kvpair_t *config);
 enum conflate_mgmt_cb_result on_conflate_get_stats(void *opaque,
