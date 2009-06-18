@@ -18,6 +18,25 @@ START_TEST(test_skey)
 }
 END_TEST
 
+START_TEST(test_whitespace)
+{
+  char *s, *t;
+    s = "123";
+    fail_unless(skipspace(s) == s, "ss");
+    s = "  123";
+    fail_unless(skipspace(s) == s + 2, "ss");
+    fail_unless(trailspace(s) == s, "ss");
+    s = "123";
+    t = trimstrdup(s);
+    fail_unless(t && strcmp(t, "123") == 0, "ss");
+    free(t);
+    s = "  123  ";
+    t = trimstrdup(s);
+    fail_unless(t && strcmp(t, "123") == 0, "ss");
+    free(t);
+}
+END_TEST
+
 START_TEST(test_parse_behavior) {
     proxy_behavior z = {0};
     proxy_behavior b = {0};
@@ -91,6 +110,7 @@ static Suite* moxi_suite(void)
     /* Core test case */
     TCase *tc_core = tcase_create("core");
     tcase_add_test(tc_core, test_skey);
+    tcase_add_test(tc_core, test_whitespace);
     tcase_add_test(tc_core, test_parse_behavior);
     suite_add_tcase(s, tc_core);
 
