@@ -340,6 +340,7 @@ bool a2b_fill_request_token(struct A2BSpec *spec,
 void cproxy_process_a2b_downstream(conn *c) {
     assert(c != NULL);
     assert(c->cmd >= 0);
+    assert(c->next == NULL);
     assert(c->item == NULL);
     assert(IS_BINARY(c->protocol));
     assert(IS_PROXY(c->protocol));
@@ -442,6 +443,7 @@ void cproxy_process_a2b_downstream(conn *c) {
 void cproxy_process_a2b_downstream_nread(conn *c) {
     assert(c != NULL);
     assert(c->cmd >= 0);
+    assert(c->next == NULL);
     assert(c->cmd_start != NULL);
     assert(IS_BINARY(c->protocol));
     assert(IS_PROXY(c->protocol));
@@ -526,6 +528,7 @@ void cproxy_process_a2b_downstream_nread(conn *c) {
 void a2b_process_downstream_response(conn *c) {
     assert(c != NULL);
     assert(c->cmd >= 0);
+    assert(c->next == NULL);
     assert(c->cmd_start != NULL);
     assert(IS_BINARY(c->protocol));
     assert(IS_PROXY(c->protocol));

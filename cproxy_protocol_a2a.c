@@ -27,6 +27,7 @@ void cproxy_init_a2a() {
 
 void cproxy_process_a2a_downstream(conn *c, char *line) {
     assert(c != NULL);
+    assert(c->next == NULL);
     assert(c->extra != NULL);
     assert(c->cmd == -1);
     assert(c->item == NULL);

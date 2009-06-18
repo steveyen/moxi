@@ -156,9 +156,7 @@ struct proxy {
     //
     proxy_behavior  behavior_head; // Proxy-level behavior.
     int             behaviors_num; // # main server-level (SL) behaviors.
-    proxy_behavior *behaviors;     // Array, size is 2*behaviors_num,
-                                   // where the second half is for
-                                   // drain server-level behaviors.
+    proxy_behavior *behaviors;     // Array, size is behaviors_num.
 
     // Any thread that accesses the mutable fields should
     // first acquire the proxy_lock.

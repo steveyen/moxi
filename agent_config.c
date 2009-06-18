@@ -286,7 +286,6 @@ void cproxy_on_new_config(void *data0, void *data1) {
     //    bucket=buck1
     //    usr=test1
     //    pwd=password
-    //    drain=svrnameX
     //  svr-svrnameX
     //    host=mc2.foo.net
     //    port=11211
@@ -296,6 +295,9 @@ void cproxy_on_new_config(void *data0, void *data1) {
     //  behavior-customer1-b
     //    wait_queue_timeout=1000
     //    downstream_max=10
+    //  pool_prev-customer1-b
+    //    svrname1
+    //    svrname3
     //  pools
     //    customer1-a
     //    customer1-b
@@ -385,11 +387,8 @@ void cproxy_on_new_config(void *data0, void *data1) {
                 // Parse server-level behaviors, so we'll have an
                 // array of behaviors, one entry for each server.
                 //
-                // The 2nd half of the array is for drain server
-                // behaviors, if any.
-                //
                 proxy_behavior *behaviors =
-                    calloc(s * 2, sizeof(proxy_behavior));
+                    calloc(s, sizeof(proxy_behavior));
 
                 if (config_str != NULL &&
                     behaviors != NULL) {
@@ -400,22 +399,8 @@ void cproxy_on_new_config(void *data0, void *data1) {
                         //
                         behaviors[j] = proxyb;
 
-                        char **props =
-                            parse_kvs_behavior(kvs, "svr", servers[j],
-                                               &behaviors[j]);
-
-                        // Parse drain server-level behavior that's
-                        // associated with the current main server.
-                        //
-                        for (int d = 0; props && props[d]; d++) {
-#ifdef NO_DRAIN_FILL_FOR_NOW
-                            if (strcmp(props[d], "drain=") == 0) {
-                                parse_kvs_behavior(kvs, "svr", props[d],
-                                                   &behaviors[j + s]);
-                                break;
-                            }
-#endif
-                        }
+                        parse_kvs_behavior(kvs, "svr", servers[j],
+                                           &behaviors[j]);
 
                         // Grow config string for libmemcached.
                         //

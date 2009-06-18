@@ -286,7 +286,7 @@ int cproxy_init_string(char *cfg_str,
                 behaviors_num++;
 
         proxy_behavior *behaviors =
-            calloc(behaviors_num * 2, sizeof(proxy_behavior));
+            calloc(behaviors_num, sizeof(proxy_behavior));
 
         if (behaviors != NULL) {
             for (int i = 0; i < behaviors_num; i++) {
@@ -476,17 +476,17 @@ void cproxy_parse_behavior_key_val(char *key,
 }
 
 /**
- * Size of array should be 2*arr_size.
+ * Size of array should be arr_size.
  */
 proxy_behavior *cproxy_copy_behaviors(int arr_size, proxy_behavior *arr) {
-    proxy_behavior *rv = calloc(arr_size * 2, sizeof(proxy_behavior));
+    proxy_behavior *rv = calloc(arr_size, sizeof(proxy_behavior));
     if (rv != NULL)
-        memcpy(rv, arr, arr_size * 2 * sizeof(proxy_behavior));
+        memcpy(rv, arr, arr_size * sizeof(proxy_behavior));
     return rv;
 }
 
 /**
- * Size of array should be 2*size.
+ * Size of x/y array should be x/y_size.
  */
 bool cproxy_equal_behaviors(int x_size, proxy_behavior *x,
                             int y_size, proxy_behavior *y) {
@@ -505,16 +505,6 @@ bool cproxy_equal_behaviors(int x_size, proxy_behavior *x,
                 fprintf(stderr, "behaviors not equal (%d)\n", i);
                 cproxy_dump_behavior(&x[i], "x", 0);
                 cproxy_dump_behavior(&y[i], "y", 0);
-            }
-
-            return false;
-        }
-
-        if (cproxy_equal_behavior(&x[i + x_size], &y[i + x_size]) == false) {
-            if (settings.verbose > 1) {
-                fprintf(stderr, "drain behaviors not equal (%d)\n", i);
-                cproxy_dump_behavior(&x[i + x_size], "dx", 0);
-                cproxy_dump_behavior(&y[i + x_size], "dy", 0);
             }
 
             return false;
