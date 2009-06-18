@@ -42,7 +42,7 @@ int cproxy_init_agent(char *cfg_str,
 
 proxy_behavior behavior_default_g = {
     .cycle = 0,
-    .downstream_max = 1,
+    .downstream_max = 4,
     .downstream_weight = 0,
     .downstream_retry = 1,
     .downstream_protocol = proxy_downstream_ascii_prot,

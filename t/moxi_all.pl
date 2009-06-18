@@ -31,7 +31,7 @@ go('fanout', 'binary');
 
 # Fork moxi-debug for moxi-specific testing.
 #
-my $childargs = "-z 11333=localhost:11311 -p 0 -U 0 -vvv -t 1";
+my $childargs = "-z 11333=localhost:11311 -p 0 -U 0 -vvv -t 1 -Z downstream_max=1";
 my $childpid  = fork();
 
 unless ($childpid) {

@@ -10,6 +10,7 @@ import re
 # Before you run moxi_mock.py, start a moxi like...
 #
 #   ./moxi-debug -z 11333=localhost:11311 -p 0 -U 0 -vvv -t 1
+#                -Z downstream_max=1
 #
 # Then...
 #
@@ -475,7 +476,7 @@ class TestProxy(unittest.TestCase):
     def testTwoSerialClients(self):
         """Test two serial clients"""
 
-        # Assuming proxy's max_downstream is 1,
+        # Assuming proxy's downstream_max is 1,
         # and number of threads is 1.
 
         self.client_connect(0)
@@ -500,7 +501,7 @@ class TestProxy(unittest.TestCase):
     def testTwoSerialClientsConnectingUpfront(self):
         """Test two serial clients that both connect upfront"""
 
-        # Assuming proxy's max_downstream is 1,
+        # Assuming proxy's downstream_max is 1,
         # and number of threads is 1.
 
         self.client_connect(0)
@@ -526,7 +527,7 @@ class TestProxy(unittest.TestCase):
     def testGetSquash(self):
         """Test multiget by multiple clients are deduped"""
 
-        # Assuming proxy's max_downstream is 1,
+        # Assuming proxy's downstream_max is 1,
         # and number of threads is 1.
 
         self.client_connect(0)
@@ -567,7 +568,7 @@ class TestProxy(unittest.TestCase):
     def testGetSquashOneKey(self):
         """Test multiget of one key by multiple clients are deduped"""
 
-        # Assuming proxy's max_downstream is 1,
+        # Assuming proxy's downstream_max is 1,
         # and number of threads is 1.
 
         self.client_connect(0)
@@ -609,7 +610,7 @@ class TestProxy(unittest.TestCase):
     def testGetSquashNoKeyOverlap(self):
         """Test multiget dedupe, but no key overlap"""
 
-        # Assuming proxy's max_downstream is 1,
+        # Assuming proxy's downstream_max is 1,
         # and number of threads is 1.
 
         self.client_connect(0)
@@ -645,7 +646,7 @@ class TestProxy(unittest.TestCase):
         """Test downstream timeout handling"""
         return """TODO: Highly dependent on hardcoded downstream timeout val"""
 
-        # Assuming proxy's max_downstream is 1,
+        # Assuming proxy's downstream_max is 1,
         # and number of threads is 1.
 
         self.client_connect(0)

@@ -161,7 +161,7 @@ my %topology_map = (
 
 my $topology = $topology_map{$topology_name};
 
-$topology .= "\$args .= \" -Z downstream_protocol=$protocol_name\";";
+$topology .= "\$args .= \" -Z downstream_protocol=$protocol_name,downstream_max=1\";";
 
 # Tack on ./t/ directory prefix if needed.
 if ($test_name !~ /^\.\/t/) {
