@@ -20,7 +20,8 @@ END_TEST
 
 START_TEST(test_whitespace)
 {
-  char *s, *t;
+    char *s, *t;
+
     s = "123";
     fail_unless(skipspace(s) == s, "ss");
     s = "  123";
@@ -34,6 +35,17 @@ START_TEST(test_whitespace)
     t = trimstrdup(s);
     fail_unless(t && strcmp(t, "123") == 0, "ss");
     free(t);
+
+    s = "123";
+    fail_unless(wordeq(s, "123"), "wordeq");
+    s = "  123";
+    fail_unless(wordeq(s, "123"), "wordeq");
+    s = "  123  ";
+    fail_unless(wordeq(s, "123"), "wordeq");
+    s = "  123  456 ";
+    fail_unless(wordeq(s, "123"), "wordeq");
+    s = "   ";
+    fail_unless(wordeq(s, ""), "wordeq");
 }
 END_TEST
 
