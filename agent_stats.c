@@ -50,18 +50,15 @@ void map_pstd_foreach_merge(gpointer key,
                             gpointer value,
                             gpointer user_data);
 
-struct add_stat_emit {
-    conflate_form_result *result;
-    char                 *prefix;
-};
-
 struct main_stats_collect_info {
     proxy_main           *m;
     conflate_form_result *result;
+    char                 *prefix;
 
     char *type;
     bool  do_settings;
     bool  do_stats;
+    bool  do_zeros;
 };
 
 static char *cmd_names[] = { // Keep sync'ed with enum_stats_cmd.
@@ -115,26 +112,26 @@ enum conflate_mgmt_cb_result on_conflate_get_stats(void *userdata,
     assert(mthread);
     assert(mthread->work_queue);
 
-    struct add_stat_emit ase = {
-        .result = r,
-        .prefix = ""
-    };
-
     char *type = get_simple_kvpair_val(form, "-subtype-");
-    bool do_all = (type == NULL || strlen(type) <= 0);
+    bool do_all = (type == NULL ||
+                   strlen(type) <= 0 ||
+                   strcmp(type, "all") == 0);
 
     struct main_stats_collect_info msci = {
         .m        = m,
         .result   = r,
+        .prefix   = "",
         .type     = type,
         .do_settings = (do_all || strcmp(type, "settings") == 0),
-        .do_stats    = (do_all || strcmp(type, "stats") == 0)
+        .do_stats    = (do_all || strcmp(type, "stats") == 0),
+        .do_zeros    = (type != NULL &&
+                        strcmp(type, "all") == 0) // Only when explicit "all".
     };
 
     char buf[800];
 
 #define more_stat(spec, key, val)              \
-    if (val) {                                 \
+    if (msci.do_zeros || val) {                \
         snprintf(buf, sizeof(buf), spec, val); \
         conflate_add_field(r, key, buf);       \
     }
@@ -148,7 +145,7 @@ enum conflate_mgmt_cb_result on_conflate_get_stats(void *userdata,
         conflate_add_field(r, "main_hostname", cproxy_hostname);
 
         cproxy_dump_behavior_ex(&m->behavior, "main_behavior", 2,
-                                add_stat_prefix, &ase);
+                                add_stat_prefix, &msci);
     }
 
     if (msci.do_stats) {
@@ -169,21 +166,17 @@ enum conflate_mgmt_cb_result on_conflate_get_stats(void *userdata,
 #undef more_stat
 
     if (msci.do_settings) {
-        struct add_stat_emit ase_memcached = {
-            .result = r,
-            .prefix = "memcached_settings"
-        };
+        struct main_stats_collect_info ase = msci;
+        ase.prefix = "memcached_settings";
 
-        process_stat_settings(add_stat_prefix_ase, &ase_memcached);
+        process_stat_settings(add_stat_prefix_ase, &ase);
     }
 
     if (msci.do_stats) {
-        struct add_stat_emit ase_memcached = {
-            .result = r,
-            .prefix = "memcached_stats"
-        };
+        struct main_stats_collect_info ase = msci;
+        ase.prefix = "memcached_stats";
 
-        server_stats(add_stat_prefix_ase, &ase_memcached);
+        server_stats(add_stat_prefix_ase, &ase);
     }
 
     // Alloc here so the main listener thread has less work.
@@ -236,7 +229,7 @@ enum conflate_mgmt_cb_result on_conflate_get_stats(void *userdata,
 
                     g_hash_table_foreach(end_pstd,
                                          map_pstd_foreach_emit,
-                                         &ase);
+                                         &msci);
                 }
             }
 
@@ -292,9 +285,8 @@ static void main_stats_collect(void *data0, void *data1) {
 
     assert(is_listen_thread());
 
-    struct add_stat_emit ase = {
-        .result = msci->result,
-    };
+    struct main_stats_collect_info ase = *msci;
+    ase.prefix = "";
 
     int sent   = 0;
     int nproxy = 0;
@@ -576,7 +568,7 @@ void map_pstd_foreach_emit(gpointer key,
     proxy_stats_td *pstd = value;
     assert(pstd != NULL);
 
-    struct add_stat_emit *emit = user_data;
+    const struct main_stats_collect_info *emit = user_data;
     assert(emit != NULL);
     assert(emit->result);
 
@@ -584,7 +576,7 @@ void map_pstd_foreach_emit(gpointer key,
     char buf_val[100];
 
 #define more_stat(key, val)                             \
-    if (val) {                                          \
+    if (emit->do_zeros || val) {                        \
         snprintf(buf_key, sizeof(buf_key),              \
                  "%s:stats_%s", name, key);             \
         snprintf(buf_val, sizeof(buf_val),              \
@@ -829,7 +821,7 @@ static void add_stat_prefix(const void *dump_opaque,
                             const char *prefix,
                             const char *key,
                             const char *val) {
-    const struct add_stat_emit *ase = dump_opaque;
+    const struct main_stats_collect_info *ase = dump_opaque;
     assert(ase);
 
     char buf[2000];
@@ -841,7 +833,7 @@ static void add_stat_prefix(const void *dump_opaque,
 static void add_stat_prefix_ase(const char *key, const uint16_t klen,
                                 const char *val, const uint32_t vlen,
                                 const void *cookie) {
-    const struct add_stat_emit *ase = cookie;
+    const struct main_stats_collect_info *ase = cookie;
     assert(ase);
 
     add_stat_prefix(cookie, ase->prefix, key, val);
