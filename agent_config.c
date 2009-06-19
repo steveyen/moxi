@@ -27,9 +27,7 @@ char *parse_kvs_servers(char *prefix,
                         char *pool_name,
                         kvpair_t *kvs,
                         char **servers,
-                        int num_servers,
-                        proxy_behavior *behavior_base,
-                        proxy_behavior *behaviors);
+                        proxy_behavior_pool *behavior_pool);
 
 char **parse_kvs_behavior(kvpair_t *kvs,
                           char *prefix,
@@ -391,40 +389,43 @@ void cproxy_on_new_config(void *data0, void *data1) {
                 while (servers[s])
                     s++;
 
-                // Parse server-level behaviors, so we'll have an
-                // array of behaviors, one entry for each server.
-                //
-                proxy_behavior *behaviors =
-                    calloc(s, sizeof(proxy_behavior));
+                if (s > 0) {
+                    // Parse server-level behaviors, so we'll have an
+                    // array of behaviors, one entry for each server.
+                    //
+                    proxy_behavior_pool behavior_pool = {
+                        .base = proxyb,
+                        .num  = s,
+                        .arr  = calloc(s, sizeof(proxy_behavior))
+                    };
 
-                char *config_str = parse_kvs_servers("svr", pool_name, kvs,
-                                                     servers, s,
-                                                     &proxyb,
-                                                     behaviors);
+                    if (behavior_pool.arr != NULL) {
+                        char *config_str =
+                            parse_kvs_servers("svr", pool_name, kvs,
+                                              servers, &behavior_pool);
+                        if (config_str != NULL &&
+                            config_str[0] != '\0') {
+                            if (settings.verbose > 1)
+                                fprintf(stderr, "conc config: %s\n",
+                                        config_str);
 
-                if (behaviors != NULL &&
-                    config_str != NULL) {
-                    if (settings.verbose > 1)
-                        fprintf(stderr, "conc config: %s\n",
-                                config_str);
+                            cproxy_on_new_pool(m, pool_name, pool_port,
+                                               config_str, new_config_ver,
+                                               &behavior_pool);
 
-                    proxy_behavior_pool behavior_pool;
-                    memset(&behavior_pool, 0, sizeof(proxy_behavior_pool));
+                            free(config_str);
+                        }
 
-                    behavior_pool.base = proxyb;
-                    behavior_pool.num  = s;
-                    behavior_pool.arr  = behaviors;
-
-                    cproxy_on_new_pool(m, pool_name, pool_port,
-                                       config_str, new_config_ver,
-                                       &behavior_pool);
-
-                    free(config_str);
-                    free(behaviors);
+                        free(behavior_pool.arr);
+                    } else {
+                        if (settings.verbose > 1)
+                            fprintf(stderr, "oom on re-config malloc\n");;
+                        goto fail;
+                    }
                 } else {
-                    if (settings.verbose > 1)
-                        fprintf(stderr, "oom on re-config malloc\n");;
-                    goto fail;
+                    // Note: ignore when no servers for an existing pool.
+                    // Because the config_ver won't be updated, we'll
+                    // fall into the empty_pool code path below.
                 }
             } else {
                 if (settings.verbose > 1)
@@ -781,17 +782,15 @@ char *parse_kvs_servers(char *prefix,
                         char *pool_name,
                         kvpair_t *kvs,
                         char **servers,
-                        int num_servers,
-                        proxy_behavior *behavior_base,
-                        proxy_behavior *behaviors) {
+                        proxy_behavior_pool *behavior_pool) {
     assert(prefix);
     assert(pool_name);
     assert(kvs);
     assert(servers);
-    assert(behavior_base);
-    assert(behaviors);
+    assert(behavior_pool);
+    assert(behavior_pool->arr);
 
-    if (num_servers <= 0)
+    if (behavior_pool->num <= 0)
         return NULL;
 
     // Create a config string that libmemcached likes.
@@ -801,20 +800,20 @@ char *parse_kvs_servers(char *prefix,
     char *config_str = calloc(config_len, 1);
 
     for (int j = 0; servers[j]; j++) {
-        assert(j < num_servers);
+        assert(j < behavior_pool->num);
 
         // Inherit default behavior.
         //
-        behaviors[j] = *behavior_base;
+        behavior_pool->arr[j] = behavior_pool->base;
 
         parse_kvs_behavior(kvs, prefix, servers[j],
-                           &behaviors[j]);
+                           &behavior_pool->arr[j]);
 
         // Grow config string for libmemcached.
         //
         int x = 40 + // For port and weight.
             strlen(config_str) +
-            strlen(behaviors[j].host);
+            strlen(behavior_pool->arr[j].host);
         if (config_len < x) {
             config_len = 2 * (config_len + x);
             config_str = realloc(config_str, config_len);
@@ -824,13 +823,13 @@ char *parse_kvs_servers(char *prefix,
         if (config_end != config_str)
             *config_end++ = ',';
 
-        if (strlen(behaviors[j].host) > 0 &&
-            behaviors[j].port > 0) {
+        if (strlen(behavior_pool->arr[j].host) > 0 &&
+            behavior_pool->arr[j].port > 0) {
             snprintf(config_end,
                      config_len - (config_end - config_str),
                      "%s:%u",
-                     behaviors[j].host,
-                     behaviors[j].port);
+                     behavior_pool->arr[j].host,
+                     behavior_pool->arr[j].port);
         } else {
             if (settings.verbose > 1)
                 fprintf(stderr,
@@ -838,16 +837,16 @@ char *parse_kvs_servers(char *prefix,
                         servers[j], pool_name);
         }
 
-        if (behaviors[j].downstream_weight > 0) {
+        if (behavior_pool->arr[j].downstream_weight > 0) {
             config_end = config_str + strlen(config_str);
             snprintf(config_end,
                      config_len - (config_end - config_str),
                      ":%u",
-                     behaviors[j].downstream_weight);
+                     behavior_pool->arr[j].downstream_weight);
         }
 
         if (settings.verbose > 1) {
-            cproxy_dump_behavior(&behaviors[j],
+            cproxy_dump_behavior(&behavior_pool->arr[j],
                                  "pks", 0);
         }
     }
