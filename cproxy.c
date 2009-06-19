@@ -99,15 +99,14 @@ proxy *cproxy_create(char    *name,
                      int      port,
                      char    *config,
                      uint32_t config_ver,
-                     proxy_behavior  behavior_base,
-                     int             behaviors_num,
-                     proxy_behavior *behaviors,
+                     proxy_behavior_pool *behavior_pool,
                      int nthreads) {
     assert(name != NULL);
     assert(port > 0);
     assert(config != NULL);
-    assert(behaviors_num > 0);
-    assert(behaviors != NULL);
+    assert(behavior_pool);
+    assert(behavior_pool->num > 0);
+    assert(behavior_pool->arr != NULL);
     assert(nthreads > 1); // Main thread + at least one worker.
     assert(nthreads == settings.num_threads);
 
@@ -122,10 +121,10 @@ proxy *cproxy_create(char    *name,
         p->config     = trimstrdup(config);
         p->config_ver = config_ver;
 
-        p->behavior_base = behavior_base;
-        p->behaviors_num = behaviors_num;
-        p->behaviors     = cproxy_copy_behaviors(behaviors_num,
-                                                 behaviors);
+        p->behavior_pool.base = behavior_pool->base;
+        p->behavior_pool.num  = behavior_pool->num;
+        p->behavior_pool.arr  = cproxy_copy_behaviors(behavior_pool->num,
+                                                      behavior_pool->arr);
 
         p->listening        = 0;
         p->listening_failed = 0;
@@ -140,25 +139,25 @@ proxy *cproxy_create(char    *name,
 
         matcher_init(&p->optimize_set_matcher, true);
 
-        if (behavior_base.front_cache_max > 0 &&
-            behavior_base.front_cache_lifespan > 0) {
+        if (behavior_pool->base.front_cache_max > 0 &&
+            behavior_pool->base.front_cache_lifespan > 0) {
             mcache_start(&p->front_cache,
-                         behavior_base.front_cache_max);
+                         behavior_pool->base.front_cache_max);
 
-            if (strlen(behavior_base.front_cache_spec) > 0) {
+            if (strlen(behavior_pool->base.front_cache_spec) > 0) {
                 matcher_start(&p->front_cache_matcher,
-                              behavior_base.front_cache_spec);
+                              behavior_pool->base.front_cache_spec);
             }
 
-            if (strlen(behavior_base.front_cache_unspec) > 0) {
+            if (strlen(behavior_pool->base.front_cache_unspec) > 0) {
                 matcher_start(&p->front_cache_unmatcher,
-                              behavior_base.front_cache_unspec);
+                              behavior_pool->base.front_cache_unspec);
             }
         }
 
-        if (strlen(behavior_base.optimize_set) > 0) {
+        if (strlen(behavior_pool->base.optimize_set) > 0) {
             matcher_start(&p->optimize_set_matcher,
-                          behavior_base.optimize_set);
+                          behavior_pool->base.optimize_set);
         }
 
         p->thread_data_num = nthreads;
@@ -167,7 +166,7 @@ proxy *cproxy_create(char    *name,
         if (p->thread_data != NULL &&
             p->name != NULL &&
             p->config != NULL &&
-            p->behaviors != NULL) {
+            p->behavior_pool.arr != NULL) {
             // We start at 1, because thread[0] is the main listen/accept
             // thread, and not a true worker thread.  Too lazy to save
             // the wasted thread[0] slot memory.
@@ -178,10 +177,12 @@ proxy *cproxy_create(char    *name,
 
                 ptd->config        = strdup(p->config);
                 ptd->config_ver    = p->config_ver;
-                ptd->behavior_base = p->behavior_base;
-                ptd->behaviors_num = p->behaviors_num;
-                ptd->behaviors     = cproxy_copy_behaviors(behaviors_num,
-                                                           behaviors);
+
+                ptd->behavior_pool.base = behavior_pool->base;
+                ptd->behavior_pool.num  = behavior_pool->num;
+                ptd->behavior_pool.arr =
+                    cproxy_copy_behaviors(behavior_pool->num,
+                                          behavior_pool->arr);
 
                 ptd->waiting_any_downstream_head = NULL;
                 ptd->waiting_any_downstream_tail = NULL;
@@ -189,7 +190,7 @@ proxy *cproxy_create(char    *name,
                 ptd->downstream_released = NULL;
                 ptd->downstream_tot = 0;
                 ptd->downstream_num = 0;
-                ptd->downstream_max = behavior_base.downstream_max;
+                ptd->downstream_max = behavior_pool->base.downstream_max;
                 ptd->downstream_assigns = 0;
                 ptd->timeout_tv.tv_sec = 0;
                 ptd->timeout_tv.tv_usec = 0;
@@ -203,19 +204,19 @@ proxy *cproxy_create(char    *name,
                 matcher_init(&ptd->key_stats_matcher, true);
                 matcher_init(&ptd->key_stats_unmatcher, true);
 
-                if (behavior_base.key_stats_max > 0 &&
-                    behavior_base.key_stats_lifespan > 0) {
+                if (behavior_pool->base.key_stats_max > 0 &&
+                    behavior_pool->base.key_stats_lifespan > 0) {
                     mcache_start(&ptd->key_stats,
-                                 behavior_base.key_stats_max);
+                                 behavior_pool->base.key_stats_max);
 
-                    if (strlen(behavior_base.key_stats_spec) > 0) {
+                    if (strlen(behavior_pool->base.key_stats_spec) > 0) {
                         matcher_start(&ptd->key_stats_matcher,
-                                      behavior_base.key_stats_spec);
+                                      behavior_pool->base.key_stats_spec);
                     }
 
-                    if (strlen(behavior_base.key_stats_unspec) > 0) {
+                    if (strlen(behavior_pool->base.key_stats_unspec) > 0) {
                         matcher_start(&ptd->key_stats_unmatcher,
-                                      behavior_base.key_stats_unspec);
+                                      behavior_pool->base.key_stats_unspec);
                     }
                 }
             }
@@ -225,7 +226,7 @@ proxy *cproxy_create(char    *name,
 
         free(p->name);
         free(p->config);
-        free(p->behaviors);
+        free(p->behavior_pool.arr);
         free(p->thread_data);
         free(p);
     }
@@ -508,9 +509,9 @@ void cproxy_on_close_downstream_conn(conn *c) {
             d->downstream_used_start == d->downstream_used &&
             d->downstream_used_start == 1 &&
             d->upstream_conn->next == NULL &&
-            d->behaviors != NULL) {
+            d->behaviors_arr != NULL) {
             if (k >= 0 && k < d->behaviors_num) {
-                int retry_max = d->behaviors[k].downstream_retry;
+                int retry_max = d->behaviors_arr[k].downstream_retry;
                 if (d->upstream_conn->cmd_retries < retry_max) {
                     d->upstream_conn->cmd_retries++;
                     uc_retry = d->upstream_conn;
@@ -580,13 +581,11 @@ void cproxy_add_downstream(proxy_td *ptd) {
         // proxy is shutting down.
         //
         if (ptd->config != NULL &&
-            ptd->behaviors != NULL) {
+            ptd->behavior_pool.arr != NULL) {
             downstream *d =
                 cproxy_create_downstream(ptd->config,
                                          ptd->config_ver,
-                                         &ptd->behavior_base,
-                                         ptd->behaviors_num,
-                                         ptd->behaviors);
+                                         &ptd->behavior_pool);
             if (d != NULL) {
                 d->ptd = ptd;
                 ptd->downstream_tot++;
@@ -814,13 +813,11 @@ void cproxy_free_downstream(downstream *d) {
  */
 downstream *cproxy_create_downstream(char *config,
                                      uint32_t config_ver,
-                                     proxy_behavior *behavior_base,
-                                     int   behaviors_num,
-                                     proxy_behavior *behaviors) {
+                                     proxy_behavior_pool *behavior_pool) {
     assert(config != NULL);
-    assert(behavior_base != NULL);
-    assert(behaviors_num > 0);
-    assert(behaviors != NULL);
+    assert(behavior_pool != NULL);
+    assert(behavior_pool->num > 0);
+    assert(behavior_pool->arr != NULL);
 
     downstream *d = (downstream *) calloc(1, sizeof(downstream));
     if (d != NULL &&
@@ -828,15 +825,15 @@ downstream *cproxy_create_downstream(char *config,
         config[0] != '\0') {
         d->config        = strdup(config);
         d->config_ver    = config_ver;
-        d->behaviors_num = behaviors_num;
-        d->behaviors     = cproxy_copy_behaviors(behaviors_num,
-                                                 behaviors);
+        d->behaviors_num = behavior_pool->num;
+        d->behaviors_arr = cproxy_copy_behaviors(behavior_pool->num,
+                                                 behavior_pool->arr);
 
         // TODO: Handle non-uniform downstream protocols.
         //
-        assert(IS_PROXY(behavior_base->downstream_protocol));
+        assert(IS_PROXY(behavior_pool->base.downstream_protocol));
 
-        if (IS_BINARY(behavior_base->downstream_protocol))
+        if (IS_BINARY(behavior_pool->base.downstream_protocol))
             d->propagate = cproxy_forward_a2b_downstream;
         else
             d->propagate = cproxy_forward_a2a_downstream;
@@ -845,10 +842,10 @@ downstream *cproxy_create_downstream(char *config,
             fprintf(stderr,
                     "cproxy_create_downstream: %s, %u, %u\n",
                     config, config_ver,
-                    behavior_base->downstream_protocol);
+                    behavior_pool->base.downstream_protocol);
 
         if (d->config != NULL &&
-            d->behaviors != NULL) {
+            d->behaviors_arr != NULL) {
             int nconns = init_memcached_st(&d->mst, d->config);
             if (nconns > 0) {
                 d->downstream_conns = (conn **)
@@ -862,7 +859,7 @@ downstream *cproxy_create_downstream(char *config,
         }
 
         free(d->config);
-        free(d->behaviors);
+        free(d->behaviors_arr);
         free(d);
     }
 
@@ -913,9 +910,9 @@ bool cproxy_check_downstream_config(downstream *d) {
                strcmp(d->config,
                       d->ptd->config) == 0 &&
                cproxy_equal_behaviors(d->behaviors_num,
-                                      d->behaviors,
-                                      d->ptd->behaviors_num,
-                                      d->ptd->behaviors)) {
+                                      d->behaviors_arr,
+                                      d->ptd->behavior_pool.num,
+                                      d->ptd->behavior_pool.arr)) {
         d->config_ver = d->ptd->config_ver;
         rv = true;
     }
@@ -939,10 +936,10 @@ int cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread) {
     int n = memcached_server_count(&d->mst);
 
     assert(d->behaviors_num == n);
-    assert(d->behaviors != NULL);
+    assert(d->behaviors_arr != NULL);
 
     for (int i = 0; i < n; i++) {
-        assert(IS_PROXY(d->behaviors[i].downstream_protocol));
+        assert(IS_PROXY(d->behaviors_arr[i].downstream_protocol));
 
         // Connect to a main downstream server, if not already.
         //
@@ -950,7 +947,7 @@ int cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread) {
             d->downstream_conns[i] =
                 cproxy_connect_downstream_conn(d, thread,
                                                &d->mst.hosts[i],
-                                               &d->behaviors[i]);
+                                               &d->behaviors_arr[i]);
         }
 
         if (d->downstream_conns[i] != NULL) {
@@ -1397,12 +1394,12 @@ struct timeval cproxy_get_downstream_timeout(downstream *d, conn *c) {
 
     if (c != NULL) {
         assert(d->behaviors_num > 0);
-        assert(d->behaviors != NULL);
+        assert(d->behaviors_arr != NULL);
         assert(d->downstream_conns != NULL);
 
         int i = downstream_conn_index(d, c);
         if (i >= 0 && i < d->behaviors_num) {
-            rv = d->behaviors[i].downstream_timeout;
+            rv = d->behaviors_arr[i].downstream_timeout;
             if (rv.tv_sec != 0 ||
                 rv.tv_usec != 0) {
                 return rv;
@@ -1413,7 +1410,7 @@ struct timeval cproxy_get_downstream_timeout(downstream *d, conn *c) {
     proxy_td *ptd = d->ptd;
     assert(ptd);
 
-    rv = ptd->behavior_base.downstream_timeout;
+    rv = ptd->behavior_pool.base.downstream_timeout;
 
     return rv;
 }
@@ -1424,7 +1421,7 @@ bool cproxy_start_wait_queue_timeout(proxy_td *ptd, conn *uc) {
     assert(uc->thread);
     assert(uc->thread->base);
 
-    ptd->timeout_tv = ptd->behavior_base.wait_queue_timeout;
+    ptd->timeout_tv = ptd->behavior_pool.base.wait_queue_timeout;
     if (ptd->timeout_tv.tv_sec != 0 ||
         ptd->timeout_tv.tv_usec != 0) {
         if (settings.verbose > 1)
@@ -1462,7 +1459,7 @@ void wait_queue_timeout(const int fd,
         if (settings.verbose > 1)
             fprintf(stderr, "wait_queue_timeout cleared\n");
 
-        struct timeval wqt = ptd->behavior_base.wait_queue_timeout;
+        struct timeval wqt = ptd->behavior_pool.base.wait_queue_timeout;
 
         // TODO: Millisecond capacity in 32-bit field not enough?
         //
@@ -1816,7 +1813,7 @@ bool cproxy_start_downstream_timeout(downstream *d, conn *c) {
     assert(d->timeout_tv.tv_sec == 0);
     assert(d->timeout_tv.tv_usec == 0);
     assert(d->behaviors_num > 0);
-    assert(d->behaviors != NULL);
+    assert(d->behaviors_arr != NULL);
 
     struct timeval dt = cproxy_get_downstream_timeout(d, c);
     if (dt.tv_sec == 0 &&

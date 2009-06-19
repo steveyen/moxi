@@ -397,7 +397,7 @@ key_stats *find_key_stats(proxy_td *ptd, char *key, int key_len,
 
             mcache_set(&ptd->key_stats, ks,
                        msec_time +
-                       ptd->behavior_base.key_stats_lifespan,
+                       ptd->behavior_pool.base.key_stats_lifespan,
                        true, false);
         }
     }

@@ -313,20 +313,20 @@ static void main_stats_collect(void *data0, void *data1) {
         emit_s("name",                p->name);
         emit_s("config",              p->config);
         emit_f("config_ver",    "%u", p->config_ver);
-        emit_f("behaviors_num", "%u", p->behaviors_num);
+        emit_f("behaviors_num", "%u", p->behavior_pool.num);
 
         if (msci->do_settings) {
             snprintf(bufk, sizeof(bufk),
                      "%u:%s:behavior", p->port, p->name);
 
-            cproxy_dump_behavior_ex(&p->behavior_base, bufk, 1,
+            cproxy_dump_behavior_ex(&p->behavior_pool.base, bufk, 1,
                                     add_stat_prefix, &ase);
 
-            for (int i = 0; i < p->behaviors_num; i++) {
+            for (int i = 0; i < p->behavior_pool.num; i++) {
                 snprintf(bufk, sizeof(bufk),
                          "%u:%s:behavior-%u", p->port, p->name, i);
 
-                cproxy_dump_behavior_ex(&p->behaviors[i], bufk, 0,
+                cproxy_dump_behavior_ex(&p->behavior_pool.arr[i], bufk, 0,
                                         add_stat_prefix, &ase);
             }
         }

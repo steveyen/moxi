@@ -40,9 +40,7 @@ void cproxy_on_new_pool(proxy_main *m,
                         char *name, int port,
                         char *config_str,
                         uint32_t config_ver,
-                        proxy_behavior behavior_base,
-                        int   behaviors_num,
-                        proxy_behavior *behaviors);
+                        proxy_behavior_pool *behavior_pool);
 
 char **get_key_values(kvpair_t *kvs, char *key);
 

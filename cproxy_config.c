@@ -281,25 +281,29 @@ int cproxy_init_string(char *cfg_str,
         proxy_sect = trimstr(proxy_sect);
 
         int behaviors_num = 1; // Number of servers.
-        for (char *x = proxy_sect; *x != '\0'; x++)
+        for (char *x = proxy_sect; *x != '\0'; x++) {
             if (*x == ',')
                 behaviors_num++;
+        }
 
-        proxy_behavior *behaviors =
-            calloc(behaviors_num, sizeof(proxy_behavior));
+        proxy_behavior_pool behavior_pool;
+        memset(&behavior_pool, 0, sizeof(proxy_behavior_pool));
 
-        if (behaviors != NULL) {
+        behavior_pool.base = behavior;
+        behavior_pool.num  = behaviors_num;
+        behavior_pool.arr  = calloc(behaviors_num,
+                                    sizeof(proxy_behavior));
+
+        if (behavior_pool.arr != NULL) {
             for (int i = 0; i < behaviors_num; i++) {
-                behaviors[i] = behavior;
+                behavior_pool.arr[i] = behavior;
             }
 
             proxy *p = cproxy_create(proxy_name,
                                      proxy_port,
                                      proxy_sect,
                                      0, // config_ver.
-                                     behavior,
-                                     behaviors_num,
-                                     behaviors,
+                                     &behavior_pool,
                                      nthreads);
             if (p != NULL) {
                 int n = cproxy_listen(p);
@@ -319,7 +323,7 @@ int cproxy_init_string(char *cfg_str,
                 exit(EXIT_FAILURE);
             }
 
-            free(behaviors);
+            free(behavior_pool.arr);
         } else {
             fprintf(stderr, "could not alloc behaviors\n");
             exit(EXIT_FAILURE);
