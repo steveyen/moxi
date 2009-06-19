@@ -391,7 +391,7 @@ void multiget_ascii_downstream_response(downstream *d, item *it) {
     proxy *p = ptd->proxy;
     assert(p);
 
-    uint32_t front_cache_lifespan = ptd->behavior_head.front_cache_lifespan;
+    uint32_t front_cache_lifespan = ptd->behavior_base.front_cache_lifespan;
 
     if (front_cache_lifespan > 0) {
         if (matcher_check(&p->front_cache_matcher,

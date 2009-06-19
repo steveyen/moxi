@@ -28,7 +28,7 @@ char *parse_kvs_servers(char *prefix,
                         kvpair_t *kvs,
                         char **servers,
                         int num_servers,
-                        proxy_behavior *behavior_head,
+                        proxy_behavior *behavior_base,
                         proxy_behavior *behaviors);
 
 char **parse_kvs_behavior(kvpair_t *kvs,
@@ -472,7 +472,7 @@ void cproxy_on_new_pool(proxy_main *m,
                         char *name, int port,
                         char *config,
                         uint32_t config_ver,
-                        proxy_behavior behavior_head,
+                        proxy_behavior behavior_base,
                         int   behaviors_num,
                         proxy_behavior *behaviors) {
     assert(m);
@@ -491,7 +491,7 @@ void cproxy_on_new_pool(proxy_main *m,
         p = cproxy_create(name, port,
                           config,
                           config_ver,
-                          behavior_head,
+                          behavior_base,
                           behaviors_num,
                           behaviors,
                           m->nthreads);
@@ -552,11 +552,11 @@ void cproxy_on_new_pool(proxy_main *m,
                                     "conp config changed\n") || changed;
 
         changed =
-            (cproxy_equal_behavior(&p->behavior_head,
-                                   &behavior_head) == false) ||
+            (cproxy_equal_behavior(&p->behavior_base,
+                                   &behavior_base) == false) ||
             changed;
 
-        p->behavior_head = behavior_head;
+        p->behavior_base = behavior_base;
 
         changed =
             update_behaviors_config(&p->behaviors, &p->behaviors_num,
@@ -583,25 +583,25 @@ void cproxy_on_new_pool(proxy_main *m,
 
         // Restart the front_cache, if necessary.
         //
-        if (behavior_head.front_cache_max > 0 &&
-            behavior_head.front_cache_lifespan > 0) {
+        if (behavior_base.front_cache_max > 0 &&
+            behavior_base.front_cache_lifespan > 0) {
             mcache_start(&p->front_cache,
-                         behavior_head.front_cache_max);
+                         behavior_base.front_cache_max);
 
-            if (strlen(behavior_head.front_cache_spec) > 0) {
+            if (strlen(behavior_base.front_cache_spec) > 0) {
                 matcher_start(&p->front_cache_matcher,
-                              behavior_head.front_cache_spec);
+                              behavior_base.front_cache_spec);
             }
 
-            if (strlen(behavior_head.front_cache_unspec) > 0) {
+            if (strlen(behavior_base.front_cache_unspec) > 0) {
                 matcher_start(&p->front_cache_unmatcher,
-                              behavior_head.front_cache_unspec);
+                              behavior_base.front_cache_unspec);
             }
         }
 
-        if (strlen(behavior_head.optimize_set) > 0) {
+        if (strlen(behavior_base.optimize_set) > 0) {
             matcher_start(&p->optimize_set_matcher,
-                          behavior_head.optimize_set);
+                          behavior_base.optimize_set);
         }
 
         // Send update across worker threads, avoiding locks.
@@ -652,7 +652,7 @@ static void update_ptd_config(void *data0, void *data1) {
             update_str_config(&ptd->config, p->config, NULL) ||
             changed;
 
-        ptd->behavior_head = p->behavior_head;
+        ptd->behavior_base = p->behavior_base;
 
         changed =
             update_behaviors_config(&ptd->behaviors, &ptd->behaviors_num,
@@ -670,19 +670,19 @@ static void update_ptd_config(void *data0, void *data1) {
         matcher_stop(&ptd->key_stats_matcher);
         matcher_stop(&ptd->key_stats_unmatcher);
 
-        if (ptd->behavior_head.key_stats_max > 0 &&
-            ptd->behavior_head.key_stats_lifespan > 0) {
+        if (ptd->behavior_base.key_stats_max > 0 &&
+            ptd->behavior_base.key_stats_lifespan > 0) {
             mcache_start(&ptd->key_stats,
-                         ptd->behavior_head.key_stats_max);
+                         ptd->behavior_base.key_stats_max);
 
-            if (strlen(ptd->behavior_head.key_stats_spec) > 0) {
+            if (strlen(ptd->behavior_base.key_stats_spec) > 0) {
                 matcher_start(&ptd->key_stats_matcher,
-                              ptd->behavior_head.key_stats_spec);
+                              ptd->behavior_base.key_stats_spec);
             }
 
-            if (strlen(ptd->behavior_head.key_stats_unspec) > 0) {
+            if (strlen(ptd->behavior_base.key_stats_unspec) > 0) {
                 matcher_start(&ptd->key_stats_unmatcher,
-                              ptd->behavior_head.key_stats_unspec);
+                              ptd->behavior_base.key_stats_unspec);
             }
         }
 
@@ -768,13 +768,13 @@ char *parse_kvs_servers(char *prefix,
                         kvpair_t *kvs,
                         char **servers,
                         int num_servers,
-                        proxy_behavior *behavior_head,
+                        proxy_behavior *behavior_base,
                         proxy_behavior *behaviors) {
     assert(prefix);
     assert(pool_name);
     assert(kvs);
     assert(servers);
-    assert(behavior_head);
+    assert(behavior_base);
     assert(behaviors);
 
     if (num_servers <= 0)
@@ -791,7 +791,7 @@ char *parse_kvs_servers(char *prefix,
 
         // Inherit default behavior.
         //
-        behaviors[j] = *behavior_head;
+        behaviors[j] = *behavior_base;
 
         parse_kvs_behavior(kvs, prefix, servers[j],
                            &behaviors[j]);

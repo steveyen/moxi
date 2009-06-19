@@ -40,7 +40,7 @@ void cproxy_on_new_pool(proxy_main *m,
                         char *name, int port,
                         char *config_str,
                         uint32_t config_ver,
-                        proxy_behavior behavior_head,
+                        proxy_behavior behavior_base,
                         int   behaviors_num,
                         proxy_behavior *behaviors);
 

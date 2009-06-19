@@ -154,7 +154,7 @@ struct proxy {
 
     // Mutable, covered by proxy_lock.
     //
-    proxy_behavior  behavior_head; // Proxy-level behavior.
+    proxy_behavior  behavior_base; // Proxy-level behavior.
     int             behaviors_num; // # main server-level (SL) behaviors.
     proxy_behavior *behaviors;     // Array, size is behaviors_num.
 
@@ -286,7 +286,7 @@ struct proxy_td { // Per proxy, per worker-thread data struct.
     char    *config;
     uint32_t config_ver;
 
-    proxy_behavior  behavior_head; // Proxy-level behavior.
+    proxy_behavior  behavior_base; // Proxy-level behavior.
     int             behaviors_num; // Size of servers-level behaviors array.
     proxy_behavior *behaviors;     // Array, size is number of servers.
 
@@ -367,7 +367,7 @@ proxy *cproxy_create(char     *name,
                      int       port,
                      char     *config,
                      uint32_t  config_ver,
-                     proxy_behavior  behavior_head,
+                     proxy_behavior  behavior_base,
                      int             behaviors_num,
                      proxy_behavior *behaviors,
                      int nthreads);
@@ -390,7 +390,7 @@ void        cproxy_add_downstream(proxy_td *ptd);
 void        cproxy_free_downstream(downstream *d);
 downstream *cproxy_create_downstream(char *config,
                                      uint32_t config_ver,
-                                     proxy_behavior *behavior_head,
+                                     proxy_behavior *behavior_base,
                                      int   behaviors_num,
                                      proxy_behavior *behaviors);
 downstream *cproxy_reserve_downstream(proxy_td *ptd);

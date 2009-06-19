@@ -319,7 +319,7 @@ static void main_stats_collect(void *data0, void *data1) {
             snprintf(bufk, sizeof(bufk),
                      "%u:%s:behavior", p->port, p->name);
 
-            cproxy_dump_behavior_ex(&p->behavior_head, bufk, 1,
+            cproxy_dump_behavior_ex(&p->behavior_base, bufk, 1,
                                     add_stat_prefix, &ase);
 
             for (int i = 0; i < p->behaviors_num; i++) {
