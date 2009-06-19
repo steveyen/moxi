@@ -372,7 +372,13 @@ proxy *cproxy_create(char     *name,
                      proxy_behavior *behaviors,
                      int nthreads);
 
-int       cproxy_listen(proxy *p);
+int cproxy_listen(proxy *p);
+int cproxy_listen_port(int port,
+                       enum protocol protocol,
+                       enum network_transport transport,
+                       void       *conn_extra,
+                       conn_funcs *conn_funcs);
+
 proxy_td *cproxy_find_thread_data(proxy *p, pthread_t thread_id);
 void      cproxy_init_upstream_conn(conn *c);
 void      cproxy_init_downstream_conn(conn *c);

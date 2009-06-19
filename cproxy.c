@@ -243,50 +243,71 @@ int cproxy_listen(proxy *p) {
         fprintf(stderr, "cproxy_listen on port %d, downstream %s\n",
                 p->port, p->config);
 
-    conn *listen_conn_orig = listen_conn;
-
     // Idempotent, remembers if it already created listening socket(s).
     //
     // TODO: Handle upstream binary protocol.
     //
     if (p->listening == 0) {
-        if (server_socket(p->port,
-                          proxy_upstream_ascii_prot,
-                          tcp_transport) == 0) {
-            assert(listen_conn != NULL);
-
-            // The listen_conn global list is changed by server_socket(),
-            // which adds a new listening conn on p->port for each bindable
-            // host address.
-            //
-            // For example, after the call to server_socket(), there
-            // might be two new listening conn's -- one for localhost,
-            // another for 127.0.0.1.
-            //
-            conn *c = listen_conn;
-            while (c != NULL &&
-                   c != listen_conn_orig) {
-                if (settings.verbose > 1)
-                    fprintf(stderr,
-                            "<%d cproxy listening on port %d, downstream %s\n",
-                            c->sfd, p->port, p->config);
-
-                p->listening++;
-
-                // TODO: Listening conn's never seem to close,
-                //       but need to handle cleanup if they do,
-                //       such as if we handle graceful shutdown one day.
-                //
-                c->extra = p;
-                c->funcs = &cproxy_listen_funcs;
-                c = c->next;
-            }
+        int listening = cproxy_listen_port(p->port,
+                                           proxy_upstream_ascii_prot,
+                                           tcp_transport,
+                                           p,
+                                           &cproxy_listen_funcs);
+        if (listening > 0) {
+            p->listening += listening;
         } else {
             p->listening_failed++;
         }
     }
 
     return p->listening;
+}
+
+int cproxy_listen_port(int port,
+                       enum protocol protocol,
+                       enum network_transport transport,
+                       void       *conn_extra,
+                       conn_funcs *conn_funcs) {
+    assert(port > 0);
+    assert(conn_extra);
+    assert(conn_funcs);
+    assert(is_listen_thread());
+
+    int   listening = 0;
+    conn *listen_conn_orig = listen_conn;
+
+    if (server_socket(port, protocol, transport) == 0) {
+        assert(listen_conn != NULL);
+
+        // The listen_conn global list is changed by server_socket(),
+        // which adds a new listening conn on port for each bindable
+        // host address.
+        //
+        // For example, after the call to server_socket(), there
+        // might be two new listening conn's -- one for localhost,
+        // another for 127.0.0.1.
+        //
+        conn *c = listen_conn;
+        while (c != NULL &&
+               c != listen_conn_orig) {
+            if (settings.verbose > 1)
+                fprintf(stderr,
+                        "<%d cproxy listening on port %d\n",
+                        c->sfd, port);
+
+            listening++;
+
+            // TODO: Listening conn's never seem to close,
+            //       but need to handle cleanup if they do,
+            //       such as if we handle graceful shutdown one day.
+            //
+            c->extra = conn_extra;
+            c->funcs = conn_funcs;
+            c = c->next;
+        }
+    }
+
+    return listening;
 }
 
 /* Finds the proxy_td associated with a worker thread.
