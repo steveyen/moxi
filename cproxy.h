@@ -86,6 +86,7 @@ typedef struct key_stats           key_stats;
 
 struct proxy_behavior {
     // IL means startup, system initialization level behavior.
+    // ML means proxy_main-level behavior.
     // PL means proxy-level behavior.
     // SL means server-level behavior, although we inherit from proxy level.
     //
@@ -97,14 +98,14 @@ struct proxy_behavior {
     struct timeval downstream_timeout;  // SL: Fields of 0 mean no timeout.
     struct timeval wait_queue_timeout;  // PL: Fields of 0 mean no timeout.
 
-    uint32_t front_cache_max;       // PL: Max # of front cachable items.
-    uint32_t front_cache_lifespan;  // PL: In millisecs.
-    char     front_cache_spec[300]; // PL: Matcher prefixes for front caching.
+    uint32_t front_cache_max;         // PL: Max # of front cachable items.
+    uint32_t front_cache_lifespan;    // PL: In millisecs.
+    char     front_cache_spec[300];   // PL: Matcher prefixes for front caching.
     char     front_cache_unspec[100]; // PL: Don't front cache prefixes.
 
-    uint32_t key_stats_max;       // PL: Max # of key stats entries.
-    uint32_t key_stats_lifespan;  // PL: In millisecs.
-    char     key_stats_spec[300]; // PL: Matcher prefixes for key-level stats.
+    uint32_t key_stats_max;         // PL: Max # of key stats entries.
+    uint32_t key_stats_lifespan;    // PL: In millisecs.
+    char     key_stats_spec[300];   // PL: Matcher prefixes for key-level stats.
     char     key_stats_unspec[100]; // PL: Don't key stat prefixes.
 
     char optimize_set[400]; // PL: Matcher prefixes for SET optimization.
@@ -114,6 +115,10 @@ struct proxy_behavior {
     char host[250];   // SL.
     int  port;        // SL.
     char bucket[250]; // SL.
+
+    // ML: Port for proxy_main to listen on.
+    //
+    int port_listen;
 };
 
 struct proxy_behavior_pool {

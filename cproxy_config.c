@@ -67,7 +67,8 @@ proxy_behavior behavior_default_g = {
     .port = 0,
     .bucket = {0},
     .usr = {0},
-    .pwd = {0}
+    .pwd = {0},
+    .port_listen = 0
 };
 
 /** Length of key that may be zero or space terminated.
@@ -470,6 +471,8 @@ void cproxy_parse_behavior_key_val(char *key,
             if (strlen(val) < sizeof(behavior->bucket) + 1) {
                 strcpy(behavior->bucket, val);
             }
+        } else if (wordeq(key, "port_listen")) {
+            behavior->port_listen = strtol(val, NULL, 10);
         } else {
             if (settings.verbose > 1)
                 fprintf(stderr, "unknown behavior key: %s\n", key);
@@ -587,6 +590,9 @@ void cproxy_dump_behavior_ex(proxy_behavior *b, char *prefix, int level,
     vdump("host",   "%s", b->host);
     vdump("port",   "%d", b->port);
     vdump("bucket", "%s", b->bucket);
+
+    if (level >= 1)
+        vdump("port_listen", "%d", b->port_listen);
 }
 
 void cproxy_dump_behavior_stderr(const void *dump_opaque,

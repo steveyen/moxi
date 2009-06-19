@@ -255,7 +255,13 @@ void on_conflate_new_config(void *userdata, kvpair_t *config) {
 
     kvpair_t *copy = dup_kvpair(config);
     if (copy != NULL) {
-        work_send(mthread->work_queue, cproxy_on_new_config, m, copy);
+        if (!work_send(mthread->work_queue, cproxy_on_new_config, m, copy) &&
+            settings.verbose > 1) {
+            fprintf(stderr, "work_send failed\n");
+        }
+    } else {
+        if (settings.verbose > 1)
+            fprintf(stderr, "agent_config ocnc failed dup_kvpair\n");
     }
 }
 
@@ -279,6 +285,9 @@ void cproxy_on_new_config(void *data0, void *data1) {
     }
 
     uint32_t new_config_ver = max_config_ver + 1;
+
+    if (settings.verbose > 1)
+        fprintf(stderr, "conc new_config_ver %u\n", new_config_ver);
 
     // The kvs key-multivalues look roughly like...
     //
@@ -313,23 +322,23 @@ void cproxy_on_new_config(void *data0, void *data1) {
     //    11221
     //    11331
     //
-    char **pools = get_key_values(kvs, "pools");
+    char **pools    = get_key_values(kvs, "pools");
+    char **bindings = get_key_values(kvs, "bindings");
+
     if (pools == NULL)
         goto fail;
 
-    char **bindings = get_key_values(kvs, "bindings");
-    if (bindings == NULL)
-        goto fail;
+    int npools    = 0;
+    int nbindings = 0;
 
-    int npools = 0;
-    while (pools[npools])
+    while (pools && pools[npools])
         npools++;
 
-    int nbindings = 0;
-    while (bindings[nbindings])
+    while (bindings && bindings[nbindings])
         nbindings++;
 
-    if (nbindings != npools) {
+    if (nbindings > 0 &&
+        nbindings != npools) {
         if (settings.verbose > 1)
             fprintf(stderr, "npools does not match nbindings\n");
         goto fail;
@@ -353,25 +362,15 @@ void cproxy_on_new_config(void *data0, void *data1) {
     }
 
     for (int i = 0; i < npools; i++) {
-        assert(pools[i]);
-        assert(bindings[i]);
+        char *pool_name = skipspace(pools[i]);
+        if (pool_name != NULL &&
+            pool_name[0] != '\0') {
+            char buf[200];
 
-        if (pools[i] != NULL &&
-            bindings[i] != NULL) {
-            char *pool_name = pools[i];
-            int   pool_port = atoi(bindings[i]);
-            char  buf[200];
+            snprintf(buf, sizeof(buf), "pool-%s", pool_name);
 
-            snprintf(buf, sizeof(buf),
-                     "pool-%s", pool_name);
-
-            char **servers = get_key_values(kvs, buf);
-
-            assert(pool_name);
-            assert(pool_port > 0);
-
-            if (servers != NULL &&
-                pool_port > 0) {
+            char **servers = get_key_values(kvs, trimstr(buf));
+            if (servers != NULL) {
                 // Parse proxy-level behavior.
                 //
                 proxy_behavior proxyb = m->behavior;
@@ -383,58 +382,75 @@ void cproxy_on_new_config(void *data0, void *data1) {
                     }
                 }
 
-                // Number of servers in this pool.
+                // The legacy way to get a port is through the bindings,
+                // but they're also available as an inheritable
+                // proxy_behavior field of port_listen.
                 //
-                int s = 0;
-                while (servers[s])
-                    s++;
+                int pool_port = proxyb.port_listen;
 
-                if (s > 0) {
-                    // Parse server-level behaviors, so we'll have an
-                    // array of behaviors, one entry for each server.
+                if (i < nbindings &&
+                    bindings != NULL &&
+                    bindings[i])
+                    pool_port = atoi(skipspace(bindings[i]));
+
+                if (pool_port > 0) {
+                    // Number of servers in this pool.
                     //
-                    proxy_behavior_pool behavior_pool = {
-                        .base = proxyb,
-                        .num  = s,
-                        .arr  = calloc(s, sizeof(proxy_behavior))
-                    };
+                    int s = 0;
+                    while (servers[s])
+                        s++;
 
-                    if (behavior_pool.arr != NULL) {
-                        char *config_str =
-                            parse_kvs_servers("svr", pool_name, kvs,
-                                              servers, &behavior_pool);
-                        if (config_str != NULL &&
-                            config_str[0] != '\0') {
+                    if (s > 0) {
+                        // Parse server-level behaviors, so we'll have an
+                        // array of behaviors, one entry for each server.
+                        //
+                        proxy_behavior_pool behavior_pool = {
+                            .base = proxyb,
+                            .num  = s,
+                            .arr  = calloc(s, sizeof(proxy_behavior))
+                        };
+
+                        if (behavior_pool.arr != NULL) {
+                            char *config_str =
+                                parse_kvs_servers("svr", pool_name, kvs,
+                                                  servers, &behavior_pool);
+                            if (config_str != NULL &&
+                                config_str[0] != '\0') {
+                                if (settings.verbose > 1)
+                                    fprintf(stderr, "conc config: %s\n",
+                                            config_str);
+
+                                cproxy_on_new_pool(m, pool_name, pool_port,
+                                                   config_str, new_config_ver,
+                                                   &behavior_pool);
+
+                                free(config_str);
+                            }
+
+                            free(behavior_pool.arr);
+                        } else {
                             if (settings.verbose > 1)
-                                fprintf(stderr, "conc config: %s\n",
-                                        config_str);
-
-                            cproxy_on_new_pool(m, pool_name, pool_port,
-                                               config_str, new_config_ver,
-                                               &behavior_pool);
-
-                            free(config_str);
+                                fprintf(stderr, "oom on re-config malloc\n");;
+                            goto fail;
                         }
-
-                        free(behavior_pool.arr);
                     } else {
-                        if (settings.verbose > 1)
-                            fprintf(stderr, "oom on re-config malloc\n");;
-                        goto fail;
+                        // Note: ignore when no servers for an existing pool.
+                        // Because the config_ver won't be updated, we'll
+                        // fall into the empty_pool code path below.
                     }
                 } else {
-                    // Note: ignore when no servers for an existing pool.
-                    // Because the config_ver won't be updated, we'll
-                    // fall into the empty_pool code path below.
+                    if (settings.verbose > 1)
+                        fprintf(stderr, "conc missing pool port\n");
+                    goto fail;
                 }
             } else {
-                if (settings.verbose > 1)
-                    fprintf(stderr, "missing servers or port\n");
-                goto fail;
+                // Note: ignore when no servers for an existing pool.
+                // Because the config_ver won't be updated, we'll
+                // fall into the empty_pool code path below.
             }
         } else {
             if (settings.verbose > 1)
-                fprintf(stderr, "missing ports or bindings\n");
+                fprintf(stderr, "conc missing pool name\n");
             goto fail;
         }
     }
@@ -458,21 +474,32 @@ void cproxy_on_new_config(void *data0, void *data1) {
     empty_pool.arr  = NULL;
 
     for (proxy *p = m->proxy_head; p != NULL; p = p->next) {
-        bool down = false;
-        int  port = 0;
+        bool  down = false;
+        int   port = 0;
+        char *name = NULL;
 
         pthread_mutex_lock(&p->proxy_lock);
 
         if (p->config_ver != new_config_ver) {
             down = true;
+
+            assert(p->port > 0);
+            assert(p->name != NULL);
+
             port = p->port;
+            name = strdup(p->name);
         }
 
         pthread_mutex_unlock(&p->proxy_lock);
 
-        if (down)
-            cproxy_on_new_pool(m, NULL, port, NULL, new_config_ver,
+        if (down) {
+            cproxy_on_new_pool(m, name, port, NULL, new_config_ver,
                                &empty_pool);
+        }
+
+        if (name != NULL) {
+            free(name);
+        }
     }
 
     free_kvpair(kvs);
@@ -481,24 +508,45 @@ void cproxy_on_new_config(void *data0, void *data1) {
  fail:
     m->stat_config_fails++;
     free_kvpair(kvs);
+
+    if (settings.verbose > 1)
+        fprintf(stderr, "conc failed config %llu\n", m->stat_config_fails);
 }
 
+/**
+ * A name and port uniquely identify a proxy.
+ */
 void cproxy_on_new_pool(proxy_main *m,
                         char *name, int port,
                         char *config,
                         uint32_t config_ver,
                         proxy_behavior_pool *behavior_pool) {
     assert(m);
+    assert(name != NULL);
     assert(port >= 0);
     assert(is_listen_thread());
 
-    // See if we've already got a proxy running on the port,
+    // See if we've already got a proxy running with that name and port,
     // and create one if needed.
     //
+    bool found = false;
     proxy *p = m->proxy_head;
-    while (p != NULL &&
-           p->port != port)
+    while (p != NULL && !found) {
+        pthread_mutex_lock(&p->proxy_lock);
+
+        assert(p->port > 0);
+        assert(p->name != NULL);
+
+        found = ((p->port == port) &&
+                 (strcmp(p->name, name) == 0));
+
+        pthread_mutex_unlock(&p->proxy_lock);
+
+        if (found)
+            break;
+
         p = p->next;
+    }
 
     if (p == NULL) {
         p = cproxy_create(name, port,
@@ -530,7 +578,8 @@ void cproxy_on_new_pool(proxy_main *m,
             fprintf(stderr, "conp existing config change %u\n",
                     p->port);
 
-        bool changed = false;
+        bool changed  = false;
+        bool shutdown = false;
 
         // Turn off the front_cache while we're reconfiguring.
         //
@@ -543,21 +592,12 @@ void cproxy_on_new_pool(proxy_main *m,
         pthread_mutex_lock(&p->proxy_lock);
 
         if (settings.verbose > 1) {
-            if (p->name && name &&
-                strcmp(p->name, name) != 0)
-                fprintf(stderr,
-                        "conp name changed from %s to %s\n",
-                        p->name, name);
-
             if (p->config && config &&
                 strcmp(p->config, config) != 0)
                 fprintf(stderr,
                         "conp config changed from %s to %s\n",
                         p->config, config);
         }
-
-        changed = update_str_config(&p->name, name,
-                                    "conp name changed\n") || changed;
 
         changed = update_str_config(&p->config, config,
                                     "conp config changed\n") || changed;
@@ -577,12 +617,13 @@ void cproxy_on_new_pool(proxy_main *m,
                                     "conp behaviors changed\n") ||
             changed;
 
-        if (p->name != NULL &&
-            p->config != NULL &&
-            p->behavior_pool.arr != NULL)
+        if (p->config != NULL &&
+            p->behavior_pool.arr != NULL) {
             m->stat_proxy_existings++;
-        else
+        } else {
             m->stat_proxy_shutdowns++;
+            shutdown = true;
+        }
 
         assert(config_ver != p->config_ver);
 
@@ -591,30 +632,33 @@ void cproxy_on_new_pool(proxy_main *m,
         pthread_mutex_unlock(&p->proxy_lock);
 
         if (settings.verbose > 1)
-            fprintf(stderr, "conp changed %s\n",
-                    changed ? "true" : "false");
+            fprintf(stderr, "conp changed %s, shutdown %s\n",
+                    changed ? "true" : "false",
+                    shutdown ? "true" : "false");
 
         // Restart the front_cache, if necessary.
         //
-        if (behavior_pool->base.front_cache_max > 0 &&
-            behavior_pool->base.front_cache_lifespan > 0) {
-            mcache_start(&p->front_cache,
-                         behavior_pool->base.front_cache_max);
+        if (shutdown == false) {
+            if (behavior_pool->base.front_cache_max > 0 &&
+                behavior_pool->base.front_cache_lifespan > 0) {
+                mcache_start(&p->front_cache,
+                             behavior_pool->base.front_cache_max);
 
-            if (strlen(behavior_pool->base.front_cache_spec) > 0) {
-                matcher_start(&p->front_cache_matcher,
-                              behavior_pool->base.front_cache_spec);
+                if (strlen(behavior_pool->base.front_cache_spec) > 0) {
+                    matcher_start(&p->front_cache_matcher,
+                                  behavior_pool->base.front_cache_spec);
+                }
+
+                if (strlen(behavior_pool->base.front_cache_unspec) > 0) {
+                    matcher_start(&p->front_cache_unmatcher,
+                                  behavior_pool->base.front_cache_unspec);
+                }
             }
 
-            if (strlen(behavior_pool->base.front_cache_unspec) > 0) {
-                matcher_start(&p->front_cache_unmatcher,
-                              behavior_pool->base.front_cache_unspec);
+            if (strlen(behavior_pool->base.optimize_set) > 0) {
+                matcher_start(&p->optimize_set_matcher,
+                              behavior_pool->base.optimize_set);
             }
-        }
-
-        if (strlen(behavior_pool->base.optimize_set) > 0) {
-            matcher_start(&p->optimize_set_matcher,
-                          behavior_pool->base.optimize_set);
         }
 
         // Send update across worker threads, avoiding locks.
@@ -685,19 +729,21 @@ static void update_ptd_config(void *data0, void *data1) {
         matcher_stop(&ptd->key_stats_matcher);
         matcher_stop(&ptd->key_stats_unmatcher);
 
-        if (ptd->behavior_pool.base.key_stats_max > 0 &&
-            ptd->behavior_pool.base.key_stats_lifespan > 0) {
-            mcache_start(&ptd->key_stats,
-                         ptd->behavior_pool.base.key_stats_max);
+        if (ptd->config != NULL) {
+            if (ptd->behavior_pool.base.key_stats_max > 0 &&
+                ptd->behavior_pool.base.key_stats_lifespan > 0) {
+                mcache_start(&ptd->key_stats,
+                             ptd->behavior_pool.base.key_stats_max);
 
-            if (strlen(ptd->behavior_pool.base.key_stats_spec) > 0) {
-                matcher_start(&ptd->key_stats_matcher,
-                              ptd->behavior_pool.base.key_stats_spec);
-            }
+                if (strlen(ptd->behavior_pool.base.key_stats_spec) > 0) {
+                    matcher_start(&ptd->key_stats_matcher,
+                                  ptd->behavior_pool.base.key_stats_spec);
+                }
 
-            if (strlen(ptd->behavior_pool.base.key_stats_unspec) > 0) {
-                matcher_start(&ptd->key_stats_unmatcher,
-                              ptd->behavior_pool.base.key_stats_unspec);
+                if (strlen(ptd->behavior_pool.base.key_stats_unspec) > 0) {
+                    matcher_start(&ptd->key_stats_unmatcher,
+                                  ptd->behavior_pool.base.key_stats_unspec);
+                }
             }
         }
 
