@@ -25,25 +25,26 @@ struct work_queue {
     int send_fd; // Pipe to notify thread.
     int recv_fd;
 
-    struct event_base *event_base;
-    struct event       event;
-
-    work_item      *work_head;
-    work_item      *work_tail;
-    pthread_mutex_t work_lock;
+    work_item *work_head;
+    work_item *work_tail;
 
     uint64_t num_items; // Current number of items in queue.
     uint64_t tot_sends;
     uint64_t tot_recvs;
+
+    struct event_base *event_base;
+    struct event       event;
+
+    pthread_mutex_t work_lock;
 };
 
 struct work_collect {
     int count;
 
+    void *data;
+
     pthread_mutex_t collect_lock;
     pthread_cond_t  collect_cond; // Signaled when count drops to 0.
-
-    void *data;
 };
 
 bool work_queue_init(work_queue *m, struct event_base *base);

@@ -43,6 +43,8 @@ doc/protocol-binary.txt
 /doc/doxy
 /check_util
 /check_moxi
+/check_moxi_agent
+/check_work
 ltmain.sh
 libtool
 libmemcached-0.29/*

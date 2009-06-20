@@ -11,6 +11,8 @@
 #include <event.h>
 #include "work.h"
 
+#undef WORK_DEBUG
+
 /** A work queue is a mechanism to allow thread-to-thread
  *  communication in a libevent-based, multithreaded system.
  *
@@ -26,7 +28,10 @@
 bool work_queue_init(work_queue *m, struct event_base *event_base) {
     assert(m != NULL);
 
+    memset(m, 0, sizeof(work_queue));
+
     pthread_mutex_init(&m->work_lock, NULL);
+
     m->work_head = NULL;
     m->work_tail = NULL;
 
@@ -37,7 +42,7 @@ bool work_queue_init(work_queue *m, struct event_base *event_base) {
     m->event_base = event_base;
     assert(m->event_base != NULL);
 
-    int fds[2];
+    int fds[2] = {0};
 
     if (pipe(fds) == 0) {
         m->recv_fd = fds[0];
@@ -48,9 +53,24 @@ bool work_queue_init(work_queue *m, struct event_base *event_base) {
         event_base_set(m->event_base, &m->event);
 
         if (event_add(&m->event, 0) == 0) {
+#ifdef WORK_DEBUG
+            fprintf(stderr, "work_queue_init %x %x %x %d %d %u %llu\n",
+                    (int) pthread_self(),
+                    (int) m,
+                    (int) m->event_base,
+                    m->send_fd,
+                    m->recv_fd,
+                    m->work_head != NULL,
+                    m->tot_sends);
+#endif
+
             return true;
         }
     }
+
+#ifdef WORK_DEBUG
+    fprintf(stderr, "work_queue_init error\n");
+#endif
 
     return false;
 }
@@ -89,10 +109,23 @@ bool work_send(work_queue *m,
         if (m->work_head == NULL)
             m->work_head = w;
 
-        m->tot_sends++;
+        if (write(m->send_fd, "", 1) == 1) {
+            m->num_items++;
+            m->tot_sends++;
 
-        if (write(m->send_fd, "", 1) == 1)
+#ifdef WORK_DEBUG
+            fprintf(stderr, "work_send %x %x %x %d %d %d %llu %llu\n",
+                    (int) pthread_self(),
+                    (int) m,
+                    (int) m->event_base,
+                    m->send_fd, m->recv_fd,
+                    m->work_head != NULL,
+                    m->num_items,
+                    m->tot_sends);
+#endif
+
             rv = true;
+        }
 
         pthread_mutex_unlock(&m->work_lock);
     }
@@ -123,14 +156,28 @@ void work_recv(int fd, short which, void *arg) {
     int readrv = read(fd, buf, 1);
     assert(readrv == 1);
     if (readrv != 1) {
+#ifdef WORK_DEBUG
         // Perhaps libevent called us in incorrect way.
         //
         fprintf(stderr, "unexpected work_recv read value\n");
+#endif
     }
 
     curr = m->work_head;
     m->work_head = NULL;
     m->work_tail = NULL;
+
+#ifdef WORK_DEBUG
+    fprintf(stderr, "work_recv %x %x %x %d %d %d %llu %llu %d\n",
+            (int) pthread_self(),
+            (int) m,
+            (int) m->event_base,
+            m->send_fd, m->recv_fd,
+            curr != NULL,
+            m->num_items,
+            m->tot_sends,
+            fd);
+#endif
 
     pthread_mutex_unlock(&m->work_lock);
 
@@ -170,6 +217,8 @@ void work_recv(int fd, short which, void *arg) {
  */
 void work_collect_init(work_collect *c, int count, void *data) {
     assert(c);
+
+    memset(c, 0, sizeof(work_collect));
 
     c->count = count;
     c->data  = data;
