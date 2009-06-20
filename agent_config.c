@@ -530,6 +530,7 @@ void cproxy_on_new_pool(proxy_main *m,
     // and create one if needed.
     //
     bool found = false;
+
     proxy *p = m->proxy_head;
     while (p != NULL && !found) {
         pthread_mutex_lock(&p->proxy_lock);
@@ -599,8 +600,10 @@ void cproxy_on_new_pool(proxy_main *m,
                         p->config, config);
         }
 
-        changed = update_str_config(&p->config, config,
-                                    "conp config changed\n") || changed;
+        changed =
+            update_str_config(&p->config, config,
+                              "conp config changed\n") ||
+            changed;
 
         changed =
             (cproxy_equal_behavior(&p->behavior_pool.base,
