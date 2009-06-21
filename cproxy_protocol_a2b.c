@@ -474,9 +474,9 @@ void cproxy_process_a2b_downstream_nread(conn *c) {
         // We item_alloc() even if vlen is 0, so that later
         // code can assume an item exists.
         //
-        char  *key   = binary_get_key(c);
-        int    vlen  = bodylen - (keylen + extlen);
-        int    flags = 0;
+        char *key   = binary_get_key(c);
+        int   vlen  = bodylen - (keylen + extlen);
+        int   flags = 0;
 
         assert(key);
         assert(keylen > 0);
