@@ -25,6 +25,8 @@ void multiget_foreach_free(gpointer key,
     proxy_stats_cmd *psc_get_key =
         &ptd->stats.stats_cmd[STATS_CMD_TYPE_REGULAR][STATS_CMD_GET_KEY];
 
+    int length = 0;
+
     multiget_entry *entry = value;
 
     while (entry != NULL) {
@@ -32,14 +34,18 @@ void multiget_foreach_free(gpointer key,
             psc_get_key->misses++;
         }
 
-        // TODO: Update key stats misses.
+        // TODO: Update key-level stats misses.
 
         multiget_entry *curr = entry;
         entry = entry->next;
         curr->upstream_conn = NULL;
         curr->next          = NULL;
         free(curr);
+
+        length++;
     }
+
+    // TODO: Track key-level multiget squashes (length > 1).
 }
 
 /* Callback to g_hash_table_foreach that clears out multiget_entries
