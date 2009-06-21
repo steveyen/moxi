@@ -26,7 +26,6 @@ void multiget_foreach_free(gpointer key,
         &ptd->stats.stats_cmd[STATS_CMD_TYPE_REGULAR][STATS_CMD_GET_KEY];
 
     multiget_entry *entry = value;
-    assert(entry != NULL);
 
     while (entry != NULL) {
         if (entry->hits == 0) {
@@ -37,6 +36,8 @@ void multiget_foreach_free(gpointer key,
 
         multiget_entry *curr = entry;
         entry = entry->next;
+        curr->upstream_conn = NULL;
+        curr->next          = NULL;
         free(curr);
     }
 }

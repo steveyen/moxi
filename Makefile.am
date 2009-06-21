@@ -8,6 +8,7 @@ noinst_PROGRAMS = moxi-debug sizes testapp
 ##  change this
 INCLUDES = $(GLIB2_CFLAGS)
 LIBS += $(GLIB2_LIBS)
+LIBS += -lgthread-2.0
 
 BUILT_SOURCES=
 

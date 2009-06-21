@@ -9,6 +9,7 @@
 #include <pthread.h>
 #include <assert.h>
 #include <math.h>
+#include <glib.h>
 #include <libmemcached/memcached.h>
 #include "memcached.h"
 #include "cproxy.h"
@@ -167,6 +168,8 @@ bool wordeq(char *s, char *word) {
 
 // ---------------------------------------
 
+static bool cproxy_core_initted = false;
+
 /** The cfg_str may be a path to a file like...
  *
  *    /full/path
@@ -190,6 +193,17 @@ int cproxy_init(char *cfg_str,
     assert(nthreads > 1); // Main + at least one worker.
     assert(nthreads == settings.num_threads);
 
+    if (cproxy_core_initted == false) {
+        cproxy_core_initted = true;
+
+        g_thread_init(NULL);
+
+        gethostname(cproxy_hostname, sizeof(cproxy_hostname));
+
+        cproxy_init_a2a();
+        cproxy_init_a2b();
+    }
+
     if (cfg_str == NULL ||
         strlen(cfg_str) <= 0)
         return 0;
@@ -206,11 +220,6 @@ int cproxy_init(char *cfg_str,
             exit(EXIT_FAILURE);
         }
     }
-
-    gethostname(cproxy_hostname, sizeof(cproxy_hostname));
-
-    cproxy_init_a2a();
-    cproxy_init_a2b();
 
     if (behavior_str == NULL)
         behavior_str = "";
