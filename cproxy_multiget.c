@@ -302,9 +302,6 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
                         assert(c->ilist != NULL);
                         assert(c->isize > 0);
 
-                        c->icurr = c->ilist;
-                        c->ileft = 0;
-
                         if (c->msgused <= 1 &&
                             c->msgbytes <= 0) {
                             emit_start(c, command, cmd_len);
