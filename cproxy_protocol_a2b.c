@@ -20,6 +20,10 @@ extern uint64_t htonll(uint64_t);
 
 // Internal declarations.
 //
+protocol_binary_request_noop req_noop = {
+    .bytes = {0}
+};
+
 #define CMD_TOKEN  0
 #define KEY_TOKEN  1
 #define MAX_TOKENS 9
@@ -145,6 +149,12 @@ int a2b_multiget_skey(conn *c, char *skey, int skey_len);
 int a2b_multiget_end(conn *c);
 
 void cproxy_init_a2b() {
+    memset(&req_noop, 0, sizeof(req_noop));
+
+    req_noop.message.header.request.magic    = PROTOCOL_BINARY_REQ;
+    req_noop.message.header.request.opcode   = PROTOCOL_BINARY_CMD_NOOP;
+    req_noop.message.header.request.datatype = PROTOCOL_BINARY_RAW_BYTES;
+
     // Run through the a2b_specs to populate the a2b_spec_map.
     //
     int i = 0;
@@ -1105,28 +1115,7 @@ int a2b_multiget_skey(conn *c, char *skey, int skey_len) {
 }
 
 int a2b_multiget_end(conn *c) {
-    item *it = item_alloc("z", 1, 0, 0, sizeof(protocol_binary_request_noop));
-    if (it != NULL) {
-        if (add_conn_item(c, it)) {
-            protocol_binary_request_noop *req =
-                (protocol_binary_request_noop *) ITEM_data(it);
-
-            memset(req, 0, sizeof(req->bytes));
-
-            req->message.header.request.magic    = PROTOCOL_BINARY_REQ;
-            req->message.header.request.opcode   = PROTOCOL_BINARY_CMD_NOOP;
-            req->message.header.request.datatype = PROTOCOL_BINARY_RAW_BYTES;
-
-            if (add_iov(c, ITEM_data(it), sizeof(req->bytes)) == 0)
-                return 0; // Success.
-
-            return -1;
-        }
-
-        item_remove(it);
-    }
-
-    return -1;
+    return add_iov(c, &req_noop.bytes, sizeof(req_noop.bytes));
 }
 
 /* Used for broadcast commands, like flush_all or stats.
