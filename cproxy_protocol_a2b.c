@@ -1094,6 +1094,8 @@ int a2b_multiget_skey(conn *c, char *skey, int skey_len) {
             if (add_iov(c, ITEM_data(it), sizeof(req->bytes)) == 0 &&
                 add_iov(c, key, key_len) == 0)
                 return 0; // Success.
+
+            return -1;
         }
 
         item_remove(it);
@@ -1117,6 +1119,8 @@ int a2b_multiget_end(conn *c) {
 
             if (add_iov(c, ITEM_data(it), sizeof(req->bytes)) == 0)
                 return 0; // Success.
+
+            return -1;
         }
 
         item_remove(it);
