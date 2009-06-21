@@ -1,4 +1,4 @@
-man_MANS = memcached.1
+man_MANS = moxi.1
 
 EXTRA_DIST = *.txt
 
