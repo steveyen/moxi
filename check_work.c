@@ -68,12 +68,30 @@ START_TEST(test_collect)
 }
 END_TEST
 
+static void test_one_worker(void *data0, void *data1) {
+  char *s0 = data0;
+  char *s1 = data1;
+  fail_unless(strcmp(s0, "hello"), "tcw");
+  fail_unless(strcmp(s1, "world"), "tcw");
+}
+
+START_TEST(test_one)
+{
+  LIBEVENT_THREAD *t = thread_by_index(1);
+  fail_unless(NULL != t, "tc");
+  fail_unless(NULL != t->work_queue, "tc");
+  work_send(t->work_queue, test_one_worker, "hello", "world");
+  sleep(1);
+}
+END_TEST
+
 static Suite* work_suite(void)
 {
     Suite *s = suite_create("work");
 
     /* Core test case */
     TCase *tc_core = tcase_create("core");
+    tcase_add_test(tc_core, test_one);
     tcase_add_test(tc_core, test_collect);
     suite_add_tcase(s, tc_core);
 
