@@ -86,8 +86,8 @@ typedef struct key_stats           key_stats;
 
 struct proxy_behavior {
     // IL means startup, system initialization level behavior.
-    // ML means proxy_main-level behavior.
-    // PL means proxy-level behavior.
+    // ML means proxy/pool manager-level behavior (proxy_main).
+    // PL means proxy/pool-level behavior.
     // SL means server-level behavior, although we inherit from proxy level.
     //
     uint32_t       cycle;               // IL: Clock resolution in millisecs.
