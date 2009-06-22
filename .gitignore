@@ -49,3 +49,5 @@ ltmain.sh
 libtool
 libmemcached-0.29/*
 libmemcached-0.29
+libmemcached-0.30/*
+libmemcached-0.30
