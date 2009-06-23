@@ -4324,6 +4324,7 @@ int main (int argc, char **argv) {
             }
             i--;
         }
+#ifndef MAIN_CHECK
         if (i <= 0 &&
             settings.port <= 0 &&
             settings.udpport <= 0) {
@@ -4331,6 +4332,7 @@ int main (int argc, char **argv) {
                     "error: need proxy configuration.  See usage (-h).\n");
             return 1;
         }
+#endif
     }
 
     if (cproxy_behavior)
