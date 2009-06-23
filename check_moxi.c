@@ -89,6 +89,7 @@ START_TEST(test_parse_behavior) {
                             " host = hostname ,"
                             " port = 4321 , "
                             " bucket = buck , "
+                            " port_listen = 443322 , "
                             " UNKNOWN_IGNORED_KEY =, "
                             " ,,,  ",
                             b);
@@ -112,6 +113,7 @@ START_TEST(test_parse_behavior) {
     fail_unless(strcmp(w.host, "hostname") == 0, "tpb");
     fail_unless(w.port == 4321, "tpb");
     fail_unless(strcmp(w.bucket, "buck") == 0, "tpb");
+    fail_unless(w.port_listen == 443322, "tpb");
 }
 END_TEST
 
