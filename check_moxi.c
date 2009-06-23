@@ -114,6 +114,55 @@ START_TEST(test_parse_behavior) {
     fail_unless(w.port == 4321, "tpb");
     fail_unless(strcmp(w.bucket, "buck") == 0, "tpb");
     fail_unless(w.port_listen == 443322, "tpb");
+
+    // Test that things get zero'ed out.
+    //
+    proxy_behavior u =
+      cproxy_parse_behavior(" ,,,"
+                            " cycle =  , "
+                            " downstream_max   =  ,"
+                            " downstream_weight =  ,"
+                            " downstream_retry =  ,"
+                            " downstream_protocol =  ,"
+                            " downstream_timeout =  ,"
+                            " front_cache_max =  , "
+                            " front_cache_lifespan =  , "
+                            " front_cache_spec =   , "
+                            " front_cache_unspec  =   ,"
+                            " key_stats_max =  , "
+                            " key_stats_lifespan =  , "
+                            " key_stats_spec =  , "
+                            " key_stats_unspec  =  ,"
+                            " optimize_set =    , "
+                            " usr =   , "
+                            " pwd =   , "
+                            " host =  ,"
+                            " port =  , "
+                            " bucket =  , "
+                            " port_listen =  , "
+                            " UNKNOWN_IGNORED_KEY =, "
+                            " ,,,  ",
+                            w);
+    fail_if(cproxy_equal_behavior(&u, &w), "tpb");
+
+    fail_unless(u.cycle == 0, "tpb");
+    fail_unless(u.downstream_max == 0, "tpb");
+    fail_unless(u.downstream_weight == 0, "tpb");
+    fail_unless(u.downstream_retry == 0, "tpb");
+    fail_unless(u.downstream_protocol == proxy_downstream_ascii_prot, "tpb");
+    fail_unless(u.front_cache_max == 0, "tpb");
+    fail_unless(strcmp(u.front_cache_spec, "") == 0, "tpb");
+    fail_unless(strcmp(u.front_cache_unspec, "") == 0, "tpb");
+    fail_unless(u.key_stats_max == 0, "");
+    fail_unless(strcmp(u.key_stats_spec, "") == 0, "tpb");
+    fail_unless(strcmp(u.key_stats_unspec, "") == 0, "tpb");
+    fail_unless(strcmp(u.optimize_set, "") == 0, "tpb");
+    fail_unless(strcmp(u.usr, "") == 0, "tpb");
+    fail_unless(strcmp(u.pwd, "") == 0, "tpb");
+    fail_unless(strcmp(u.host, "") == 0, "tpb");
+    fail_unless(u.port == 0, "tpb");
+    fail_unless(strcmp(u.bucket, "") == 0, "tpb");
+    fail_unless(u.port_listen == 0, "tpb");
 }
 END_TEST
 

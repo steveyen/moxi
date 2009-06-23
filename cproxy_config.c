@@ -399,7 +399,7 @@ void cproxy_parse_behavior_key_val(char *key,
 
         if (wordeq(key, "cycle")) {
             behavior->cycle = strtol(val, NULL, 10);
-            assert(behavior->cycle > 0);
+            assert(behavior->cycle >= 0);
         } else if (wordeq(key, "downstream_max")) {
             behavior->downstream_max = strtol(val, NULL, 10);
             assert(behavior->downstream_max >= 0);
