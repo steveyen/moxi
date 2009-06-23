@@ -21,8 +21,6 @@ struct agg {
 
 int main_check(int argc, char **argv);
 
-#if 0
-
 static void test_collect_worker(void *data0, void *data1) {
   fail_unless(data0 != NULL, "wsc");
   fail_unless(data1 != NULL, "wsc");
@@ -50,7 +48,7 @@ static void test_collect_main(void) {
   agg.visits = 0;
 
   work_collect c;
-  work_collect_init(&c, nthreads, &agg);
+  work_collect_init(&c, nthreads - 1, &agg);
 
   for (int i = 1; i < nthreads; i++) {
     LIBEVENT_THREAD *t = thread_by_index(i);
@@ -61,7 +59,7 @@ static void test_collect_main(void) {
 
   work_collect_wait(&c);
 
-  fail_unless(agg.visits == nthreads, "collect");
+  fail_unless(agg.visits == nthreads - 1, "collect");
 }
 
 START_TEST(test_collect)
@@ -69,8 +67,6 @@ START_TEST(test_collect)
   test_collect_main();
 }
 END_TEST
-
-#endif
 
 static void test_one_worker(void *data0, void *data1) {
   char *s0 = data0;
@@ -97,7 +93,7 @@ static Suite* work_suite(void)
     /* Core test case */
     TCase *tc_core = tcase_create("core");
     tcase_add_test(tc_core, test_one);
-    // tcase_add_test(tc_core, test_collect);
+    tcase_add_test(tc_core, test_collect);
     suite_add_tcase(s, tc_core);
 
     return s;

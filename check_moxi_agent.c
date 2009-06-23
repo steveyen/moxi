@@ -50,6 +50,7 @@ static void *check_thread(void *arg) {
     int number_failed;
     Suite *s = moxi_agent_suite();
     SRunner *sr = srunner_create(s);
+    srunner_set_fork_status(sr, CK_NOFORK);
     srunner_run_all(sr, CK_NORMAL);
     number_failed = srunner_ntests_failed(sr);
     srunner_free(sr);
