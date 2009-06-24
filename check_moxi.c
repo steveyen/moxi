@@ -409,6 +409,37 @@ START_TEST(test_matcher)
                 "match");
     fail_unless(true == matcher_check(&m, s_len("pre3:foo"), false),
                 "match");
+
+    matcher_stop(&m);
+    fail_if(matcher_started(&m), "unstarted after stop");
+    fail_if(true == matcher_check(&m, s_len("pre1:"), false),
+            "miss after stop");
+    fail_if(true == matcher_check(&m, s_len("pre1:foo"), false),
+            "miss after stop");
+
+    matcher_start(&m, "|||pre1:|||pre2:|||pre3:|||");
+    fail_if(matcher_started(&m) == false, "started");
+
+    fail_if(true == matcher_check(&m, s_len(""), false),
+            "match");
+    fail_if(true == matcher_check(&m, s_len("hi"), false),
+            "no match");
+    fail_if(true == matcher_check(&m, s_len("pre1"), false),
+            "match");
+    fail_if(true == matcher_check(&m, s_len("pre1foo"), false),
+            "match");
+    fail_unless(true == matcher_check(&m, s_len("pre1:"), false),
+                "match");
+    fail_unless(true == matcher_check(&m, s_len("pre1:foo"), false),
+                "match");
+    fail_unless(true == matcher_check(&m, s_len("pre2:"), false),
+                "match");
+    fail_unless(true == matcher_check(&m, s_len("pre2:foo"), false),
+                "match");
+    fail_unless(true == matcher_check(&m, s_len("pre3:"), false),
+                "match");
+    fail_unless(true == matcher_check(&m, s_len("pre3:foo"), false),
+                "match");
 }
 END_TEST
 
