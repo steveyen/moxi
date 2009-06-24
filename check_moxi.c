@@ -10,6 +10,8 @@
 
 int main_check(int argc, char **argv);
 
+#define s_len(str) (str), strlen(str)
+
 START_TEST(test_skey)
 {
     fail_unless(skey_len("123") == 3, "skey_len");
@@ -166,6 +168,108 @@ START_TEST(test_parse_behavior) {
 }
 END_TEST
 
+START_TEST(test_mcache) {
+    mcache m;
+    mcache_init(&m, false, &mcache_key_stats_funcs, false);
+    fail_unless(NULL == mcache_get(&m, s_len("not_there"), 0), "tm");
+
+    key_stats ks1 = {
+      .key = "ks1",
+      .refcount = 0,
+      .exptime = 0,
+      .next = NULL,
+      .prev = NULL
+    };
+
+    mcache_set(&m, &ks1, 0, false, false);
+    fail_unless(NULL == mcache_get(&m, s_len("ks1"), 0),
+                "empty when not started");
+
+    mcache_start(&m, 100);
+    fail_unless(mcache_started(&m), "started");
+
+    fail_unless(NULL == mcache_get(&m, s_len("ks1"), 0),
+                "empty after just started");
+
+    mcache_set(&m, &ks1, 0, false, false);
+    fail_if(NULL == mcache_get(&m, s_len("ks1"), 0),
+            "hit after set");
+    fail_unless(NULL == mcache_get(&m, s_len("ks2"), 0),
+                "miss");
+
+    fail_unless(mcache_started(&m), "still started");
+    mcache_stop(&m);
+    fail_if(mcache_started(&m), "stopped");
+
+    fail_unless(NULL == mcache_get(&m, s_len("ks1"), 0),
+                "miss after stop");
+    fail_unless(NULL == mcache_get(&m, s_len("ks2"), 0),
+                "miss after stop");
+
+    mcache_set(&m, &ks1, 0, false, false);
+    fail_unless(NULL == mcache_get(&m, s_len("ks1"), 0),
+                "empty when not started");
+
+    key_stats ks9 = {
+      .key = "ks9",
+      .refcount = 0,
+      .exptime = 0,
+      .next = NULL,
+      .prev = NULL
+    };
+
+    mcache_start(&m, 100);
+    fail_unless(mcache_started(&m), "restarted");
+
+    fail_unless(NULL == mcache_get(&m, s_len("ks1"), 0),
+                "empty after just restarted");
+
+    mcache_set(&m, &ks1, 0, false, false);
+    mcache_set(&m, &ks9, 0, false, false);
+    fail_if(NULL == mcache_get(&m, s_len("ks1"), 0),
+            "hit after set");
+    fail_if(NULL == mcache_get(&m, s_len("ks9"), 0),
+            "hit after set");
+    fail_unless(NULL == mcache_get(&m, s_len("ks2"), 0),
+                "miss");
+
+    mcache_delete(&m, s_len("ks1")),
+
+    fail_unless(NULL == mcache_get(&m, s_len("ks1"), 0),
+            "miss after deleted");
+    fail_if(NULL == mcache_get(&m, s_len("ks9"), 0),
+            "hit on non-deleted key");
+
+    // Test with tiny capacity of 1 item.
+    //
+    fail_unless(mcache_started(&m), "still started");
+    mcache_stop(&m);
+    fail_if(mcache_started(&m), "stopped");
+    mcache_start(&m, 1);
+    fail_unless(mcache_started(&m), "restarted small");
+
+    fail_unless(NULL == mcache_get(&m, s_len("ks1"), 0),
+                "empty after just restarted");
+    fail_unless(NULL == mcache_get(&m, s_len("ks9"), 0),
+                "empty after just restarted");
+
+    mcache_set(&m, &ks1, 0, false, false);
+    fail_if(NULL == mcache_get(&m, s_len("ks1"), 0),
+            "hit after set");
+    mcache_set(&m, &ks9, 0, false, false);
+    fail_if(NULL == mcache_get(&m, s_len("ks9"), 0),
+            "hit after set");
+
+    fail_unless(NULL == mcache_get(&m, s_len("ks1"), 0),
+                "miss");
+    fail_unless(NULL == mcache_get(&m, s_len("ks2"), 0),
+                "miss");
+
+    fail_if(NULL == mcache_get(&m, s_len("ks9"), 0),
+            "hit after set");
+}
+END_TEST
+
 static Suite* moxi_suite(void)
 {
     Suite *s = suite_create("moxi");
@@ -175,6 +279,7 @@ static Suite* moxi_suite(void)
     tcase_add_test(tc_core, test_skey);
     tcase_add_test(tc_core, test_whitespace);
     tcase_add_test(tc_core, test_parse_behavior);
+    tcase_add_test(tc_core, test_mcache);
     suite_add_tcase(s, tc_core);
 
     return s;
