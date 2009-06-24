@@ -171,7 +171,16 @@ END_TEST
 START_TEST(test_mcache) {
     mcache m;
     mcache_init(&m, false, &mcache_key_stats_funcs, false);
-    fail_unless(NULL == mcache_get(&m, s_len("not_there"), 0), "tm");
+    fail_if(mcache_started(&m), "started");
+
+    fail_unless(NULL == mcache_get(&m, s_len("not_there"), 0),
+                "miss when unstarted");
+
+    mcache_stop(&m);
+    fail_if(mcache_started(&m), "stop idempotent");
+
+    fail_unless(NULL == mcache_get(&m, s_len("not_there"), 0),
+                "miss when unstarted");
 
     key_stats ks1 = {
       .key = "ks1",
@@ -309,6 +318,100 @@ START_TEST(test_mcache) {
 }
 END_TEST
 
+START_TEST(test_matcher)
+{
+    matcher m;
+
+    matcher_init(&m, false);
+    fail_if(true == matcher_check(&m, s_len("hi"), false),
+            "when unstarted");
+    fail_if(false == matcher_check(&m, s_len("hi"), true),
+            "when unstarted");
+
+    fail_if(matcher_started(&m), "unstarted");
+    matcher_stop(&m);
+    fail_if(matcher_started(&m), "stop is idempotent");
+    matcher_start(&m, NULL);
+    fail_if(matcher_started(&m), "unstarted with NULL spec");
+    matcher_start(&m, "");
+    fail_if(matcher_started(&m), "unstarted with blank spec");
+
+    matcher_start(&m, "pre1:");
+    fail_if(matcher_started(&m) == false, "started");
+
+    fail_if(true == matcher_check(&m, s_len(""), false),
+            "match");
+    fail_if(true == matcher_check(&m, s_len("hi"), false),
+            "no match");
+    fail_if(true == matcher_check(&m, s_len("pre1"), false),
+            "match");
+    fail_if(true == matcher_check(&m, s_len("pre1foo"), false),
+            "match");
+    fail_unless(true == matcher_check(&m, s_len("pre1:"), false),
+                "match");
+    fail_unless(true == matcher_check(&m, s_len("pre1:foo"), false),
+                "match");
+
+    matcher_stop(&m);
+    fail_if(matcher_started(&m), "unstarted after stop");
+    fail_if(true == matcher_check(&m, s_len("pre1:"), false),
+            "miss after stop");
+    fail_if(true == matcher_check(&m, s_len("pre1:foo"), false),
+            "miss after stop");
+
+    matcher_start(&m, "pre1:|pre2:");
+    fail_if(matcher_started(&m) == false, "started");
+
+    fail_if(true == matcher_check(&m, s_len(""), false),
+            "match");
+    fail_if(true == matcher_check(&m, s_len("hi"), false),
+            "no match");
+    fail_if(true == matcher_check(&m, s_len("pre1"), false),
+            "match");
+    fail_if(true == matcher_check(&m, s_len("pre1foo"), false),
+            "match");
+    fail_unless(true == matcher_check(&m, s_len("pre1:"), false),
+                "match");
+    fail_unless(true == matcher_check(&m, s_len("pre1:foo"), false),
+                "match");
+    fail_unless(true == matcher_check(&m, s_len("pre2:"), false),
+                "match");
+    fail_unless(true == matcher_check(&m, s_len("pre2:foo"), false),
+                "match");
+
+    matcher_stop(&m);
+    fail_if(matcher_started(&m), "unstarted after stop");
+    fail_if(true == matcher_check(&m, s_len("pre1:"), false),
+            "miss after stop");
+    fail_if(true == matcher_check(&m, s_len("pre1:foo"), false),
+            "miss after stop");
+
+    matcher_start(&m, "pre1:|pre2:|pre3:");
+    fail_if(matcher_started(&m) == false, "started");
+
+    fail_if(true == matcher_check(&m, s_len(""), false),
+            "match");
+    fail_if(true == matcher_check(&m, s_len("hi"), false),
+            "no match");
+    fail_if(true == matcher_check(&m, s_len("pre1"), false),
+            "match");
+    fail_if(true == matcher_check(&m, s_len("pre1foo"), false),
+            "match");
+    fail_unless(true == matcher_check(&m, s_len("pre1:"), false),
+                "match");
+    fail_unless(true == matcher_check(&m, s_len("pre1:foo"), false),
+                "match");
+    fail_unless(true == matcher_check(&m, s_len("pre2:"), false),
+                "match");
+    fail_unless(true == matcher_check(&m, s_len("pre2:foo"), false),
+                "match");
+    fail_unless(true == matcher_check(&m, s_len("pre3:"), false),
+                "match");
+    fail_unless(true == matcher_check(&m, s_len("pre3:foo"), false),
+                "match");
+}
+END_TEST
+
 static Suite* moxi_suite(void)
 {
     Suite *s = suite_create("moxi");
@@ -319,6 +422,7 @@ static Suite* moxi_suite(void)
     tcase_add_test(tc_core, test_whitespace);
     tcase_add_test(tc_core, test_parse_behavior);
     tcase_add_test(tc_core, test_mcache);
+    tcase_add_test(tc_core, test_matcher);
     suite_add_tcase(s, tc_core);
 
     return s;

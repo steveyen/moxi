@@ -36,12 +36,16 @@ void matcher_start(matcher *m, char *spec) {
     //
     if (spec != NULL &&
         strlen(spec) > 0) {
-        char *next = spec;
-        while (next != NULL) {
-            char *patt = strsep(&next, "|");
-            if (patt != NULL) {
-                matcher_add(m, patt);
+        char *copy = strdup(spec);
+        if (copy != NULL) {
+            char *next = copy;
+            while (next != NULL) {
+                char *patt = strsep(&next, "|");
+                if (patt != NULL) {
+                    matcher_add(m, patt);
+                }
             }
+            free(copy);
         }
     }
 
