@@ -267,6 +267,45 @@ START_TEST(test_mcache) {
 
     fail_if(NULL == mcache_get(&m, s_len("ks9"), 0),
             "hit after set");
+
+    // Test with tiny capacity of 2 items.
+    //
+    fail_unless(mcache_started(&m), "still started");
+    mcache_stop(&m);
+    fail_if(mcache_started(&m), "stopped");
+    mcache_start(&m, 2);
+    fail_unless(mcache_started(&m), "restarted with 2 slots");
+
+    fail_unless(NULL == mcache_get(&m, s_len("ks1"), 0),
+                "empty after just restarted");
+    fail_unless(NULL == mcache_get(&m, s_len("ks9"), 0),
+                "empty after just restarted");
+
+    mcache_set(&m, &ks1, 0, false, false);
+    fail_if(NULL == mcache_get(&m, s_len("ks1"), 0),
+            "hit after set");
+    mcache_set(&m, &ks9, 0, false, false);
+    fail_if(NULL == mcache_get(&m, s_len("ks9"), 0),
+            "hit after set");
+
+    fail_if(NULL == mcache_get(&m, s_len("ks1"), 0), // We last touched ks1,
+            "hit after set");                        // so ks9 is LRU.
+
+    key_stats ks8 = {
+      .key = "ks8",
+      .refcount = 0,
+      .exptime = 0,
+      .next = NULL,
+      .prev = NULL
+    };
+
+    mcache_set(&m, &ks8, 0, false, false);
+    fail_if(NULL == mcache_get(&m, s_len("ks8"), 0),
+            "hit after set");
+    fail_if(NULL == mcache_get(&m, s_len("ks1"), 0),
+            "miss");
+    fail_unless(NULL == mcache_get(&m, s_len("ks9"), 0),
+                "miss");
 }
 END_TEST
 
