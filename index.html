@@ -3,11 +3,147 @@
 
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
     <head>
-     <title>moxi documentation</title>
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+
+        <title>NorthScale Labs:Moxi</title>
+
+        <link id="master_css" rel="stylesheet" type="text/css" href="/css/default.css"/>
+
     </head>
+
     <body>
-      More docs coming soon... For now, please look to the 
-      <a href="http://wiki.github.com/steveyen/moxi">wiki</a> for any 
-      documentation.
+
+        <div id="header">
+            <img src="/images/ns_logo_labs.png" alt="NorthScale Labs" style="margin-top:10px;">
+        </div>
+
+
+        <div id="container">
+
+
+            <br>
+                <h1>Moxi by NorthScale</h1>
+
+
+            <a name="moxi"><h2>moxi</h2></a>
+
+            <p>Moxi is a memcached proxy with several features 
+            which can help
+            keep the memcached contract whole in complicated environments.  It
+            brings several optimizations to memcached deployments without
+            requiring any changes to the application software using memcached.</p>
+
+            <p>For instance, moxi has:<br/>
+            <ul><li>A "get" deduplication optimization allowing many requests
+            from one proxy to turn into a single <i>downstream</i> request</li>
+            <li>A multiget optimization which coalesces and multigets requests
+            from multiple threads/processes on a client to memcached servers</li>
+            <li>A 'front cache' which allows for a small (non-coherent) cache,
+            designed to either cache all items or configure particular items to
+            cache by key prefix</li>
+            <li>Optimizations to help keep latencies low from the perspective
+            of the client when running in variable
+            networks, as found in <i>cloud computing</i> environments
+            </ul></p>
+
+            <p>We at NorthScale of course have a variety of other ideas on where
+            we may be able to take moxi and memcached, since we've long been users
+            and helped many others make use of Open Source memcached in their
+            applications.  In releasing moxi as Open Source, we hope to have
+            others join in using or defining these features.  Join us on the
+            <a href="http://groups.google.com/group/moxi">discussion group</a>
+            if you want to collaborate!</p>
+
+            <h3>Download</h3>
+            <!-- p>
+                You can download this project in either
+                <a href="http://github.com/northscale/moxi/zipball/master">zip</a> or
+                <a href="http://github.com/northscale/moxi/tarball/master">tar</a> formats.
+            </p -->
+            <p>You can clone the project with <a href="http://git-scm.com">git</a>
+                by running:
+                <pre>$ git clone git://github.com/northscale/moxi</pre>
+            </p>
+
+
+            <p>There are several dependencies to be noted if you're building
+            from source.  They are either 
+            bundled or should generally be available in most OS distributions.</p>
+
+            <p><ul>
+                <li><a href="http://tangent.org">libmemcached</a> (specific 
+                version, statically linked and bundled)</li>
+                <li><a href="http://monkey.org/~provos/libevent/">libevent</a>,
+                a portable event notification layer for socket/file descriptor
+                events on UNIX like systems
+                <li><a href="http://check.sourceforge.net">check</a>, a C unit test 
+                framework (needed only for testing, we're fans of test driven
+                design)</li>
+            </ul>
+            </p>
+            <p>For more information on depedencies and building, see the project
+            <a href="http://wiki.github.com/northscale/moxi">wiki</a>.  If you
+            have questions, please join our 
+            <a href="http://groups.google.com/group/moxi">discussion group</a>
+            to ask!</p>
+
+            <h3>Installation</h3>
+            <p>Packages will shortly be available for the most common platforms,
+            and that is the preferred method of installation.  Otherwise, the
+            source is automake/autconf based and should build on most UNIX and
+            GNU/Linux systems.</p>
+            
+            <h3>License</h3>
+            <p>New BSD</p>
+
+            <h3>Contact</h3>
+            <p><a href="mailto:feeedback@northscale.com">feedback@northscale.com</a></p>
+            <p>Alternatively, you may post comments below using disqus.</p>
+
+            <p><div id="disqus_thread"></div><script type="text/javascript"
+                                                         src="http://disqus.com/forums/labsnorthscale/embed.js"></script>
+                <noscript><a href="http://labsnorthscale.disqus.com/?url=ref">View the
+                discussion thread.</a></noscript><a href="http://disqus.com"
+                                                    class="dsq-brlink">comments powered by
+            <span class="logo-disqus">Disqus</span></a></p>
+
+            
+
+        </div>
+
+        <script type="text/javascript">
+            var gaJsHost = (("https:" == document.location.protocol) ? "https://ssl." : "http://www.");
+            document.write(unescape("%3Cscript src='" + gaJsHost + "google-analytics.com/ga.js' type='text/javascript'%3E%3C/script%3E"));
+        </script>
+        <script type="text/javascript">
+            try {
+                var pageTracker = _gat._getTracker("UA-0000000-1");
+                pageTracker._trackPageview();
+            } catch(err) {}</script>
+        <script type="text/javascript">
+            //<![CDATA[
+            (function() {
+                var links = document.getElementsByTagName('a');
+                var query = '?';
+                for(var i = 0; i < links.length; i++) {
+                    if(links[i].href.indexOf('#disqus_thread') >= 0) {
+                        query += 'url' + i + '=' + encodeURIComponent(links[i].href) + '&';
+                    }
+                }
+                document.write('<script charset="utf-8" type="text/javascript" src="http://disqus.com/forums/labsnorthscale/get_num_replies.js' + query + '"></' + 'script>');
+            })();
+            //]]>
+        </script>
+
+        <script type="text/javascript">
+            var gaJsHost = (("https:" == document.location.protocol) ? "https://ssl." : "http://www.");
+            document.write(unescape("%3Cscript src='" + gaJsHost + "google-analytics.com/ga.js' type='text/javascript'%3E%3C/script%3E"));
+        </script>
+        <script type="text/javascript">
+            try {
+                var pageTracker = _gat._getTracker("UA-7763794-3");
+                pageTracker._trackPageview();
+            } catch(err) {}</script>
+
     </body>
 </html>
