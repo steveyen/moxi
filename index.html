@@ -76,7 +76,7 @@
           Front cache - an L1 cache, to avoid network hops.
         </li>
         <li>
-          Minimal locks - our aspiration is to have no new locks as part of the "main loop" of protocol handling.
+          Fire & forget SET - optinally return STORED from SET requests so that the application can proceed, based on key-prefix matches.  (For those clients that don't do noreply.)
         </li>
         <li>
           Timeouts - set maximum time for operations. eg, "no downstream memcached operation should take more than X ms."
