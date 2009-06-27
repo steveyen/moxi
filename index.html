@@ -8,7 +8,6 @@
     <title>NorthScale Labs:memcached moxi</title>
 
     <link id="master_css" rel="stylesheet" type="text/css" href="/css/default.css"/>
-
   </head>
 
   <body>
@@ -17,51 +16,129 @@
       <img src="/images/ns_logo_labs.png" alt="NorthScale Labs" style="margin-top:10px;"/>
     </div>
 
-
     <div id="container">
 
+      <h1>moxi</h1>
 
-      <h1>memcached moxi by NorthScale</h1>
+      <h2>a modern memcached proxy with energy and pep</h2>
 
-      <h2>memcached moxi</h2>
+      <p>moxi is a memcached proxy with several features which can
+        help keep the memcached contract whole in complicated
+        environments.  It also brings several optimizations to
+        memcached deployments, without requiring any changes to the
+        application software using memcached.</p>
 
-      <p>memcached moxi is a proxy for memcached protocol with several features
-        which can help
-        keep the memcached contract whole in complicated environments.  It
-        brings several optimizations to memcached deployments without
-        requiring any changes to the application software using memcached.</p>
-
-      <p>For instance, memcached moxi has:</p>
-
+      <h3>The basics</h3>
       <ul>
-        <li>A "get" deduplication optimization allowing many requests
-          from one proxy to turn into a single <i>downstream</i> request</li>
-        <li>A multiget optimization which coalesces and multigets requests
-          from multiple threads/processes on a client to memcached servers</li>
-        <li>A 'front cache' which allows for a small (non-coherent) cache,
-          designed to either cache all items or configure particular items to
-          cache by key prefix</li>
-        <li>Optimizations to help keep latencies low from the perspective
-          of the client when running in variable
-          networks, as found in <i>cloud computing</i> environments</li>
+        <li>Open-source, same BSD license as memcached.
+        </li>
+        <li>Written in C.
+        </li>
+        <li>Based on the latest memcached server code for
+            its high-performance connection and protocol handling.
+        </li>
+        <li>Uses the libmemcached for its rich hashing features
+            (consistent hashing, etc).
+        </li>
+        <li>Uses libevent for both upstream (client) and downstream
+            connection handling.
+        </li>
       </ul>
 
-      <p>
-        We at NorthScale of course have a variety of other ideas on where
-        we may be able to take moxi and memcached, since we've long been users
-        and helped many others make use of Open Source memcached in their
-        applications.  In releasing memcached moxi as Open Source, we hope to have
-        others join in using or defining these features.  Join us on the
-        <a href="http://groups.google.com/group/moxi">discussion group</a>
-        if you want to collaborate!
-      </p>
+      <h3>Test suites</h3>
+      <ul>
+        <li>moxi aims to pass all the relevant memcached server
+            compatibility tests.
+        </li>
+        <li>moxi has many new test cases to exercise proxy-only
+            features and topologies.
+        </li>
+      </ul>
+
+      <h3>Protocol support</h3>
+      <ul>
+        <li>memcached text protocol, for upstream and downstream communication
+        </li>
+        <li>memcached binary protocol, for downstream communication
+        </li>
+        <li>later: binary support for upstream communication, and
+            mixing and matching protocols (eg, some downstream servers
+            are text, some are binary).
+        </li>
+      </ul>
+
+      <h3>Optimizations</h3>
+      <ul>
+        <li>
+          Multi-get Escalation and Protocol Pipelining - de-duplicates requests for popular keys, based on ideas from Dustin Sallings' spymemcached Java client library for memcached. See: http://code.google.com/p/spymemcached/wiki/Optimizations
+        </li>
+        <li>
+          Front cache - an L1 cache, to avoid network hops.
+        </li>
+        <li>
+          Minimal locks - our aspiration is to have no new locks as part of the "main loop" of protocol handling.
+        </li>
+        <li>
+          Timeouts - set maximum time for operations. eg, "no downstream memcached operation should take more than X ms."
+        </li>
+      </ul>
+
+      <h3>Statistics</h3>
+      <ul>
+        <li>
+          Statistics are tracked independently on each thread, optimized for the 99% case of being a good proxy. A once-in-awhile request for proxy statistics will perform an internal scatter-gather inside moxi to aggregate statistics.
+        </li>
+      </ul>
+
+      <h3>Configuration</h3>
+      <ul>
+        <li>Based on libconflate reconfiguration (in the works) to allow dynamic server pool reconfigurations.
+        </li>
+      </ul>
+
+      <h3>Simplified deployment</h3>
+      <ul>
+        <li>
+          Assuming you run moxi on your web/app server boxes, your development, staging and production configurations gets easy: always point your memcached clients to "localhost:11211" (or whatever port you run moxi on).
+        </li>
+      </ul>
+
+      <h3>Features inherited from memcached</h3>
+      <ul>
+        <li>
+          moxi is built "on the shoulders of giants", that is, memcached, so there's lots to inherit...
+        </li>
+        <li>
+          Multi-platform
+        </li>
+        <li>
+          Multi-threaded
+        </li>
+        <li>
+          Daemonizable
+        </li>
+        <li>
+          Run as another user
+        </li>
+        <li>
+          Bindable to IP interface, default is INADDR_ANY
+        </li>
+        <li>
+          PID file
+        </li>
+        <li>
+          etc
+        </li>
+      </ul>
 
       <h3>Download</h3>
-      <!-- p>
+      <!--
+      <p>
       You can download this project in either
       <a href="http://github.com/northscale/moxi/zipball/master">zip</a> or
       <a href="http://github.com/northscale/moxi/tarball/master">tar</a> formats.
-      </p -->
+      </p>
+      -->
       <p>
         You can clone the project
         with <a href="http://git-scm.com">git</a> by running:
@@ -102,7 +179,16 @@
       <h3>License</h3>
       <p>New BSD</p>
 
+      <h3>What's next?  Want to help?</h3>
+      <p>
+        We'd love to hear your ideas, feedback and patches/improvements.
+        Join us on the
+        <a href="http://groups.google.com/group/moxi">moxi discussion group</a>
+        if you want to collaborate.
+      </p>
+
       <h3>Contact</h3>
+
       <p><a href="mailto:feeedback@northscale.com">feedback@northscale.com</a></p>
       <p>Alternatively, you may post comments below using disqus.</p>
 
