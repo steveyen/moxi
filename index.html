@@ -45,16 +45,6 @@
         </li>
       </ul>
 
-      <h3>Test suites</h3>
-      <ul>
-        <li>moxi aims to pass all the relevant memcached server
-            compatibility tests.
-        </li>
-        <li>moxi has many new test cases to exercise proxy-only
-            features and topologies.
-        </li>
-      </ul>
-
       <h3>Protocol support</h3>
       <ul>
         <li>memcached text protocol, for upstream and downstream communication
@@ -92,14 +82,10 @@
 
       <h3>Configuration</h3>
       <ul>
-        <li>Based on libconflate reconfiguration (in the works) to allow dynamic server pool reconfigurations.
+        <li>Based on <a href="http://labs.northscale.com/libconflate">libconflate</a> reconfiguration to allow dynamic server pool reconfigurations.
         </li>
-      </ul>
-
-      <h3>Simplified deployment</h3>
-      <ul>
         <li>
-          Assuming you run moxi on your web/app server boxes, your development, staging and production configurations gets easy: always point your memcached clients to "localhost:11211" (or whatever port you run moxi on).
+          Assuming you run moxi on your web/app server boxes and you're using <a href="http://labs.northscale.com/libconflate">libconflate</a>, your development, staging and production configurations gets easy: always point your memcached clients to "localhost:11211" (or whatever port you run moxi on).
         </li>
       </ul>
 
@@ -175,6 +161,21 @@
         source is automake/autconf based and should build on most UNIX and
         GNU/Linux systems.
       </p>
+
+      <h3>Test suites</h3>
+      <ul>
+        <li>moxi aims to pass all the relevant memcached server
+            compatibility tests.
+        </li>
+        <li>moxi has many new test cases to exercise proxy-only
+            features and topologies.
+        </li>
+      </ul>
+
+      <pre>$ make test
+$ make check
+$ ./t/moxi_all.pl
+      </pre>
 
       <h3>License</h3>
       <p>New BSD</p>
