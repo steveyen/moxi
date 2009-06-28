@@ -146,6 +146,24 @@ return sizeof(void*) == 8 ? 0 : 1;
     ])
 fi
 
+useconflate="no"
+AC_ARG_WITH(libconflate,
+            AS_HELP_STRING([--with-conflate=PATH],
+            [build with libconflate xmpp management]),
+            [
+              if test "x$withval" != "xno"
+                then
+                AC_DEFINE([HAVE_CONFLATE_H], 1,
+                  [Defined if building with libconflate XMPP management])
+                CPPFLAGS="-I$withval $CPPFLAGS"
+                LDFLAGS+="-L$withval -L../libstrophe"
+                LIBS+="-lconflate -lstrophe"
+                useconflate="yes"
+              fi
+            ])
+AM_CONDITIONAL([BUILD_WITH_CONFLATE],[test "$useconflate" = "yes"])
+
+
 trylibeventdir=""
 AC_ARG_WITH(libevent,
        [  --with-libevent=PATH     Specify path to libevent installation ],
@@ -386,8 +404,7 @@ fi
 
 AC_SEARCH_LIBS(memcached_create, memcached)
 
-LIBS="$LIBS -lm -lconflate -lsqlite3 -lstrophe -lexpat -lresolv -lssl"
-LDFLAGS+=" -static -L../libconflate -L../libstrophe"
+LIBS="$LIBS -lm -lsqlite3 -lresolv -lssl"
 
 AC_CONFIG_FILES(Makefile doc/Makefile)
 AC_OUTPUT

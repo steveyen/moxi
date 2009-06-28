@@ -47,16 +47,16 @@ moxi_SOURCES += cache.c
 testapp_SOURCES += cache.c
 endif
 
+if BUILD_WITH_CONFLATE
 moxi_SOURCES += agent.h agent_config.c agent_ping.c agent_stats.c
+endif
 
 if BUILD_SOLARIS_PRIVS
 moxi_SOURCES += solaris_priv.c
 endif
 
 moxi_debug_SOURCES = $(moxi_SOURCES)
-moxi_debug_CPPFLAGS = -DHAVE_CONFLATE_H \
-                      -I$(top_srcdir)/libmemcached-0.30 \
-                      -I$(top_srcdir)/../libconflate \
+moxi_debug_CPPFLAGS = -I$(top_srcdir)/libmemcached-0.30 \
                       -I$(top_srcdir)/../libstrophe
 moxi_CPPFLAGS = -DNDEBUG $(moxi_debug_CPPFLAGS)
 moxi_debug_LDADD = @PROFILER_LDFLAGS@ \
