@@ -20,11 +20,51 @@ int main_check(int argc, char **argv);
 
 START_TEST(test_first_config)
 {
-  char *v[] = {"poolx", "pooly", NULL};
-  kvpair_t *config = mk_kvpair("pools", v);
+  char *empty[] = { NULL };
 
-  on_conflate_new_config(pmain, config);
-  sleep(2);
+  kvpair_t *last = NULL;
+  kvpair_t *head = last = mk_kvpair("pools", empty);
+
+  // No crash on weak config.
+  //
+  on_conflate_new_config(pmain, head);
+  on_conflate_new_config(pmain, head);
+
+  sleep(1);
+
+  fail_unless(pmain->proxy_head == NULL, "pools empty");
+
+  // Add a pool.
+  //
+  add_kvpair_value(last, "poolx");
+
+  last->next = mk_kvpair("pool-poolx", empty);
+  last = last->next;
+
+  add_kvpair_value(last, "svr1");
+
+  last->next = mk_kvpair("behavior-poolx", empty);
+  last = last->next;
+
+  add_kvpair_value(last, "port_listen=11411");
+
+  last->next = mk_kvpair("svr-svr1", empty);
+  last = last->next;
+
+  add_kvpair_value(last, "host=localhost");
+  add_kvpair_value(last, "port=11211");
+
+  on_conflate_new_config(pmain, head);
+
+  sleep(1);
+
+  fail_if(pmain->proxy_head == NULL, "fc");
+  fail_unless(pmain->proxy_head->port == 11411, "fc");
+  fail_unless(strcmp(pmain->proxy_head->config, "localhost:11211") == 0, "fc");
+  fail_unless(pmain->proxy_head->behavior_pool.num == 1, "fc");
+  fail_unless(strcmp(pmain->proxy_head->behavior_pool.arr[0].host,
+                     "localhost") == 0, "fc");
+  fail_unless(pmain->proxy_head->behavior_pool.arr[0].port == 11211, "fc");
 }
 END_TEST
 
