@@ -38,19 +38,16 @@ START_TEST(test_first_config)
   //
   add_kvpair_value(last, "poolx");
 
-  last->next = mk_kvpair("pool-poolx", empty);
-  last = last->next;
-
-  add_kvpair_value(last, "svr1");
-
   last->next = mk_kvpair("behavior-poolx", empty);
   last = last->next;
-
   add_kvpair_value(last, "port_listen=11411");
+
+  last->next = mk_kvpair("pool-poolx", empty);
+  last = last->next;
+  add_kvpair_value(last, "svr1");
 
   last->next = mk_kvpair("svr-svr1", empty);
   last = last->next;
-
   add_kvpair_value(last, "host=localhost");
   add_kvpair_value(last, "port=11211");
 
@@ -68,6 +65,71 @@ START_TEST(test_first_config)
 }
 END_TEST
 
+START_TEST(test_easy_reconfig)
+{
+  char *empty[] = { NULL };
+
+  kvpair_t *last = NULL;
+  kvpair_t *head = last = mk_kvpair("pools", empty);
+  add_kvpair_value(last, "poolx");
+
+  last->next = mk_kvpair("behavior-poolx", empty);
+  last = last->next;
+  add_kvpair_value(last, "port_listen=11411");
+
+  last->next = mk_kvpair("pool-poolx", empty);
+  last = last->next;
+  add_kvpair_value(last, "svr1");
+
+  last->next = mk_kvpair("svr-svr1", empty);
+  last = last->next;
+  add_kvpair_value(last, "host=localhost");
+  add_kvpair_value(last, "port=11211");
+
+  on_conflate_new_config(pmain, head);
+
+  sleep(1);
+
+  fail_if(pmain->proxy_head == NULL, "fc");
+  fail_unless(pmain->proxy_head->port == 11411, "fc");
+  fail_unless(strcmp(pmain->proxy_head->config, "localhost:11211") == 0, "fc");
+  fail_unless(pmain->proxy_head->behavior_pool.num == 1, "fc");
+  fail_unless(strcmp(pmain->proxy_head->behavior_pool.arr[0].host,
+                     "localhost") == 0, "fc");
+  fail_unless(pmain->proxy_head->behavior_pool.arr[0].port == 11211, "fc");
+
+  // Reconfig.
+  //
+  head = last = mk_kvpair("pools", empty);
+  add_kvpair_value(last, "poolx");
+
+  last->next = mk_kvpair("behavior-poolx", empty);
+  last = last->next;
+  add_kvpair_value(last, "port_listen=11411");
+
+  last->next = mk_kvpair("pool-poolx", empty);
+  last = last->next;
+  add_kvpair_value(last, "svr1");
+
+  last->next = mk_kvpair("svr-svr1", empty);
+  last = last->next;
+  add_kvpair_value(last, "host=host1");
+  add_kvpair_value(last, "port=11111");
+
+  on_conflate_new_config(pmain, head);
+
+  sleep(1);
+
+  fail_if(pmain->proxy_head == NULL, "fc");
+  fail_unless(pmain->proxy_head->port == 11411, "fc");
+  fail_unless(strcmp(pmain->proxy_head->config, "host1:11111") == 0, "fc");
+  fail_unless(pmain->proxy_head->behavior_pool.num == 1, "fc");
+  fail_unless(strcmp(pmain->proxy_head->behavior_pool.arr[0].host,
+                     "localhost") == 0, "fc");
+  fail_unless(pmain->proxy_head->behavior_pool.arr[0].port == 11211, "fc");
+}
+END_TEST
+
 static Suite* moxi_agent_suite(void)
 {
     Suite *s = suite_create("moxi_agent");
@@ -75,6 +137,7 @@ static Suite* moxi_agent_suite(void)
     /* Core test case */
     TCase *tc_core = tcase_create("core");
     tcase_add_test(tc_core, test_first_config);
+    tcase_add_test(tc_core, test_easy_reconfig);
     suite_add_tcase(s, tc_core);
 
     return s;
