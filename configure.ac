@@ -146,9 +146,26 @@ return sizeof(void*) == 8 ? 0 : 1;
     ])
 fi
 
+usestrophe="no"
+AC_ARG_WITH(libstrophe,
+            AS_HELP_STRING([--with-libstrophe=PATH],
+            [build with libstrophe xmpp libs]),
+            [
+              if test "x$withval" != "xno"
+                then
+                AC_DEFINE([HAVE_STROPHE_H], 1,
+                  [Defined if building with libstrophe XMPP client])
+                CPPFLAGS="-I$withval $CPPFLAGS"
+                LDFLAGS+="-L$withval -L$withval/expat "
+                LIBS="$LIBS -lconflate"
+                usestrophe="yes"
+              fi
+            ])
+AM_CONDITIONAL([BUILD_WITH_STROPHE],[test "$usestrophe" = "yes"])
+
 useconflate="no"
 AC_ARG_WITH(libconflate,
-            AS_HELP_STRING([--with-conflate=PATH],
+            AS_HELP_STRING([--with-libconflate=PATH],
             [build with libconflate xmpp management]),
             [
               if test "x$withval" != "xno"
@@ -156,13 +173,12 @@ AC_ARG_WITH(libconflate,
                 AC_DEFINE([HAVE_CONFLATE_H], 1,
                   [Defined if building with libconflate XMPP management])
                 CPPFLAGS="-I$withval $CPPFLAGS"
-                LDFLAGS+="-L$withval -L../libstrophe"
-                LIBS+="-lconflate -lstrophe"
+                LDFLAGS+="-L$withval "
+                LIBS="$LIBS -lstrophe -lexpat"
                 useconflate="yes"
               fi
             ])
 AM_CONDITIONAL([BUILD_WITH_CONFLATE],[test "$useconflate" = "yes"])
-
 
 trylibeventdir=""
 AC_ARG_WITH(libevent,

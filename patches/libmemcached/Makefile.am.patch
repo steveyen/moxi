@@ -1,0 +1,38 @@
+--- a/Makefile.am	2009-06-21 21:45:23.000000000 -0700
++++ b/Makefile.am	2009-06-21 21:46:04.000000000 -0700
+@@ -11,23 +11,22 @@
+		 memcached_io.h \
+                  common.h \
+                  memcached/protocol_binary.h @DTRACE_HEADER@
+-
+-pkginclude_HEADERS= memcached.h \
+-		    memcached.hh \
+-		    memcached_constants.h \
+-		    memcached_get.h \
+-		    memcached_result.h \
+-		    memcached_server.h \
+-		    memcached_storage.h \
+-		    memcached_string.h \
+-		    memcached_types.h \
+-		    memcached_watchpoint.h
++	         memcached.h \
++	    	 memcached.hh \
++		 memcached_constants.h \
++		 memcached_get.h \
++		 memcached_result.h \
++		 memcached_server.h \
++		 memcached_storage.h \
++		 memcached_string.h \
++		 memcached_types.h \
++		 memcached_watchpoint.h
+
+ if BUILD_LIBMEMCACHEDUTIL
+-pkginclude_HEADERS+= memcached_util.h memcached_pool.h
++noinst_HEADERS+= memcached_util.h memcached_pool.h
+ endif
+
+-lib_LTLIBRARIES = libmemcached.la
++noinst_LTLIBRARIES = libmemcached.la
+
+ libmemcached_la_SOURCES = crc.c \
+			  memcached.c \

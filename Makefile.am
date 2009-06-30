@@ -1,7 +1,7 @@
 AUTOMAKE_OPTIONS = foreign
 
 bin_PROGRAMS = moxi
-pkginclude_HEADERS = protocol_binary.h
+##pkginclude_HEADERS = protocol_binary.h
 noinst_PROGRAMS = moxi-debug sizes testapp
 
 ## INCLUDES is apparently not previously set, if you set it
@@ -10,7 +10,7 @@ INCLUDES = $(GLIB2_CFLAGS)
 LIBS += $(GLIB2_LIBS)
 LIBS += -lgthread-2.0
 
-BUILT_SOURCES=
+BUILT_SOURCES= setuplibmemcached
 
 testapp_SOURCES = testapp.c util.c util.h
 
@@ -127,6 +127,9 @@ test: memcached-debug sizes testapp
 	    fi \
 	  done \
 	else :; fi
+
+setuplibmemcached:
+	cd libmemcached-0.30; ./configure --without-memcached
 
 docs:
 	(cat Doxyfile ; echo "PROJECT_NUMBER=`cat version.num`") | doxygen -

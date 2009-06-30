@@ -1,0 +1,12 @@
+libmemcached is bundled here as a libtool "convenience" library
+
+The reason for doing this is that during the development of moxi, we
+found the most expedient path to implementation was to rely on some of
+the internals of libmemcached rather than operate through documented API.
+Since the libmemcached on the platform you're using may be different,
+we chose to bundle it as a statically linked "convenience" library for
+safety.
+
+It is the same libmemcached as the upstream, just tested to ensure correct
+behavior.  No modifications have been made to the code, only to the
+build properties.  All patches are in the "patches" directory.
