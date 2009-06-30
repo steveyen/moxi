@@ -529,7 +529,8 @@ void cproxy_on_new_config(void *data0, void *data1) {
     free_kvpair(kvs);
 
     if (settings.verbose > 1) {
-        fprintf(stderr, "conc failed config %llu\n", m->stat_config_fails);
+        fprintf(stderr, "conc failed config %llu\n",
+                (long long unsigned int)m->stat_config_fails);
     }
 }
 
