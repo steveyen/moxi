@@ -56,6 +56,7 @@ START_TEST(test_first_config)
   sleep(1);
 
   fail_if(pmain->proxy_head == NULL, "fc");
+  fail_if(pmain->proxy_head->next != NULL, "fc");
   fail_unless(pmain->proxy_head->port == 11411, "fc");
   fail_unless(strcmp(pmain->proxy_head->config, "localhost:11211") == 0, "fc");
   fail_unless(pmain->proxy_head->behavior_pool.num == 1, "fc");
@@ -91,6 +92,7 @@ START_TEST(test_easy_reconfig)
   sleep(1);
 
   fail_if(pmain->proxy_head == NULL, "fc");
+  fail_if(pmain->proxy_head->next != NULL, "fc");
   fail_unless(pmain->proxy_head->port == 11411, "fc");
   fail_unless(strcmp(pmain->proxy_head->config, "localhost:11211") == 0, "fc");
   fail_unless(pmain->proxy_head->behavior_pool.num == 1, "fc");
@@ -121,12 +123,13 @@ START_TEST(test_easy_reconfig)
   sleep(1);
 
   fail_if(pmain->proxy_head == NULL, "fc");
+  fail_if(pmain->proxy_head->next != NULL, "fc");
   fail_unless(pmain->proxy_head->port == 11411, "fc");
   fail_unless(strcmp(pmain->proxy_head->config, "host1:11111") == 0, "fc");
   fail_unless(pmain->proxy_head->behavior_pool.num == 1, "fc");
   fail_unless(strcmp(pmain->proxy_head->behavior_pool.arr[0].host,
-                     "localhost") == 0, "fc");
-  fail_unless(pmain->proxy_head->behavior_pool.arr[0].port == 11211, "fc");
+                     "host1") == 0, "fc");
+  fail_unless(pmain->proxy_head->behavior_pool.arr[0].port == 11111, "fc");
 }
 END_TEST
 
