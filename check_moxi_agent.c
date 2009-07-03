@@ -16,14 +16,40 @@ static proxy_main *pmain = NULL;
 
 extern proxy_behavior behavior_default_g;
 
+static char *empty[] = { NULL };
+
 int main_check(int argc, char **argv);
+
+static kvpair_t *mk_kvpairs(char *spec[]) {
+  kvpair_t *last = NULL;
+  kvpair_t *head = NULL;
+
+  int i = 0;
+  while (spec[i]) {
+    if (head == NULL) {
+      assert(last == NULL);
+      head = last = mk_kvpair(spec[i], empty);
+    } else {
+      last->next = mk_kvpair(spec[i], empty);
+      last = last->next;
+    }
+
+    i++;
+
+    while(spec[i]) {
+      add_kvpair_value(last, spec[i]);
+      i++;
+    }
+
+    i++;
+  }
+
+  return head;
+}
 
 START_TEST(test_first_config)
 {
-  char *empty[] = { NULL };
-
-  kvpair_t *last = NULL;
-  kvpair_t *head = last = mk_kvpair("pools", empty);
+  kvpair_t *head = mk_kvpair("pools", empty);
 
   // No crash on weak config.
   //
@@ -36,22 +62,25 @@ START_TEST(test_first_config)
 
   // Add a pool.
   //
-  add_kvpair_value(last, "poolx");
+  char *ca[] = {
+    "pools",
+    "poolx",
+    NULL,
+    "behavior-poolx",
+    "port_listen=11411",
+    NULL,
+    "pool-poolx",
+    "svr1",
+    NULL,
+    "svr-svr1",
+    "host=localhost",
+    "port=11211",
+    NULL,
+    NULL
+  };
+  kvpair_t *c = mk_kvpairs(ca);
 
-  last->next = mk_kvpair("behavior-poolx", empty);
-  last = last->next;
-  add_kvpair_value(last, "port_listen=11411");
-
-  last->next = mk_kvpair("pool-poolx", empty);
-  last = last->next;
-  add_kvpair_value(last, "svr1");
-
-  last->next = mk_kvpair("svr-svr1", empty);
-  last = last->next;
-  add_kvpair_value(last, "host=localhost");
-  add_kvpair_value(last, "port=11211");
-
-  on_conflate_new_config(pmain, head);
+  on_conflate_new_config(pmain, c);
 
   sleep(1);
 
@@ -68,26 +97,25 @@ END_TEST
 
 START_TEST(test_easy_reconfig)
 {
-  char *empty[] = { NULL };
+  char *ca[] = {
+    "pools",
+    "poolx",
+    NULL,
+    "behavior-poolx",
+    "port_listen=11411",
+    NULL,
+    "pool-poolx",
+    "svr1",
+    NULL,
+    "svr-svr1",
+    "host=localhost",
+    "port=11211",
+    NULL,
+    NULL
+  };
+  kvpair_t *c = mk_kvpairs(ca);
 
-  kvpair_t *last = NULL;
-  kvpair_t *head = last = mk_kvpair("pools", empty);
-  add_kvpair_value(last, "poolx");
-
-  last->next = mk_kvpair("behavior-poolx", empty);
-  last = last->next;
-  add_kvpair_value(last, "port_listen=11411");
-
-  last->next = mk_kvpair("pool-poolx", empty);
-  last = last->next;
-  add_kvpair_value(last, "svr1");
-
-  last->next = mk_kvpair("svr-svr1", empty);
-  last = last->next;
-  add_kvpair_value(last, "host=localhost");
-  add_kvpair_value(last, "port=11211");
-
-  on_conflate_new_config(pmain, head);
+  on_conflate_new_config(pmain, c);
 
   sleep(1);
 
@@ -102,23 +130,25 @@ START_TEST(test_easy_reconfig)
 
   // Reconfig.
   //
-  head = last = mk_kvpair("pools", empty);
-  add_kvpair_value(last, "poolx");
+  char *da[] = {
+    "pools",
+    "poolx",
+    NULL,
+    "behavior-poolx",
+    "port_listen=11411",
+    NULL,
+    "pool-poolx",
+    "svr1",
+    NULL,
+    "svr-svr1",
+    "host=host1",
+    "port=11111",
+    NULL,
+    NULL
+  };
+  kvpair_t *d = mk_kvpairs(da);
 
-  last->next = mk_kvpair("behavior-poolx", empty);
-  last = last->next;
-  add_kvpair_value(last, "port_listen=11411");
-
-  last->next = mk_kvpair("pool-poolx", empty);
-  last = last->next;
-  add_kvpair_value(last, "svr1");
-
-  last->next = mk_kvpair("svr-svr1", empty);
-  last = last->next;
-  add_kvpair_value(last, "host=host1");
-  add_kvpair_value(last, "port=11111");
-
-  on_conflate_new_config(pmain, head);
+  on_conflate_new_config(pmain, d);
 
   sleep(1);
 
