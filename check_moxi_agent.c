@@ -128,7 +128,7 @@ START_TEST(test_easy_reconfig)
                      "localhost") == 0, "fc");
   fail_unless(pmain->proxy_head->behavior_pool.arr[0].port == 11211, "fc");
 
-  // Reconfig.
+  // Reconfig to d.
   //
   char *da[] = {
     "pools",
@@ -148,6 +148,62 @@ START_TEST(test_easy_reconfig)
   };
   kvpair_t *d = mk_kvpairs(da);
 
+  on_conflate_new_config(pmain, d);
+
+  sleep(1);
+
+  fail_if(pmain->proxy_head == NULL, "fc");
+  fail_if(pmain->proxy_head->next != NULL, "fc");
+  fail_unless(pmain->proxy_head->port == 11411, "fc");
+  fail_unless(strcmp(pmain->proxy_head->config, "host1:11111") == 0, "fc");
+  fail_unless(pmain->proxy_head->behavior_pool.num == 1, "fc");
+  fail_unless(strcmp(pmain->proxy_head->behavior_pool.arr[0].host,
+                     "host1") == 0, "fc");
+  fail_unless(pmain->proxy_head->behavior_pool.arr[0].port == 11111, "fc");
+
+  // Reconfig to e.
+  //
+  char *ea[] = {
+    "pools",
+    "poolx",
+    NULL,
+    "behavior-poolx",
+    "port_listen=11411",
+    NULL,
+    "pool-poolx",
+    "svr1",
+    "svr2",
+    NULL,
+    "svr-svr1",
+    "host=mc1",
+    "port=1111",
+    NULL,
+    "svr-svr2",
+    "host=mc2",
+    "port=2222",
+    NULL,
+    NULL
+  };
+  kvpair_t *e = mk_kvpairs(ea);
+
+  on_conflate_new_config(pmain, e);
+
+  sleep(1);
+
+  fail_if(pmain->proxy_head == NULL, "fc");
+  fail_if(pmain->proxy_head->next != NULL, "fc");
+  fail_unless(pmain->proxy_head->port == 11411, "fc");
+  fail_unless(strcmp(pmain->proxy_head->config, "mc1:1111,mc2:2222") == 0, "fc");
+  fail_unless(pmain->proxy_head->behavior_pool.num == 2, "fc");
+  fail_unless(strcmp(pmain->proxy_head->behavior_pool.arr[0].host,
+                     "mc1") == 0, "fc");
+  fail_unless(pmain->proxy_head->behavior_pool.arr[0].port == 1111, "fc");
+  fail_unless(strcmp(pmain->proxy_head->behavior_pool.arr[1].host,
+                     "mc2") == 0, "fc");
+  fail_unless(pmain->proxy_head->behavior_pool.arr[1].port == 2222, "fc");
+
+  // Go back to d
+  //
   on_conflate_new_config(pmain, d);
 
   sleep(1);
