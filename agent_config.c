@@ -530,7 +530,7 @@ void cproxy_on_new_config(void *data0, void *data1) {
 
     if (settings.verbose > 1) {
         fprintf(stderr, "conc failed config %llu\n",
-                (long long unsigned int)m->stat_config_fails);
+                (long long unsigned int) m->stat_config_fails);
     }
 }
 
