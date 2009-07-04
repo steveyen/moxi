@@ -116,6 +116,7 @@ int cproxy_init_agent(char *cfg_str,
     while (next != NULL) {
         char *jid    = NULL;
         char *jpw    = NULL;
+        char *jpwmem = NULL;
         char *config = NULL;
         char *host   = NULL;
 
@@ -130,11 +131,6 @@ int cproxy_init_agent(char *cfg_str,
                     if (wordeq(key, "apikey")) {
                         jid = strsep(&val, "%");
                         jpw = val;
-
-                        if (settings.verbose > 1) {
-                            fprintf(stderr, "cproxy_init jid %s\n",
-                                    jid);
-                        }
                     }
                     if (wordeq(key, "config")) {
                         config = val;
@@ -150,6 +146,27 @@ int cproxy_init_agent(char *cfg_str,
             strlen(jid) <= 0) {
             fprintf(stderr, "missing conflate id\n");
             exit(EXIT_FAILURE);
+        }
+
+        if (jpw == NULL) {
+            // Handle if jid/jpw is in user:password@fqdn format
+            // instead of user@fqdn%password format.
+            //
+            char *colon = strchr(jid, ':');
+            char *asign = strchr(jid, '@');
+            if (colon != NULL &&
+                asign != NULL &&
+                asign > colon) {
+                *asign = '\0';
+                jpw = jpwmem = strdup(colon + 1);
+                *asign = '@';
+                do {
+                    *colon = *asign;
+                    colon++;
+                    asign++;
+                } while (*asign != '\0');
+                *colon = '\0';
+            }
         }
 
         if (jpw == NULL ||
@@ -171,6 +188,10 @@ int cproxy_init_agent(char *cfg_str,
             }
         }
 
+        if (settings.verbose > 1) {
+            fprintf(stderr, "cproxy_init jid %s\n", jid);
+        }
+
         if (cproxy_init_agent_start(jid, jpw, config, host,
                                     behavior,
                                     nthreads) != NULL) {
@@ -180,6 +201,10 @@ int cproxy_init_agent(char *cfg_str,
         if (config_alloc > 0 &&
             config != NULL) {
             free(config);
+        }
+
+        if (jpwmem) {
+            free(jpwmem);
         }
     }
 
