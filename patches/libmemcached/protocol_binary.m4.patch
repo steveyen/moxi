@@ -1,0 +1,26 @@
+--- a/protocol_binary.m4	2009-07-04 13:35:19.000000000 -0700
++++ b/protocol_binary.m4	2009-07-04 13:30:40.000000000 -0700
+@@ -1,9 +1,9 @@
+ dnl ---------------------------------------------------------------------------
+ dnl Macro: PROTOCOL_BINARY_TEST
+ dnl ---------------------------------------------------------------------------
+-save_CFLAGS="$CFLAGS"
+-CFLAGS="$CFLAGS -I${srcdir}"
+-AC_RUN_IFELSE([
++save_CPPFLAGS="$CPPFLAGS"
++CPPFLAGS="$CPPFLAGS -I${srcdir} -I${srcdir}/libmemcached-0.30"
++AC_RUN_IFELSE([
+    AC_LANG_PROGRAM([
+       #include "libmemcached/memcached/protocol_binary.h"
+    ], [
+@@ -12,8 +12,8 @@
+          return 1;
+       }
+    ])
+-],, AC_MSG_ERROR([Unsupported struct padding done by compiler.]))
+-CFLAGS="$save_CFLAGS"
++],, AC_MSG_ERROR([Unsupported struct padding done by compiler.]))
++CPPFLAGS="$save_CPPFLAGS"
+
+ dnl ---------------------------------------------------------------------------
+ dnl End Macro: PROTOCOL_BINARY_TEST

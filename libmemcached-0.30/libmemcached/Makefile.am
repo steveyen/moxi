@@ -66,6 +66,8 @@ if INCLUDE_HSIEH_SRC
 libmemcached_la_SOURCES += hsieh_hash.c
 endif
 
+libmemcached_la_CPPFLAGS = -I..
+
 if BUILD_BYTEORDER
 libmemcached_la_SOURCES += byteorder.c
 endif

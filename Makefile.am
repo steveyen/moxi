@@ -10,7 +10,7 @@ INCLUDES = $(GLIB2_CFLAGS)
 LIBS += $(GLIB2_LIBS)
 LIBS += -lgthread-2.0
 
-BUILT_SOURCES= setuplibmemcached
+BUILT_SOURCES=
 
 testapp_SOURCES = testapp.c util.c util.h
 
@@ -127,9 +127,6 @@ test: memcached-debug sizes testapp
 	    fi \
 	  done \
 	else :; fi
-
-setuplibmemcached:
-	cd libmemcached-0.30; ./configure --without-memcached
 
 docs:
 	(cat Doxyfile ; echo "PROJECT_NUMBER=`cat version.num`") | doxygen -

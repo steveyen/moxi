@@ -9,7 +9,7 @@
 #include "common.h"
 static memcached_return ascii_dump(memcached_st *ptr, memcached_dump_func *callback, void *context, uint32_t number_of_callbacks)
 {
-  memcached_return rc;
+  memcached_return rc = MEMCACHED_FAILURE;
   char buffer[MEMCACHED_DEFAULT_COMMAND_SIZE];
   size_t send_length;
   uint32_t server_key;

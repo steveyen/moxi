@@ -1,8 +1,8 @@
 dnl ---------------------------------------------------------------------------
 dnl Macro: PROTOCOL_BINARY_TEST
 dnl ---------------------------------------------------------------------------
-save_CFLAGS="$CFLAGS"
-CFLAGS="$CFLAGS -I${srcdir}"
+save_CPPFLAGS="$CPPFLAGS"
+CPPFLAGS="$CPPFLAGS -I${srcdir} -I${srcdir}/libmemcached-0.30"
 AC_RUN_IFELSE([
    AC_LANG_PROGRAM([
       #include "libmemcached/memcached/protocol_binary.h"
@@ -13,7 +13,7 @@ AC_RUN_IFELSE([
       }
    ])
 ],, AC_MSG_ERROR([Unsupported struct padding done by compiler.]))
-CFLAGS="$save_CFLAGS"
+CPPFLAGS="$save_CPPFLAGS"
 
 dnl ---------------------------------------------------------------------------
 dnl End Macro: PROTOCOL_BINARY_TEST

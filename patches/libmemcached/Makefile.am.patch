@@ -1,5 +1,5 @@
---- a/Makefile.am	2009-06-21 21:45:23.000000000 -0700
-+++ b/Makefile.am	2009-06-21 21:46:04.000000000 -0700
+--- a/Makefile.am	2009-07-04 13:37:01.000000000 -0700
++++ b/Makefile.am	2009-07-04 13:28:38.000000000 -0700
 @@ -11,23 +11,22 @@
 		 memcached_io.h \
                   common.h \
@@ -16,7 +16,7 @@
 -		    memcached_types.h \
 -		    memcached_watchpoint.h
 +	         memcached.h \
-+	    	 memcached.hh \
++		 memcached.hh \
 +		 memcached_constants.h \
 +		 memcached_get.h \
 +		 memcached_result.h \
@@ -36,3 +36,12 @@
 
  libmemcached_la_SOURCES = crc.c \
 			  memcached.c \
+@@ -67,6 +66,8 @@
+ libmemcached_la_SOURCES += hsieh_hash.c
+ endif
+
++libmemcached_la_CPPFLAGS = -I..
++
+ if BUILD_BYTEORDER
+ libmemcached_la_SOURCES += byteorder.c
+ endif

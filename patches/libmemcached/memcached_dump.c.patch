@@ -1,0 +1,11 @@
+--- a/memcached_dump.c	2009-07-04 13:44:05.000000000 -0700
++++ b/memcached_dump.c	2009-07-04 13:43:18.000000000 -0700
+@@ -9,7 +9,7 @@
+ #include "common.h"
+ static memcached_return ascii_dump(memcached_st *ptr, memcached_dump_func *callback, void *context, uint32_t number_of_callbacks)
+ {
+-  memcached_return rc;
++  memcached_return rc = MEMCACHED_FAILURE;
+   char buffer[MEMCACHED_DEFAULT_COMMAND_SIZE];
+   size_t send_length;
+   uint32_t server_key;

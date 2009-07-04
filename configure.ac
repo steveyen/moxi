@@ -5,8 +5,10 @@ AC_CANONICAL_SYSTEM
 AC_CONFIG_SRCDIR(memcached.c)
 AM_INIT_AUTOMAKE(AC_PACKAGE_NAME, AC_PACKAGE_VERSION)
 AM_CONFIG_HEADER(config.h)
+AM_CONFIG_HEADER(libmemcached-0.30/libmemcached/libmemcached_config.h)
 
 AC_PROG_CC
+AC_PROG_CXX
 AC_DISABLE_SHARED
 AM_PROG_LIBTOOL
 
@@ -102,6 +104,19 @@ AM_CONDITIONAL([DTRACE_INSTRUMENT_OBJ],[test "$dtrace_instrument_obj" = "yes"])
 AC_SUBST(DTRACE)
 AC_SUBST(DTRACEFLAGS)
 AC_SUBST(PROFILER_LDFLAGS)
+
+AC_HEADER_TIME
+
+sinclude(libmemcached-0.30/m4/pod2man.m4)
+sinclude(libmemcached-0.30/m4/debug.m4)
+sinclude(libmemcached-0.30/m4/dtrace.m4)
+sinclude(libmemcached-0.30/m4/byteorder.m4)
+sinclude(libmemcached-0.30/m4/64bit.m4)
+sinclude(libmemcached-0.30/m4/protocol_binary.m4)
+sinclude(libmemcached-0.30/m4/memcached.m4)
+sinclude(libmemcached-0.30/m4/setsockopt.m4)
+sinclude(libmemcached-0.30/m4/hsieh.m4)
+sinclude(libmemcached-0.30/m4/util.m4)
 
 AC_ARG_ENABLE(coverage,
   [AS_HELP_STRING([--disable-coverage],[Disable code coverage])])
@@ -422,6 +437,6 @@ AC_SEARCH_LIBS(memcached_create, memcached)
 
 LIBS="$LIBS -lm -lsqlite3 -lresolv -lssl"
 
-AC_CONFIG_FILES(Makefile doc/Makefile)
+AC_CONFIG_FILES(Makefile doc/Makefile libmemcached-0.30/libmemcached/Makefile)
 AC_OUTPUT
 
