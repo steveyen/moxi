@@ -50,5 +50,3 @@ libtool
 libmemcached-0.30/libmemcached/.libs/
 libmemcached-0.30/libmemcached/*.lo
 libmemcached-0.30/libmemcached/*.la
-libmemcached-0.30/support/libmemcached-fc.spec
-libmemcached-0.30/support/libmemcached.pc
