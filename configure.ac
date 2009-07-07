@@ -171,8 +171,8 @@ AC_ARG_WITH(libstrophe,
                 AC_DEFINE([HAVE_STROPHE_H], 1,
                   [Defined if building with libstrophe XMPP client])
                 CPPFLAGS="-I$withval $CPPFLAGS"
-                LDFLAGS+="-L$withval -L$withval/expat "
-                LIBS="$LIBS -lconflate"
+                LDFLAGS="$LDFLAGS -L$withval -L$withval/expat "
+                LIBS="$LIBS -lstrophe -lexpat"
                 usestrophe="yes"
               fi
             ])
@@ -188,8 +188,8 @@ AC_ARG_WITH(libconflate,
                 AC_DEFINE([HAVE_CONFLATE_H], 1,
                   [Defined if building with libconflate XMPP management])
                 CPPFLAGS="-I$withval $CPPFLAGS"
-                LDFLAGS+="-L$withval "
-                LIBS="$LIBS -lstrophe -lexpat"
+                LDFLAGS="$LDFLAGS -L$withval "
+                LIBS="$LIBS -lconflate"
                 useconflate="yes"
               fi
             ])
