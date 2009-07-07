@@ -27,6 +27,7 @@ moxi-debug
 moxi-debug.profile
 missing
 stamp-h1
+stamp-h2
 tags
 TAGS
 cscope.out
@@ -47,6 +48,8 @@ doc/protocol-binary.txt
 /check_work
 ltmain.sh
 libtool
-libmemcached-0.30/libmemcached/.libs/
-libmemcached-0.30/libmemcached/*.lo
-libmemcached-0.30/libmemcached/*.la
+libmemcached-*/libmemcached/.libs/
+libmemcached-*/libmemcached/*.lo
+libmemcached-*/libmemcached/*.la
+libmemcached-*/libmemcached/libmemcached_config.h
+
