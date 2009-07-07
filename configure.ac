@@ -107,6 +107,8 @@ AC_SUBST(PROFILER_LDFLAGS)
 
 AC_HEADER_TIME
 
+AC_SUBST(NO_STRICT_ALIASING)
+
 sinclude(libmemcached-0.30/m4/pod2man.m4)
 sinclude(libmemcached-0.30/m4/debug.m4)
 sinclude(libmemcached-0.30/m4/dtrace.m4)
@@ -161,23 +163,6 @@ return sizeof(void*) == 8 ? 0 : 1;
     ])
 fi
 
-usestrophe="no"
-AC_ARG_WITH(libstrophe,
-            AS_HELP_STRING([--with-libstrophe=PATH],
-            [build with libstrophe xmpp libs]),
-            [
-              if test "x$withval" != "xno"
-                then
-                AC_DEFINE([HAVE_STROPHE_H], 1,
-                  [Defined if building with libstrophe XMPP client])
-                CPPFLAGS="-I$withval $CPPFLAGS"
-                LDFLAGS="$LDFLAGS -L$withval -L$withval/expat "
-                LIBS="$LIBS -lstrophe -lexpat"
-                usestrophe="yes"
-              fi
-            ])
-AM_CONDITIONAL([BUILD_WITH_STROPHE],[test "$usestrophe" = "yes"])
-
 useconflate="no"
 AC_ARG_WITH(libconflate,
             AS_HELP_STRING([--with-libconflate=PATH],
@@ -194,6 +179,23 @@ AC_ARG_WITH(libconflate,
               fi
             ])
 AM_CONDITIONAL([BUILD_WITH_CONFLATE],[test "$useconflate" = "yes"])
+
+usestrophe="no"
+AC_ARG_WITH(libstrophe,
+            AS_HELP_STRING([--with-libstrophe=PATH],
+            [build with libstrophe xmpp libs]),
+            [
+              if test "x$withval" != "xno"
+                then
+                AC_DEFINE([HAVE_STROPHE_H], 1,
+                  [Defined if building with libstrophe XMPP client])
+                CPPFLAGS="-I$withval $CPPFLAGS"
+                LDFLAGS="$LDFLAGS -L$withval -L$withval/expat "
+                LIBS="$LIBS -lstrophe -lexpat"
+                usestrophe="yes"
+              fi
+            ])
+AM_CONDITIONAL([BUILD_WITH_STROPHE],[test "$usestrophe" = "yes"])
 
 trylibeventdir=""
 AC_ARG_WITH(libevent,
@@ -427,6 +429,7 @@ elif test "$GCC" = "yes"
 then
   CFLAGS="$CFLAGS -Wall -Werror -pedantic -Wstrict-prototypes -Wmissing-prototypes -Wmissing-declarations -Wredundant-decls"
   AC_DEFINE([_GNU_SOURCE],[1],[find sigignore on Linux])
+  NO_STRICT_ALIASING="-fno-strict-aliasing -Wno-strict-aliasing"
 elif test "$SUNCC" = "yes"
 then
   CFLAGS="$CFLAGS -errfmt=error -errwarn -errshort=tags"
