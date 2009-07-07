@@ -18,8 +18,8 @@ import re
 #
 # ----------------------------------
 
-def debug(x):
-    if True:
+def debug(level, x):
+    if level < 1:
         print(x)
 
 # A fake memcached server.
@@ -57,10 +57,10 @@ class MockServer(threading.Thread):
             self.server.listen(self.backlog)
 
             while self.running:
-                debug("MockServer running " + str(self.port))
+                debug(0, "MockServer running " + str(self.port))
                 client, address = self.server.accept()
                 c = MockSession(client, address, self)
-                debug("MockServer accepted " + str(self.port))
+                debug(0, "MockServer accepted " + str(self.port))
                 self.sessions[len(self.sessions)] = c
                 c.start()
 
@@ -69,7 +69,7 @@ class MockServer(threading.Thread):
             raise
         except socket.error, (value, message):
             self.close()
-            debug("MockServer socket error: " + message)
+            debug(1, "MockServer socket error: " + message)
             sys.exit(1)
 
         self.close()
@@ -94,22 +94,22 @@ class MockSession(threading.Thread):
             self.running = 1
             while (self.running > 0 and
                    self.running < self.running_max):
-                debug("MockSession running (" + str(self.running) + ")")
+                debug(1, "MockSession running (" + str(self.running) + ")")
                 self.running = self.running + 1
 
                 iready, oready, eready = select.select(input, [], [], 1)
                 if len(eready) > 0:
-                    debug("MockSession select eready...")
+                    debug(1, "MockSession select eready...")
                     self.running = 0
                 elif len(iready) > 0:
-                    debug("MockSession recv...")
+                    debug(1, "MockSession recv...")
                     data = self.client.recv(self.recvlen)
-                    debug("MockSession recv done:" + data)
+                    debug(1, "MockSession recv done:" + data)
 
                     if data and len(data) > 0:
                         self.received.append(data)
                     else:
-                        debug("MockSession recv no data")
+                        debug(1, "MockSession recv no data")
                         self.close()
 
         except KeyboardInterrupt:
@@ -118,13 +118,13 @@ class MockSession(threading.Thread):
             1
 
         if self.running >= self.running_max:
-            debug("MockSession running too long, shutting down")
+            debug(1, "MockSession running too long, shutting down")
 
-        debug("MockSession closing")
+        debug(1, "MockSession closing")
         self.close()
 
     def close(self):
-        debug("MockSession close")
+        debug(1, "MockSession close")
         self.running = 0
         if self.client:
             self.client.close()
@@ -171,11 +171,11 @@ class TestProxy(unittest.TestCase):
         return c
 
     def client_send(self, what, idx=0):
-        debug("client sending " + what)
+        debug(1, "client sending " + what)
         self.clients[idx].send(what)
 
     def mock_send(self, what, session_idx=0):
-        debug("mock sending " + what)
+        debug(1, "mock sending " + what)
 
         session = self.mock_server().sessions[session_idx]
 
@@ -184,11 +184,11 @@ class TestProxy(unittest.TestCase):
         session.client.send(what)
 
     def client_recv(self, what, idx=0):
-        debug("client_recv expect: " + what)
+        debug(1, "client_recv expect: " + what)
 
         s = self.clients[idx].recv(1024)
 
-        debug("client_recv actual: " + s);
+        debug(1, "client_recv actual: " + s);
 
         self.assertTrue(what == s or re.match(what, s) is not None)
 
@@ -201,36 +201,36 @@ class TestProxy(unittest.TestCase):
             i = i * 2
 
         if len(self.mock_server().sessions) <= session_idx and i >= wait_max:
-            debug("waiting too long for mock_session " + str(i))
+            debug(1, "waiting too long for mock_session " + str(i))
 
         return self.mock_server().sessions[session_idx]
 
     def mock_recv(self, what, session_idx=0):
-        debug("mock_recv expect: " + what)
+        debug(1, "mock_recv expect: " + what)
 
         session = self.mock_session(session_idx)
 
         wait_max = 5
         i = 1
         while len(session.received) <= 0 and i < wait_max:
-            debug("sleeping waiting for mock_recv " + str(i))
+            debug(1, "sleeping waiting for mock_recv " + str(i))
             time.sleep(i)
             i = i * 2
 
         if len(session.received) <= 0 and i >= wait_max:
-            debug("waiting too long for mock_recv " + str(i))
+            debug(1, "waiting too long for mock_recv " + str(i))
 
         message = ""
 
         if len(session.received) > 0:
             message = session.received.pop(0)
 
-        debug("mock_recv actual: " + message);
+        debug(1, "mock_recv actual: " + message);
 
         self.assertTrue(what == message or re.match(what, message) is not None)
 
     def wait(self, x):
-        debug("wait " + str(x))
+        debug(1, "wait " + str(x))
         time.sleep(0.01 * x)
 
     def client_close(self, idx=0):

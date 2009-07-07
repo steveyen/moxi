@@ -10,7 +10,7 @@ INCLUDES = $(GLIB2_CFLAGS)
 LIBS += $(GLIB2_LIBS)
 LIBS += -lgthread-2.0
 
-BUILT_SOURCES=
+BUILT_SOURCES =
 
 testapp_SOURCES = testapp.c util.c util.h
 
@@ -36,7 +36,14 @@ moxi_SOURCES = memcached.c memcached.h \
 
 TESTS = check_util check_moxi check_moxi_agent check_work
 
-check_PROGRAMS = check_util check_moxi check_moxi_agent check_work
+check_PROGRAMS = check_util \
+                 check_moxi \
+                 check_moxi_agent \
+                 check_work \
+                 check_moxi_all_t
+
+check_moxi_all_t:
+	./t/moxi_all.pl
 
 check_util_SOURCES = check_util.c util.c util.h
 check_util_CFLAGS = @CHECK_CFLAGS@
@@ -82,7 +89,7 @@ CLEANFILES += memcached_dtrace.o memcached_debug_dtrace.o
 endif
 
 memcached_dtrace.h: memcached_dtrace.d
-	${DTRACE} -h -s memcached_dtrace.d 
+	${DTRACE} -h -s memcached_dtrace.d
 	sed -e 's,void \*,const void \*,g' memcached_dtrace.h | \
             sed -e 's,char \*,const char \*,g' | tr '\t' ' ' > mmc_dtrace.tmp
 	mv mmc_dtrace.tmp memcached_dtrace.h
@@ -92,7 +99,6 @@ memcached_dtrace.o: $(moxi_OBJECTS)
 
 memcached_debug_dtrace.o: $(moxi_debug_OBJECTS)
 	$(DTRACE) $(DTRACEFLAGS) -G -o memcached_debug_dtrace.o -s ${srcdir}/memcached_dtrace.d $(moxi_debug_OBJECTS)
-
 
 SUBDIRS = doc libmemcached-0.30/libmemcached
 DIST_DIRS = scripts
