@@ -39,10 +39,9 @@ TESTS = check_util check_moxi check_moxi_agent check_work
 check_PROGRAMS = check_util \
                  check_moxi \
                  check_moxi_agent \
-                 check_work \
-                 check_moxi_all_t
+                 check_work
 
-check_moxi_all_t:
+test_moxi:
 	./t/moxi_all.pl
 
 check_util_SOURCES = check_util.c util.c util.h
