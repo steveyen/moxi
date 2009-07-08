@@ -122,21 +122,36 @@ int cproxy_init_agent(char *cfg_str,
 
         char *cur = trimstr(strsep(&next, ";"));
         while (cur != NULL) {
-            char *key_val = trimstr(strsep(&cur, ","));
+            char *key_val = trimstr(strsep(&cur, ",\r\n"));
             if (key_val != NULL) {
                 char *key = trimstr(strsep(&key_val, "="));
                 char *val = trimstr(key_val);
 
-                if (val != NULL) {
+                bool handled = true;
+
+                if (key != NULL &&
+                    val != NULL) {
                     if (wordeq(key, "apikey")) {
                         jid = strsep(&val, "%");
                         jpw = val;
-                    }
-                    if (wordeq(key, "config")) {
+                    } else if (wordeq(key, "config")) {
                         config = val;
-                    }
-                    if (wordeq(key, "host")) {
+                    } else if (wordeq(key, "host")) {
                         host = val;
+                    } else {
+                        handled = false;
+                    }
+                } else {
+                    handled = false;
+                }
+
+                if (handled == false &&
+                    key != NULL &&
+                    key[0] != '#' &&
+                    key[0] != '\0') {
+                    if (settings.verbose > 0) {
+                        fprintf(stderr,
+                                "unknown configuration key: %s\n", key);
                     }
                 }
             }
@@ -430,8 +445,9 @@ void cproxy_on_new_config(void *data0, void *data1) {
 
                 if (i < nbindings &&
                     bindings != NULL &&
-                    bindings[i])
+                    bindings[i]) {
                     pool_port = atoi(skipspace(bindings[i]));
+                }
 
                 if (pool_port > 0) {
                     // Number of servers in this pool.
