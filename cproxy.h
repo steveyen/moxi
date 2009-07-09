@@ -18,7 +18,7 @@ int cproxy_init(char *cfg_str,
                      x == proxy_downstream_ascii_prot || \
                      x == proxy_downstream_binary_prot)
 
-#define CPROXY_NOT_CAS -1
+#define CPROXY_NOT_CAS UINT64_MAX
 
 // TODO: Millisecond capacity in 32-bit field not enough?
 //
