@@ -12,6 +12,20 @@ AC_PROG_CXX
 AC_DISABLE_SHARED
 AM_PROG_LIBTOOL
 
+#shared library versioning
+MEMCACHED_LIBRARY_VERSION=2:0:0
+#                         | | |
+#                  +------+ | +---+
+#                  |        |     |
+#                 current:revision:age
+#                  |        |     |
+#                  |        |     +- increment if interfaces have been added
+#                  |        |        set to zero if interfaces have been removed or changed
+#                  |        +- increment if source code has changed
+#                  |           set to zero if current is incremented
+#                  +- increment if interfaces have been added, removed or changed
+AC_SUBST(MEMCACHED_LIBRARY_VERSION)
+
 dnl **********************************************************************
 dnl DETECT_ICC ([ACTION-IF-YES], [ACTION-IF-NO])
 dnl
