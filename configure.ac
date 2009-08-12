@@ -205,7 +205,7 @@ AC_ARG_WITH(libstrophe,
                   [Defined if building with libstrophe XMPP client])
                 CPPFLAGS="-I$withval $CPPFLAGS"
                 LDFLAGS="$LDFLAGS -L$withval -L$withval/expat "
-                LIBS="$LIBS -lstrophe -lexpat"
+                LIBS="$LIBS -lstrophe -lexpat -lssl -lresolv"
                 usestrophe="yes"
               fi
             ])
@@ -458,7 +458,7 @@ fi
 
 AC_SEARCH_LIBS(memcached_create, memcached)
 
-LIBS="$LIBS -lm -lsqlite3 -lresolv -lssl"
+LIBS="$LIBS -lm -lsqlite3 -lssl"
 
 AC_CONFIG_FILES(Makefile doc/Makefile libmemcached-0.30/libmemcached/Makefile)
 AC_OUTPUT
