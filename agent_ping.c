@@ -260,6 +260,7 @@ static void ping_server(char *server_name,
 
     if (memcached_create(&mst) != NULL) {
         memcached_behavior_set(&mst, MEMCACHED_BEHAVIOR_NO_BLOCK, 1);
+        memcached_behavior_set(&mst, MEMCACHED_BEHAVIOR_TCP_NODELAY, 1);
 
         snprintf(buf, sizeof(buf),
                  "%s:%u",

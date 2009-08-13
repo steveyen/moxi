@@ -870,6 +870,7 @@ int init_memcached_st(memcached_st *mst, char *config) {
     if (memcached_create(mst) != NULL) {
         memcached_behavior_set(mst, MEMCACHED_BEHAVIOR_NO_BLOCK, 1);
         memcached_behavior_set(mst, MEMCACHED_BEHAVIOR_KETAMA, 1);
+        memcached_behavior_set(mst, MEMCACHED_BEHAVIOR_TCP_NODELAY, 1);
 
         memcached_server_st *mservers;
 
