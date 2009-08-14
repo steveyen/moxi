@@ -1,4 +1,4 @@
-* Hacking Memcached
+* Hacking Moxi
 
 * Prerequisites
 
@@ -6,6 +6,8 @@
  - automake
  - autotools
  - libevent
+ - glib-2.0
+ - check 
 
 * Getting Started
 
@@ -37,3 +39,11 @@ to keep the reporting accurate.  To do so, add the following to
 
     #!/bin/sh
     ./version.sh
+
+* Running tests
+
+It has been noted that tests hang on some OSs.  After investigation, 
+this is due to those OSs using a default shell which doesn't kill off
+the child process from a kill.  This has been noted on Ubuntu with 
+the shell dash.  To run tests convert the default shell to bash with 
+dpkg-reconfigure.
