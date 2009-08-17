@@ -75,13 +75,13 @@
           Multi-get Escalation and Protocol Pipelining - de-duplicates
           requests for popular keys, based on ideas from Dustin Sallings'
           spymemcached Java client library for memcached. See:
-          <A HREF="http://code.google.com/p/spymemcached/wiki/Optimizations">code.google.com/p/spymemcached/wiki/Optimizations</a>
+          <a href="http://code.google.com/p/spymemcached/wiki/Optimizations">code.google.com/p/spymemcached/wiki/Optimizations</a>
         </li>
         <li>
           Front cache - an L1 cache, to avoid network hops.
         </li>
         <li>
-          Fire & forget SET - optinally return STORED from SET requests so that the application can proceed, based on key-prefix matches.  (For those clients that don't do noreply.)
+          Fire &amp; forget SET - optinally return STORED from SET requests so that the application can proceed, based on key-prefix matches.  (For those clients that don't do noreply.)
         </li>
         <li>
           Timeouts - set maximum time for operations. eg, "no downstream memcached operation should take more than X ms."
@@ -134,11 +134,17 @@
 
       <h3>Presentations</h3>
       <p>
-        A subset of these slides were presented at OSCON 2009 as a Lightning Talk -
+        A subset of these slides were presented at OSCON 2009 as a 
+        Lightning Talk - </p>
 
-<div style="width:425px;text-align:left" id="__ss_1747476"><a style="font:14px Helvetica,Arial,Sans-serif;display:block;margin:12px 0 3px 0;text-decoration:underline;" href="http://www.slideshare.net/northscale/moxi-memcached-proxy" title="moxi - memcached + integrated proxy + more">memcached + integrated proxy + more</a><object style="margin:0px" width="425" height="355"><param name="movie" value="http://static.slidesharecdn.com/swf/ssplayer2.swf?doc=moxiabout-090721035815-phpapp02&stripped_title=moxi-memcached-proxy" /><param name="allowFullScreen" value="true"/><param name="allowScriptAccess" value="always"/><embed src="http://static.slidesharecdn.com/swf/ssplayer2.swf?doc=moxiabout-090721035815-phpapp02&stripped_title=moxi-memcached-proxy" type="application/x-shockwave-flash" allowscriptaccess="always" allowfullscreen="true" width="425" height="355"></embed></object><div style="font-size:11px;font-family:tahoma,arial;height:26px;padding-top:2px;">View more <a style="text-decoration:underline;" href="http://www.slideshare.net/">documents</a> from <a style="text-decoration:underline;" href="http://www.slideshare.net/northscale">NorthScale</a>.</div></div>
-
-      </p>
+<div style="width:425px; text-align:left;" id="__ss_1747476">
+<a style="font:14px Helvetica,Arial,Sans-serif; display:block;margin:12px 0 3px 0;text-decoration:underline;" 
+href="http://www.slideshare.net/northscale/moxi-memcached-proxy" 
+title="moxi - memcached + integrated proxy + more">memcached + integrated 
+proxy + more</a><object style="margin:0px" width="425" height="355">
+<param name="movie" value="http://static.slidesharecdn.com/swf/ssplayer2.swf?doc=moxiabout-090721035815-phpapp02&stripped_title=moxi-memcached-proxy" /><param name="allowFullScreen" value="true"/><param name="allowScriptAccess" value="always"/><embed src="http://static.slidesharecdn.com/swf/ssplayer2.swf?doc=moxiabout-090721035815-phpapp02&stripped_title=moxi-memcached-proxy" type="application/x-shockwave-flash" allowscriptaccess="always" allowfullscreen="true" width="425" height="355"></embed></object>
+<div style="font-size:11px;font-family:tahoma,arial;height:26px;padding-top:2px;">View more <a style="text-decoration:underline;" href="http://www.slideshare.net/">documents</a> from <a style="text-decoration:underline;" href="http://www.slideshare.net/northscale">NorthScale</a>.</div>
+</div>
 
       <h3>Obtaining the Source</h3>
       <!--
