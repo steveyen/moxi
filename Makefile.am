@@ -3,6 +3,11 @@ AUTOMAKE_OPTIONS = foreign
 bin_PROGRAMS = moxi
 noinst_PROGRAMS = moxi-debug sizes testapp
 
+## INCLUDES is apparently not previously set, if you set it
+##  change this
+INCLUDES = $(CONFLATE_CFLAGS)
+LIBS += $(CONFLATE_LIBS)
+
 BUILT_SOURCES =
 
 testapp_SOURCES = testapp.c util.c util.h

@@ -177,39 +177,30 @@ return sizeof(void*) == 8 ? 0 : 1;
     ])
 fi
 
-useconflate="no"
-AC_ARG_WITH(libconflate,
-            AS_HELP_STRING([--with-libconflate=PATH],
-            [build with libconflate xmpp management]),
-            [
-              if test "x$withval" != "xno"
-                then
-                AC_DEFINE([HAVE_CONFLATE_H], 1,
-                  [Defined if building with libconflate XMPP management])
-                CPPFLAGS="-I$withval $CPPFLAGS"
-                LDFLAGS="$LDFLAGS -L$withval "
-                LIBS="$LIBS -lconflate"
-                useconflate="yes"
-              fi
-            ])
-AM_CONDITIONAL([BUILD_WITH_CONFLATE],[test "$useconflate" = "yes"])
+PKG_PROG_PKG_CONFIG
 
-usestrophe="no"
-AC_ARG_WITH(libstrophe,
-            AS_HELP_STRING([--with-libstrophe=PATH],
-            [build with libstrophe xmpp libs]),
-            [
-              if test "x$withval" != "xno"
-                then
-                AC_DEFINE([HAVE_STROPHE_H], 1,
-                  [Defined if building with libstrophe XMPP client])
-                CPPFLAGS="-I$withval $CPPFLAGS"
-                LDFLAGS="$LDFLAGS -L$withval -L$withval/expat "
-                LIBS="$LIBS -lstrophe -lexpat -lssl"
-                usestrophe="yes"
-              fi
-            ])
-AM_CONDITIONAL([BUILD_WITH_STROPHE],[test "$usestrophe" = "yes"])
+AC_ARG_WITH(libconflate, [AS_HELP_STRING([--with-libconflate], [build with libconflate xmpp management @<:@default=check@:>@])],
+                           [], [with_libconflate=check])
+CONFLATE_CFLAGS=
+CONFLATE_LIBS=
+AC_SUBST(CONFLATE_CFLAGS)
+AC_SUBST(CONFLATE_LIBS)
+if test "x$with_libconflate" == xno; then
+  echo "libconflate support is manually disabled"
+else
+  PKG_CHECK_MODULES([CONFLATE], [libconflate], [
+       BUILD_WITH_CONFLATE=yes
+       AC_DEFINE([HAVE_CONFLATE_H], 1,
+               [Defined if building with libconflate XMPP management])
+    ], [
+       if test "x$with_libconflate" != xcheck; then
+         AC_MSG_FAILURE([--with-libconflate was given, but pkg-config package for libconflate is missing])
+       fi
+       BUILD_WITH_CONFLATE=no
+       echo "support for libconflate XMPP management will be disabled"
+    ])
+fi
+AM_CONDITIONAL([BUILD_WITH_CONFLATE], [test "x$BUILD_WITH_CONFLATE" = xyes])
 
 trylibeventdir=""
 AC_ARG_WITH(libevent,
@@ -451,7 +442,7 @@ then
 fi
 
 AC_ARG_VAR([CONFLATE_DB_PATH], [Directory for libconflate config database (default /var/lib/]AC_PACKAGE_NAME[)])
-if test "x$useconflate" = "xyes"; then
+if test "x$BUILD_WITH_CONFLATE" = "xyes"; then
   if test "x$CONFLATE_DB_PATH" = x; then
     CONFLATE_DB_PATH=/var/lib/$PACKAGE
   fi
