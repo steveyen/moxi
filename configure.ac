@@ -205,7 +205,7 @@ AC_ARG_WITH(libstrophe,
                   [Defined if building with libstrophe XMPP client])
                 CPPFLAGS="-I$withval $CPPFLAGS"
                 LDFLAGS="$LDFLAGS -L$withval -L$withval/expat "
-                LIBS="$LIBS -lstrophe -lexpat -lssl -lresolv"
+                LIBS="$LIBS -lstrophe -lexpat -lssl"
                 usestrophe="yes"
               fi
             ])
@@ -457,6 +457,11 @@ fi
 
 
 AC_SEARCH_LIBS(memcached_create, memcached)
+
+AC_SEARCH_LIBS([res_query], resolv)
+AC_SEARCH_LIBS(res_9_query, resolv)
+dnl Linux needs resolv for the above, but doesn't seem to know it
+AC_SEARCH_LIBS(__res_query, resolv)
 
 LIBS="$LIBS -lm -lsqlite3 -lssl"
 
