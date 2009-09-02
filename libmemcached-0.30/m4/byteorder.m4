@@ -16,7 +16,7 @@ AC_DEFUN([DETECT_BYTEORDER],
     ])
 
     AC_MSG_RESULT([$have_htoll])
-    AM_CONDITIONAL([BUILD_BYTEORDER],[test "x$have_htoll" == "xno"])
+    AM_CONDITIONAL([BUILD_BYTEORDER],[test "x$have_htoll" = "xno"])
     AC_MSG_CHECKING([byteorder])
     have_htoll="no"
     AC_RUN_IFELSE([

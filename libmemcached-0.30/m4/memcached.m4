@@ -7,14 +7,14 @@ AC_ARG_WITH(memcached,
     MEMC_BINARY="$withval"
   fi
 
-  if test x$withval == xyes
+  if test x$withval = xyes
   then
     MEMC_BINARY=memcached
   fi
 
   # just ignore the user if --without-memcached is passed.. it is
   # only used by make test
-  if test x$withval == xno
+  if test x$withval = xno
   then
     MEMC_BINARY=memcached
   fi
@@ -23,7 +23,7 @@ AC_ARG_WITH(memcached,
    AC_PATH_PROG([MEMC_BINARY], [memcached], "no", [$PATH])
 ])
 
-if test x$MEMC_BINARY == "xno"
+if test x$MEMC_BINARY = "xno"
 then
   AC_MSG_ERROR(["could not find memcached binary"])
 fi
