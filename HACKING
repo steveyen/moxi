@@ -6,8 +6,7 @@
  - automake
  - autotools
  - libevent
- - glib-2.0
- - check 
+ - check
 
 * Getting Started
 
