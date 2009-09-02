@@ -6,16 +6,15 @@
 #include <sysexits.h>
 #include <pthread.h>
 #include <assert.h>
-#include <glib.h>
 #include <libmemcached/memcached.h>
 #include "memcached.h"
 #include "cproxy.h"
 
 /* Callback to g_hash_table_foreach that frees the multiget_entry list.
  */
-void multiget_foreach_free(gpointer key,
-                           gpointer value,
-                           gpointer user_data) {
+void multiget_foreach_free(const void *key,
+                           const void *value,
+                           void *user_data) {
     downstream *d = user_data;
     assert(d);
 
@@ -27,7 +26,7 @@ void multiget_foreach_free(gpointer key,
 
     int length = 0;
 
-    multiget_entry *entry = value;
+    multiget_entry *entry = (multiget_entry*)value;
 
     while (entry != NULL) {
         if (entry->hits == 0) {
@@ -51,10 +50,10 @@ void multiget_foreach_free(gpointer key,
 /* Callback to g_hash_table_foreach that clears out multiget_entries
  * which have the given upstream conn (passed as user_data).
  */
-void multiget_remove_upstream(gpointer key,
-                              gpointer value,
-                              gpointer user_data) {
-    multiget_entry *entry = value;
+void multiget_remove_upstream(const void *key,
+                              const void *value,
+                              void *user_data) {
+    multiget_entry *entry = (multiget_entry *) value;
     assert(entry != NULL);
 
     conn *uc = user_data;
@@ -108,8 +107,7 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
         // More than one upstream conn, so we need a hashtable
         // to track keys for de-deplication.
         //
-        d->multiget = g_hash_table_new(skey_hash,
-                                       skey_equal);
+        d->multiget = genhash_init(128, skeyhash_ops);
         if (settings.verbose > 1)
             fprintf(stderr, "cproxy multiget hash table new\n");
     }
@@ -284,9 +282,9 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
                             entry->upstream_conn = uc_cur;
                             entry->opaque = 0;
                             entry->hits = 0;
-                            entry->next = g_hash_table_lookup(d->multiget, key);
+                            entry->next = genhash_find(d->multiget, key);
 
-                            g_hash_table_insert(d->multiget, key, entry);
+                            genhash_store(d->multiget, key, entry);
 
                             if (entry->next != NULL)
                                 first_request = false;
@@ -417,8 +415,7 @@ void multiget_ascii_downstream_response(downstream *d, item *it) {
         memcpy(key_buf, ITEM_key(it), it->nkey);
         key_buf[it->nkey] = '\0';
 
-        multiget_entry *entry_first =
-            g_hash_table_lookup(d->multiget, key_buf);
+        multiget_entry *entry_first = genhash_find(d->multiget, key_buf);
 
         if (entry_first != NULL) {
             entry_first->hits++;

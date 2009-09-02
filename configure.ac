@@ -300,11 +300,8 @@ AC_SEARCH_LIBS(socket, socket)
 AC_SEARCH_LIBS(gethostbyname, nsl)
 AC_SEARCH_LIBS(umem_cache_create, umem)
 
-PKG_CHECK_MODULES([GLIB2], [ glib-2.0 >= 2.0.6 ])
-AC_SUBST(GLIB2)
 PKG_CHECK_MODULES([CHECK], [check >= 0.9.4])
 
-AC_SUBST(DEPS)
 AC_SUBST(DEPS)
 
 AC_HEADER_STDBOOL

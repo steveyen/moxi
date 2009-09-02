@@ -250,7 +250,7 @@ static void *worker_libevent(void *arg) {
      */
     me->thread_id = pthread_self();
     if (settings.verbose > 1)
-        fprintf(stderr, "worker_libevent thread_id %x\n", (unsigned int) me->thread_id);
+        fprintf(stderr, "worker_libevent thread_id %ld\n", (long)me->thread_id);
 
     pthread_mutex_lock(&init_lock);
     init_count++;

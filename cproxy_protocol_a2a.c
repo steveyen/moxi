@@ -6,7 +6,6 @@
 #include <sysexits.h>
 #include <pthread.h>
 #include <assert.h>
-#include <glib.h>
 #include <libmemcached/memcached.h>
 #include "memcached.h"
 #include "cproxy.h"
@@ -287,8 +286,7 @@ bool cproxy_forward_a2a_simple_downstream(downstream *d,
 
         if (cproxy_broadcast_a2a_downstream(d, command, uc,
                                             "END\r\n")) {
-            d->merger = g_hash_table_new(skey_hash,
-                                         skey_equal);
+            d->merger = genhash_init(512, skeyhash_ops);
             return true;
         } else {
             return false;

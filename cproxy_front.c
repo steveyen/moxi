@@ -99,10 +99,11 @@ void mcache_start(mcache *m, uint32_t max) {
     assert(m->lru_tail == NULL);
     assert(m->oldest_live == 0);
 
-    m->map = g_hash_table_new_full(skey_hash,
-                                   skey_equal,
-                                   m->key_alloc ? helper_g_free : NULL,
-                                   m->funcs->item_dec_ref);
+    struct hash_ops hops = skeyhash_ops;
+    hops.freeKey = m->key_alloc ? free : noop_free;
+    hops.freeValue = m->funcs->item_dec_ref;
+
+    m->map = genhash_init(128, hops);
     if (m->map != NULL) {
         m->max         = max;
         m->lru_head    = NULL;
@@ -134,7 +135,7 @@ void mcache_stop(mcache *m) {
     if (m->lock)
         pthread_mutex_lock(m->lock);
 
-    GHashTable *x = m->map;
+    genhash_t *x = m->map;
 
     m->map         = NULL;
     m->max         = 0;
@@ -148,7 +149,7 @@ void mcache_stop(mcache *m) {
     // Destroying hash table outside the lock.
     //
     if (x != NULL)
-        g_hash_table_destroy(x);
+        genhash_free(x);
 }
 
 void *mcache_get(mcache *m, char *key, int key_len,
@@ -164,7 +165,7 @@ void *mcache_get(mcache *m, char *key, int key_len,
         pthread_mutex_lock(m->lock);
 
     if (m->map != NULL) {
-        void *it = g_hash_table_lookup(m->map, key);
+        void *it = genhash_find(m->map, key);
         if (it != NULL) {
             mcache_item_unlink(m, it);
 
@@ -197,7 +198,7 @@ void *mcache_get(mcache *m, char *key, int key_len,
                 fprintf(stderr,
                         "mcache expire: %s\n", key);
 
-            g_hash_table_remove(m->map, key);
+            genhash_delete(m->map, key);
         } else {
             m->tot_get_misses++;
         }
@@ -230,7 +231,7 @@ void mcache_set(mcache *m, void *it,
         // Evict some items if necessary.
         //
         for (int i = 0; m->lru_tail != NULL && i < 20; i++) {
-            if (g_hash_table_size(m->map) < m->max)
+            if (genhash_size(m->map) < m->max)
                 break;
 
             void *last_it = m->lru_tail;
@@ -243,16 +244,15 @@ void mcache_set(mcache *m, void *it,
                 memcpy(buf, m->funcs->item_key(last_it), len);
                 buf[len] = '\0';
 
-                g_hash_table_remove(m->map, buf);
+                genhash_delete(m->map, buf);
             } else {
-                g_hash_table_remove(m->map,
-                                    m->funcs->item_key(last_it));
+                genhash_delete(m->map, m->funcs->item_key(last_it));
             }
 
             m->tot_evictions++;
         }
 
-        if (g_hash_table_size(m->map) < m->max) {
+        if (genhash_size(m->map) < m->max) {
             char *key     = m->funcs->item_key(it);
             int   key_len = m->funcs->item_key_len(it);
             char *key_buf = NULL;
@@ -274,10 +274,7 @@ void mcache_set(mcache *m, void *it,
             }
 
             if (key != NULL) {
-                void *existing =
-                    add_only ?
-                    (void *) g_hash_table_lookup(m->map, key) :
-                    NULL;
+                void *existing = add_only ? genhash_find(m->map, key) : NULL;
                 if (existing != NULL) {
                     mcache_item_unlink(m, existing);
                     mcache_item_touch(m, existing);
@@ -297,7 +294,7 @@ void mcache_set(mcache *m, void *it,
                     m->funcs->item_set_exptime(it, exptime);
                     m->funcs->item_add_ref(it);
 
-                    g_hash_table_insert(m->map, key, it);
+                    genhash_store(m->map, key, it);
 
                     m->tot_adds++;
                     m->tot_add_bytes += m->funcs->item_len(it);
@@ -331,11 +328,11 @@ void mcache_delete(mcache *m, char *key, int key_len) {
         pthread_mutex_lock(m->lock);
 
     if (m->map != NULL) {
-        void *existing = (void *) g_hash_table_lookup(m->map, key);
+        void *existing = genhash_find(m->map, key);
         if (existing != NULL) {
             mcache_item_unlink(m, existing);
 
-            g_hash_table_remove(m->map, key);
+            genhash_delete(m->map, key);
 
             m->tot_deletes++;
         }
@@ -353,7 +350,7 @@ void mcache_flush_all(mcache *m, uint32_t msec_exp) {
         pthread_mutex_lock(m->lock);
 
     if (m->map != NULL) {
-        g_hash_table_remove_all(m->map);
+        genhash_clear(m->map);
 
         m->lru_head = NULL;
         m->lru_tail = NULL;

@@ -389,8 +389,7 @@ void cproxy_on_close_upstream_conn(conn *c) {
         //
         if (found) {
             if (d->multiget != NULL)
-                g_hash_table_foreach(d->multiget,
-                                     multiget_remove_upstream, c);
+                genhash_iter(d->multiget, multiget_remove_upstream, c);
 
             // The downstream conn's might have iov's that
             // point to the upstream conn's buffers.  Also, the
@@ -667,9 +666,9 @@ bool cproxy_release_downstream(downstream *d, bool force) {
         if (d->merger != NULL) {
             // TODO: Allow merger callback to be func pointer.
             //
-            g_hash_table_foreach(d->merger,
-                                 protocol_stats_foreach_write,
-                                 d->upstream_conn);
+            genhash_iter(d->merger,
+                        protocol_stats_foreach_write,
+                        d->upstream_conn);
 
             if (update_event(d->upstream_conn, EV_WRITE | EV_PERSIST)) {
                 conn_set_state(d->upstream_conn, conn_mwrite);
@@ -704,14 +703,14 @@ bool cproxy_release_downstream(downstream *d, bool force) {
     // Free extra hash tables.
     //
     if (d->multiget != NULL) {
-        g_hash_table_foreach(d->multiget, multiget_foreach_free, d);
-        g_hash_table_destroy(d->multiget);
+        genhash_iter(d->multiget, multiget_foreach_free, d);
+        genhash_free(d->multiget);
         d->multiget = NULL;
     }
 
     if (d->merger != NULL) {
-        g_hash_table_foreach(d->merger, protocol_stats_foreach_free, NULL);
-        g_hash_table_destroy(d->merger);
+        genhash_iter(d->merger, protocol_stats_foreach_free, NULL);
+        genhash_free(d->merger);
         d->merger = NULL;
     }
 

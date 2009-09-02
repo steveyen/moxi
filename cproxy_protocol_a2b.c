@@ -7,7 +7,6 @@
 #include <pthread.h>
 #include <assert.h>
 #include <math.h>
-#include <glib.h>
 #include <libmemcached/memcached.h>
 #include "memcached.h"
 #include "cproxy.h"
@@ -965,8 +964,7 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
                                                 out_keylen,
                                                 out_extlen, uc,
                                                 "END\r\n")) {
-                d->merger = g_hash_table_new(skey_hash,
-                                             skey_equal);
+                d->merger = genhash_init(128, skeyhash_ops);
                 return true;
             }
         }

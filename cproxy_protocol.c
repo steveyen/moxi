@@ -6,7 +6,6 @@
 #include <sysexits.h>
 #include <pthread.h>
 #include <assert.h>
-#include <glib.h>
 #include <libmemcached/memcached.h>
 #include "memcached.h"
 #include "cproxy.h"

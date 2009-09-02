@@ -3,8 +3,8 @@
 #ifndef CPROXY_H
 #define CPROXY_H
 
-#include <glib.h>
 #include <libmemcached/memcached.h>
+#include "genhash.h"
 #include "work.h"
 #include "matcher.h"
 
@@ -52,7 +52,7 @@ typedef struct {
 
     bool key_alloc;        // True if mcache must alloc key memory.
 
-    GHashTable *map;       // NULL-able, keyed by string, value is item.
+    genhash_t *map;       // NULL-able, keyed by string, value is item.
 
     uint32_t max;          // Maxiumum number of items to keep.
 
@@ -360,8 +360,8 @@ struct downstream {
     conn  *upstream_conn;     // Non-NULL when downstream is reserved.
     char  *upstream_suffix;   // Last bit to write when downstreams are done.
 
-    GHashTable *multiget; // Keyed by string.
-    GHashTable *merger;   // Keyed by string, for merging replies like STATS.
+    genhash_t *multiget; // Keyed by string.
+    genhash_t *merger;   // Keyed by string, for merging replies like STATS.
 
     // Timeout is in use when timeout_tv fields are non-zero.
     //
@@ -537,27 +537,30 @@ bool multiget_ascii_downstream(
 
 void multiget_ascii_downstream_response(downstream *d, item *it);
 
-void multiget_foreach_free(gpointer key,
-                           gpointer value,
-                           gpointer user_data);
+void multiget_foreach_free(const void *key,
+                           const void *value,
+                           void *user_data);
 
-void multiget_remove_upstream(gpointer key,
-                              gpointer value,
-                              gpointer user_data);
+void multiget_remove_upstream(const void *key,
+                              const void *value,
+                              void *user_data);
 
 // Space or null terminated key funcs.
 //
-size_t   skey_len(const char *key);
-guint    skey_hash(gconstpointer v);
-gboolean skey_equal(gconstpointer v1, gconstpointer v2);
+size_t skey_len(const char *key);
+int    skey_hash(const void *v);
+int    skey_equal(const void *v1, const void *v2);
 
-void helper_g_free(gpointer data);
+extern struct hash_ops strhash_ops;
+extern struct hash_ops skeyhash_ops;
+
+void noop_free(void *v);
 
 // Stats handling.
 //
-bool protocol_stats_merge_line(GHashTable *merger, char *line);
+bool protocol_stats_merge_line(genhash_t *merger, char *line);
 
-bool protocol_stats_merge_name_val(GHashTable *merger,
+bool protocol_stats_merge_name_val(genhash_t *merger,
                                    char *prefix,
                                    int   prefix_len,
                                    char *name,
@@ -565,13 +568,13 @@ bool protocol_stats_merge_name_val(GHashTable *merger,
                                    char *val,
                                    int   val_len);
 
-void protocol_stats_foreach_free(gpointer key,
-                                 gpointer value,
-                                 gpointer user_data);
+void protocol_stats_foreach_free(const void *key,
+                                 const void *value,
+                                 void *user_data);
 
-void protocol_stats_foreach_write(gpointer key,
-                                  gpointer value,
-                                  gpointer user_data);
+void protocol_stats_foreach_write(const void *key,
+                                  const void *value,
+                                  void *user_data);
 
 void cproxy_optimize_to_self(downstream *d, conn *uc,
                              char *command);

@@ -74,7 +74,7 @@ mcache_funcs mcache_key_stats_funcs = {
 #define VALUE_TOKEN    2
 #define MERGE_BUF_SIZE 300
 
-bool protocol_stats_merge_line(GHashTable *merger, char *line) {
+bool protocol_stats_merge_line(genhash_t *merger, char *line) {
     assert(merger != NULL);
     assert(line != NULL);
 
@@ -108,7 +108,7 @@ bool protocol_stats_merge_line(GHashTable *merger, char *line) {
 
 // TODO: The stats merge assumes an ascii upstream.
 //
-bool protocol_stats_merge_name_val(GHashTable *merger,
+bool protocol_stats_merge_name_val(genhash_t *merger,
                                    char *prefix,
                                    int   prefix_len,
                                    char *name,
@@ -134,7 +134,7 @@ bool protocol_stats_merge_name_val(GHashTable *merger,
         strncpy(buf_name, name, name_len);
         buf_name[name_len] = '\0';
 
-        char *prev = (char *) g_hash_table_lookup(merger, buf_name);
+        char *prev = (char *) genhash_find(merger, buf_name);
         if (prev == NULL) {
             char *hval = malloc(prefix_len + 1 +
                                 name_len + 1 +
@@ -149,9 +149,7 @@ bool protocol_stats_merge_name_val(GHashTable *merger,
                 memcpy(hval + prefix_len + 1 + name_len + 1, val, val_len);
                 hval[prefix_len + 1 + name_len + 1 + val_len] = '\0';
 
-                g_hash_table_insert(merger,
-                                    hval + prefix_len + 1,
-                                    hval);
+                genhash_store(merger, hval + prefix_len + 1, hval);
             }
 
             return true;
@@ -203,9 +201,7 @@ bool protocol_stats_merge_name_val(GHashTable *merger,
                 strcpy(hval + prefix_len + 1 + name_len + 1, buf_val);
                 hval[prefix_len + 1 + name_len + 1 + vlen] = '\0';
 
-                g_hash_table_insert(merger,
-                                    hval + prefix_len + 1,
-                                    hval);
+                genhash_store(merger, hval + prefix_len + 1, hval);
 
                 free(prev);
             }
@@ -266,18 +262,18 @@ bool protocol_stats_merge_smallest(char *v1, int v1len,
     return false;
 }
 
-/* Callback to g_hash_table_foreach that frees the multiget_entry list.
+/* Callback to hash table iteration that frees the multiget_entry list.
  */
-void protocol_stats_foreach_free(gpointer key,
-                                 gpointer value,
-                                 gpointer user_data) {
+void protocol_stats_foreach_free(const void *key,
+                                 const void *value,
+                                 void *user_data) {
     assert(value != NULL);
-    free(value);
+    free((void*)value);
 }
 
-void protocol_stats_foreach_write(gpointer key,
-                                  gpointer value,
-                                  gpointer user_data) {
+void protocol_stats_foreach_write(const void *key,
+                                  const void *value,
+                                  void *user_data) {
     char *line = (char *) value;
     assert(line != NULL);
 

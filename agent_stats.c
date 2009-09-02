@@ -38,17 +38,16 @@ static void add_proxy_stats(proxy_stats *agg,
 static void add_stats_cmd(proxy_stats_cmd *agg,
                           proxy_stats_cmd *x);
 
-void map_pstd_foreach_free(gpointer key,
-                           gpointer value,
-                           gpointer user_data);
+void map_pstd_foreach_free(const void *key,
+                           const void *value,
+                           void *user_data);
+void map_pstd_foreach_emit(const void *key,
+                           const void *value,
+                           void *user_data);
 
-void map_pstd_foreach_emit(gpointer key,
-                           gpointer value,
-                           gpointer user_data);
-
-void map_pstd_foreach_merge(gpointer key,
-                            gpointer value,
-                            gpointer user_data);
+void map_pstd_foreach_merge(const void *key,
+                            const void *value,
+                            void *user_data);
 
 struct main_stats_collect_info {
     proxy_main           *m;
@@ -190,9 +189,7 @@ enum conflate_mgmt_cb_result on_conflate_get_stats(void *userdata,
             // is keyed by each proxy's "binding:name", and whose
             // values are proxy_stats_td.
             //
-            GHashTable *map_pstd =
-                g_hash_table_new(g_str_hash,
-                                 g_str_equal);
+            genhash_t *map_pstd = genhash_init(128, strhash_ops);
             if (map_pstd != NULL)
                 work_collect_init(&ca[i], -1, map_pstd);
             else
@@ -213,33 +210,29 @@ enum conflate_mgmt_cb_result on_conflate_get_stats(void *userdata,
             assert(m->nthreads > 0);
 
             if (msci.do_stats) {
-                GHashTable *end_pstd = ca[1].data;
+                genhash_t *end_pstd = ca[1].data;
                 if (end_pstd != NULL) {
                     // Skip the first worker thread (index 1)'s results,
                     // because that's where we'll aggregate final results.
                     //
                     for (i = 2; i < m->nthreads; i++) {
-                        GHashTable *map_pstd = ca[i].data;
+                        genhash_t *map_pstd = ca[i].data;
                         if (map_pstd != NULL) {
-                            g_hash_table_foreach(map_pstd,
-                                                 map_pstd_foreach_merge,
-                                                 end_pstd);
+                            genhash_iter(map_pstd, map_pstd_foreach_merge,
+                                         end_pstd);
                         }
                     }
 
-                    g_hash_table_foreach(end_pstd,
-                                         map_pstd_foreach_emit,
-                                         &msci);
+                    genhash_iter(end_pstd, map_pstd_foreach_emit, &msci);
                 }
             }
 
             for (i = 1; i < m->nthreads; i++) {
-                GHashTable *map_pstd = ca[i].data;
+                genhash_t *map_pstd = ca[i].data;
                 if (map_pstd != NULL) {
-                    g_hash_table_foreach(map_pstd,
-                                         map_pstd_foreach_free,
-                                         NULL);
-                    g_hash_table_destroy(map_pstd);
+                    genhash_iter(map_pstd, map_pstd_foreach_free, NULL);
+                    genhash_free(map_pstd);
+                    map_pstd = NULL;
                 }
             }
 
@@ -250,16 +243,14 @@ enum conflate_mgmt_cb_result on_conflate_get_stats(void *userdata,
     return RV_OK;
 }
 
-void map_pstd_foreach_merge(gpointer key,
-                            gpointer value,
-                            gpointer user_data) {
-    GHashTable *map_end_pstd = user_data;
+void map_pstd_foreach_merge(const void *key,
+                            const void *value,
+                            void *user_data) {
+    genhash_t *map_end_pstd = user_data;
     if (key != NULL &&
         map_end_pstd != NULL) {
         proxy_stats_td *cur_pstd = (proxy_stats_td *) value;
-        proxy_stats_td *end_pstd =
-            g_hash_table_lookup(map_end_pstd,
-                                key);
+        proxy_stats_td *end_pstd = genhash_find(map_end_pstd, key);
         if (cur_pstd != NULL &&
             end_pstd != NULL) {
             add_proxy_stats_td(end_pstd, cur_pstd);
@@ -346,8 +337,7 @@ static void main_stats_collect(void *data0, void *data1) {
             pthread_mutex_lock(p->front_cache.lock);
 
             if (p->front_cache.map != NULL)
-                emit_f("front_cache_size",
-                       "%u", g_hash_table_size(p->front_cache.map));
+                emit_f("front_cache_size", "%u", genhash_size(p->front_cache.map));
 
             emit_f("front_cache_max",
                    "%u", p->front_cache.max);
@@ -437,7 +427,7 @@ static void work_stats_collect(void *data0, void *data1) {
 
     assert(is_listen_thread() == false); // Expecting a worker thread.
 
-    GHashTable *map_pstd = c->data;
+    genhash_t *map_pstd = c->data;
     assert(map_pstd != NULL);
 
     pthread_mutex_lock(&p->proxy_lock);
@@ -452,14 +442,11 @@ static void work_stats_collect(void *data0, void *data1) {
             pthread_mutex_unlock(&p->proxy_lock);
             locked = false;
 
-            proxy_stats_td *pstd =
-                g_hash_table_lookup(map_pstd, key_buf);
+            proxy_stats_td *pstd = genhash_find(map_pstd, key_buf);
             if (pstd == NULL) {
                 pstd = calloc(1, sizeof(proxy_stats_td));
                 if (pstd != NULL) {
-                    g_hash_table_insert(map_pstd,
-                                        key_buf,
-                                        pstd);
+                    genhash_store(map_pstd, key_buf, pstd);
                     key_buf = NULL;
                 }
             }
@@ -549,23 +536,24 @@ static void add_stats_cmd(proxy_stats_cmd *agg,
     agg->cas         += x->cas;
 }
 
-void map_pstd_foreach_free(gpointer key,
-                           gpointer value,
-                           gpointer user_data) {
+void map_pstd_foreach_free(const void *key,
+                           const void *value,
+                           void *user_data) {
     assert(key != NULL);
-    free(key);
+    free((void*)key);
 
     assert(value != NULL);
-    free(value);
+    free((void*)value);
 }
 
-void map_pstd_foreach_emit(gpointer key,
-                           gpointer value,
-                           gpointer user_data) {
-    char *name = key;
+void map_pstd_foreach_emit(const void *k,
+                           const void *value,
+                           void *user_data) {
+
+    const char *name = (const char*)k;
     assert(name != NULL);
 
-    proxy_stats_td *pstd = value;
+    proxy_stats_td *pstd = (proxy_stats_td *)value;
     assert(pstd != NULL);
 
     const struct main_stats_collect_info *emit = user_data;

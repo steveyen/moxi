@@ -9,7 +9,6 @@
 #include <pthread.h>
 #include <assert.h>
 #include <math.h>
-#include <glib.h>
 #include <libmemcached/memcached.h>
 #include "memcached.h"
 #include "cproxy.h"
@@ -86,7 +85,7 @@ size_t skey_len(const char *key) {
 
 /** Hash of key that may be zero or space terminated.
  */
-guint skey_hash(gconstpointer v) {
+int skey_hash(const void *v) {
     assert(v);
 
     const char *key = v;
@@ -98,7 +97,7 @@ guint skey_hash(gconstpointer v) {
 /** Returns true if two keys are equal, where the
  *  keys may be zero or space terminated.
  */
-gboolean skey_equal(gconstpointer v1, gconstpointer v2) {
+int skey_equal(const void *v1, const void *v2) {
     assert(v1);
     assert(v2);
 
@@ -111,9 +110,42 @@ gboolean skey_equal(gconstpointer v1, gconstpointer v2) {
     return (n1 == n2 && strncmp(k1, k2, n1) == 0);
 }
 
-void helper_g_free(gpointer data) {
-    free(data);
+static void *noop_dup(const void *v)
+{
+    return (void*)v;
 }
+
+void noop_free(void *v) {
+    /* Nothing */
+}
+
+static int
+str_eq(const void* p1, const void*p2)
+{
+    char *str1=(char *)p1;
+    char *str2=(char *)p2;
+    assert(str1 != NULL);
+    assert(str2 != NULL);
+    return strcmp(str1, str2) == 0;
+}
+
+struct hash_ops strhash_ops = {
+   .hashfunc = genhash_string_hash,
+   .hasheq = str_eq,
+   .dupKey = noop_dup,
+   .dupValue = noop_dup,
+   .freeKey = noop_free,
+   .freeValue = noop_free
+};
+
+struct hash_ops skeyhash_ops = {
+   .hashfunc = skey_hash,
+   .hasheq = skey_equal,
+   .dupKey = noop_dup,
+   .dupValue = noop_dup,
+   .freeKey = noop_free,
+   .freeValue = noop_free
+};
 
 /** Returns pointer to first non-space char in string.
  */
@@ -195,8 +227,6 @@ int cproxy_init(char *cfg_str,
 
     if (cproxy_core_initted == false) {
         cproxy_core_initted = true;
-
-        g_thread_init(NULL);
 
         gethostname(cproxy_hostname, sizeof(cproxy_hostname));
 

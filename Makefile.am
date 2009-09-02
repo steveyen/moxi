@@ -4,17 +4,12 @@ bin_PROGRAMS = moxi
 ##pkginclude_HEADERS = protocol_binary.h
 noinst_PROGRAMS = moxi-debug sizes testapp
 
-## INCLUDES is apparently not previously set, if you set it
-##  change this
-INCLUDES = $(GLIB2_CFLAGS)
-LIBS += $(GLIB2_LIBS)
-LIBS += -lgthread-2.0
-
 BUILT_SOURCES =
 
 testapp_SOURCES = testapp.c util.c util.h
 
 moxi_SOURCES = memcached.c memcached.h \
+					genhash.c genhash.h genhash_int.h \
                     hash.c hash.h \
                     slabs.c slabs.h \
                     items.c items.h \
