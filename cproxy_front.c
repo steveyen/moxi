@@ -294,7 +294,7 @@ void mcache_set(mcache *m, void *it,
                     m->funcs->item_set_exptime(it, exptime);
                     m->funcs->item_add_ref(it);
 
-                    genhash_store(m->map, key, it);
+                    genhash_update(m->map, key, it);
 
                     m->tot_adds++;
                     m->tot_add_bytes += m->funcs->item_len(it);

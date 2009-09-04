@@ -284,7 +284,7 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
                             entry->hits = 0;
                             entry->next = genhash_find(d->multiget, key);
 
-                            genhash_store(d->multiget, key, entry);
+                            genhash_update(d->multiget, key, entry);
 
                             if (entry->next != NULL)
                                 first_request = false;

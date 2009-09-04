@@ -149,7 +149,7 @@ bool protocol_stats_merge_name_val(genhash_t *merger,
                 memcpy(hval + prefix_len + 1 + name_len + 1, val, val_len);
                 hval[prefix_len + 1 + name_len + 1 + val_len] = '\0';
 
-                genhash_store(merger, hval + prefix_len + 1, hval);
+                genhash_update(merger, hval + prefix_len + 1, hval);
             }
 
             return true;
@@ -201,7 +201,7 @@ bool protocol_stats_merge_name_val(genhash_t *merger,
                 strcpy(hval + prefix_len + 1 + name_len + 1, buf_val);
                 hval[prefix_len + 1 + name_len + 1 + vlen] = '\0';
 
-                genhash_store(merger, hval + prefix_len + 1, hval);
+                genhash_update(merger, hval + prefix_len + 1, hval);
 
                 free(prev);
             }

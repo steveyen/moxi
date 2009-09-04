@@ -446,7 +446,7 @@ static void work_stats_collect(void *data0, void *data1) {
             if (pstd == NULL) {
                 pstd = calloc(1, sizeof(proxy_stats_td));
                 if (pstd != NULL) {
-                    genhash_store(map_pstd, key_buf, pstd);
+                    genhash_update(map_pstd, key_buf, pstd);
                     key_buf = NULL;
                 }
             }
