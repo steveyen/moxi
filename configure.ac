@@ -452,11 +452,6 @@ fi
 
 AC_SEARCH_LIBS(memcached_create, memcached)
 
-AC_SEARCH_LIBS([res_query], resolv)
-AC_SEARCH_LIBS(res_9_query, resolv)
-dnl Linux needs resolv for the above, but doesn't seem to know it
-AC_SEARCH_LIBS(__res_query, resolv)
-
 LIBS="$LIBS -lm -lsqlite3 -lssl"
 
 AC_CONFIG_FILES(Makefile doc/Makefile libmemcached-0.30/libmemcached/Makefile)
