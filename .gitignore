@@ -4,6 +4,11 @@
 *.gcno
 *.tcov
 .deps
+/GPATH
+/GRTAGS
+/GSYMS
+/GTAGS
+/ID
 INSTALL
 Makefile
 Makefile.in
