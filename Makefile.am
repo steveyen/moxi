@@ -146,3 +146,5 @@ check_moxi_agent_SOURCES = check_moxi_agent.c $(moxi_debug_SOURCES)
 check_moxi_agent_CFLAGS = @CHECK_CFLAGS@ $(moxi_debug_CPPFLAGS) -DMAIN_CHECK
 check_moxi_agent_LDADD = @CHECK_LIBS@ $(moxi_debug_LDADD)
 
+check-syntax:
+	$(COMPILE) -o /dev/null -S ${CHK_SOURCES}
