@@ -86,7 +86,6 @@ if test "$ICC" = "no"; then
    AC_PROG_CC_C99
 fi
 
-AM_PROG_CC_C_O
 AC_PROG_INSTALL
 
 AC_ARG_ENABLE(dtrace,
@@ -450,9 +449,7 @@ if test "x$BUILD_WITH_CONFLATE" = "xyes"; then
 fi
 
 
-AC_SEARCH_LIBS(memcached_create, memcached)
-
-LIBS="$LIBS -lm -lsqlite3 -lssl"
+LIBS="$LIBS -lm"
 
 AC_CONFIG_FILES(Makefile doc/Makefile libmemcached-0.30/libmemcached/Makefile)
 AC_OUTPUT
