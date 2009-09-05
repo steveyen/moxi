@@ -302,8 +302,6 @@ AC_SEARCH_LIBS(umem_cache_create, umem)
 
 PKG_CHECK_MODULES([CHECK], [check >= 0.9.4])
 
-AC_SUBST(DEPS)
-
 AC_HEADER_STDBOOL
 AC_C_CONST
 
