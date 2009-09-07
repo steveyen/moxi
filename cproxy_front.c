@@ -403,6 +403,25 @@ void mcache_item_touch(mcache *m, void *it) {
         m->lru_tail = it;
 }
 
+struct mcache_foreach_data {
+    mcache_traversal_func f;
+    void *userdata;
+};
+
+static
+void mcache_foreach_trampoline(const void *key, const void *value, void *_data) {
+    struct mcache_foreach_data *data = _data;
+    data->f(value, data->userdata);
+}
+
+void mcache_foreach(mcache *m, mcache_traversal_func f, void *userdata) {
+    assert(m);
+    if (!m->map)
+        return;
+    struct mcache_foreach_data data = {.f = f, .userdata = userdata};
+    genhash_iter(m->map, mcache_foreach_trampoline, &data);
+}
+
 // -------------------------------------------------
 
 static char *item_key(void *it) {

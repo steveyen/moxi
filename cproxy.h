@@ -590,6 +590,8 @@ void cproxy_del_front_cache_key_ascii_response(downstream *d,
                                                char *response,
                                                char *command);
 
+typedef void (*mcache_traversal_func)(const void *it, void *userdata);
+
 // Functions for the front cache.
 //
 void  mcache_init(mcache *m, bool multithreaded,
@@ -606,6 +608,7 @@ void  mcache_set(mcache *m, void *it,
                  bool mod_exptime_if_exists);
 void  mcache_delete(mcache *m, char *key, int key_len);
 void  mcache_flush_all(mcache *m, uint32_t msec_exp);
+void  mcache_foreach(mcache *m, mcache_traversal_func f, void *userdata);
 
 // Functions for key stats.
 //
