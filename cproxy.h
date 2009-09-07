@@ -279,6 +279,7 @@ struct key_stats {
     char key[KEY_MAX_LENGTH + 1];
     int  refcount;
     uint32_t exptime;
+    uint32_t added_at;
     key_stats *next;
     key_stats *prev;
     proxy_stats_cmd stats_cmd[STATS_CMD_TYPE_last][STATS_CMD_last];

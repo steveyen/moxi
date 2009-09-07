@@ -390,6 +390,7 @@ key_stats *find_key_stats(proxy_td *ptd, char *key, int key_len,
             memcpy(ks->key, key, key_len);
             ks->key[key_len] = '\0';
             ks->refcount = 1;
+            ks->added_at = msec_time;
 
             mcache_set(&ptd->key_stats, ks,
                        msec_time +
