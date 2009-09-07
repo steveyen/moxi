@@ -8,6 +8,7 @@
 #include <pthread.h>
 #include <assert.h>
 #include <libmemcached/memcached.h>
+#include <math.h>
 #include "memcached.h"
 #include "conflate.h"
 #include "cproxy.h"
@@ -33,14 +34,22 @@ static void work_stats_reset(void *data0, void *data1);
 
 static void add_proxy_stats_td(proxy_stats_td *agg,
                                proxy_stats_td *x);
+static void add_raw_key_stats(genhash_t *key_stats_map,
+                              mcache *key_stats);
+static void add_processed_key_stats(genhash_t *dest_map,
+                                    genhash_t *src_map);
 static void add_proxy_stats(proxy_stats *agg,
                             proxy_stats *x);
 static void add_stats_cmd(proxy_stats_cmd *agg,
                           proxy_stats_cmd *x);
+static void add_stats_cmd_with_rescale(proxy_stats_cmd *agg,
+                                       const proxy_stats_cmd *x,
+                                       float rescale_agg,
+                                       float rescale_x);
 
-void map_pstd_foreach_free(const void *key,
-                           const void *value,
-                           void *user_data);
+void genhash_free_entry(const void *key,
+                        const void *value,
+                        void *user_data);
 void map_pstd_foreach_emit(const void *key,
                            const void *value,
                            void *user_data);
@@ -48,6 +57,16 @@ void map_pstd_foreach_emit(const void *key,
 void map_pstd_foreach_merge(const void *key,
                             const void *value,
                             void *user_data);
+
+static void map_key_stats_foreach_free(const void *key,
+                                       const void *value,
+                                       void *user_data);
+static void map_key_stats_foreach_emit(const void *key,
+                                       const void *value,
+                                       void *user_data);
+static void map_key_stats_foreach_merge(const void *key,
+                                        const void *value,
+                                        void *user_data);
 
 struct main_stats_collect_info {
     proxy_main           *m;
@@ -84,6 +103,11 @@ static char *cmd_names[] = { // Keep sync'ed with enum_stats_cmd.
 static char *cmd_type_names[] = { // Keep sync'ed with enum_stats_cmd_type.
     "regular",
     "quiet"
+};
+
+struct stats_gathering_pair {
+    genhash_t *map_pstd; // maps "<proxy-name>:<port>" strings to (proxy_stats_td *)
+    genhash_t *map_key_stats; // maps "<proxy-name>:<port>" strings to (genhash that maps key names to (struct key_stats *))
 };
 
 /* This callback is invoked by conflate on a conflate thread
@@ -185,15 +209,19 @@ enum conflate_mgmt_cb_result on_conflate_get_stats(void *userdata,
         int i;
 
         for (i = 1; i < m->nthreads; i++) {
+            struct stats_gathering_pair *pair = calloc(1, sizeof(struct stats_gathering_pair));
+            if (!pair)
+                break;
             // Each thread gets its own collection hashmap, which
             // is keyed by each proxy's "binding:name", and whose
             // values are proxy_stats_td.
             //
-            genhash_t *map_pstd = genhash_init(128, strhash_ops);
-            if (map_pstd != NULL)
-                work_collect_init(&ca[i], -1, map_pstd);
-            else
+            if (!(pair->map_pstd = genhash_init(128, strhash_ops)))
                 break;
+            // key stats hashmap has same keys and genhash<string, struct key_stats *> as values
+            if (!(pair->map_key_stats = genhash_init(128, strhash_ops)))
+                break;
+            work_collect_init(&ca[i], -1, pair);
         }
 
         // Continue on the main listener thread.
@@ -210,34 +238,52 @@ enum conflate_mgmt_cb_result on_conflate_get_stats(void *userdata,
             assert(m->nthreads > 0);
 
             if (msci.do_stats) {
-                genhash_t *end_pstd = ca[1].data;
+                struct stats_gathering_pair *end_pair = ca[1].data;
+                genhash_t *end_pstd = end_pair->map_pstd;
+                genhash_t *end_map_key_stats = end_pair->map_key_stats;
                 if (end_pstd != NULL) {
                     // Skip the first worker thread (index 1)'s results,
                     // because that's where we'll aggregate final results.
                     //
                     for (i = 2; i < m->nthreads; i++) {
-                        genhash_t *map_pstd = ca[i].data;
+                        struct stats_gathering_pair *pair = ca[i].data;
+                        genhash_t *map_pstd = pair->map_pstd;
                         if (map_pstd != NULL) {
                             genhash_iter(map_pstd, map_pstd_foreach_merge,
                                          end_pstd);
                         }
+
+                        genhash_t *map_key_stats = pair->map_key_stats;
+                        if (map_key_stats != NULL) {
+                            genhash_iter(map_key_stats, map_key_stats_foreach_merge,
+                                         end_map_key_stats);
+                        }
                     }
 
                     genhash_iter(end_pstd, map_pstd_foreach_emit, &msci);
+                    genhash_iter(end_map_key_stats, map_key_stats_foreach_emit, &msci);
                 }
             }
-
-            for (i = 1; i < m->nthreads; i++) {
-                genhash_t *map_pstd = ca[i].data;
-                if (map_pstd != NULL) {
-                    genhash_iter(map_pstd, map_pstd_foreach_free, NULL);
-                    genhash_free(map_pstd);
-                    map_pstd = NULL;
-                }
-            }
-
-            free(ca);
         }
+
+        for (i = 1; i < m->nthreads; i++) {
+            struct stats_gathering_pair *pair = ca[i].data;
+            if (!pair)
+                continue;
+            genhash_t *map_pstd = pair->map_pstd;
+            if (map_pstd != NULL) {
+                genhash_iter(map_pstd, genhash_free_entry, NULL);
+                genhash_free(map_pstd);
+            }
+            genhash_t *map_key_stats = pair->map_key_stats;
+            if (map_key_stats != NULL) {
+                genhash_iter(map_key_stats, map_key_stats_foreach_free, NULL);
+                genhash_free(map_key_stats);
+            }
+            free(pair);
+        }
+
+        free(ca);
     }
 
     return RV_OK;
@@ -257,6 +303,33 @@ void map_pstd_foreach_merge(const void *key,
         }
     }
 }
+
+void map_key_stats_foreach_free(const void *key,
+                                const void *value,
+                                void *user_data) {
+    assert(key);
+    assert(value);
+
+    free((void *)key);
+
+    genhash_t *map_key_stats = (genhash_t *)value;
+    genhash_iter(map_key_stats, genhash_free_entry, NULL);
+    genhash_free(map_key_stats);
+}
+
+void map_key_stats_foreach_merge(const void *key,
+                                 const void *value,
+                                 void *user_data) {
+    genhash_t *end_map_key_stats = user_data;
+    if (key != NULL) {
+        genhash_t *key_stats = (genhash_t *) value;
+        genhash_t *end_key_stats = genhash_find(end_map_key_stats, key);
+        if (key_stats != NULL && end_key_stats != NULL) {
+            add_processed_key_stats(key_stats, end_key_stats);
+        }
+    }
+}
+
 
 /* Must be invoked on the main listener thread.
  *
@@ -427,7 +500,8 @@ static void work_stats_collect(void *data0, void *data1) {
 
     assert(is_listen_thread() == false); // Expecting a worker thread.
 
-    genhash_t *map_pstd = c->data;
+    struct stats_gathering_pair *pair = c->data;
+    genhash_t *map_pstd = pair->map_pstd;
     assert(map_pstd != NULL);
 
     pthread_mutex_lock(&p->proxy_lock);
@@ -446,8 +520,13 @@ static void work_stats_collect(void *data0, void *data1) {
             if (pstd == NULL) {
                 pstd = calloc(1, sizeof(proxy_stats_td));
                 if (pstd != NULL) {
-                    genhash_update(map_pstd, key_buf, pstd);
-                    key_buf = NULL;
+                    char *key = strdup(key_buf);
+                    if (key == NULL) {
+                        free(pstd);
+                        pstd = NULL;
+                    } else {
+                        genhash_update(map_pstd, key, pstd);
+                    }
                 }
             }
 
@@ -455,8 +534,25 @@ static void work_stats_collect(void *data0, void *data1) {
                 add_proxy_stats_td(pstd, &ptd->stats);
             }
 
-            if (key_buf != NULL)
-                free(key_buf);
+            genhash_t *key_stats_map = genhash_find(pair->map_key_stats, key_buf);
+            if (key_stats_map == NULL) {
+                key_stats_map = genhash_init(16, strhash_ops);
+                if (key_stats_map != NULL) {
+                    char *key = strdup(key_buf);
+                    if (key == NULL) {
+                        genhash_free(key_stats_map);
+                        key_stats_map = NULL;
+                    } else {
+                        genhash_update(pair->map_key_stats, key, key_stats_map);
+                    }
+                }
+            }
+
+            if (key_stats_map != NULL) {
+                add_raw_key_stats(key_stats_map, &ptd->key_stats);
+            }
+
+            free(key_buf);
         }
     }
 
@@ -536,14 +632,136 @@ static void add_stats_cmd(proxy_stats_cmd *agg,
     agg->cas         += x->cas;
 }
 
-void map_pstd_foreach_free(const void *key,
-                           const void *value,
-                           void *user_data) {
+static void add_stats_cmd_with_rescale(proxy_stats_cmd *agg,
+                                       const proxy_stats_cmd *x,
+                                       float rescale_agg,
+                                       float rescale_x) {
+    assert(agg);
+    assert(x);
+
+#define AGG(field) do {agg->field = llrintf(agg->field * rescale_agg + x->field * rescale_x);} while (0)
+
+    AGG(seen);
+    AGG(hits);
+    AGG(misses);
+    AGG(read_bytes);
+    AGG(write_bytes);
+    AGG(cas);
+
+#undef AGG
+}
+
+static void add_key_stats_inner(const void *data, void *userdata) {
+    genhash_t *key_stats_map = userdata;
+    const struct key_stats *stats = data;
+    struct key_stats *dest_stats = genhash_find(key_stats_map, stats->key);
+
+    if (dest_stats == NULL) {
+        dest_stats = calloc(1, sizeof(struct key_stats));
+        if (dest_stats != NULL)
+            *dest_stats = *stats;
+        genhash_update(key_stats_map, strdup(stats->key), dest_stats);
+        return;
+    }
+
+    uint32_t current_time = msec_current_time;
+    float rescale_factor_dest = 1.0, rescale_factor_src = 1.0;
+    if (dest_stats->added_at < stats->added_at) {
+        rescale_factor_src = (float)(current_time - dest_stats->added_at)/(current_time - stats->added_at);
+    } else {
+        rescale_factor_dest = (float)(current_time - stats->added_at)/(current_time - dest_stats->added_at);
+        dest_stats->added_at = stats->added_at;
+    }
+
+    assert(rescale_factor_dest >= 1.0);
+    assert(rescale_factor_src >= 1.0);
+
+    for (int j = 0; j < STATS_CMD_TYPE_last; j++) {
+        for (int k = 0; k < STATS_CMD_last; k++) {
+            add_stats_cmd_with_rescale(&(dest_stats->stats_cmd[j][k]),
+                                       &(stats->stats_cmd[j][k]),
+                                       rescale_factor_dest,
+                                       rescale_factor_src);
+        }
+    }
+}
+
+static void add_raw_key_stats(genhash_t *key_stats_map,
+                              mcache *key_stats) {
+    assert(key_stats_map);
+    assert(key_stats);
+
+    mcache_foreach(key_stats, add_key_stats_inner, key_stats_map);
+}
+
+static void add_processed_key_stats_inner(const void *key, const void* val, void *arg) {
+    add_key_stats_inner(val, arg);
+}
+
+static void add_processed_key_stats(genhash_t *dest_map,
+                                    genhash_t *src_map) {
+    assert(dest_map);
+    assert(src_map);
+
+    genhash_iter(src_map, add_processed_key_stats_inner, dest_map);
+}
+
+void genhash_free_entry(const void *key,
+                        const void *value,
+                        void *user_data) {
     assert(key != NULL);
     free((void*)key);
 
     assert(value != NULL);
     free((void*)value);
+}
+
+static void emit_proxy_stats_cmd(conflate_form_result *result,
+                                 const char *prefix,
+                                 const char *format,
+                                 proxy_stats_cmd stats_cmd[][STATS_CMD_last]) {
+    size_t prefix_len = strlen(prefix);
+    const size_t bufsize = 200;
+    char buf_key[bufsize + prefix_len];
+    char buf_val[100];
+
+    memcpy(buf_key, prefix, prefix_len);
+
+    char *buf = buf_key+prefix_len;
+
+#define more_cmd_stat(type, cmd, key, val)                       \
+    if (val != 0) {                                              \
+        snprintf(buf, bufsize,                                   \
+                 format, type, cmd, key);                        \
+        snprintf(buf_val, sizeof(buf_val),                       \
+                 "%llu", (long long unsigned int) val);          \
+        conflate_add_field(result, buf_key, buf_val);      \
+    }
+
+    for (int j = 0; j < STATS_CMD_TYPE_last; j++) {
+        for (int k = 0; k < STATS_CMD_last; k++) {
+            more_cmd_stat(cmd_type_names[j], cmd_names[k],
+                          "seen",
+                          stats_cmd[j][k].seen);
+            more_cmd_stat(cmd_type_names[j], cmd_names[k],
+                          "hits",
+                          stats_cmd[j][k].hits);
+            more_cmd_stat(cmd_type_names[j], cmd_names[k],
+                          "misses",
+                          stats_cmd[j][k].misses);
+            more_cmd_stat(cmd_type_names[j], cmd_names[k],
+                          "read_bytes",
+                          stats_cmd[j][k].read_bytes);
+            more_cmd_stat(cmd_type_names[j], cmd_names[k],
+                          "write_bytes",
+                          stats_cmd[j][k].write_bytes);
+            more_cmd_stat(cmd_type_names[j], cmd_names[k],
+                          "cas",
+                          stats_cmd[j][k].cas);
+        }
+    }
+
+#undef more_cmd_stat
 }
 
 void map_pstd_foreach_emit(const void *k,
@@ -639,37 +857,55 @@ void map_pstd_foreach_emit(const void *k,
     more_stat("err_downstream_write_prep",
               pstd->stats.err_downstream_write_prep);
 
-#define more_cmd_stat(type, cmd, key, val)                       \
-    if (val != 0) {                                              \
-        snprintf(buf_key, sizeof(buf_key),                       \
-                 "%s:stats_cmd_%s_%s_%s", name, type, cmd, key); \
-        snprintf(buf_val, sizeof(buf_val),                       \
-                 "%llu", (long long unsigned int) val);          \
-        conflate_add_field(emit->result, buf_key, buf_val);      \
-    }
+    snprintf(buf_key, sizeof(buf_key), "%s:stats_cmd_", name);
+    emit_proxy_stats_cmd(emit->result, buf_key, "%s_%s_%s", pstd->stats_cmd);
+}
 
-    for (int j = 0; j < STATS_CMD_TYPE_last; j++) {
-        for (int k = 0; k < STATS_CMD_last; k++) {
-            more_cmd_stat(cmd_type_names[j], cmd_names[k],
-                          "seen",
-                          pstd->stats_cmd[j][k].seen);
-            more_cmd_stat(cmd_type_names[j], cmd_names[k],
-                          "hits",
-                          pstd->stats_cmd[j][k].hits);
-            more_cmd_stat(cmd_type_names[j], cmd_names[k],
-                          "misses",
-                          pstd->stats_cmd[j][k].misses);
-            more_cmd_stat(cmd_type_names[j], cmd_names[k],
-                          "read_bytes",
-                          pstd->stats_cmd[j][k].read_bytes);
-            more_cmd_stat(cmd_type_names[j], cmd_names[k],
-                          "write_bytes",
-                          pstd->stats_cmd[j][k].write_bytes);
-            more_cmd_stat(cmd_type_names[j], cmd_names[k],
-                          "cas",
-                          pstd->stats_cmd[j][k].cas);
-        }
+struct key_stats_emit_state {
+    const char *name;
+    const struct main_stats_collect_info *emit;
+};
+
+static void map_key_stats_foreach_emit_inner(const void *_key,
+                                              const void *value,
+                                              void *user_data) {
+    struct key_stats_emit_state *state = user_data;
+    const char *key = _key;
+    struct key_stats *stats = (struct key_stats *)value;
+
+    assert(strcmp(key, stats->key) == 0);
+
+    char buf[200+KEY_MAX_LENGTH];
+
+    snprintf(buf, sizeof(buf), "%s:keys_stats:%s:", state->name, key);
+    emit_proxy_stats_cmd(state->emit->result, buf, "%s_%s_%s", stats->stats_cmd);
+
+    {
+        char buf_val[32];
+        snprintf(buf, sizeof(buf), "%s:keys_stats:%s:added_at_msec", state->name, key);
+        snprintf(buf_val, sizeof(buf_val), "%llu", (uint64_t) stats->added_at);
+        conflate_add_field(state->emit->result, buf, buf_val);
     }
+}
+
+void map_key_stats_foreach_emit(const void *k,
+                                const void *value,
+                                void *user_data) {
+    
+    const char *name = (const char*)k;
+    assert(name != NULL);
+
+    genhash_t *map_key_stats = (genhash_t *)value;
+    assert(map_key_stats != NULL);
+
+    const struct main_stats_collect_info *emit = user_data;
+    assert(emit != NULL);
+    assert(emit->result);
+
+    struct key_stats_emit_state state = {.name = name,
+                                         .emit = emit};
+
+    genhash_iter(map_key_stats, map_key_stats_foreach_emit_inner, &state);
 }
 
 /* This callback is invoked by conflate on a conflate thread
