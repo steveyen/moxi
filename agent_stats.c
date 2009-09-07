@@ -802,6 +802,8 @@ static void work_stats_reset(void *data0, void *data1) {
 
     cproxy_reset_stats_td(&ptd->stats);
 
+    mcache_flush_all(&ptd->key_stats, 0);
+
     work_collect_one(c);
 }
 
