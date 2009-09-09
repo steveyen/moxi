@@ -153,7 +153,7 @@ Or, hit that fork button on
 
 Alternatively, you may post comments below using disqus.
 
-[summarypdf]: moxi+information+7.17.09.pdf
+[summarypdf]: moxi_information_7.17.09.pdf
 [changelog]: changelog.html
 [spyopt]: http://code.google.com/p/spymemcached/wiki/Optimizations
 [group]: http://groups.google.com/group/moxi
