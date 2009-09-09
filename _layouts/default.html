@@ -1,0 +1,65 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+          "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+    <title>{{ page.title }}</title>
+    <link id="master_css" rel="stylesheet" type="text/css"
+          href="http://labs.northscale.com/css/default.css"/>
+  </head>
+
+  <body>
+
+    <div id="header">
+      <img src="http://labs.northscale.com/images/ns_logo_labs.png"
+           alt="NorthScale Labs" style="margin-top:10px;"/>
+    </div>
+
+    <div id="container">
+
+      {{ content }}
+
+    </div>
+
+    <div id="disqus_thread"></div>
+    <script type="text/javascript"
+            src="http://disqus.com/forums/labsnorthscale/embed.js"></script>
+    <noscript>
+      <p>
+        <a href="http://labsnorthscale.disqus.com/?url=ref">View the
+          discussion thread.</a>
+      </p>
+    </noscript>
+    <a href="http://disqus.com"
+       class="dsq-brlink">comments powered by
+      <span class="logo-disqus">Disqus</span></a>
+  </div>
+
+  <script type="text/javascript">
+    //<![CDATA[
+            (function() {
+                var links = document.getElementsByTagName('a');
+                var query = '?';
+                for(var i = 0; i < links.length; i++) {
+                    if(links[i].href.indexOf('#disqus_thread') >= 0) {
+                        query += 'url' + i + '=' + encodeURIComponent(links[i].href) + '&';
+                    }
+                }
+                document.write('<script charset="utf-8" type="text/javascript" src="http://disqus.com/forums/labsnorthscale/get_num_replies.js' + query + '"></' + 'script>');
+            })();
+            //]]>
+  </script>
+
+  <script type="text/javascript">
+    var gaJsHost = (("https:" == document.location.protocol) ? "https://ssl." : "http://www.");
+    document.write(unescape("%3Cscript src='" + gaJsHost + "google-analytics.com/ga.js' type='text/javascript'%3E%3C/script%3E"));
+  </script>
+  <script type="text/javascript">
+    try {
+    var pageTracker = _gat._getTracker("UA-7763794-3");
+    pageTracker._trackPageview();
+    } catch(err) {}</script>
+
+</body>
+</html>
