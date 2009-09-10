@@ -45,6 +45,7 @@
 #include <assert.h>
 #include <limits.h>
 #include <sysexits.h>
+#include <stddef.h>
 
 #include "cproxy.h"
 
@@ -177,8 +178,8 @@ static void stats_reset(void) {
 static void settings_init(void) {
     settings.use_cas = true;
     settings.access = 0700;
-    settings.port = -1;    // Formerly 11211, -1 means unspecified, 0 means off.
-    settings.udpport = -1; // Formerly 11211, -1 means unspecified, 0 means off.
+    settings.port = UNSPECIFIED;
+    settings.udpport = UNSPECIFIED;
     /* By default this string should be NULL for getaddrinfo() */
     settings.inter = NULL;
     settings.maxbytes = 64 * 1024 * 1024; /* default is 64MB */
@@ -332,7 +333,6 @@ static const char *prot_text(enum protocol prot) {
 conn *conn_new(const int sfd, enum conn_states init_state,
                const int event_flags,
                const int read_buffer_size,
-               enum protocol prot,
                enum network_transport transport,
                struct event_base *base,
                conn_funcs *funcs, void *extra) {
@@ -380,7 +380,7 @@ conn *conn_new(const int sfd, enum conn_states init_state,
     }
 
     c->transport = transport;
-    c->protocol = prot;
+    c->protocol = settings.binding_protocol;
 
     /* unix socket mode doesn't need this, so zeroed out.  but why
      * is this done for every command?  presumably for UDP
@@ -919,7 +919,7 @@ static void add_bin_header(conn *c, uint16_t err, uint8_t hdr_len, uint16_t key_
 
     header->response.bodylen = htonl(body_len);
     header->response.opaque = c->opaque;
-    header->response.cas = swap64(c->cas);
+    header->response.cas = mc_swap64(c->cas);
 
     if (settings.verbose > 1) {
         int ii;
@@ -1005,7 +1005,7 @@ static void write_bin_response(conn *c, void *d, int hlen, int keylen, int dlen)
 }
 
 /* Byte swap a 64-bit number */
-uint64_t swap64(uint64_t in) {
+uint64_t mc_swap64(uint64_t in) {
 #ifdef ENDIAN_LITTLE
     /* Little endian, flip the bytes around until someone makes a faster/better
     * way to do this. */
@@ -1026,7 +1026,6 @@ static void complete_incr_bin(conn *c) {
     item *it;
     char *key;
     size_t nkey;
-#define INCR_MAX_STORAGE_LEN 24
 
     protocol_binary_response_incr* rsp = (protocol_binary_response_incr*)c->wbuf;
     protocol_binary_request_incr* req = binary_get_request(c);
@@ -1035,8 +1034,8 @@ static void complete_incr_bin(conn *c) {
     assert(c->wsize >= sizeof(*rsp));
 
     /* fix byteorder in the request */
-    req->message.body.delta = swap64(req->message.body.delta);
-    req->message.body.initial = swap64(req->message.body.initial);
+    req->message.body.delta = mc_swap64(req->message.body.delta);
+    req->message.body.initial = mc_swap64(req->message.body.initial);
     req->message.body.expiration = ntohl(req->message.body.expiration);
     key = binary_get_key(c);
     nkey = c->binary_header.request.keylen;
@@ -1076,7 +1075,7 @@ static void complete_incr_bin(conn *c) {
         if (st != PROTOCOL_BINARY_RESPONSE_SUCCESS) {
             write_bin_error(c, st, 0);
         } else {
-            rsp->message.body.value = swap64(strtoull(tmpbuf, NULL, 10));
+            rsp->message.body.value = mc_swap64(strtoull(tmpbuf, NULL, 10));
             c->cas = ITEM_get_cas(it);
             write_bin_response(c, &rsp->message.body, 0, 0,
                                sizeof(rsp->message.body.value));
@@ -1085,8 +1084,8 @@ static void complete_incr_bin(conn *c) {
         item_remove(it);         /* release our reference */
     } else if (!it && req->message.body.expiration != 0xffffffff) {
         /* Save some room for the response */
-        rsp->message.body.value = swap64(req->message.body.initial);
-        it = item_alloc(key, nkey, 0, c->funcs->conn_realtime(req->message.body.expiration),
+        rsp->message.body.value = mc_swap64(req->message.body.initial);
+        it = item_alloc(key, nkey, 0, realtime(req->message.body.expiration),
                         INCR_MAX_STORAGE_LEN);
 
         if (it != NULL) {
@@ -1119,7 +1118,6 @@ static void complete_incr_bin(conn *c) {
 
         write_bin_error(c, PROTOCOL_BINARY_RESPONSE_KEY_ENOENT, 0);
     }
-#undef INCR_MAX_STORAGE_LEN
 }
 
 static void complete_update_bin(conn *c) {
@@ -1227,7 +1225,7 @@ static void process_bin_get(conn *c) {
             keylen = nkey;
         }
         add_bin_header(c, 0, sizeof(rsp->message.body), keylen, bodylen);
-        rsp->message.header.response.cas = swap64(ITEM_get_cas(it));
+        rsp->message.header.response.cas = mc_swap64(ITEM_get_cas(it));
 
         // add the flags
         rsp->message.body.flags = htonl(strtoul(ITEM_suffix(it), NULL, 10));
@@ -1304,14 +1302,16 @@ static void append_ascii_stats(const char *key, const uint16_t klen,
                                const char *val, const uint32_t vlen,
                                conn *c) {
     char *pos = c->stats.buffer + c->stats.offset;
-    uint32_t nbytes;
+    uint32_t nbytes = 0;
+    int remaining = c->stats.size - c->stats.offset;
+    int room = remaining - 1;
 
     if (klen == 0 && vlen == 0) {
-        nbytes = sprintf(pos, "END\r\n");
+        nbytes = snprintf(pos, room, "END\r\n");
     } else if (vlen == 0) {
-        nbytes = sprintf(pos, "STAT %s\r\n", key);
+        nbytes = snprintf(pos, room, "STAT %s\r\n", key);
     } else {
-        nbytes = sprintf(pos, "STAT %s %s\r\n", key, val);
+        nbytes = snprintf(pos, room, "STAT %s %s\r\n", key, val);
     }
 
     c->stats.offset += nbytes;
@@ -1445,7 +1445,46 @@ void bin_read_key(conn *c, enum bin_substates next_substate, int extra) {
     assert(c);
     c->substate = next_substate;
     c->rlbytes = c->keylen + extra;
-    assert(c->rsize >= c->rlbytes);
+
+    /* Ok... do we have room for the extras and the key in the input buffer? */
+    ptrdiff_t offset = c->rcurr + sizeof(protocol_binary_request_header) - c->rbuf;
+    if (c->rlbytes > c->rsize - offset) {
+        size_t nsize = c->rsize;
+        size_t size = c->rlbytes + sizeof(protocol_binary_request_header);
+
+        while (size > nsize) {
+            nsize *= 2;
+        }
+
+        if (nsize != c->rsize) {
+            if (settings.verbose) {
+                fprintf(stderr, "%d: Need to grow buffer from %lu to %lu\n",
+                        c->sfd, (unsigned long)c->rsize, (unsigned long)nsize);
+            }
+            char *newm = realloc(c->rbuf, nsize);
+            if (newm == NULL) {
+                if (settings.verbose) {
+                    fprintf(stderr, "%d: Failed to grow buffer.. closing connection\n",
+                            c->sfd);
+                }
+                conn_set_state(c, conn_closing);
+                return;
+            }
+
+            c->rbuf= newm;
+            /* rcurr should point to the same offset in the packet */
+            c->rcurr = c->rbuf + offset - sizeof(protocol_binary_request_header);
+            c->rsize = nsize;
+        }
+        if (c->rbuf != c->rcurr) {
+            memmove(c->rbuf, c->rcurr, c->rbytes);
+            c->rcurr = c->rbuf;
+            if (settings.verbose) {
+                fprintf(stderr, "%d: Repack input buffer\n", c->sfd);
+            }
+        }
+    }
+
     /* preserve the header in the buffer.. */
     c->ritem = c->rcurr + sizeof(protocol_binary_request_header);
     conn_set_state(c, conn_nread);
@@ -1582,6 +1621,9 @@ void dispatch_bin_command(conn *c) {
             if (keylen == 0 && extlen == 0 && bodylen == 0) {
                 write_bin_response(c, NULL, 0, 0, 0);
                 c->write_and_go = conn_closing;
+                if (c->noreply) {
+                    conn_set_state(c, conn_closing);
+                }
             } else {
                 protocol_error = 1;
             }
@@ -1593,6 +1635,10 @@ void dispatch_bin_command(conn *c) {
     if (protocol_error) {
         /* Just write an error message and disconnect the client */
         write_bin_error(c, PROTOCOL_BINARY_RESPONSE_EINVAL, 0);
+        if (settings.verbose) {
+            fprintf(stderr, "Protocol error (opcode %02x), close connection %d\n",
+                    c->binary_header.request.opcode, c->sfd);
+        }
         c->write_and_go = conn_closing;
     }
 }
@@ -1760,6 +1806,10 @@ static void process_bin_flush(conn *c) {
     }
     item_flush_expired();
 
+    pthread_mutex_lock(&c->thread->stats.mutex);
+    c->thread->stats.flush_cmds++;
+    pthread_mutex_unlock(&c->thread->stats.mutex);
+
     write_bin_response(c, NULL, 0, 0, 0);
 }
 
@@ -1783,7 +1833,7 @@ static void process_bin_delete(conn *c) {
 
     it = item_get(key, nkey);
     if (it) {
-        uint64_t cas=swap64(req->message.header.request.cas);
+        uint64_t cas=mc_swap64(req->message.header.request.cas);
         if (cas == 0 || cas == ITEM_get_cas(it)) {
             MEMCACHED_COMMAND_DELETE(c->sfd, ITEM_key(it), it->nkey);
             item_unlink(it);
@@ -1977,6 +2027,10 @@ enum store_item_type do_store_item(item *it, int comm, conn *c) {
     if (new_it != NULL)
         do_item_remove(new_it);
 
+    if (stored == STORED) {
+        c->cas = ITEM_get_cas(it);
+    }
+
     return stored;
 }
 
@@ -2074,7 +2128,7 @@ void set_noreply_maybe(conn *c, token_t *tokens, size_t ntokens) {
 
 void append_stat(const char *name, ADD_STAT add_stats, void *c,
                  const char *fmt, ...) {
-    char val_str[128];
+    char val_str[STAT_VAL_LEN];
     int vlen;
     va_list ap;
 
@@ -2356,11 +2410,13 @@ static inline void process_get_command(conn *c, token_t *tokens, size_t ntokens,
                     return;
                   }
                   *(c->suffixlist + i) = suffix;
-                  sprintf(suffix, " %llu\r\n", (unsigned long long)ITEM_get_cas(it));
+                  int suffix_len = snprintf(suffix, SUFFIX_SIZE,
+                                            " %llu\r\n",
+                                            (unsigned long long)ITEM_get_cas(it));
                   if (add_iov(c, "VALUE ", 6) != 0 ||
                       add_iov(c, ITEM_key(it), it->nkey) != 0 ||
                       add_iov(c, ITEM_suffix(it), it->nsuffix - 2) != 0 ||
-                      add_iov(c, suffix, strlen(suffix)) != 0 ||
+                      add_iov(c, suffix, suffix_len) != 0 ||
                       add_iov(c, ITEM_data(it), it->nbytes) != 0)
                       {
                           item_remove(it);
@@ -2479,27 +2535,32 @@ void process_update_command(conn *c, token_t *tokens, const size_t ntokens, int 
 
     // does cas value exist?
     if (handle_cas) {
-        if (!safe_strtoull(tokens[5].value, &req_cas_id)
-            || vlen < 0 ) {
+        if (!safe_strtoull(tokens[5].value, &req_cas_id)) {
             out_string(c, "CLIENT_ERROR bad command line format");
             return;
         }
+    }
+
+    vlen += 2;
+    if (vlen < 0 || vlen - 2 < 0) {
+        out_string(c, "CLIENT_ERROR bad command line format");
+        return;
     }
 
     if (settings.detail_enabled) {
         stats_prefix_record_set(key, nkey);
     }
 
-    it = item_alloc(key, nkey, flags, c->funcs->conn_realtime(exptime), vlen+2);
+    it = item_alloc(key, nkey, flags, c->funcs->conn_realtime(exptime), vlen);
 
     if (it == 0) {
-        if (! item_size_ok(nkey, flags, vlen + 2))
+        if (! item_size_ok(nkey, flags, vlen))
             out_string(c, "SERVER_ERROR object too large for cache");
         else
             out_string(c, "SERVER_ERROR out of memory storing object");
         /* swallow the data line */
         c->write_and_go = conn_swallow;
-        c->sbytes = vlen + 2;
+        c->sbytes = vlen;
 
         /* Avoid stale data persisting in cache because we failed alloc.
          * Unacceptable for SET. Anywhere else too? */
@@ -2523,7 +2584,7 @@ void process_update_command(conn *c, token_t *tokens, const size_t ntokens, int 
 }
 
 static void process_arithmetic_command(conn *c, token_t *tokens, const size_t ntokens, const bool incr) {
-    char temp[sizeof("18446744073709551615")];
+    char temp[INCR_MAX_STORAGE_LEN];
     item *it;
     uint64_t delta;
     char *key;
@@ -2542,7 +2603,7 @@ static void process_arithmetic_command(conn *c, token_t *tokens, const size_t nt
     nkey = tokens[KEY_TOKEN].length;
 
     if (!safe_strtoull(tokens[2].value, &delta)) {
-        out_string(c, "CLIENT_ERROR bad command line format");
+        out_string(c, "CLIENT_ERROR invalid numeric delta argument");
         return;
     }
 
@@ -2617,7 +2678,7 @@ enum delta_result_type do_add_delta(conn *c, item *it, const bool incr,
     }
     pthread_mutex_unlock(&c->thread->stats.mutex);
 
-    sprintf(buf, "%llu", (unsigned long long)value);
+    snprintf(buf, INCR_MAX_STORAGE_LEN, "%llu", (unsigned long long)value);
     res = strlen(buf);
     if (res + 2 > it->nbytes) { /* need to realloc */
         item *new_it;
@@ -2767,9 +2828,9 @@ void process_command(conn *c, char *command) {
 
         set_noreply_maybe(c, tokens, ntokens);
 
-        STATS_LOCK();
+        pthread_mutex_lock(&c->thread->stats.mutex);
         c->thread->stats.flush_cmds++;
-        STATS_UNLOCK();
+        pthread_mutex_unlock(&c->thread->stats.mutex);
 
         if(ntokens == (c->noreply ? 3 : 2)) {
             settings.oldest_live = current_time - 1;
@@ -2900,7 +2961,7 @@ int try_read_command(conn *c) {
             c->binary_header = *req;
             c->binary_header.request.keylen = ntohs(req->request.keylen);
             c->binary_header.request.bodylen = ntohl(req->request.bodylen);
-            c->binary_header.request.cas = swap64(req->request.cas);
+            c->binary_header.request.cas = mc_swap64(req->request.cas);
 
             if (c->binary_header.request.magic != c->funcs->conn_binary_command_magic) {
                 if (settings.verbose) {
@@ -2971,6 +3032,10 @@ static enum try_read_result try_read_udp(conn *c) {
     if (res > 8) {
         unsigned char *buf = (unsigned char *)c->rbuf;
 
+        pthread_mutex_lock(&c->thread->stats.mutex);
+        c->thread->stats.bytes_read += res;
+        pthread_mutex_unlock(&c->thread->stats.mutex);
+
         add_bytes_read(c, res);
 
         /* Beginning of UDP packet is the request ID; save it. */
@@ -3030,6 +3095,10 @@ static enum try_read_result try_read_network(conn *c) {
         int avail = c->rsize - c->rbytes;
         res = read(c->sfd, c->rbuf + c->rbytes, avail);
         if (res > 0) {
+            pthread_mutex_lock(&c->thread->stats.mutex);
+            c->thread->stats.bytes_read += res;
+            pthread_mutex_unlock(&c->thread->stats.mutex);
+
             add_bytes_read(c, res);
 
             gotdata = READ_DATA_RECEIVED;
@@ -3206,7 +3275,6 @@ void drive_machine(conn *c) {
 
             dispatch_conn_new(sfd, conn_new_cmd, EV_READ | EV_PERSIST,
                               DATA_BUFFER_SIZE,
-                              c->protocol,
                               tcp_transport,
                               c->funcs, c->extra);
             stop = true;
@@ -3326,8 +3394,14 @@ void drive_machine(conn *c) {
                 break;
             }
             /* otherwise we have a real error, on which we close the connection */
-            if (settings.verbose > 0)
-                fprintf(stderr, "Failed to read, and not due to blocking\n");
+            if (settings.verbose > 0) {
+                fprintf(stderr, "Failed to read, and not due to blocking:\n"
+                        "errno: %d %s \n"
+                        "rcurr=%lx ritem=%lx rbuf=%lx rlbytes=%d rsize=%d\n",
+                        errno, strerror(errno),
+                        (long)c->rcurr, (long)c->ritem, (long)c->rbuf,
+                        (int)c->rlbytes, (int)c->rsize);
+            }
             conn_set_state(c, conn_closing);
             break;
 
@@ -3350,6 +3424,9 @@ void drive_machine(conn *c) {
             /*  now try reading from the socket */
             res = read(c->sfd, c->rbuf, c->rsize > c->sbytes ? c->sbytes : c->rsize);
             if (res > 0) {
+                pthread_mutex_lock(&c->thread->stats.mutex);
+                c->thread->stats.bytes_read += res;
+                pthread_mutex_unlock(&c->thread->stats.mutex);
                 add_bytes_read(c, res);
                 c->sbytes -= res;
                 break;
@@ -3546,37 +3623,39 @@ static void maximize_sndbuf(const int sfd) {
         fprintf(stderr, "<%d send buffer was %d, now %d\n", sfd, old_size, last_good);
 }
 
-int server_socket(const int port,
-                  enum protocol prot,
-                  enum network_transport transport) {
+/**
+ * Create a socket and bind it to a specific port number
+ * @param port the port number to bind to
+ * @param transport the transport protocol (TCP / UDP)
+ * @param portnumber_file A filepointer to write the port numbers to
+ *        when they are successfully added to the list of ports we
+ *        listen on.
+ */
+int server_socket(int port, enum network_transport transport,
+                  FILE *portnumber_file) {
     int sfd;
     struct linger ling = {0, 0};
     struct addrinfo *ai;
     struct addrinfo *next;
-    struct addrinfo hints;
+    struct addrinfo hints = { .ai_flags = AI_PASSIVE,
+                              .ai_family = AF_UNSPEC };
     char port_buf[NI_MAXSERV];
     int error;
     int success = 0;
-
     int flags =1;
 
-    /*
-     * the memset call clears nonstandard fields in some impementations
-     * that otherwise mess things up.
-     */
-    memset(&hints, 0, sizeof (hints));
-    hints.ai_flags = AI_PASSIVE;
-    hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = IS_UDP(transport) ? SOCK_DGRAM : SOCK_STREAM;
 
-    snprintf(port_buf, NI_MAXSERV, "%d", port);
+    if (port == EPHEMERAL) {
+        port = 0;
+    }
+    snprintf(port_buf, sizeof(port_buf), "%d", port);
     error= getaddrinfo(settings.inter, port_buf, &hints, &ai);
     if (error != 0) {
         if (error != EAI_SYSTEM)
           fprintf(stderr, "getaddrinfo(): %s\n", gai_strerror(error));
         else
           perror("getaddrinfo()");
-
         return 1;
     }
 
@@ -3634,6 +3713,26 @@ int server_socket(const int port,
                 freeaddrinfo(ai);
                 return 1;
             }
+            if (portnumber_file != NULL &&
+                (next->ai_addr->sa_family == AF_INET ||
+                 next->ai_addr->sa_family == AF_INET6)) {
+                union {
+                    struct sockaddr_in in;
+                    struct sockaddr_in6 in6;
+                } my_sockaddr;
+                socklen_t len = sizeof(my_sockaddr);
+                if (getsockname(sfd, (struct sockaddr*)&my_sockaddr, &len)==0) {
+                    if (next->ai_addr->sa_family == AF_INET) {
+                        fprintf(portnumber_file, "%s INET: %u\n",
+                                IS_UDP(transport) ? "UDP" : "TCP",
+                                ntohs(my_sockaddr.in.sin_port));
+                    } else {
+                        fprintf(portnumber_file, "%s INET6: %u\n",
+                                IS_UDP(transport) ? "UDP" : "TCP",
+                                ntohs(my_sockaddr.in6.sin6_port));
+                    }
+                }
+            }
         }
 
         if (IS_UDP(transport)) {
@@ -3642,13 +3741,13 @@ int server_socket(const int port,
             for (c = 1; c < settings.num_threads; c++) {
                 /* this is guaranteed to hit all threads because we round-robin */
                 dispatch_conn_new(sfd, conn_read, EV_READ | EV_PERSIST,
-                                  UDP_READ_BUFFER_SIZE, prot, transport,
+                                  UDP_READ_BUFFER_SIZE, transport,
                                   NULL, NULL);
             }
         } else {
             if (!(listen_conn_add = conn_new(sfd, conn_listening,
                                              EV_READ | EV_PERSIST, 1,
-                                             prot, transport,
+                                             transport,
                                              main_base, NULL, NULL))) {
                 fprintf(stderr, "failed to create listening connection\n");
                 exit(EXIT_FAILURE);
@@ -3717,7 +3816,8 @@ static int server_socket_unix(const char *path, int access_mask) {
     memset(&addr, 0, sizeof(addr));
 
     addr.sun_family = AF_UNIX;
-    strcpy(addr.sun_path, path);
+    strncpy(addr.sun_path, path, sizeof(addr.sun_path) - 1);
+    assert(strcmp(addr.sun_path, path) == 0);
     old_umask = umask( ~(access_mask&0777));
     if (bind(sfd, (struct sockaddr *)&addr, sizeof(addr)) == -1) {
         perror("bind()");
@@ -3733,7 +3833,6 @@ static int server_socket_unix(const char *path, int access_mask) {
     }
     if (!(listen_conn = conn_new(sfd, conn_listening,
                                  EV_READ | EV_PERSIST, 1,
-                                 negotiating_prot,
                                  local_transport, main_base,
                                  NULL, NULL))) {
         fprintf(stderr, "failed to create listening connection\n");
@@ -4183,9 +4282,9 @@ int main (int argc, char **argv) {
         }
     }
 
-    if (cproxy_cfg &&
-        settings.port == -1 &&
-        settings.udpport == -1) {
+    if (cproxy_cfg
+        && settings.port == UNSPECIFIED
+        && settings.udpport == UNSPECIFIED) {
         // Default behavior when we're a proxy is to also
         // behave as a memcached on port 11210.
         //
@@ -4229,7 +4328,7 @@ int main (int argc, char **argv) {
     } else {
         int maxfiles = settings.maxconns;
         if (rlim.rlim_cur < maxfiles)
-            rlim.rlim_cur = maxfiles + 3;
+            rlim.rlim_cur = maxfiles;
         if (rlim.rlim_max < rlim.rlim_cur)
             rlim.rlim_max = rlim.rlim_cur;
         if (setrlimit(RLIMIT_NOFILE, &rlim) != 0) {
@@ -4315,24 +4414,35 @@ int main (int argc, char **argv) {
     if (settings.socketpath != NULL) {
         errno = 0;
         if (server_socket_unix(settings.socketpath,settings.access)) {
-          fprintf(stderr, "failed to listen on UNIX socket: %s\n",
-                  settings.socketpath);
-          if (errno != 0)
-              perror("socket listen");
-          exit(EX_OSERR);
+            vperror("failed to listen on UNIX socket: %s", settings.socketpath);
+            exit(EX_OSERR);
         }
     }
 
     /* create the listening socket, bind it, and init */
     if (settings.socketpath == NULL) {
         int udp_port;
+
+        const char *portnumber_filename = getenv("MEMCACHED_PORT_FILENAME");
+        char temp_portnumber_filename[PATH_MAX];
+        FILE *portnumber_file = NULL;
+
+        if (portnumber_filename != NULL) {
+            snprintf(temp_portnumber_filename,
+                     sizeof(temp_portnumber_filename),
+                     "%s.lck", portnumber_filename);
+
+            portnumber_file = fopen(temp_portnumber_filename, "a");
+            if (portnumber_file == NULL) {
+                fprintf(stderr, "Failed to open \"%s\": %s\n",
+                        temp_portnumber_filename, strerror(errno));
+            }
+        }
+
         errno = 0;
-        if (settings.port > 0 && server_socket(settings.port,
-                                               settings.binding_protocol,
-                                               tcp_transport)) {
-            fprintf(stderr, "failed to listen on TCP port %d\n", settings.port);
-            if (errno != 0)
-                perror("tcp listen");
+        if (settings.port >= 0 && server_socket(settings.port, tcp_transport,
+                                                portnumber_file)) {
+            vperror("failed to listen on TCP port %d", settings.port);
             exit(EX_OSERR);
         }
 
@@ -4346,13 +4456,16 @@ int main (int argc, char **argv) {
 
         /* create the UDP listening socket and bind it */
         errno = 0;
-        if (settings.udpport > 0 && server_socket(settings.udpport,
-                                                  settings.binding_protocol,
-                                                  udp_transport)) {
-            fprintf(stderr, "failed to listen on UDP port %d\n", settings.udpport);
-            if (errno != 0)
-                perror("udp listen");
+        if (settings.udpport >= 0 && server_socket(settings.udpport,
+                                                   udp_transport,
+                                                   portnumber_file)) {
+            vperror("failed to listen on UDP port %d", settings.udpport);
             exit(EX_OSERR);
+        }
+
+        if (portnumber_file) {
+            fclose(portnumber_file);
+            rename(temp_portnumber_filename, portnumber_filename);
         }
     }
 
@@ -4378,9 +4491,9 @@ int main (int argc, char **argv) {
             i--;
         }
 #ifndef MAIN_CHECK
-        if (i <= 0 &&
-            settings.port <= 0 &&
-            settings.udpport <= 0) {
+        if (i <= 0
+            && settings.port == UNSPECIFIED
+            && settings.udpport == UNSPECIFIED) {
             fprintf(stderr,
                     "error: need proxy configuration.  See usage (-h).\n");
             return 1;

@@ -41,6 +41,7 @@ doc/protocol-binary.txt
 /version.m4
 /version.num
 /testapp
+/timedrun
 /doc/doxy
 /check_util
 /check_moxi
@@ -53,4 +54,4 @@ libmemcached-*/libmemcached/*.lo
 libmemcached-*/libmemcached/*.la
 libmemcached-*/libmemcached/libmemcached_config.h
 .buildbot/*
-
+/memcached.spec

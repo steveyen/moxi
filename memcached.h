@@ -9,6 +9,7 @@
 #include "config.h"
 #endif
 
+#include <stdio.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/time.h>
@@ -27,11 +28,18 @@
 /** Maximum length of a key. */
 #define KEY_MAX_LENGTH 250
 
+/** Size of an incr buf. */
+#define INCR_MAX_STORAGE_LEN 24
+
 #define DATA_BUFFER_SIZE 2048
 #define UDP_READ_BUFFER_SIZE 65536
 #define UDP_MAX_PAYLOAD_SIZE 1400
 #define UDP_HEADER_SIZE 8
 #define MAX_SENDBUF_SIZE (256 * 1024 * 1024)
+
+/* Port values */
+#define EPHEMERAL -1
+#define UNSPECIFIED -2
 
 /* No. of seconds in 30 days - largest possible delta exptime. */
 #define REALTIME_MAXDELTA 60*60*24*30
@@ -99,15 +107,18 @@
          + (item)->nsuffix + (item)->nbytes \
          + (((item)->it_flags & ITEM_CAS) ? sizeof(uint64_t) : 0))
 
+#define STAT_KEY_LEN 128
+#define STAT_VAL_LEN 128
+
 /** Append a simple stat with a stat name, value format and value */
 #define APPEND_STAT(name, fmt, val) \
     append_stat(name, add_stats, c, fmt, val);
 
 /** Append an indexed stat with a stat name (with format), value format
     and value */
-#define APPEND_NUM_FMT_STAT(name_fmt, num, name, fmt, val)   \
-    klen = sprintf(key_str, name_fmt, num, name);            \
-    vlen = sprintf(val_str, fmt, val);                       \
+#define APPEND_NUM_FMT_STAT(name_fmt, num, name, fmt, val)          \
+    klen = snprintf(key_str, STAT_KEY_LEN, name_fmt, num, name);    \
+    vlen = snprintf(val_str, STAT_VAL_LEN, fmt, val);               \
     add_stats(key_str, klen, val_str, vlen, c);
 
 /** Common APPEND_NUM_FMT_STAT format. */
@@ -465,7 +476,6 @@ enum store_item_type do_store_item(item *item, int comm, conn* c);
 
 conn *conn_new(const int sfd, const enum conn_states init_state,
                const int event_flags, const int read_buffer_size,
-               enum protocol prot,
                enum network_transport transport,
                struct event_base *base,
                conn_funcs *funcs, void *extra);
@@ -482,7 +492,7 @@ void process_bin_noreply(conn *c);
 void bin_read_key(conn *c, enum bin_substates next_substate, int extra);
 char* binary_get_key(conn *c);
 void* binary_get_request(conn *c);
-uint64_t swap64(uint64_t in);
+uint64_t mc_swap64(uint64_t in);
 void reset_cmd_handler(conn *c);
 void complete_nread(conn *c);
 void complete_nread_binary(conn *c);
@@ -497,8 +507,8 @@ const char *state_text(enum conn_states state);
 extern int daemonize(int nochdir, int noclose);
 
 int server_socket(const int port,
-                  enum protocol prot,
-                  enum network_transport transport);
+                  enum network_transport transport,
+                  FILE *portnum_file);
 
 void drive_machine(conn *c);
 
@@ -526,14 +536,12 @@ int  dispatch_event_add(int thread, conn *c);
 void dispatch_conn_new(int sfd, enum conn_states init_state,
                        int event_flags,
                        int read_buffer_size,
-                       enum protocol prot,
                        enum network_transport transport,
                        conn_funcs *funcs, void *extra);
 
 void dispatch_conn_new_to_thread(int tid, int sfd, enum conn_states init_state,
                                  int event_flags,
                                  int read_buffer_size,
-                                 enum protocol prot,
                                  enum network_transport transport,
                                  conn_funcs *funcs, void *extra);
 
@@ -572,7 +580,7 @@ void process_stat_settings(ADD_STAT add_stats, void *c);
 enum store_item_type store_item(item *item, int comm, conn *c);
 
 #if HAVE_DROP_PRIVILEGES
-extern void drop_privileges();
+extern void drop_privileges(void);
 #else
 #define drop_privileges()
 #endif

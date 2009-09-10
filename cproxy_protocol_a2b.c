@@ -737,7 +737,7 @@ void a2b_process_downstream_response(conn *c) {
             case 0: {
                 char *s = add_conn_suffix(uc);
                 if (s != NULL) {
-                    uint64_t v = swap64(response_incr->message.body.value);
+                    uint64_t v = mc_swap64(response_incr->message.body.value);
                     sprintf(s, "%llu", (unsigned long long) v);
                     out_string(uc, s);
                 } else {
@@ -1270,7 +1270,7 @@ bool cproxy_forward_a2b_item_downstream(downstream *d, short cmd,
                         break;
                     case NREAD_CAS: {
                         uint64_t cas = ITEM_get_cas(it);
-                        req->request.cas = swap64(cas);
+                        req->request.cas = mc_swap64(cas);
                         req->request.opcode =
                             uc->noreply ?
                             PROTOCOL_BINARY_CMD_SETQ :

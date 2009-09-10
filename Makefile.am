@@ -2,7 +2,7 @@ AUTOMAKE_OPTIONS = foreign
 
 bin_PROGRAMS = moxi
 ##pkginclude_HEADERS = protocol_binary.h
-noinst_PROGRAMS = moxi-debug sizes testapp
+noinst_PROGRAMS = moxi-debug sizes testapp timedrun
 
 BUILT_SOURCES =
 
@@ -28,6 +28,8 @@ moxi_SOURCES = memcached.c memcached.h \
                     cproxy_stats.c \
                     cproxy_front.c \
                     matcher.c matcher.h
+
+timedrun_SOURCES = timedrun.c
 
 TESTS = check_util check_moxi check_moxi_agent check_work
 

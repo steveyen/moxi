@@ -5,12 +5,13 @@ our @files;
 
 BEGIN {
     chdir "$Bin/.." or die;
-    @files = grep {! /^config.h$/ } (glob("*.h"), glob("*.c"), glob("*.ac"), "memcached.spec");
+    @files = grep {! /^config.h$/ } (glob("*.h"), glob("*.c"), glob("*.ac"),
+                                     "memcached.spec.in");
 }
 use Test::More tests => scalar(@files);
 
 foreach my $f (@files) {
-    open(my $fh, $f) or die;
+    open(my $fh, $f) or die "Cannot open $f: $!";
     my $before = do { local $/; <$fh>; };
     close ($fh);
     my $after = $before;
