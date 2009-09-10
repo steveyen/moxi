@@ -68,6 +68,11 @@ static void map_key_stats_foreach_merge(const void *key,
                                         const void *value,
                                         void *user_data);
 
+struct main_stats_proxy_info {
+    char *name;
+    int port;
+};
+
 struct main_stats_collect_info {
     proxy_main           *m;
     conflate_form_result *result;
@@ -77,6 +82,9 @@ struct main_stats_collect_info {
     bool  do_settings;
     bool  do_stats;
     bool  do_zeros;
+
+    int nproxy;
+    struct main_stats_proxy_info *proxies;
 };
 
 static char *cmd_names[] = { // Keep sync'ed with enum_stats_cmd.
@@ -109,6 +117,46 @@ struct stats_gathering_pair {
     genhash_t *map_pstd; // maps "<proxy-name>:<port>" strings to (proxy_stats_td *)
     genhash_t *map_key_stats; // maps "<proxy-name>:<port>" strings to (genhash that maps key names to (struct key_stats *))
 };
+
+static
+void collect_memcached_stats_for_proxy(struct main_stats_collect_info *msci, const char *proxy_name, int proxy_port) {
+    memcached_st mst;
+
+    memcached_create(&mst);
+    memcached_server_add(&mst, "127.0.0.1", proxy_port);
+    memcached_behavior_set(&mst, MEMCACHED_BEHAVIOR_TCP_NODELAY, 1);
+
+    memcached_return error;
+    memcached_stat_st *st = memcached_stat(&mst, NULL, &error);
+
+    if (st == NULL)
+        goto out_free;
+
+    char bufk[500];
+
+#define emit_s(key, val)                               \
+    snprintf(bufk, sizeof(bufk), "%u:%s:stats:%s",           \
+             proxy_port,                                  \
+             proxy_name != NULL ? proxy_name : "", key);     \
+    conflate_add_field(msci->result, bufk, val);
+
+    char **keys = memcached_stat_get_keys(&mst, st, &error);
+    for (; *keys; keys++) {
+        char *key = *keys;
+        char *value = memcached_stat_get_value(&mst, st, key, &error);
+        if (value == NULL)
+            continue;
+
+        emit_s(key, value);
+        free(value);
+    }
+#undef emit_s
+
+    free(st);
+
+out_free:
+    memcached_free(&mst);
+}
 
 /* This callback is invoked by conflate on a conflate thread
  * when it wants proxy stats.
@@ -265,6 +313,12 @@ enum conflate_mgmt_cb_result on_conflate_get_stats(void *userdata,
                 }
             }
         }
+
+        for (i = 0; i < msci.nproxy; i++) {
+            collect_memcached_stats_for_proxy(&msci, msci.proxies[i].name, msci.proxies[i].port);
+            free(msci.proxies[i].name);
+        }
+        free(msci.proxies);
 
         for (i = 1; i < m->nthreads; i++) {
             struct stats_gathering_pair *pair = ca[i].data;
@@ -472,6 +526,22 @@ static void main_stats_collect(void *data0, void *data1) {
                 }
             }
         }
+    }
+
+    {
+        struct main_stats_proxy_info *infos = calloc(nproxy, sizeof(struct main_stats_proxy_info));
+        proxy *p = m->proxy_head;
+        for (int i = 0; i < nproxy; i++, p = p->next) {
+            if (p == NULL)
+                break;
+            pthread_mutex_lock(&p->proxy_lock);
+            infos[i].name = p->name != NULL ? strdup(p->name) : NULL;
+            infos[i].port = p->port;
+            pthread_mutex_unlock(&p->proxy_lock);
+        }
+
+        msci->proxies = infos;
+        msci->nproxy = nproxy;
     }
 
     // Normally, no need to wait for the worker threads to finish,
