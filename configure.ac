@@ -192,13 +192,26 @@ else
        AC_DEFINE([HAVE_CONFLATE_H], 1,
                [Defined if building with libconflate XMPP management])
     ], [
-       if test "x$with_libconflate" != xcheck; then
-         AC_MSG_FAILURE([--with-libconflate was given, but pkg-config package for libconflate is missing])
-       fi
-       BUILD_WITH_CONFLATE=no
-       echo "support for libconflate XMPP management will be disabled"
+       conflate_pkg_not_found=yes
     ])
 fi
+if test "x$conflate_pkg_not_found" = "xyes"; then
+  if test -f "$srcdir/libconflate/configure"; then
+    AC_MSG_NOTICE([will use bundled libconflate])
+    AC_CONFIG_SUBDIRS([libconflate])
+    CONFLATE_LIBS="-Llibconflate -lconflate"
+    CONFLATE_CFLAGS="-Ilibconflate"
+    BUILD_WITH_CONFLATE=yes
+    BUILD_BUNDLED_CONFLATE=yes
+  else
+    if test "x$with_libconflate" != xcheck; then
+      AC_MSG_FAILURE([--with-libconflate was given, but pkg-config package for libconflate is missing])
+    fi
+    BUILD_WITH_CONFLATE=no
+    AC_MSG_NOTICE([support for libconflate XMPP management will be disabled])
+  fi
+fi
+AM_CONDITIONAL([BUILD_BUNDLED_CONFLATE], [test "x$BUILD_BUNDLED_CONFLATE" = xyes])
 AM_CONDITIONAL([BUILD_WITH_CONFLATE], [test "x$BUILD_WITH_CONFLATE" = xyes])
 
 trylibeventdir=""

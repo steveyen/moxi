@@ -33,3 +33,7 @@ echo "autoconf..."
 AUTOCONF=${AUTOCONF:-autoconf}
 $AUTOCONF || exit 1
 
+if (test -d libconflate) && !(test -f libconflate/configure); then
+    echo "libconflate..."
+    (cd libconflate; ./autogen.sh)
+fi
