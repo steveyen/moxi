@@ -196,7 +196,7 @@ int cproxy_init_agent(char *cfg_str,
             config = calloc(config_alloc, 1);
             if (config != NULL) {
                 snprintf(config, config_alloc,
-                         "/var/tmp/moxi_%s.cfg", jid);
+                         CONFLATE_DB_PATH "/%s.cfg", jid);
             } else {
                 fprintf(stderr, "conflate config buf alloc\n");
                 exit(EXIT_FAILURE);

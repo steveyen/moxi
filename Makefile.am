@@ -134,6 +134,9 @@ dist-hook:
 	rm -rf $(distdir)/libmemcached-0.30/libmemcached/{.deps,.libs,*.lo,*.o,Makefile,*.la,libmemcached_config.h,stamp-h[0-9]}
 	rm -f $(distdir)/*/*~ $(distdir)/t/lib/*~ $(distdir)/*~
 
+install-data-hook:
+	$(MKDIR_P) $(CONFLATE_DB_PATH)
+
 check_work_SOURCES = check_work.c $(moxi_debug_SOURCES)
 check_work_CFLAGS = @CHECK_CFLAGS@ $(moxi_debug_CPPFLAGS) -DMAIN_CHECK
 check_work_LDADD = @CHECK_LIBS@ $(moxi_debug_LDADD)
