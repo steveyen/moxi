@@ -1,7 +1,6 @@
 AUTOMAKE_OPTIONS = foreign
 
 bin_PROGRAMS = moxi
-##pkginclude_HEADERS = protocol_binary.h
 noinst_PROGRAMS = moxi-debug sizes testapp
 
 BUILT_SOURCES =
@@ -96,7 +95,7 @@ memcached_debug_dtrace.o: $(moxi_debug_OBJECTS)
 
 SUBDIRS = doc libmemcached-0.30/libmemcached
 DIST_DIRS = scripts
-EXTRA_DIST = doc scripts TODO t memcached.spec memcached_dtrace.d version.m4 libmemcached-0.30
+EXTRA_DIST = doc scripts TODO t memcached.spec memcached_dtrace.d version.m4 libmemcached-0.30 protocol_binary.h
 
 MOSTLYCLEANFILES = *.gcov *.gcno *.gcda *.tcov
 
@@ -132,6 +131,7 @@ docs:
 	(cat Doxyfile ; echo "PROJECT_NUMBER=`cat version.num`") | doxygen -
 
 dist-hook:
+	rm -rf $(distdir)/libmemcached-0.30/libmemcached/.deps
 	rm -f $(distdir)/*/*~ $(distdir)/t/lib/*~ $(distdir)/*~
 
 check_work_SOURCES = check_work.c $(moxi_debug_SOURCES)
