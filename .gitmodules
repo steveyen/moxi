@@ -1,0 +1,3 @@
+[submodule "libconflate"]
+	path = libconflate
+	url = git://github.com/alk/libconflate.git
