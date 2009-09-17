@@ -28,7 +28,7 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
     assert(IS_ASCII(c->protocol));
     assert(IS_PROXY(c->protocol));
 
-    if (settings.verbose > 1)
+    if (settings.verbose > 2)
         fprintf(stderr, "<%d cproxy_process_upstream_ascii %s\n",
                 c->sfd, line);
 
@@ -273,7 +273,7 @@ void cproxy_upstream_ascii_item_response(item *it, conn *uc,
                     add_iov(uc, ITEM_key(it), it->nkey) == 0 &&
                     add_iov(uc, ITEM_suffix(it),
                             it->nsuffix + it->nbytes) == 0) {
-                    if (settings.verbose > 1)
+                    if (settings.verbose > 2)
                         fprintf(stderr,
                                 "<%d cproxy ascii item response success\n",
                                 uc->sfd);
@@ -293,7 +293,7 @@ void cproxy_upstream_ascii_item_response(item *it, conn *uc,
                                 it->nsuffix - 2) == 0 &&
                         add_iov(uc, suffix, strlen(suffix)) == 0 &&
                         add_iov(uc, ITEM_data(it), it->nbytes) == 0) {
-                        if (settings.verbose > 1)
+                        if (settings.verbose > 2)
                             fprintf(stderr,
                                     "<%d cproxy ascii item response ok\n",
                                     uc->sfd);
@@ -303,7 +303,7 @@ void cproxy_upstream_ascii_item_response(item *it, conn *uc,
         }
     } else {
         if (settings.verbose > 1)
-            fprintf(stderr, "unexpected downstream data block");
+            fprintf(stderr, "ERROR: unexpected downstream data block");
     }
 }
 
@@ -353,7 +353,7 @@ void cproxy_del_front_cache_key_ascii(downstream *d,
                 mcache_delete(&d->ptd->proxy->front_cache,
                               key, key_len);
 
-                if (settings.verbose > 1)
+                if (settings.verbose > 2)
                     fprintf(stderr, "front_cache del %s\n", key);
             }
         }
@@ -384,7 +384,7 @@ bool cproxy_optimize_set_ascii(downstream *d, conn *uc,
         if (!update_event(uc, EV_WRITE | EV_PERSIST)) {
             if (settings.verbose > 1)
                 fprintf(stderr,
-                        "Can't update upstream write event\n");
+                        "ERROR: Can't update upstream write event\n");
 
             d->ptd->stats.stats.err_oom++;
             cproxy_close_conn(uc);
@@ -411,7 +411,7 @@ void cproxy_optimize_to_self(downstream *d, conn *uc,
     d->ptd->stats.stats.tot_optimize_self++;
 
     if (command != NULL &&
-        settings.verbose > 1)
+        settings.verbose > 2)
         fprintf(stderr, "optimize to self: %s\n", command);
 
     d->upstream_conn   = NULL;

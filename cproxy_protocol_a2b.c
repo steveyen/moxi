@@ -262,7 +262,7 @@ bool a2b_fill_request_token(struct A2BSpec *spec,
 
     uint64_t delta;
 
-    if (settings.verbose > 1)
+    if (settings.verbose > 2)
         fprintf(stderr, "a2b_fill_request_token %s\n",
                 spec->tokens[cur_token].value);
 
@@ -355,7 +355,7 @@ void cproxy_process_a2b_downstream(conn *c) {
     assert(IS_BINARY(c->protocol));
     assert(IS_PROXY(c->protocol));
 
-    if (settings.verbose > 1)
+    if (settings.verbose > 2)
         fprintf(stderr, "<%d cproxy_process_a2b_downstream\n",
                 c->sfd);
 
@@ -392,7 +392,7 @@ void cproxy_process_a2b_downstream(conn *c) {
     // - bin_reading_get_key means do nread for ext and key data.
     // - bin_read_set_value means do nread for item data.
     //
-    if (settings.verbose > 1)
+    if (settings.verbose > 2)
         fprintf(stderr, "<%d cproxy_process_a2b_downstream %x\n",
                 c->sfd, c->cmd);
 
@@ -461,7 +461,7 @@ void cproxy_process_a2b_downstream_nread(conn *c) {
     downstream *d = c->extra;
     assert(d);
 
-    if (settings.verbose > 1)
+    if (settings.verbose > 2)
         fprintf(stderr,
                 "<%d cproxy_process_a2b_downstream_nread %d %d\n",
                 c->sfd, c->ileft, c->isize);
@@ -543,7 +543,7 @@ void a2b_process_downstream_response(conn *c) {
     assert(IS_BINARY(c->protocol));
     assert(IS_PROXY(c->protocol));
 
-    if (settings.verbose > 1)
+    if (settings.verbose > 2)
         fprintf(stderr,
                 "<%d cproxy_process_a2b_downstream_response\n",
                 c->sfd);
@@ -677,7 +677,7 @@ void a2b_process_downstream_response(conn *c) {
             if (!update_event(uc, EV_WRITE | EV_PERSIST)) {
                 if (settings.verbose > 1)
                     fprintf(stderr,
-                            "Can't write upstream a2b event\n");
+                            "ERROR: Can't write upstream a2b event\n");
 
                 d->ptd->stats.stats.err_oom++;
                 cproxy_close_conn(uc);
@@ -713,7 +713,7 @@ void a2b_process_downstream_response(conn *c) {
             if (!update_event(uc, EV_WRITE | EV_PERSIST)) {
                 if (settings.verbose > 1)
                     fprintf(stderr,
-                            "Can't write upstream a2b event\n");
+                            "ERROR: Can't write upstream a2b event\n");
 
                 d->ptd->stats.stats.err_oom++;
                 cproxy_close_conn(uc);
@@ -767,7 +767,7 @@ void a2b_process_downstream_response(conn *c) {
             if (!update_event(uc, EV_WRITE | EV_PERSIST)) {
                 if (settings.verbose > 1)
                     fprintf(stderr,
-                            "Can't write upstream a2b arith event\n");
+                            "ERROR: Can't write upstream a2b arith event\n");
 
                 d->ptd->stats.stats.err_oom++;
                 cproxy_close_conn(uc);
@@ -911,7 +911,7 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
             assert(out_key == NULL);
             assert(out_keylen == 0);
 
-            if (settings.verbose > 1) {
+            if (settings.verbose > 2) {
                 fprintf(stderr, "a2b broadcast flush_all\n");
             }
 
@@ -927,7 +927,7 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
                                                    "OK\r\n");
         }
 
-        if (settings.verbose > 1) {
+        if (settings.verbose > 2) {
             fprintf(stderr, "a2b broadcast flush_all no size\n");
         }
 
@@ -950,7 +950,7 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
             assert(out_extlen == 0);
             assert(uc->noreply == false);
 
-            if (settings.verbose > 1)
+            if (settings.verbose > 2)
                 fprintf(stderr, "a2b broadcast %s\n", command);
 
             if (strncmp(command + 5, " reset", 6) == 0)
@@ -1023,7 +1023,7 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
                     out_keylen > 0)
                     add_iov(c, out_key, out_keylen);
 
-                if (settings.verbose > 1)
+                if (settings.verbose > 2)
                     fprintf(stderr, "forwarding a2b to %d, noreply %d\n",
                             c->sfd, uc->noreply);
 
@@ -1050,7 +1050,7 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
                     // TODO: Error handling.
                     //
                     if (settings.verbose > 1)
-                        fprintf(stderr, "Couldn't a2b update write event\n");
+                        fprintf(stderr, "ERROR: Couldn't a2b update write event\n");
 
                     if (d->upstream_suffix == NULL)
                         d->upstream_suffix = "SERVER_ERROR a2b event oom\r\n";
@@ -1059,7 +1059,7 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
                 // TODO: Error handling.
                 //
                 if (settings.verbose > 1)
-                    fprintf(stderr, "Couldn't a2b fill request: %s\n",
+                    fprintf(stderr, "ERROR: Couldn't a2b fill request: %s\n",
                             command);
 
                 if (d->upstream_suffix == NULL)
@@ -1173,7 +1173,7 @@ bool cproxy_broadcast_a2b_downstream(downstream *d,
                 } else {
                     if (settings.verbose > 1)
                         fprintf(stderr,
-                                "Update cproxy write event failed\n");
+                                "ERROR: Update cproxy write event failed\n");
 
                     d->ptd->stats.stats.err_oom++;
                     cproxy_close_conn(c);
@@ -1181,7 +1181,7 @@ bool cproxy_broadcast_a2b_downstream(downstream *d,
             } else {
                 if (settings.verbose > 1)
                     fprintf(stderr,
-                            "a2b broadcast prep conn failed\n");
+                            "ERROR: a2b broadcast prep conn failed\n");
 
                 d->ptd->stats.stats.err_downstream_write_prep++;
                 cproxy_close_conn(c);
@@ -1189,7 +1189,7 @@ bool cproxy_broadcast_a2b_downstream(downstream *d,
         }
     }
 
-    if (settings.verbose > 1)
+    if (settings.verbose > 2)
         fprintf(stderr, "forward multiget nwrite %d out of %d\n",
                 nwrite, nconns);
 

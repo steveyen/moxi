@@ -358,7 +358,7 @@ void cproxy_init_downstream_conn(conn *c) {
 void cproxy_on_close_upstream_conn(conn *c) {
     assert(c != NULL);
 
-    if (settings.verbose > 1)
+    if (settings.verbose > 2)
         fprintf(stderr, "<%d cproxy_on_close_upstream_conn\n", c->sfd);
 
     proxy_td *ptd = c->extra;
@@ -433,7 +433,7 @@ void cproxy_on_close_downstream_conn(conn *c) {
     assert(c->sfd >= 0);
     assert(c->state == conn_closing);
 
-    if (settings.verbose > 1)
+    if (settings.verbose > 2)
         fprintf(stderr, "<%d cproxy_on_close_downstream_conn\n", c->sfd);
 
     downstream *d = c->extra;
@@ -452,7 +452,7 @@ void cproxy_on_close_downstream_conn(conn *c) {
         if (d->downstream_conns[i] == c) {
             d->downstream_conns[i] = NULL;
 
-            if (settings.verbose > 1)
+            if (settings.verbose > 2)
                 fprintf(stderr,
                         "<%d cproxy_on_close_downstream_conn quit_server\n",
                         c->sfd);
@@ -541,7 +541,7 @@ void cproxy_on_close_downstream_conn(conn *c) {
     // right now.
     //
     if (uc_retry != NULL) {
-        if (settings.verbose > 1)
+        if (settings.verbose > 2)
             fprintf(stderr, "%d cproxy retrying\n", uc_retry->sfd);
 
         ptd->stats.stats.tot_retry++;
@@ -569,7 +569,7 @@ void cproxy_add_downstream(proxy_td *ptd) {
     assert(ptd->proxy != NULL);
 
     if (ptd->downstream_num < ptd->downstream_max) {
-        if (settings.verbose > 1)
+        if (settings.verbose > 2)
             fprintf(stderr, "cproxy_add_downstream %d %d\n",
                     ptd->downstream_num,
                     ptd->downstream_max);
@@ -656,7 +656,7 @@ bool cproxy_release_downstream(downstream *d, bool force) {
     assert(d != NULL);
     assert(d->ptd != NULL);
 
-    if (settings.verbose > 1)
+    if (settings.verbose > 2)
         fprintf(stderr, "release_downstream\n");
 
     d->ptd->stats.stats.tot_downstream_released++;
@@ -761,7 +761,7 @@ void cproxy_free_downstream(downstream *d) {
     assert(d->timeout_tv.tv_sec == 0);
     assert(d->timeout_tv.tv_usec == 0);
 
-    if (settings.verbose > 1)
+    if (settings.verbose > 2)
         fprintf(stderr, "cproxy_free_downstream\n");
 
     d->ptd->stats.stats.tot_downstream_freed++;
@@ -835,7 +835,7 @@ downstream *cproxy_create_downstream(char *config,
         else
             d->propagate = cproxy_forward_a2a_downstream;
 
-        if (settings.verbose > 1)
+        if (settings.verbose > 2)
             fprintf(stderr,
                     "cproxy_create_downstream: %s, %u, %u\n",
                     config, config_ver,
@@ -915,7 +915,7 @@ bool cproxy_check_downstream_config(downstream *d) {
         rv = true;
     }
 
-    if (settings.verbose > 1)
+    if (settings.verbose > 2)
         fprintf(stderr, "check_downstream_config %u\n", rv);
 
     return rv;
@@ -1095,7 +1095,7 @@ int cproxy_server_index(downstream *d, char *key, size_t key_length) {
 void cproxy_assign_downstream(proxy_td *ptd) {
     assert(ptd != NULL);
 
-    if (settings.verbose > 1)
+    if (settings.verbose > 2)
         fprintf(stderr, "assign_downstream\n");
 
     ptd->downstream_assigns++;
@@ -1186,7 +1186,7 @@ void cproxy_assign_downstream(proxy_td *ptd) {
             ptd->stats.stats.tot_assign_upstream++;
         }
 
-        if (settings.verbose > 1)
+        if (settings.verbose > 2)
             fprintf(stderr, "assign_downstream, matched to upstream %d\n",
                     d->upstream_conn->sfd);
 
@@ -1212,7 +1212,7 @@ void cproxy_assign_downstream(proxy_td *ptd) {
 
                 if (settings.verbose > 1)
                     fprintf(stderr,
-                            "%d could not forward upstream to downstream\n",
+                            "ERROR: %d could not forward upstream to downstream\n",
                             uc->sfd);
 
                 upstream_error(uc);
@@ -1226,7 +1226,7 @@ void cproxy_assign_downstream(proxy_td *ptd) {
         }
     }
 
-    if (settings.verbose > 1)
+    if (settings.verbose > 2)
         fprintf(stderr, "assign_downstream, done\n");
 }
 
@@ -1283,7 +1283,7 @@ void cproxy_reset_upstream(conn *uc) {
     //
     // May need to use the work_queue to call drive_machine() on the uc?
     //
-    if (settings.verbose > 1)
+    if (settings.verbose > 2)
         fprintf(stderr, "cproxy_reset_upstream with bytes available\n");
 
     ptd->stats.stats.tot_reset_upstream_avail++;
@@ -1326,7 +1326,7 @@ void cproxy_release_downstream_conn(downstream *d, conn *c) {
     proxy_td *ptd = d->ptd;
     assert(ptd != NULL);
 
-    if (settings.verbose > 1)
+    if (settings.verbose > 2)
         fprintf(stderr,
                 "%d release_downstream_conn, downstream_used %d %d\n",
                 c->sfd, d->downstream_used, d->downstream_used_start);
@@ -1346,7 +1346,7 @@ void cproxy_release_downstream_conn(downstream *d, conn *c) {
 void cproxy_on_pause_downstream_conn(conn *c) {
     assert(c != NULL);
 
-    if (settings.verbose > 1)
+    if (settings.verbose > 2)
         fprintf(stderr, "<%d cproxy_on_pause_downstream_conn\n",
                 c->sfd);
 
@@ -1370,7 +1370,7 @@ void cproxy_pause_upstream_for_downstream(proxy_td *ptd, conn *upstream) {
     assert(ptd != NULL);
     assert(upstream != NULL);
 
-    if (settings.verbose > 1)
+    if (settings.verbose > 2)
         fprintf(stderr, "%d pause_upstream_for_downstream\n",
                 upstream->sfd);
 
@@ -1422,7 +1422,7 @@ bool cproxy_start_wait_queue_timeout(proxy_td *ptd, conn *uc) {
     ptd->timeout_tv = ptd->behavior_pool.base.wait_queue_timeout;
     if (ptd->timeout_tv.tv_sec != 0 ||
         ptd->timeout_tv.tv_usec != 0) {
-        if (settings.verbose > 1)
+        if (settings.verbose > 2)
             fprintf(stderr, "wait_queue_timeout started\n");
 
         evtimer_set(&ptd->timeout_event, wait_queue_timeout, ptd);
@@ -1441,7 +1441,7 @@ void wait_queue_timeout(const int fd,
     proxy_td *ptd = arg;
     assert(ptd != NULL);
 
-    if (settings.verbose > 1)
+    if (settings.verbose > 2)
         fprintf(stderr, "wait_queue_timeout\n");
 
     // This timer callback is invoked when an upstream conn
@@ -1454,7 +1454,7 @@ void wait_queue_timeout(const int fd,
         ptd->timeout_tv.tv_sec = 0;
         ptd->timeout_tv.tv_usec = 0;
 
-        if (settings.verbose > 1)
+        if (settings.verbose > 2)
             fprintf(stderr, "wait_queue_timeout cleared\n");
 
         struct timeval wqt = ptd->behavior_pool.base.wait_queue_timeout;
@@ -1478,7 +1478,7 @@ void wait_queue_timeout(const int fd,
 
             // Check if upstream conn is old and should be removed.
             //
-            if (settings.verbose > 1)
+            if (settings.verbose > 2)
                 fprintf(stderr,
                         "wait_queue_timeout compare %u to %u cutoff\n",
                         uc->cmd_start_time, cut_msec);
@@ -1779,7 +1779,7 @@ void downstream_timeout(const int fd,
     assert(d != NULL);
     assert(d->ptd != NULL);
 
-    if (settings.verbose > 1)
+    if (settings.verbose > 2)
         fprintf(stderr, "downstream_timeout\n");
 
     // This timer callback is invoked when one or more of
@@ -1826,7 +1826,7 @@ bool cproxy_start_downstream_timeout(downstream *d, conn *c) {
     assert(uc->thread->base != NULL);
     assert(IS_PROXY(uc->protocol));
 
-    if (settings.verbose > 1)
+    if (settings.verbose > 2)
         fprintf(stderr, "cproxy_start_downstream_timeout\n");
 
     evtimer_set(&d->timeout_event, downstream_timeout, d);
@@ -1843,6 +1843,9 @@ bool cproxy_auth_downstream(memcached_server_st *server,
                             proxy_behavior *behavior) {
     assert(server);
     assert(behavior);
+    if (settings.verbose > 2)
+      fprintf(stderr, "cproxy_auth_downstream usr: %s pwd: %s\n",
+              behavior->usr,behavior->pwd);
 
     char buf[3000];
 
@@ -1918,7 +1921,7 @@ bool cproxy_auth_downstream(memcached_server_st *server,
         // - UNKNOWN_COMMAND - sasl-unaware server.
         //
         if (res.response.status == PROTOCOL_BINARY_RESPONSE_SUCCESS) {
-            if (settings.verbose > 1)
+            if (settings.verbose > 2)
                 fprintf(stderr, "auth_downstream success\n");
 
             return true;
@@ -1996,7 +1999,7 @@ bool cproxy_bucket_downstream(memcached_server_st *server,
         // - UNKNOWN_COMMAND - bucket-unaware server.
         //
         if (res.response.status == PROTOCOL_BINARY_RESPONSE_SUCCESS) {
-            if (settings.verbose > 1)
+            if (settings.verbose > 2)
                 fprintf(stderr, "bucket_downstream success, %s\n",
                         behavior->bucket);
 
