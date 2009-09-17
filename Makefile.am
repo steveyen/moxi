@@ -95,7 +95,7 @@ memcached_debug_dtrace.o: $(moxi_debug_OBJECTS)
 
 SUBDIRS = doc libmemcached-0.30/libmemcached
 DIST_DIRS = scripts
-EXTRA_DIST = doc scripts TODO t memcached.spec memcached_dtrace.d version.m4 libmemcached-0.30 protocol_binary.h
+EXTRA_DIST = doc scripts TODO t memcached.spec memcached_dtrace.d version.m4 libmemcached-0.30 protocol_binary.h patches
 
 MOSTLYCLEANFILES = *.gcov *.gcno *.gcda *.tcov
 
