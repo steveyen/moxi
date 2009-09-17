@@ -131,7 +131,7 @@ docs:
 	(cat Doxyfile ; echo "PROJECT_NUMBER=`cat version.num`") | doxygen -
 
 dist-hook:
-	rm -rf $(distdir)/libmemcached-0.30/libmemcached/.deps
+	rm -rf $(distdir)/libmemcached-0.30/libmemcached/{.deps,.libs,*.lo,*.o,Makefile,*.la,libmemcached_config.h,stamp-h[0-9]}
 	rm -f $(distdir)/*/*~ $(distdir)/t/lib/*~ $(distdir)/*~
 
 check_work_SOURCES = check_work.c $(moxi_debug_SOURCES)
