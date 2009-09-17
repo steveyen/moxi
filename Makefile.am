@@ -98,10 +98,8 @@ memcached_dtrace.o: $(moxi_OBJECTS)
 memcached_debug_dtrace.o: $(moxi_debug_OBJECTS)
 	$(DTRACE) $(DTRACEFLAGS) -G -o memcached_debug_dtrace.o -s ${srcdir}/memcached_dtrace.d $(moxi_debug_OBJECTS)
 
-SUBDIRS = doc libmemcached-0.30/libmemcached
-if BUILD_BUNDLED_CONFLATE
-  SUBDIRS += libconflate
-endif
+SUBDIRS = doc libmemcached-0.30/libmemcached $(MAYBE_LIBCONFLATE)
+DIST_SUBDIRS = doc libmemcached-0.30/libmemcached $(MAYBE_LIBCONFLATE)
 DIST_DIRS = scripts
 EXTRA_DIST = doc scripts TODO t memcached.spec memcached_dtrace.d version.m4 libmemcached-0.30 protocol_binary.h patches
 
