@@ -266,9 +266,10 @@ int main_check(int argc, char **argv)
 
     proxy_behavior pbg = behavior_default_g;
 
+    unlink("t/check_moxi_agent.cfg");
     pmain = cproxy_init_agent_start("check_moxi_agent@localhost", // Fake JID.
                                     "password",                   // Fake password.
-                                    CONFLATE_DB_PATH "/check_moxi_agent.cfg",
+                                    "t/check_moxi_agent.cfg",
                                     NULL,
                                     pbg,
                                     settings.num_threads);
