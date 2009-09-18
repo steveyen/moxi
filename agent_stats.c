@@ -883,7 +883,7 @@ static void map_key_stats_foreach_emit_inner(const void *_key,
     {
         char buf_val[32];
         snprintf(buf, sizeof(buf), "%s:keys_stats:%s:added_at_msec", state->name, key);
-        snprintf(buf_val, sizeof(buf_val), "%llu", (uint64_t) stats->added_at);
+        snprintf(buf_val, sizeof(buf_val), "%u", stats->added_at);
         conflate_add_field(state->emit->result, buf, buf_val);
     }
 }
