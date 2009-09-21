@@ -206,6 +206,8 @@ if test "x$conflate_pkg_not_found" = "xyes"; then
     CONFLATE_LIBS="-Llibconflate -lconflate"
     CONFLATE_CFLAGS="-Ilibconflate $libstrophe_CFLAGS -Ilibconflate/libstrophe"
     BUILD_WITH_CONFLATE=yes
+    AC_DEFINE([HAVE_CONFLATE_H], 1,
+              [Defined if building with libconflate XMPP management])
     AC_SUBST([MAYBE_LIBCONFLATE], [libconflate])
   else
     if test "x$with_libconflate" != xcheck; then
