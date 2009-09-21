@@ -137,6 +137,10 @@ docs:
 	(cat Doxyfile ; echo "PROJECT_NUMBER=`cat version.num`") | doxygen -
 
 dist-hook:
+	@if [ "x$(MAYBE_LIBCONFLATE)" = x ]; then \
+	  echo "WARNING! WARNING! WARNING!: libconflate WILL NOT be bundled in distribution archive!"; \
+	  echo "WARNING! WARNING! WARNING!: you should do 'make dist' after configuring with bundled libconflate (and libstrophe too)!!!!!"; \
+	fi
 	rm -rf $(distdir)/libmemcached-0.30/libmemcached/{.deps,.libs,*.lo,*.o,Makefile,*.la,libmemcached_config.h,stamp-h[0-9]}
 	rm -f $(distdir)/*/*~ $(distdir)/t/lib/*~ $(distdir)/*~
 
