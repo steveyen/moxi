@@ -454,10 +454,10 @@ then
   CFLAGS="$CFLAGS -errfmt=error -errwarn -errshort=tags"
 fi
 
-AC_ARG_VAR([CONFLATE_DB_PATH], [Directory for libconflate config database (default /var/lib/]AC_PACKAGE_NAME[)])
+AC_ARG_VAR([CONFLATE_DB_PATH], [Directory for libconflate config database (default $prefix/var/lib/]AC_PACKAGE_NAME[)])
 if test "x$BUILD_WITH_CONFLATE" = "xyes"; then
   if test "x$CONFLATE_DB_PATH" = x; then
-    CONFLATE_DB_PATH=/var/lib/$PACKAGE
+    CONFLATE_DB_PATH=$localstatedir/lib/$PACKAGE
   fi
   AC_DEFINE_UNQUOTED([CONFLATE_DB_PATH], ["$CONFLATE_DB_PATH"], [directory for libconflate config database])
 fi
