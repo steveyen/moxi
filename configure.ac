@@ -198,13 +198,9 @@ fi
 if test "x$conflate_pkg_not_found" = "xyes"; then
   if test -f "$srcdir/libconflate/configure"; then
     AC_MSG_NOTICE([will use bundled libconflate])
-    dnl here we rely on a bit of knowledge of libconflate internals (i.e. dependency on libstrophe)
-    dnl we need correct -I flags for libstrophe because conflate.h includes strophe.h
-    dnl I think that's ok for _bundled_ libconflate
-    PKG_CHECK_MODULES([libstrophe], [libstrophe], [], [true])
     AC_CONFIG_SUBDIRS([libconflate])
     CONFLATE_LIBS="-Llibconflate -lconflate"
-    CONFLATE_CFLAGS="-Ilibconflate $libstrophe_CFLAGS -Ilibconflate/libstrophe"
+    CONFLATE_CFLAGS="-Ilibconflate"
     BUILD_WITH_CONFLATE=yes
     AC_DEFINE([HAVE_CONFLATE_H], 1,
               [Defined if building with libconflate XMPP management])
