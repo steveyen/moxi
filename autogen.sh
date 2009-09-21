@@ -38,7 +38,7 @@ if [ -d libconflate ] && [ -d .git ] && ! [ -f libconflate/autogen.sh ]; then
   git submodule update -i && (cd libconflate && git submodule update -i) && (cd libconflate/libstrophe && git submodule update -i)
 fi
 
-if (test -f libconflate/autogen.sh) && !(test -f libconflate/configure); then
+if (test -f libconflate/autogen.sh) && ! (test -f libconflate/configure); then
     echo "libconflate..."
     (cd libconflate && ./autogen.sh)
 fi
