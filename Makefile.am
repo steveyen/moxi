@@ -101,7 +101,7 @@ memcached_debug_dtrace.o: $(moxi_debug_OBJECTS)
 SUBDIRS = doc libmemcached-0.30/libmemcached $(MAYBE_LIBCONFLATE)
 DIST_SUBDIRS = doc libmemcached-0.30/libmemcached $(MAYBE_LIBCONFLATE)
 DIST_DIRS = scripts
-EXTRA_DIST = doc scripts TODO t memcached.spec memcached_dtrace.d version.m4 libmemcached-0.30 protocol_binary.h patches
+EXTRA_DIST = doc scripts TODO t memcached.spec memcached_dtrace.d version.m4 libmemcached-0.30 protocol_binary.h patches debian
 
 MOSTLYCLEANFILES = *.gcov *.gcno *.gcda *.tcov
 
@@ -161,3 +161,14 @@ check_moxi_agent_LDADD = @CHECK_LIBS@ $(moxi_debug_LDADD)
 
 check-syntax:
 	$(COMPILE) -o /dev/null -S ${CHK_SOURCES}
+
+fc_rpm_inner:
+	-rm $(rpmtop)/SRPMS/moxi-$(VERSION)*.rpm
+	-rm $(rpmtop)/RPMS/*/moxi-$(VERSION)*.rpm
+	cp moxi-$(VERSION).tar.gz $(rpmtop)/SOURCES/
+	rpmbuild -ba scripts/rpm/moxi.spec
+	cp $(rpmtop)/SRPMS/moxi-$(VERSION)*.rpm .
+	cp $(rpmtop)/RPMS/*/moxi{,-debuginfo}-$(VERSION)*.rpm .
+
+fc_rpm: dist
+	rpmtop=`rpm --eval "%{_topdir}"` $(MAKE) fc_rpm_inner

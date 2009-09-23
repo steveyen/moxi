@@ -1,0 +1,15 @@
+# Defaults for moxi initscript
+# sourced by /etc/init.d/moxi
+# installed at /etc/default/moxi by the maintainer scripts
+
+#
+# This is a POSIX shell fragment
+#
+
+# uncomment to enable moxi
+#RUN="yes"
+MAXCONN=1024
+PIDFILE=/var/run/moxi/moxi.pid
+PROXY_ARG="-z /etc/moxi.conf"
+# Additional options that are passed to the Daemon.
+DAEMON_OPTS="-u nobody -d -c $MAXCONN $PROXY_ARG -P $PIDFILE"

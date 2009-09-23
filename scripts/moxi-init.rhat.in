@@ -1,0 +1,85 @@
+#! /bin/sh
+#
+# chkconfig: - 55 45
+# description:	The moxi is a memchached proxy
+# processname: moxi
+# config: /etc/sysconfig/moxi
+
+# Source function library.
+. /etc/rc.d/init.d/functions
+
+USER=nobody
+MAXCONN=1024
+CPROXY_ARG=/etc/moxi.conf
+OPTIONS=""
+
+if [ -f /etc/sysconfig/moxi ];then 
+	. /etc/sysconfig/moxi
+fi
+
+# Check that networking is up.
+if [ "$NETWORKING" = "no" ]
+then
+	exit 0
+fi
+
+# if CPROXY_ARG is a config file reference check it's existance
+if ([[ "/" < "$CPROXY_ARG" ]] && [[ "$CPROXY_ARG" < "0" ]]) || ([[ "." < "$CPROXY_ARG" ]] && [[ "$CPROXY_ARG" < "/" ]]); then
+	if [ ! -f "$CPROXY_ARG" ]; then
+		echo "Misconfiguration! '$CPROXY_ARG' is absent. See /usr/share/doc/moxi-%{version}/examples/ for configuration examples. Aborting."
+		exit 1
+	fi
+fi
+
+RETVAL=0
+prog="moxi"
+
+start () {
+	echo -n $"Starting $prog: "
+	# insure that /var/run/moxi has proper permissions
+        chown $USER /var/run/moxi
+	daemon /usr/bin/moxi -d -u $USER -c $MAXCONN -z $CPROXY_ARG -P /var/run/moxi/moxi.pid $OPTIONS
+	RETVAL=$?
+	echo
+	[ $RETVAL -eq 0 ] && touch /var/lock/subsys/moxi
+}
+stop () {
+	echo -n $"Stopping $prog: "
+	killproc moxi
+	RETVAL=$?
+	echo
+	if [ $RETVAL -eq 0 ] ; then
+	    rm -f /var/lock/subsys/moxi
+	    rm -f /var/run/moxi.pid
+	fi
+}
+
+restart () {
+        stop
+        start
+}
+
+
+# See how we were called.
+case "$1" in
+  start)
+	start
+	;;
+  stop)
+	stop
+	;;
+  status)
+	status moxi
+	;;
+  restart|reload)
+	restart
+	;;
+  condrestart)
+	[ -f /var/lock/subsys/moxi ] && restart || :
+	;;
+  *)
+	echo $"Usage: $0 {start|stop|status|restart|reload|condrestart}"
+	exit 1
+esac
+
+exit $?

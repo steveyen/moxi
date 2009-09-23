@@ -1,0 +1,16 @@
+Source: moxi
+Section: web
+Priority: optional
+Maintainer: Northscale <info@northscale.com>
+Build-Depends: debhelper (>= 5), libevent-dev, check, libsqlite3-dev, libssl-dev, pkg-config, automake, libtool, git-core
+Standards-Version: 3.8.1
+Homepage: http://labs.northscale.com/moxi
+
+Package: moxi
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, lsb-base (>= 3.2)
+Description: a high performance, multithreaded memcached proxy
+ moxi is a high performance memcached proxy with several optimizations
+ which may be useful when deploying memcached at a large scale or in
+ cloud compute environments.  moxi was produced by NorthScale and is
+ Open Source under the BSD license.

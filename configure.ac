@@ -462,9 +462,10 @@ if test "x$BUILD_WITH_CONFLATE" = "xyes"; then
   AC_DEFINE_UNQUOTED([CONFLATE_DB_PATH], ["$CONFLATE_DB_PATH"], [directory for libconflate config database])
 fi
 
+AC_SUBST([DATE], [`LANG=C date -R`])
 
 LIBS="$LIBS -lm"
 
-AC_CONFIG_FILES(Makefile doc/Makefile libmemcached-0.30/libmemcached/Makefile)
+AC_CONFIG_FILES(Makefile doc/Makefile libmemcached-0.30/libmemcached/Makefile debian/changelog scripts/rpm/moxi.spec)
 AC_OUTPUT
 

@@ -1,0 +1,17 @@
+#!/bin/sh
+
+rm -rf tmp/rpmbuild
+mkdir -p tmp/rpmbuild/SOURCES
+mkdir -p tmp/rpmbuild/BUILD
+mkdir -p tmp/rpmbuild/BUILDROOT
+mkdir -p tmp/rpmbuild/RPMS
+mkdir -p tmp/rpmbuild/SRPMS
+mkdir -p tmp/rpmbuild/SPECS
+
+rm -rf tmp/build
+mkdir tmp/build
+
+cp -R . tmp/build && \
+tar cf tmp/rpmbuild/SOURCES/proxybuild.tar -C tmp proxybuild && \
+rpmbuild --define="_topdir `pwd`/tmp/rpmbuild" -ba moxi.spec && \
+cp tmp/rpmbuild/RPMS/*/*.rpm .

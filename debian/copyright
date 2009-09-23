@@ -1,0 +1,5 @@
+Moxi is based on code of memcached (http://www.danga.com/memcached/) and is
+licensed under same license -- BSD.
+
+On Debian systems, the complete text of the BSD License can be
+found in `/usr/share/common-licenses/BSD'.

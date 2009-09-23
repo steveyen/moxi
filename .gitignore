@@ -12,6 +12,8 @@
 INSTALL
 Makefile
 Makefile.in
+/debian/changelog
+/scripts/rpm/moxi.spec
 config.guess
 config.h
 config.h.in

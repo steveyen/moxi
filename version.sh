@@ -1,6 +1,6 @@
 #!/bin/sh
 
-if git describe > version.num.tmp
+if git describe | sed s/-/./g > version.num.tmp
 then
     mv version.num.tmp version.num
     echo "m4_define([VERSION_NUMBER], [`tr -d '\n' < version.num`])" \
