@@ -186,6 +186,8 @@ AC_SUBST(CONFLATE_CFLAGS)
 AC_SUBST(CONFLATE_LIBS)
 if test "x$with_libconflate" == xno; then
   echo "libconflate support is manually disabled"
+elif test "x$with_libconflate" = xbundled; then
+  conflate_pkg_not_found=yes
 else
   PKG_CHECK_MODULES([CONFLATE], [libconflate], [
        BUILD_WITH_CONFLATE=yes
@@ -197,7 +199,11 @@ else
 fi
 if test "x$conflate_pkg_not_found" = "xyes"; then
   if test -f "$srcdir/libconflate/configure"; then
-    AC_MSG_NOTICE([will use bundled libconflate])
+    if test "x$with_libconflate" = xbundled; then
+      AC_MSG_NOTICE([forced use of bundled libconflate])
+    else
+      AC_MSG_NOTICE([will use bundled libconflate])
+    fi
     AC_CONFIG_SUBDIRS([libconflate])
     CONFLATE_LIBS="-Llibconflate -lconflate"
     CONFLATE_CFLAGS="-Ilibconflate"
@@ -206,6 +212,9 @@ if test "x$conflate_pkg_not_found" = "xyes"; then
               [Defined if building with libconflate XMPP management])
     AC_SUBST([MAYBE_LIBCONFLATE], [libconflate])
   else
+    if test "x$with_libconflate" = xbundled; then
+      AC_MSG_FAILURE([build with bundled libconflate is requested, but libconflate/configure is missing])
+    fi
     if test "x$with_libconflate" != xcheck; then
       AC_MSG_FAILURE([--with-libconflate was given, but pkg-config package for libconflate is missing])
     fi
