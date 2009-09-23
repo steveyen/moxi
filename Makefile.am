@@ -145,7 +145,7 @@ dist-hook:
 	rm -f $(distdir)/*/*~ $(distdir)/t/lib/*~ $(distdir)/*~
 
 install-data-hook:
-	$(mkdir_p) $(CONFLATE_DB_PATH)
+	$(mkdir_p) $(DESTDIR)$(CONFLATE_DB_PATH)
 
 check_work_SOURCES = check_work.c $(moxi_debug_SOURCES)
 check_work_CFLAGS = @CHECK_CFLAGS@ $(moxi_debug_CPPFLAGS) -DMAIN_CHECK
