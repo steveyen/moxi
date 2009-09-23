@@ -35,7 +35,9 @@ $AUTOCONF || exit 1
 
 if [ -d libconflate ] && [ -d .git ] && ! [ -f libconflate/autogen.sh ]; then
   echo "libconflate submodule seem to be absent. Will fetch it now."
-  git submodule update -i && (cd libconflate && git submodule update -i) && (cd libconflate/libstrophe && git submodule update -i)
+  git submodule init && git submodule update &&
+(cd libconflate && git submodule init && git submodule update) &&
+(cd libconflate/libstrophe && git submodule init && git submodule update)
 fi
 
 if (test -f libconflate/autogen.sh) && ! (test -f libconflate/configure); then
