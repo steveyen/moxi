@@ -33,6 +33,9 @@ echo "autoconf..."
 AUTOCONF=${AUTOCONF:-autoconf}
 $AUTOCONF || exit 1
 
+# this is important so that this file is not rebuilt during builds
+touch libmemcached-0.30/libmemcached/libmemcached_config.h.in
+
 if [ -d libconflate ] && [ -d .git ] && ! [ -f libconflate/autogen.sh ]; then
   echo "libconflate submodule seem to be absent. Will fetch it now."
   git submodule init && git submodule update &&
