@@ -8,14 +8,16 @@ $ rpmdev-setuptree
 
 Then
 
-$ ./autogen.sh && ./configure && make fc_rpm
+$ ./autogen.sh && ./configure --with-libconflate=bundled \
+--with-bundled-libstrophe && make fc_rpm
 
 this will produce source and binary rpms for your architecture.
 
 For Debian/Ubuntu
 -----------------
 
-$ ./autogen.sh && ./configure && make dist
+$ ./autogen.sh && ./configure --with-libconflate=bundled \
+--with-bundled-libstrophe && make dist
 
 Than unpack moxi .tar.gz source archive and inside source directory
 run
