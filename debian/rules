@@ -17,7 +17,7 @@ configure: configure-stamp
 configure-stamp:
 	dh_testdir
 
-	CONFLATE_DB_PATH=/var/lib/moxi ./configure --prefix=/usr --disable-coverage --disable-debug --disable-shared --without-memcached
+	CONFLATE_DB_PATH=/var/lib/moxi ./configure --prefix=/usr --disable-coverage --disable-debug --disable-shared --without-memcached --with-bundled-libstrophe --with-libconflate=bundled
 
 	touch configure-stamp
 
