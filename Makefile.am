@@ -163,8 +163,8 @@ check_moxi_CFLAGS = @CHECK_CFLAGS@ $(moxi_debug_CPPFLAGS) -DMAIN_CHECK
 check_moxi_LDADD = @CHECK_LIBS@ $(moxi_debug_LDADD)
 
 if BUILD_WITH_CONFLATE
-check_moxi_agent_SOURCES = check_moxi_agent.c $(moxi_debug_SOURCES)
-check_moxi_agent_CFLAGS = @CHECK_CFLAGS@ $(moxi_debug_CPPFLAGS) -DMAIN_CHECK
+check_moxi_agent_SOURCES = check_moxi_agent.c redirects.c $(moxi_debug_SOURCES)
+check_moxi_agent_CFLAGS = @CHECK_CFLAGS@ $(moxi_debug_CPPFLAGS) -DMAIN_CHECK -DREDIRECTS_FOR_MOCKS
 check_moxi_agent_LDADD = @CHECK_LIBS@ $(moxi_debug_LDADD)
 endif
 

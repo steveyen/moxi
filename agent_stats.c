@@ -15,6 +15,10 @@
 #include "work.h"
 #include "agent.h"
 
+#ifdef REDIRECTS_FOR_MOCKS
+#include "redirects.h"
+#endif
+
 // Local declarations.
 //
 static void add_stat_prefix(const void *dump_opaque,
@@ -118,7 +122,11 @@ struct stats_gathering_pair {
     genhash_t *map_key_stats; // maps "<proxy-name>:<port>" strings to (genhash that maps key names to (struct key_stats *))
 };
 
+#ifndef REDIRECTS_FOR_MOCKS
 static
+#else
+#undef collect_memcached_stats_for_proxy
+#endif
 void collect_memcached_stats_for_proxy(struct main_stats_collect_info *msci, const char *proxy_name, int proxy_port) {
     memcached_st mst;
 
@@ -157,6 +165,10 @@ void collect_memcached_stats_for_proxy(struct main_stats_collect_info *msci, con
 out_free:
     memcached_free(&mst);
 }
+#ifdef REDIRECTS_FOR_MOCKS
+#define collect_memcached_stats_for_proxy redirected_collect_memcached_stats_for_proxy 
+#endif
+
 
 /* This callback is invoked by conflate on a conflate thread
  * when it wants proxy stats.

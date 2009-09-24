@@ -207,6 +207,7 @@ END_TEST
 static
 void setup(void)
 {
+  reset_redirections();
   start_main("moxi", NULL);
   assert(!is_listen_thread());
   proxy_behavior pbg = behavior_default_g;

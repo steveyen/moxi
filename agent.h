@@ -4,6 +4,9 @@
 #define AGENT_H
 
 #include <conflate.h>
+#ifdef REDIRECTS_FOR_MOCKS
+#include "redirects.h"
+#endif
 
 int cproxy_init_agent(char *cfg_str,
                       proxy_behavior behavior,
