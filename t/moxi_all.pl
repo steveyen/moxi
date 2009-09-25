@@ -38,11 +38,13 @@ if ($< == 0) {
 my $childpid  = fork();
 
 unless ($childpid) {
+    setpgrp();
     exec "$exe $childargs";
     exit; # never gets here.
 }
+setpgrp($childpid, $childpid);
 
 system("python ./t/moxi_mock.py");
 
-kill 2, $childpid;
+kill 2, -$childpid;
 

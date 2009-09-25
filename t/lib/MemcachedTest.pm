@@ -159,9 +159,11 @@ sub new_memcached {
     croak("memcached binary not executable\n") unless -x _;
 
     unless ($childpid) {
+        setpgrp();
         exec "$exe $args";
         exit; # never gets here.
     }
+    setpgrp($childpid, $childpid);
 
     # unix domain sockets
     if ($args =~ /-s (\S+)/) {
@@ -170,7 +172,7 @@ sub new_memcached {
 	my $conn = IO::Socket::UNIX->new(Peer => $filename) || 
 	    croak("Failed to connect to unix domain socket: $! '$filename'");
 
-	return Memcached::Handle->new(pid  => $childpid,
+	return Memcached::Handle->new(pid  => -$childpid,
 				      conn => $conn,
 				      domainsocket => $filename,
 				      port => $port);
@@ -182,7 +184,7 @@ sub new_memcached {
     for (1..20) {
 	my $conn = IO::Socket::INET->new(PeerAddr => "127.0.0.1:$port");
 	if ($conn) {
-	    return Memcached::Handle->new(pid  => $childpid,
+	    return Memcached::Handle->new(pid  => -$childpid,
 					  conn => $conn,
 					  udpport => $udpport,
 					  port => $port);
