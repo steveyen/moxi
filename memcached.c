@@ -4002,6 +4002,60 @@ static int enable_large_pages(void) {
 }
 #endif
 
+#ifdef MAIN_CHECK
+#define main main_memcached
+#endif
+
+int main(int argc, char **argv);
+
+#ifdef MAIN_CHECK
+
+static
+work_collect main_completion;
+
+struct main_data {
+    int argc;
+    char **argv;
+};
+
+static
+void *main_trampoline(void *_data)
+{
+    struct main_data *data = _data;
+    int rv = main_memcached(data->argc, data->argv);
+    printf("Unexpected exit from main with rv = %d\n", rv);
+    abort();
+}
+
+#include <stdarg.h>
+
+void start_main(char *arg0, ...)
+{
+    pthread_t main_thread;
+    va_list args;
+    int rv;
+    char *argv[256] = {0};
+    int argc = 0;
+    char *current_arg = arg0;
+
+    va_start(args, arg0);
+    while (current_arg != NULL) {
+        argv[argc++] = current_arg;
+        current_arg = va_arg(args, char *);
+    }
+    va_end(args);
+
+    work_collect_init(&main_completion, 1, NULL);
+    struct main_data data = {.argc = argc, .argv = argv};
+    rv = pthread_create(&main_thread, NULL, main_trampoline, &data);
+    if (rv) {
+        perror("pthread_create");
+        abort();
+    }
+    work_collect_wait(&main_completion);
+}
+#endif
+
 int main (int argc, char **argv) {
     int c;
     bool lock_memory = false;
@@ -4399,7 +4453,7 @@ int main (int argc, char **argv) {
     drop_privileges();
 
 #ifdef MAIN_CHECK
-    main_check(argc, argv);
+    work_collect_one(&main_completion);
 #endif
 
     /* enter the event loop */
