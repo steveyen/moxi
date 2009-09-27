@@ -53,8 +53,6 @@ START_TEST(test_first_config)
   on_conflate_new_config(pmain, head);
   on_conflate_new_config(pmain, head);
 
-  sleep(1);
-
   fail_unless(pmain->proxy_head == NULL, "pools empty");
 
   // Add a pool.
@@ -78,8 +76,6 @@ START_TEST(test_first_config)
   kvpair_t *c = mk_kvpairs(ca);
 
   on_conflate_new_config(pmain, c);
-
-  sleep(1);
 
   fail_if(pmain->proxy_head == NULL, "fc");
   fail_if(pmain->proxy_head->next != NULL, "fc");
@@ -114,8 +110,6 @@ START_TEST(test_easy_reconfig)
 
   on_conflate_new_config(pmain, c);
 
-  sleep(1);
-
   fail_if(pmain->proxy_head == NULL, "fc");
   fail_if(pmain->proxy_head->next != NULL, "fc");
   fail_unless(pmain->proxy_head->port == 11411, "fc");
@@ -146,8 +140,6 @@ START_TEST(test_easy_reconfig)
   kvpair_t *d = mk_kvpairs(da);
 
   on_conflate_new_config(pmain, d);
-
-  sleep(1);
 
   fail_if(pmain->proxy_head == NULL, "fc");
   fail_if(pmain->proxy_head->next != NULL, "fc");
@@ -185,8 +177,6 @@ START_TEST(test_easy_reconfig)
 
   on_conflate_new_config(pmain, e);
 
-  sleep(1);
-
   fail_if(pmain->proxy_head == NULL, "fc");
   fail_if(pmain->proxy_head->next != NULL, "fc");
   fail_unless(pmain->proxy_head->port == 11411, "fc");
@@ -202,8 +192,6 @@ START_TEST(test_easy_reconfig)
   // Go back to d
   //
   on_conflate_new_config(pmain, d);
-
-  sleep(1);
 
   fail_if(pmain->proxy_head == NULL, "fc");
   fail_if(pmain->proxy_head->next != NULL, "fc");
@@ -243,9 +231,6 @@ static Suite* moxi_agent_suite(void)
     tcase_add_test(tc_core, test_first_config);
     tcase_add_test(tc_core, test_easy_reconfig);
     suite_add_tcase(s, tc_core);
-
-    if (getenv("CK_DEFAULT_TIMEOUT") == NULL)
-      tcase_set_timeout(tc_core, 20);
 
     return s;
 }

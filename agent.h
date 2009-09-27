@@ -34,8 +34,6 @@ enum conflate_mgmt_cb_result on_conflate_ping_test(void *opaque,
                                                    kvpair_t *form,
                                                    conflate_form_result *);
 
-void cproxy_on_new_config(void *data0, void *data1);
-
 void cproxy_on_new_pool(proxy_main *m,
                         char *name, int port,
                         char *config_str,

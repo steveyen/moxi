@@ -290,6 +290,9 @@ proxy_main *cproxy_init_agent_start(char *jid,
     return NULL;
 }
 
+static
+void cproxy_on_new_config(void *data0, void *data1);
+
 void on_conflate_new_config(void *userdata, kvpair_t *config) {
     assert(config != NULL);
 
@@ -303,9 +306,12 @@ void on_conflate_new_config(void *userdata, kvpair_t *config) {
         fprintf(stderr, "agent_config ocnc on_conflate_new_config\n");
     }
 
+    work_collect completion;
+    work_collect_init(&completion, 1, m);
+
     kvpair_t *copy = dup_kvpair(config);
     if (copy != NULL) {
-        if (!work_send(mthread->work_queue, cproxy_on_new_config, m, copy) &&
+        if (!work_send(mthread->work_queue, cproxy_on_new_config, &completion, copy) &&
             settings.verbose > 1) {
             fprintf(stderr, "work_send failed\n");
         }
@@ -314,10 +320,14 @@ void on_conflate_new_config(void *userdata, kvpair_t *config) {
             fprintf(stderr, "agent_config ocnc failed dup_kvpair\n");
         }
     }
+
+    work_collect_wait(&completion);
 }
 
+static
 void cproxy_on_new_config(void *data0, void *data1) {
-    proxy_main *m = data0;
+    work_collect *completion = data0;
+    proxy_main *m = completion->data;
     assert(m);
 
     kvpair_t *kvs = data1;
@@ -563,6 +573,9 @@ void cproxy_on_new_config(void *data0, void *data1) {
     }
 
     free_kvpair(kvs);
+
+ out:
+    work_collect_one(completion);
     return;
 
  fail:
@@ -573,6 +586,7 @@ void cproxy_on_new_config(void *data0, void *data1) {
         fprintf(stderr, "conc failed config %llu\n",
                 (long long unsigned int) m->stat_config_fails);
     }
+    goto out;
 }
 
 /**
