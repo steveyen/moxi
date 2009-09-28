@@ -1,26 +1,47 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
-          "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+	"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
 
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
-  <head>
-    <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
-    <title>{{ page.title }}</title>
-    <link id="master_css" rel="stylesheet" type="text/css"
-          href="http://labs.northscale.com/css/default.css"/>
-  </head>
+<head>
+	<meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
 
-  <body>
+	<title>NorthScale - Labs</title>
+	<link rel="stylesheet" type="text/css" href="/css/styles.css" />
+	<!--[if lte IE 8]><link rel="stylesheet" type="text/css" href="/css/ie_lte_8.css" /><![endif]-->
+	<!--[if lte IE 7]><link rel="stylesheet" type="text/css" href="/css/ie_lte_7.css" /><![endif]-->
+	<!--[if lte IE 6]><link rel="stylesheet" type="text/css" href="/css/ie_lte_6.css" /><![endif]-->
+</head>
 
-    <div id="header">
-      <img src="http://labs.northscale.com/images/ns_logo_labs.png"
-           alt="NorthScale Labs" style="margin-top:10px;"/>
-    </div>
+<body class="labs" id="www-northscale-com">
+	<p id="ContentJump"><a href="#ContentJumpTarget">Jump to content</a></p>
+	<div id="Wrapper">
+		<div id="WrapperChannel">
+			<div id="Header" class="selfClear">
+				<div id="SiteId"><a href="/"><img src="/images/labs-logo.png" alt="NorthScale Labs" width="281" height="34" /></a></div>
+				<div id="NavigationPrimary" class="selfClear">
+					<ul>
+						<li class="first" id="NavigationPrimaryHome"><a href="http://www.northscale.com/">Home</a></li>
+						<li id="NavigationPrimaryTeam"><a href="http://www.northscale.com/team.html">Team</a></li>
+						<li id="NavigationPrimaryContact"><a href="http://www.northscale.com/contact.html">Contact</a></li>
+						<li id="NavigationPrimaryBlog"><a href="http://blog.northscale.com/">Blog</a></li>
+						<li class="last" id="NavigationPrimaryLabs"><a href="/" class="active">Labs</a></li>
+					</ul>
+				</div>
+			</div><!-- div#Header -->
 
-    <div id="container">
+			<div id="MainBody" class="selfClear">
+				<div id="MainChannel">
+					<div id="Content">
+						<a name="ContentJumpTarget" id="ContentJumpTarget"></a>
+						<h1 id="SourceFromNorthScale">Source from NorthScale</h1>
+						<div id="ContentChannel">
 
-      {{ content }}
+              {{ content }}
 
-    </div>
+              <hr/>
+							<h3 id='contact'>Contact</h3>
+
+							<p><a href='mailto:feedback@northscale.com'>feedback@northscale.com</a></p>
 
     <div id="disqus_thread"></div>
     <script type="text/javascript"
@@ -61,5 +82,42 @@
     pageTracker._trackPageview();
     } catch(err) {}</script>
 
+						</div><!-- #ContentChannel -->
+					</div><!-- #Content -->
+				</div><!-- #MainChannel -->
+			</div><!-- #MainBody -->
+			<div id="Footer" class="selfClear">
+				<p class="copy">&copy; 2009&nbsp;</p>
+				<div class="vcard">
+					<p class="copy"><a class="fn org url" href="http://www.northscale.com">NorthScale</a></p>
+					 <div class="adr">
+						<div class="street-address">148 Castro Street, Suite B5</div>
+	  					<span class="locality">Mountain View</span>,
+	  					<span class="region">CA</span>
+	  					<span class="postal-code">94041</span>
+					</div>
+					<span class="tel"><span class="type">Work</span>: <span class="value">1.888.399.5509</span></span><br />
+					<a class="email" href="mailto:info@northscale.com">info@northscale.com</a><br />
+					<a class="url twitter" href="http://twitter.com/northscale">twitter</a><br />
+					<p class="note">NorthScale creates innovative applications and services to help web sites scale data usage.</p>
+				</div>
+				<p class="copy">. All Rights Reserved</p>
+				<ul class="siteLinks">
+					<li class="first"><a href="index.html">Home</a></li>
+					<li><a href="team.html">Team</a></li>
+					<li><a href="contact.html">Contact</a></li>
+					<li><a href="blog.html">Blog</a></li>
+					<li><a href="labs.html">Labs</a></li>
+
+			  </ul>
+			</div><!-- #Footer -->
+		</div><!-- #WrapperChannel -->
+	</div><!-- #Wrapper -->
+	<script src="/javascript/jquery-latest.min.js" type="text/javascript"></script>
+	<script src="/javascript/jquery.validate.min.js" type="text/javascript"></script>
+	<!--[if lte IE 6]>
+		<script src="/javascript/DD_belatedPNG_0.0.8a-min.js" type="text/javascript"></script>
+	<![endif]-->
+	<script src="/javascript/library.js" type="text/javascript"></script>
 </body>
 </html>
