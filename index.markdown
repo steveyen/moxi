@@ -3,8 +3,6 @@ layout: default
 title: NorthScale Labs - memcached moxi
 ---
 
-# moxi
-
 ## memcached + integrated proxy + more
 
 moxi is a memcached proxy with several features which can help keep
