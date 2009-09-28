@@ -468,7 +468,7 @@ int main_check(int argc, char **argv)
     int number_failed;
     Suite *s = moxi_suite();
     SRunner *sr = srunner_create(s);
-    srunner_run_all(sr, CK_NORMAL);
+    srunner_run_all(sr, CK_ENV);
     number_failed = srunner_ntests_failed(sr);
     srunner_free(sr);
     int rv = (number_failed == 0) ? EXIT_SUCCESS : EXIT_FAILURE;
