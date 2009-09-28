@@ -9,7 +9,6 @@
 
 #include "memcached.h"
 #include "cproxy.h"
-#include "agent.h"
 #include "work.h"
 
 static pthread_t check_thread_tid;
