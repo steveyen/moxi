@@ -33,12 +33,19 @@ moxi_SOURCES = memcached.c memcached.h \
                     cproxy_front.c \
                     matcher.c matcher.h
 
-TESTS = check_util check_moxi check_moxi_agent check_work
+TESTS = check_util check_moxi check_work
+if BUILD_WITH_CONFLATE
+TESTS += check_moxi_agent
+endif
 
 check_PROGRAMS = check_util \
                  check_moxi \
-                 check_moxi_agent \
                  check_work
+
+if BUILD_WITH_CONFLATE
+check_PROGRAMS += check_moxi_agent
+endif
+
 
 test_moxi:
 	./t/moxi_all.pl
@@ -155,9 +162,11 @@ check_moxi_SOURCES = check_moxi.c $(moxi_debug_SOURCES)
 check_moxi_CFLAGS = @CHECK_CFLAGS@ $(moxi_debug_CPPFLAGS) -DMAIN_CHECK
 check_moxi_LDADD = @CHECK_LIBS@ $(moxi_debug_LDADD)
 
+if BUILD_WITH_CONFLATE
 check_moxi_agent_SOURCES = check_moxi_agent.c $(moxi_debug_SOURCES)
 check_moxi_agent_CFLAGS = @CHECK_CFLAGS@ $(moxi_debug_CPPFLAGS) -DMAIN_CHECK
 check_moxi_agent_LDADD = @CHECK_LIBS@ $(moxi_debug_LDADD)
+endif
 
 check-syntax:
 	$(COMPILE) -o /dev/null -S ${CHK_SOURCES}
