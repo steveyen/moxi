@@ -3275,6 +3275,7 @@ void drive_machine(conn *c) {
 
             dispatch_conn_new(sfd, conn_new_cmd, EV_READ | EV_PERSIST,
                               DATA_BUFFER_SIZE,
+                              c->protocol,
                               tcp_transport,
                               c->funcs, c->extra);
             stop = true;
@@ -3741,7 +3742,7 @@ int server_socket(int port, enum network_transport transport,
             for (c = 1; c < settings.num_threads; c++) {
                 /* this is guaranteed to hit all threads because we round-robin */
                 dispatch_conn_new(sfd, conn_read, EV_READ | EV_PERSIST,
-                                  UDP_READ_BUFFER_SIZE, transport,
+                                  UDP_READ_BUFFER_SIZE, settings.binding_protocol, transport,
                                   NULL, NULL);
             }
         } else {

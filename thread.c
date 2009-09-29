@@ -295,6 +295,7 @@ static void thread_libevent_process(int fd, short which, void *arg) {
                 close(item->sfd);
             }
         } else {
+            c->protocol = item->protocol;
             c->thread = me;
         }
         cqi_free(item);
@@ -311,6 +312,7 @@ static int last_thread = 0;
  */
 void dispatch_conn_new(int sfd, enum conn_states init_state, int event_flags,
                        int read_buffer_size,
+                       enum protocol prot,
                        enum network_transport transport,
                        conn_funcs *funcs, void *extra) {
     int tid = last_thread % (settings.num_threads - 1);
@@ -322,12 +324,14 @@ void dispatch_conn_new(int sfd, enum conn_states init_state, int event_flags,
 
     dispatch_conn_new_to_thread(tid, sfd, init_state, event_flags,
                                 read_buffer_size,
+                                prot,
                                 transport,
                                 funcs, extra);
 }
 
 void dispatch_conn_new_to_thread(int tid, int sfd, enum conn_states init_state,
                                  int event_flags, int read_buffer_size,
+                                 enum protocol prot,
                                  enum network_transport transport,
                                  conn_funcs *funcs, void *extra) {
     assert(tid > 0);
@@ -341,6 +345,7 @@ void dispatch_conn_new_to_thread(int tid, int sfd, enum conn_states init_state,
     item->init_state = init_state;
     item->event_flags = event_flags;
     item->read_buffer_size = read_buffer_size;
+    item->protocol = prot;
     item->transport = transport;
     item->funcs = funcs;
     item->extra = extra;

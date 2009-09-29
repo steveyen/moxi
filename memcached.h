@@ -536,12 +536,14 @@ int  dispatch_event_add(int thread, conn *c);
 void dispatch_conn_new(int sfd, enum conn_states init_state,
                        int event_flags,
                        int read_buffer_size,
+                       enum protocol prot,
                        enum network_transport transport,
                        conn_funcs *funcs, void *extra);
 
 void dispatch_conn_new_to_thread(int tid, int sfd, enum conn_states init_state,
                                  int event_flags,
                                  int read_buffer_size,
+                                 enum protocol prot,
                                  enum network_transport transport,
                                  conn_funcs *funcs, void *extra);
 
