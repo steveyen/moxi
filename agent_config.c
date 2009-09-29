@@ -238,7 +238,7 @@ proxy_main *cproxy_init_agent_start(char *jid,
     assert(jpw);
     assert(config_path);
 
-    if (settings.verbose > 1) {
+    if (settings.verbose > 2) {
         fprintf(stderr, "cproxy_init_agent_start\n");;
     }
 
@@ -273,7 +273,7 @@ proxy_main *cproxy_init_agent_start(char *jid,
         config.log        = agent_logger;
 
         if (start_conflate(config)) {
-            if (settings.verbose > 1) {
+            if (settings.verbose > 2) {
                 fprintf(stderr, "cproxy_init done\n");
             }
 
@@ -302,7 +302,7 @@ void on_conflate_new_config(void *userdata, kvpair_t *config) {
     LIBEVENT_THREAD *mthread = thread_by_index(0);
     assert(mthread != NULL);
 
-    if (settings.verbose > 1) {
+    if (settings.verbose > 2) {
         fprintf(stderr, "agent_config ocnc on_conflate_new_config\n");
     }
 
@@ -348,7 +348,7 @@ void cproxy_on_new_config(void *data0, void *data1) {
 
     uint32_t new_config_ver = max_config_ver + 1;
 
-    if (settings.verbose > 1) {
+    if (settings.verbose > 2) {
         fprintf(stderr, "conc new_config_ver %u\n", new_config_ver);
     }
 
@@ -482,7 +482,7 @@ void cproxy_on_new_config(void *data0, void *data1) {
                                                   servers, &behavior_pool);
                             if (config_str != NULL &&
                                 config_str[0] != '\0') {
-                                if (settings.verbose > 1) {
+                                if (settings.verbose > 2) {
                                     fprintf(stderr, "conc config: %s\n",
                                             config_str);
                                 }
@@ -497,7 +497,7 @@ void cproxy_on_new_config(void *data0, void *data1) {
                             free(behavior_pool.arr);
                         } else {
                             if (settings.verbose > 1) {
-                                fprintf(stderr, "oom on re-config malloc\n");;
+                                fprintf(stderr, "ERROR: oom on re-config malloc\n");;
                             }
                             goto fail;
                         }
@@ -508,7 +508,7 @@ void cproxy_on_new_config(void *data0, void *data1) {
                     }
                 } else {
                     if (settings.verbose > 1) {
-                        fprintf(stderr, "conc missing pool port\n");
+                        fprintf(stderr, "ERROR: conc missing pool port\n");
                     }
                     goto fail;
                 }
@@ -519,7 +519,7 @@ void cproxy_on_new_config(void *data0, void *data1) {
             }
         } else {
             if (settings.verbose > 1) {
-                fprintf(stderr, "conc missing pool name\n");
+                fprintf(stderr, "ERROR: conc missing pool name\n");
             }
             goto fail;
         }
@@ -583,7 +583,7 @@ void cproxy_on_new_config(void *data0, void *data1) {
     free_kvpair(kvs);
 
     if (settings.verbose > 1) {
-        fprintf(stderr, "conc failed config %llu\n",
+        fprintf(stderr, "ERROR: conc failed config %llu\n",
                 (long long unsigned int) m->stat_config_fails);
     }
     goto out;
@@ -638,7 +638,7 @@ void cproxy_on_new_pool(proxy_main *m,
 
             int n = cproxy_listen(p);
             if (n > 0) {
-                if (settings.verbose > 1) {
+                if (settings.verbose > 2) {
                     fprintf(stderr,
                             "cproxy_listen success %u to %s with %d conns\n",
                             p->port, p->config, n);
@@ -647,14 +647,14 @@ void cproxy_on_new_pool(proxy_main *m,
             } else {
                 if (settings.verbose > 1) {
                     fprintf(stderr,
-                            "cproxy_listen failed on %u to %s\n",
+                            "ERROR: cproxy_listen failed on %u to %s\n",
                             p->port, p->config);
                 }
                 m->stat_proxy_start_fails++;
             }
         }
     } else {
-        if (settings.verbose > 1) {
+        if (settings.verbose > 2) {
             fprintf(stderr, "conp existing config change %u\n",
                     p->port);
         }
@@ -672,7 +672,7 @@ void cproxy_on_new_pool(proxy_main *m,
 
         pthread_mutex_lock(&p->proxy_lock);
 
-        if (settings.verbose > 1) {
+        if (settings.verbose > 2) {
             if (p->config && config &&
                 strcmp(p->config, config) != 0) {
                 fprintf(stderr,
@@ -715,7 +715,7 @@ void cproxy_on_new_pool(proxy_main *m,
 
         pthread_mutex_unlock(&p->proxy_lock);
 
-        if (settings.verbose > 1) {
+        if (settings.verbose > 2) {
             fprintf(stderr, "conp changed %s, shutdown %s\n",
                     changed ? "true" : "false",
                     shutdown ? "true" : "false");
@@ -832,12 +832,12 @@ static void update_ptd_config(void *data0, void *data1) {
             }
         }
 
-        if (settings.verbose > 1) {
+        if (settings.verbose > 2) {
             fprintf(stderr, "update_ptd_config %u, %u to %u\n",
                     port, prev, ptd->config_ver);
         }
     } else {
-        if (settings.verbose > 1) {
+        if (settings.verbose > 2) {
             fprintf(stderr, "update_ptd_config %u, %u = %u no change\n",
                     port, prev, ptd->config_ver);
         }
@@ -860,7 +860,7 @@ static bool update_str_config(char **curr, char *next, char *descrip) {
         rv = true;
 
         if (descrip != NULL &&
-            settings.verbose > 1) {
+            settings.verbose > 2) {
             fprintf(stderr, "%s\n", descrip);
         }
     }
@@ -891,7 +891,7 @@ static bool update_behaviors_config(proxy_behavior **curr,
         rv = true;
 
         if (descrip != NULL &&
-            settings.verbose > 1) {
+            settings.verbose > 2) {
             fprintf(stderr, "%s\n", descrip);
         }
     }
@@ -969,7 +969,7 @@ char *parse_kvs_servers(char *prefix,
         } else {
             if (settings.verbose > 1) {
                 fprintf(stderr,
-                        "missing host:port for svr-%s in %s\n",
+                        "ERROR: missing host:port for svr-%s in %s\n",
                         servers[j], pool_name);
             }
         }
@@ -982,7 +982,7 @@ char *parse_kvs_servers(char *prefix,
                      behavior_pool->arr[j].downstream_weight);
         }
 
-        if (settings.verbose > 1) {
+        if (settings.verbose > 2) {
             cproxy_dump_behavior(&behavior_pool->arr[j],
                                  "pks", 0);
         }
