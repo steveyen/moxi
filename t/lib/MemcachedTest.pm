@@ -160,7 +160,7 @@ sub new_memcached {
 
     unless ($childpid) {
         setpgrp();
-        exec "$exe $args";
+        exec "$builddir/timedrun 600 $exe $args";
         exit; # never gets here.
     }
     setpgrp($childpid, $childpid);

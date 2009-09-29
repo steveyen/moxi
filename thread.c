@@ -280,7 +280,6 @@ static void thread_libevent_process(int fd, short which, void *arg) {
     if (NULL != item) {
         conn *c = conn_new(item->sfd, item->init_state, item->event_flags,
                            item->read_buffer_size,
-                           item->protocol,
                            item->transport,
                            me->base,
                            item->funcs, item->extra);
@@ -296,6 +295,7 @@ static void thread_libevent_process(int fd, short which, void *arg) {
                 close(item->sfd);
             }
         } else {
+            c->protocol = item->protocol;
             c->thread = me;
         }
         cqi_free(item);
@@ -324,7 +324,8 @@ void dispatch_conn_new(int sfd, enum conn_states init_state, int event_flags,
 
     dispatch_conn_new_to_thread(tid, sfd, init_state, event_flags,
                                 read_buffer_size,
-                                prot, transport,
+                                prot,
+                                transport,
                                 funcs, extra);
 }
 

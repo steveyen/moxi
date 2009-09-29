@@ -48,6 +48,7 @@ doc/protocol-binary.txt
 /version.m4
 /version.num
 /testapp
+/timedrun
 /doc/doxy
 /check_util
 /check_moxi
@@ -61,3 +62,4 @@ libmemcached-*/libmemcached/*.la
 libmemcached-*/libmemcached/libmemcached_config.h
 .buildbot/*
 /t/check_moxi_agent.cfg
+/memcached.spec

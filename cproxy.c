@@ -274,7 +274,7 @@ int cproxy_listen_port(int port,
     int   listening = 0;
     conn *listen_conn_orig = listen_conn;
 
-    if (server_socket(port, protocol, transport) == 0) {
+    if (server_socket(port, transport, NULL) == 0) {
         assert(listen_conn != NULL);
 
         // The listen_conn global list is changed by server_socket(),
@@ -301,6 +301,7 @@ int cproxy_listen_port(int port,
             //
             c->extra = conn_extra;
             c->funcs = conn_funcs;
+            c->protocol = protocol;
             c = c->next;
         }
     }
@@ -985,11 +986,11 @@ conn *cproxy_connect_downstream_conn(downstream *d,
 
                     conn *c = conn_new(fd, conn_pause, 0,
                                        DATA_BUFFER_SIZE,
-                                       behavior->downstream_protocol,
                                        tcp_transport,
                                        thread->base,
                                        &cproxy_downstream_funcs, d);
                     if (c != NULL) {
+                        c->protocol = behavior->downstream_protocol;
                         c->thread = thread;
 
                         return c;

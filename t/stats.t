@@ -57,7 +57,7 @@ foreach my $key (qw(curr_items total_items bytes cmd_get cmd_set get_hits evicti
 }
 is($stats->{accepting_conns}, 1, "initial accepting_conns is one");
 
-is($stats->{'bytes_read'}, 7);
+is($stats->{'bytes_read'}, 14);
 
 # Do some operations
 

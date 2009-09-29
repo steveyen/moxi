@@ -1,10 +1,11 @@
-#include <stdlib.h>
+#include <stdio.h>
 #include <assert.h>
 #include <ctype.h>
 #include <errno.h>
 #include <string.h>
 #include <stdlib.h>
 #include <math.h>
+#include <stdarg.h>
 
 #include "memcached.h"
 
@@ -158,4 +159,18 @@ void compute_stats(struct moxi_stats *out, double *vals, int num_vals)
     // 95th %ile
     qsort(vals, num_vals, sizeof(double), cmp_doubles);
     out->ninetyfifth = vals[(int)((float)num_vals * 0.95)];
+}
+
+void vperror(const char *fmt, ...) {
+    int old_errno = errno;
+    char buf[80];
+    va_list ap;
+
+    va_start(ap, fmt);
+    vsnprintf(buf, sizeof(buf), fmt, ap);
+    va_end(ap);
+
+    errno = old_errno;
+
+    perror(buf);
 }

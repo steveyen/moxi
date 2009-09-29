@@ -43,3 +43,20 @@ struct moxi_stats {
  * @param num_values the number of values to be processed
  */
 void compute_stats(struct moxi_stats *out, double *vals, int num_vals);
+
+#ifdef __GCC
+# define __gcc_attribute__ __attribute__
+#else
+# define __gcc_attribute__(x)
+#endif
+
+/**
+ * Vararg variant of perror that makes for more useful error messages
+ * when reporting with parameters.
+ *
+ * @param fmt a printf format
+ */
+void vperror(const char *fmt, ...)
+    __gcc_attribute__ ((format (printf, 1, 2)));
+
+#undef __gcc_attribute__

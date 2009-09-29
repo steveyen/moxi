@@ -1,7 +1,7 @@
 AUTOMAKE_OPTIONS = foreign
 
 bin_PROGRAMS = moxi
-noinst_PROGRAMS = moxi-debug sizes testapp
+noinst_PROGRAMS = moxi-debug sizes testapp timedrun
 
 ## INCLUDES is apparently not previously set, if you set it
 ##  change this
@@ -32,6 +32,8 @@ moxi_SOURCES = memcached.c memcached.h \
                     cproxy_stats.c \
                     cproxy_front.c \
                     matcher.c matcher.h
+
+timedrun_SOURCES = timedrun.c
 
 TESTS = check_util check_moxi check_work
 if BUILD_WITH_CONFLATE

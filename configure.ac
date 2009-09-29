@@ -139,10 +139,11 @@ AC_ARG_ENABLE(coverage,
 if test "x$enable_coverage" != "xno"; then
    if test "$ICC" = "yes"
    then
-      :
       dnl ICC trying to be gcc, but not well
+      CFLAGS="$CFLAGS -pthread"
    elif test "$GCC" = "yes"
    then
+      CFLAGS="$CFLAGS -pthread"
       AC_PATH_PROG([PROFILER], [gcov], "no", [$PATH])
       if test "x$PROFILER" != "xno"; then
          PROFILER_FLAGS="-fprofile-arcs -ftest-coverage"
@@ -394,10 +395,10 @@ AC_DEFUN([AC_C_ALIGNMENT],
   ],[
     ac_cv_c_alignment=none
   ],[
-    ac_cv_c_endian=need
+    ac_cv_c_alignment=need
   ])
 ])
-if test $ac_cv_c_endian = need; then
+if test $ac_cv_c_alignment = need; then
   AC_DEFINE(NEED_ALIGN, 1, [Machine need alignment])
 fi
 ])
@@ -449,7 +450,7 @@ then
    AC_DEFINE([_GNU_SOURCE],[1],[find sigignore on Linux])
 elif test "$GCC" = "yes"
 then
-  GCC_VERSION=`gcc -dumpversion`
+  GCC_VERSION=`$CC -dumpversion`
   CFLAGS="$CFLAGS -Wall -Werror -pedantic -Wstrict-prototypes -Wmissing-prototypes -Wmissing-declarations -Wredundant-decls"
   case $GCC_VERSION in
     4.4.*)
