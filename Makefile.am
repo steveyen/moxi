@@ -171,7 +171,7 @@ check_moxi_agent_LDADD = @CHECK_LIBS@ $(moxi_debug_LDADD)
 endif
 
 check-syntax:
-	$(COMPILE) -o /dev/null -S ${CHK_SOURCES}
+	$(COMPILE) $(moxi_debug_CPPFLAGS) -o /dev/null -S ${CHK_SOURCES}
 
 fc_rpm_inner:
 	-rm $(rpmtop)/SRPMS/moxi-$(VERSION)*.rpm
