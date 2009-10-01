@@ -70,8 +70,7 @@ moxi_SOURCES += solaris_priv.c
 endif
 
 moxi_debug_SOURCES = $(moxi_SOURCES)
-moxi_debug_CPPFLAGS = -I$(top_srcdir)/libmemcached-0.30 \
-                      -I$(top_srcdir)/../libstrophe
+moxi_debug_CPPFLAGS = -I$(top_srcdir)/libmemcached-0.30 -DCONFLATE_DB_PATH=\"$(CONFLATE_DB_PATH)\"
 moxi_CPPFLAGS = -DNDEBUG $(moxi_debug_CPPFLAGS)
 moxi_debug_LDADD = @PROFILER_LDFLAGS@ \
                    libmemcached-0.30/libmemcached/libmemcached.la
