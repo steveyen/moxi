@@ -23,6 +23,7 @@ moxi_SOURCES = memcached.c memcached.h \
                     util.c util.h \
                     trace.h cache.h \
                     work.c work.h \
+                    redirects.h \
                     cproxy.c cproxy.h \
                     cproxy_config.c \
                     cproxy_protocol.c \
