@@ -93,7 +93,7 @@ START_TEST(test_first_config)
 }
 END_TEST
 
-uint64_t random_data[128];
+static uint64_t random_data[128];
 static unsigned random_index;
 
 struct field_description {
@@ -525,6 +525,7 @@ int main(int argc, char **argv)
     return (number_failed == 0) ? EXIT_SUCCESS : EXIT_FAILURE;
 }
 
+static
 uint64_t random_data[128] = {
 18367347275435208884ULL, 10959197861943083324ULL, 5593119765411066088ULL, 4998348243644656542ULL,
 11068269067176603708ULL, 8419710415668082894ULL, 3240935944006201405ULL, 1580228941575989076ULL,
