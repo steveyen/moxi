@@ -18,6 +18,10 @@ extern proxy_behavior behavior_default_g;
 
 static char *empty[] = { NULL };
 
+#ifndef ck_assert
+#define ck_assert(cond) fail_unless((cond), NULL)
+#endif
+
 static kvpair_t *mk_kvpairs(char *spec[]) {
   kvpair_t *last = NULL;
   kvpair_t *head = NULL;
@@ -218,7 +222,7 @@ void gathering_conflate_add_field(conflate_form_result *r, const char *k, const 
 {
   int i;
 
-  fail_unless((intptr_t)r == (intptr_t)gathering_conflate_add_field);
+  ck_assert((intptr_t)r == (intptr_t)gathering_conflate_add_field);
   if (strncmp(k, "11411:poolx:stats_", 18) != 0)
     return;
 
@@ -235,7 +239,7 @@ void gathering_conflate_add_field(conflate_form_result *r, const char *k, const 
   }
 
   const char *rest_of_name = k+18;
-  fail_unless(strncmp(rest_of_name, "cmd_", 4) == 0);
+  ck_assert(strncmp(rest_of_name, "cmd_", 4) == 0);
 
   rest_of_name += 4;
 
@@ -306,16 +310,16 @@ START_TEST(test_cmd_stats_gathering)
   // we're hardcoding knowledge of all commands and command types here.
   // this assertions ensure that the tests will be updated when
   // anything of the above will change
-  fail_unless(STATS_CMD_ERROR + 1 == STATS_CMD_last);
-  fail_unless(STATS_CMD_TYPE_QUIET + 1 == STATS_CMD_TYPE_last);
+  ck_assert(STATS_CMD_ERROR + 1 == STATS_CMD_last);
+  ck_assert(STATS_CMD_TYPE_QUIET + 1 == STATS_CMD_TYPE_last);
 
   on_conflate_new_config(pmain, c);
 
   proxy *proxy = pmain->proxy_head;
-  fail_unless(proxy != NULL);
-  fail_unless(proxy->next == NULL);
+  ck_assert(proxy != NULL);
+  ck_assert(proxy->next == NULL);
 
-  fail_unless(pmain->nthreads >= 2);
+  ck_assert(pmain->nthreads >= 2);
 
   reset_random();
   for (t = 1; t < 3; t++) {
@@ -331,13 +335,13 @@ START_TEST(test_cmd_stats_gathering)
   redirected_conflate_add_field_target = gathering_conflate_add_field;
   redirected_collect_memcached_stats_for_proxy_target = cmd_stats_gathering_collect_memcached_stats_for_proxy;
 
-  fail_unless(memcmp(&(proxy->thread_data[0].stats), &(proxy->thread_data[1].stats), sizeof(proxy->thread_data[1].stats)) != 0);
+  ck_assert(memcmp(&(proxy->thread_data[0].stats), &(proxy->thread_data[1].stats), sizeof(proxy->thread_data[1].stats)) != 0);
 
   on_conflate_get_stats(pmain, NULL, "get-stats", true, NULL, (conflate_form_result *)(intptr_t)gathering_conflate_add_field);
 
-  fail_unless(collect_memcached_stats_for_proxy_called);
+  ck_assert(collect_memcached_stats_for_proxy_called);
 
-  fail_unless(memcmp(&(proxy->thread_data[0].stats), &(proxy->thread_data[1].stats), sizeof(proxy->thread_data[1].stats)) != 0);
+  ck_assert(memcmp(&(proxy->thread_data[0].stats), &(proxy->thread_data[1].stats), sizeof(proxy->thread_data[1].stats)) != 0);
 
   for (i = 0; i < STATS_CMD_TYPE_last; i++) {
     for (j = 0; j < STATS_CMD_last; j++) {
