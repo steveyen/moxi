@@ -38,27 +38,29 @@ $AUTOCONF || exit 1
 # this is important so that this file is not rebuilt during builds
 touch libmemcached-0.30/libmemcached/libmemcached_config.h.in
 
-if [ -d libconflate ] && [ -d .git ] && \
-   ( ! [ -f libconflate/libstrophe/.git ] || \
-       [ -f libconflate/autogen.sh ] ); then
-  echo "The libconflate submodule or it's submodules seem to be absent."
-  echo "Fetching submodules recursively."
-  git submodule init && git submodule update &&
-(cd libconflate && git submodule init && git submodule update) &&
-(cd libconflate/libstrophe && git submodule init && git submodule update)
-fi
+if [ "x$MOXI_DEVELOPMENT" != xyes ]; then
+  if [ -d libconflate ] && [ -d .git ] && \
+     ( ! [ -f libconflate/libstrophe/.git ] || \
+         [ -f libconflate/autogen.sh ] ); then
+    echo "The libconflate submodule or it's submodules seem to be absent."
+    echo "Fetching submodules recursively."
+    git submodule init && git submodule update &&
+  (cd libconflate && git submodule init && git submodule update) &&
+  (cd libconflate/libstrophe && git submodule init && git submodule update)
+  fi
 
-# if this project is based on git, not just make-dist tarball,
-# clean submodules recursively on autogen
-for i in $(find . -name .git \
-           | awk 'BEGIN{getline} \
-           {print (substr($0, 0, index($0, ".git")-1 ))}');
-do
-  currdir=$(pwd)
-  cd $i && git reset --hard > /dev/null 2>&1 && \
-     git clean -d -f -x > /dev/null 2>&1
-  cd $currdir
-done
+  # if this project is based on git, not just make-dist tarball,
+  # clean submodules recursively on autogen
+  for i in $(find . -name .git \
+             | awk 'BEGIN{getline} \
+             {print (substr($0, 0, index($0, ".git")-1 ))}');
+  do
+    currdir=$(pwd)
+    cd $i && git reset --hard > /dev/null 2>&1 && \
+       git clean -d -f -x > /dev/null 2>&1
+    cd $currdir
+  done
+fi
 
 if (test -f libconflate/autogen.sh) && ! (test -f libconflate/configure); then
     echo "libconflate..."
