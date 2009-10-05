@@ -40,8 +40,8 @@ touch libmemcached-0.30/libmemcached/libmemcached_config.h.in
 
 if [ "x$MOXI_DEVELOPMENT" != xyes ]; then
   if [ -d libconflate ] && [ -d .git ] && \
-     ( ! [ -f libconflate/libstrophe/.git ] || \
-         [ -f libconflate/autogen.sh ] ); then
+     ( ! [ -d libconflate/libstrophe/.git ] || \
+       ! [ -f libconflate/autogen.sh ] ); then
     echo "The libconflate submodule or it's submodules seem to be absent."
     echo "Fetching submodules recursively."
     git submodule init && git submodule update &&
