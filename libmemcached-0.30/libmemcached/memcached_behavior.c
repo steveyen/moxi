@@ -165,7 +165,7 @@ memcached_return memcached_behavior_set(memcached_st *ptr,
 uint64_t memcached_behavior_get(memcached_st *ptr,
                                 memcached_behavior flag)
 {
-  memcached_flags temp_flag= 0;
+  memcached_flags temp_flag= MEM_ZERO;
 
   switch (flag)
   {

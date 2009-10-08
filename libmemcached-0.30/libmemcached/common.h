@@ -63,6 +63,7 @@
 
 
 typedef enum {
+  MEM_ZERO= 0,
   MEM_NO_BLOCK= (1 << 0),
   MEM_TCP_NODELAY= (1 << 1),
   MEM_REUSE_MEMORY= (1 << 2),
