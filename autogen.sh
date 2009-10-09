@@ -57,7 +57,8 @@ if [ "x$MOXI_DEVELOPMENT" != xyes ]; then
   do
     currdir=$(pwd)
     cd $i && git reset --hard > /dev/null 2>&1 && \
-       git clean -d -f -x > /dev/null 2>&1
+       git clean -d -f -x > /dev/null 2>&1 && \
+       git submodule update > /dev/null 2>&1
     cd $currdir
   done
 fi
