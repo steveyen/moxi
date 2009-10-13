@@ -131,8 +131,8 @@ then
   fi
   if test "$building_from_hg" = "yes"
   then
-    CFLAGS="-errwarn $CFLAGS"
-    CXXFLAGS="-errwarn $CXXFLAGS"
+    CFLAGS="-errwarn=%all,no%E_ATTRIBUTE_UNKNOWN $CFLAGS"
+    CXXFLAGS="-errwarn=%all,no%E_ATTRIBUTE_UNKNOWN $CXXFLAGS"
   fi
   CFLAGS="-Xa -xstrconst -mt -errfmt=error -errshort=tags ${CFLAGS}"
   CXXFLAGS="+w +w2 -xwe -mt ${CXXFLAGS}"
