@@ -461,7 +461,7 @@ then
   NO_STRICT_ALIASING="-fno-strict-aliasing -Wno-strict-aliasing"
 elif test "$SUNCC" = "yes"
 then
-  CFLAGS="$CFLAGS -errfmt=error -errwarn -errshort=tags"
+  CFLAGS="$CFLAGS -errfmt=error -errwarn -erroff=E_ATTRIBUTE_UNKNOWN -errshort=tags"
 fi
 
 AC_ARG_VAR([CONFLATE_DB_PATH], [Directory for libconflate config database (default $prefix/var/lib/]AC_PACKAGE_NAME[)])
