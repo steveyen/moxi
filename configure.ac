@@ -82,9 +82,7 @@ AC_DEFUN([DETECT_SUNCC],
 
 DETECT_SUNCC([CFLAGS="-mt $CFLAGS"], [])
 
-if test "$ICC" = "no"; then
-   AC_PROG_CC_C99
-fi
+AC_PROG_CC_C99
 
 AC_PROG_INSTALL
 
@@ -266,7 +264,8 @@ AC_CACHE_CHECK([for libevent directory], ac_cv_libevent_dir, [
       fi
     fi
     # Can I compile and link it?
-    AC_TRY_LINK([#include <sys/time.h>
+    AC_TRY_LINK([#define _BSD_SOURCE
+#include <sys/time.h>
 #include <sys/types.h>
 #include <event.h>], [ event_init(); ],
        [ libevent_linked=yes ], [ libevent_linked=no ])
