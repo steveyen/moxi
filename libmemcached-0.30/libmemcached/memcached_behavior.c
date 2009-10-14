@@ -88,7 +88,7 @@ memcached_return memcached_behavior_set(memcached_st *ptr,
       }
       else
       {
-        ptr->hash= 0;
+        ptr->hash= MEMCACHED_HASH_DEFAULT;
         ptr->distribution= 0;
       }
       run_distribution(ptr);

@@ -86,7 +86,7 @@ struct memcached_st {
   uint8_t purging;
   bool is_allocated;
   uint8_t distribution;
-  uint8_t hash;
+  memcached_hash hash;
   uint32_t continuum_points_counter;
   memcached_server_st *hosts;
   int32_t snd_timeout;
