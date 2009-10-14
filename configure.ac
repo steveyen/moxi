@@ -138,7 +138,7 @@ if test "x$enable_coverage" != "xno"; then
    if test "$ICC" = "yes"
    then
       dnl ICC trying to be gcc, but not well
-      CFLAGS="$CFLAGS -pthread"
+      CFLAGS="$CFLAGS -pthread -wd593 -wd2259 -wd981 -wd181 -wd589 -wd869 -wd1418"
    elif test "$GCC" = "yes"
    then
       CFLAGS="$CFLAGS -pthread"
@@ -445,7 +445,7 @@ dnl to detect the function ;-)
 if test "$ICC" = "yes"
 then
    dnl ICC trying to be gcc.
-   CFLAGS="$CFLAGS -diag-disable 187 -Wall -Werror"
+   CFLAGS="$CFLAGS -diag-disable 187 -Wall"
    AC_DEFINE([_GNU_SOURCE],[1],[find sigignore on Linux])
 elif test "$GCC" = "yes"
 then
