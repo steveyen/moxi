@@ -445,7 +445,7 @@ dnl to detect the function ;-)
 if test "$ICC" = "yes"
 then
    dnl ICC trying to be gcc.
-   CFLAGS="$CFLAGS -diag-disable 187 -Wall"
+   CFLAGS="$CFLAGS -diag-disable 187 -Wall "
    AC_DEFINE([_GNU_SOURCE],[1],[find sigignore on Linux])
 elif test "$GCC" = "yes"
 then
