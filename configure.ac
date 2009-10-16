@@ -138,7 +138,7 @@ if test "x$enable_coverage" != "xno"; then
    if test "$ICC" = "yes"
    then
       dnl ICC trying to be gcc, but not well
-      CFLAGS="$CFLAGS -pthread -wd593 -wd2259 -wd981 -wd181 -wd589 -wd869 -wd1418"
+      CFLAGS="$CFLAGS -pthread -D_GNU_SOURCE -w1"
    elif test "$GCC" = "yes"
    then
       CFLAGS="$CFLAGS -pthread"
