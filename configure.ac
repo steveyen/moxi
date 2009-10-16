@@ -264,8 +264,7 @@ AC_CACHE_CHECK([for libevent directory], ac_cv_libevent_dir, [
       fi
     fi
     # Can I compile and link it?
-    AC_TRY_LINK([typedef unsigned char u_char;
-#include <sys/time.h>
+    AC_TRY_LINK([#include <sys/time.h>
 #include <sys/types.h>
 #include <event.h>], [ event_init(); ],
        [ libevent_linked=yes ], [ libevent_linked=no ])
