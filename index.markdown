@@ -14,11 +14,11 @@ See [this summary][summarypdf] for a quick, highlevel overview.
 
 ### Obtaining
 
-Version 0.10.0 is the latest release of moxi, and it became available
-on the 16th of October, 2009.  We plan for packages of this release in
-both .deb and .rpm to be available soon.  Right now, the release is
-available via github as listed below.  See the [changelog][changelog]
-for some clues on what has changed.
+* Version 0.10.0 is the latest release of moxi, and it became available
+  on the 16th of October, 2009.  We plan for packages of this release in
+  both .deb and .rpm to be available soon.  Right now, the release is
+  available via github as listed below.  See the [changelog][changelog]
+  for some clues on what has changed.
 
 ### The basics
 
@@ -33,10 +33,10 @@ for some clues on what has changed.
 
 ### Protocol support
 
-* memcached text protocol (for upstream and downstream communication)
-* memcached binary protocol (for downstream communication)
+* memcached text protocol (for upstream and downstream communication).
+* memcached binary protocol (for downstream communication).
 * later: binary support for upstream communication and mixing and
-  matching protocols (e.g. some downstream text, some binary)
+  matching protocols (e.g. some downstream text, some binary).
 
 ### Optimizations
 
@@ -49,14 +49,14 @@ for some clues on what has changed.
   before completely processing the request so that the application can
   proceed.  * Timeouts - set maximum time for operations. e.g. "no
   downstream memcached operation should take more than *X*ms.
-* Internal Hash - does not rely on Glib
+* Internal Hash - does not rely on glib anymore.
 
 ### Statistics
 
-Statistics are tracked independently on each thread, optimized for the
-99% case of being a good proxy. A once-in-awhile request for proxy
-statistics will perform an internal scatter-gather inside moxi to
-aggregate statistics.
+* Statistics are tracked independently on each thread, optimized for the
+  99% case of being a good proxy. A once-in-awhile request for proxy
+  statistics will perform an internal scatter-gather inside moxi to
+  aggregate statistics.
 
 ### Configuration
 
