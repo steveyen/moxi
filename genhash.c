@@ -141,8 +141,14 @@ genhash_update(genhash_t* h, const void* k, const void* v)
     p=genhash_find_entry(h, k);
 
     if(p) {
+        void *k2=h->ops.dupKey(k);
+        h->ops.freeKey(p->key);
+        p->key=k2;
+
+        void *v2=h->ops.dupValue(v);
         h->ops.freeValue(p->value);
-        p->value=h->ops.dupValue(v);
+        p->value=v2;
+
         rv=MODIFICATION;
     } else {
         genhash_store(h, k, v);
@@ -165,8 +171,15 @@ genhash_fun_update(genhash_t* h, const void* k,
 
     if(p) {
         void *newValue=upd(k, p->value);
+
+        void *k2=h->ops.dupKey(k);
+        h->ops.freeKey(p->key);
+        p->key=k2;
+
+        void *v2=h->ops.dupValue(newValue);
         h->ops.freeValue(p->value);
-        p->value=h->ops.dupValue(newValue);
+        p->value=v2;
+
         fr(newValue);
         rv=MODIFICATION;
     } else {
