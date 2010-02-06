@@ -4288,7 +4288,7 @@ int main (int argc, char **argv) {
             break;
         case 't':
             settings.num_threads = atoi(optarg) + 1; /* Extra dispatch thread */
-            if (settings.num_threads == 0) {
+            if (settings.num_threads <= 1) {
                 fprintf(stderr, "Number of threads must be greater than 0\n");
                 return 1;
             }
