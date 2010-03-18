@@ -146,7 +146,7 @@ topologies.
 We'd love to hear your ideas, feedback and patches/improvements.  Join
 us on the [moxi discussion group][group] if you want to collaborate.
 
-Or, hit that fork button on
+Or, hit the fork button on
 [http://github.com/northscale/moxi/tree/master][moxigithub].
 
 ### Contact
