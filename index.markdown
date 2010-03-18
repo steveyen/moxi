@@ -47,7 +47,8 @@ See [this summary][summarypdf] for a quick, highlevel overview.
 * Front cache - an L1 cache, to avoid network hops.
 * Fire & forget `set` - optionally returned STORED from `set` requests
   before completely processing the request so that the application can
-  proceed.  * Timeouts - set maximum time for operations. e.g. "no
+  proceed.
+* Timeouts - set maximum time for operations. e.g. "no
   downstream memcached operation should take more than *X*ms.
 * Internal Hash - does not rely on glib anymore.
 
@@ -65,7 +66,7 @@ See [this summary][summarypdf] for a quick, highlevel overview.
 * Assuming you run moxi on your web/app server boxes and you're using
   [libconflate][lconfl], your development, staging and production
   configurations gets easy: always point your memcached clients to
-  "localhost:11211" (or whatever port you run moxi on).  </li> </ul>
+  "localhost:11211" (or whatever port you run moxi on).
 
 ### Features inherited from memcached
 
@@ -76,7 +77,7 @@ there's lots to inherit...
 * Multi-threaded
 * Daemonizable
 * Run as another user
-* Bindable to IP interface, default is INADDR_ANY
+* Bindable to IP interface, default is INADDR ANY
 * PID file
 * etc
 
@@ -98,7 +99,7 @@ proxy + more</a><object style="margin:0px" width="425" height="355">
 
 You can obtain the latest release as a tar.gz file from <a href="http://labs.northscale.com/moxi/moxi-0.10.0.tar.gz">http://labs.northscale.com/moxi/moxi-0.10.0.tar.gz</a>
 
-Or for the latest source, you can clone the project with [git][git] 
+Or for the latest source, you can clone the project with [git][git]
 by running:
 
     $ git clone git://github.com/northscale/moxi
