@@ -1,0 +1,383 @@
+* Configuring moxi
+
+This document describes the higher level design and some details on
+configuring moxi.
+
+The latest configurable reality can be found by looking at moxi's
+cproxy_config.c and cproxy.h source code files, especially with the
+proxy_behavior struct.
+
+* Behavior equals configuration
+
+In the codebase and this document, the word 'behavior' is used as a
+synonmym for configuration, inspired by libmemcached's usage of the
+word "behavior".
+
+* Command-line configuration versus libconflate/mcp dynamic configuration
+
+The same key-value parser function, cproxy_parse_behavior_key_val(),
+is used to parse incoming configuration key/value strings into a
+proxy_behavior struct, no matter whether from command-line parameters
+or from mcp/XMPP/libconflate dynamic reconfiguration messages.
+
+* Configuration hierarchies.
+
+There are several levels in moxi's configuration hierarchy.  From
+top-to-bottom, these are:
+
+- GL - global/default level
+- IL - initialization level
+- ML - proxy/pool manager level
+- PL - proxy/pool level
+- SL - server level
+
+Lower levels inherit configuration settings from higher levels.  For
+example, an SL level proxy_behavior struct inherits settings from a PL
+level proxy_behavior struct, PL inherits from ML, and so on.
+
+The different levels all use the same proxy_behavior struct, although
+the code might ignore certain slots in the struct, depending on the
+level it's operating at.
+
+** GL - global/default level
+
+There's just one hardcoded, immutable global proxy_behavior struct.
+See the behavior_default_g variable in cproxy_config.c.  Any values
+which aren't set elsewhere will pickup defaults from this hardcoded,
+immutable global.
+
+As just one example, you'll find the infamous "downstream_max" setting
+has its default value of 4 (as of 2009/06) defined at GL level.
+
+** IL - initialization level
+
+The proxy_behavior struct at IL level is also effectively global, and
+overrides the settings at the GL level by parsing behavior settings
+that users defined on the command-line using the '-Z' command-line
+parameter (explained below).  IL level is setup during moxi's startup
+and is immutable after that.
+
+Lower-level proxy_behavior structs inherit settings from IL level
+proxy_behavior structs.
+
+** ML - proxy/pool manager level
+
+moxi initializes a proxy_behavior struct at ML level for every JID.
+
+Pragmatically, there's usually only a single JID on the command-line
+at moxi startup, so usually only one proxy_behavior at this level.
+The code allows for more than on ML or JID, though.
+
+See the code around the proxy_main struct.
+
+** PL - proxy/pool level
+
+At the next lower level, PL, there's a proxy_behavior struct for each
+proxy pool.  Eg, a pool named "dothesuperthing-staging" on port
+"11211" would have its own proxy_behavior struct.
+
+Remember, one JID (ML-level) can have multiple pools (PL-level).
+Pragmatically, though, we often use moxi in a
+single-JID-to-single-pool edge case.
+
+** SL - server level
+
+By 'server' at the SL level, we mean downstream memcached server.
+Each downstream memcached server has its own proxy_behavior struct
+settings.
+
+* Command-line arguments
+
+Moxi has two moxi-specific command-line parameter flags:
+
+- -z [libconflate-key-val-lists]
+- -Z [IL-key-val-lists]
+
+** The -z command-line argument
+
+Moxi's -z flag allows users to specify key=value pairs to initialize
+libconflate.
+
+The format is a list of comma-separated key=value pairs.  And, you
+have have more than one key-val-list, separated by semicolon character.
+
+The usual example...
+
+  moxi -z apikey=[jidname]@[jhostname]%[jpassword]
+
+Such as...
+
+  moxi -z apikey=pool1@xmpp.enormicom.net%password
+
+Above, an 'apikey' is a key, and 'pool1@xmpp.enormicom.net%password'
+is a value.  In this example, your company is Enormicom, running an
+xmpp server at xmpp.enormicom.net.
+
+Here's a longer example, with multiple key-value pairs, separated by
+comman...
+
+  moxi -z
+  "apikey=app1@xmpp.enormicom.net%password,config=/tmp/moxi.cfg,host=localhost"
+
+The allowed -z keys are...
+
+- apikey -- passed to libconflate initialization.  This should be in
+  [JID]%[jpassword] format.  The JID has a format of [jidname]@[jhostname]
+
+- config -- passed to libconflate initialization.  This should be a
+  path to a libconflate config file (eg, sqlite db).  Defaults to
+  "/var/tmp/moxi_[JID].cfg"
+
+- host -- passed to libconflate initialization, to help libconflate
+  find an XMPP server.
+
+You can have more than one apikey (or key-value-list), by using
+semicolon as separators.  For example...
+
+  moxi -z
+  "apikey=pool1@xmpp.manage.net%pw1;apikey=pool2@xmpp.manage.net%pw2"
+
+The last example should initialize libconflate twice, each with a
+different JID.  Also, the last example results in two ML-level
+structs.
+
+*** Short-form -z format
+
+As a convenience, moxi always assumes the first -z key-value should be
+"apikey=...".  So, you can use the short form of...
+
+  moxi -z pool1@xmpp.enormicom.net
+
+And moxi will assume you meant...
+
+  moxi -z apikey=pool1@xmpp.enormicom.net
+
+However, moxi is dumb in this convenience, so the following would give
+you an error...
+
+  moxi -z host=localhost,pool1@xmpp.enormicom.net
+
+That is because moxi will probably (incorrectly) think you meant...
+
+  moxi -z apikey=host=localhost,pool1@xmpp.enormicom.net
+
+*** Non-conflate -z configuration
+
+There is one more case of using the -z configuration, which is
+specifying a direct port=host:port,host:port list, and avoiding
+libconflate.  In this mode, moxi is not talking with mcp and is
+operating standalone, such as on a developer laptop, when when running standalone.  So...
+
+  moxi -z [port]=[host:port],[host:port],...
+
+For example, below moxi will listen on port 11211 and forward requests to memcached servers running on host:port of mc1:11222 and mc2:11233...
+
+  moxi -z 11211=mc1:11222,mc2:11233
+
+Another example, where moxi's just a simple man-in-the-middle...
+
+  moxi -z 11211=mc1:11211
+
+You can specify more than one port with a semicolon separator.  For
+example, the following will result in two PL or proxy-pool level
+structs...
+
+  moxi -z "11211=mc1:11411;11311=mc2:11211"
+
+In the above example, moxi will listen on port 11211 and forward
+traffic to the memcached process running on host "mc1" on port 11411.
+And, moxi will also listen on port 11311 and forward traffic to host
+"mc2" on port 11211.
+
+moxi determines it should use non-conflate -z configuration be
+scanning for a '@' character, which is part of the JID.  In other
+words, when moxi sees a '@' character in the -z parameter, it thinks
+it has a JID and should use conflate.
+
+*** File-based -z configuration
+
+moxi allows jid/password credentials to be moved off the command-line
+(and from ps / process-status visibility), where users can instead put
+their -z value into a configuration file.  This is meant for increased
+security.  For example...
+
+  moxi -z /absolute/path/to/file
+
+Or...
+
+  moxi -z ./relative/path/to/file
+
+That is, when moxi sees a first character of '.' or '/', it treats the
+value string as a file path.  The contents of the file should be the
+value of -z flag.  Inside the file, that is, you'd see something
+like...
+
+  apikey=myJID@hostname%password
+
+Whitespace is allowed, so the following file contents are acceptable,
+as a prettier example; note that you still need all the '=' and ','
+delimiter characters...
+
+  apikey = myJID@hostname%password,
+  config = /var/tmp/moxi_config.db,
+  host   = localhost
+
+One final example of possible file contents...
+
+  11211=mc1:11222,mc2:11333,mc3:11444
+
+** The -Z command-line argument
+
+The -Z key-value list is to setup IL default proxy behavior.  For example...
+
+  moxi -z myJID@memscale.net%password \
+       -Z downstream_max=100,downstream_timeout=5000
+
+Some of the valid keys are (circa 2009/06)...
+
+    uint32_t       cycle;               // IL: Clock resolution in millisecs.
+    uint32_t       downstream_max;      // PL: Downstream concurrency.
+    uint32_t       downstream_weight;   // SL: Server weight.
+    uint32_t       downstream_retry;    // SL: How many times to retry a cmd.
+    enum protocol  downstream_protocol; // SL: Favored downstream protocol.
+    struct timeval downstream_timeout;  // SL: Fields of 0 mean no timeout.
+    struct timeval wait_queue_timeout;  // PL: Fields of 0 mean no timeout.
+
+    uint32_t front_cache_max;       // PL: Max # of front cachable items.
+    uint32_t front_cache_lifespan;  // PL: In millisecs.
+    char     front_cache_spec[300]; // PL: Matcher prefixes for front caching.
+    char     front_cache_unspec[100]; // PL: Don't front cache prefixes.
+
+    uint32_t key_stats_max;       // PL: Max # of key stats entries.
+    uint32_t key_stats_lifespan;  // PL: In millisecs.
+    char     key_stats_spec[300]; // PL: Matcher prefixes for key-level stats.
+    char     key_stats_unspec[100]; // PL: Don't key stat prefixes.
+
+    char optimize_set[400]; // PL: Matcher prefixes for SET optimization.
+
+    char usr[250];    // SL.
+    char pwd[900];    // SL.
+    char host[250];   // SL.
+    int  port;        // SL.
+    char bucket[250]; // SL.
+
+For example, in standalone mode (without libconflate), in order to setup a front_cache, you might have...
+
+  moxi \
+   -z "11211=mc1:11222,mc2:11333" \
+   -Z "front_cache_max=300,front_cache_lifespan=5000,front_cache_spec=sess:|page:"
+
+But, the best place to look for the latest allowable keys is in the
+proxy_behavior struct defintion in cproxy.h and in the
+cproxy_parse_behavior_key_val() function.
+
+* MCP (or libconflate) configuration of moxi
+
+The following is the code snippet you'd see in the Master Control
+Program (mcp)'s configs.py file.  Notice that this is just python...
+
+  configs['storefront324'] = ServerConfig([
+        ServerList('poolx', 11221,
+                   [Server("1",
+                           host='localhost',
+                           port=11211,
+                           protocol='binary',
+                           # bucket='b1',
+                           # weight=2,
+                           # usr='test1',
+                           # pwd='password'
+                           )],
+                   protocol='binary',
+                   # front_cache_lifespan=15000,
+                   # front_cache_spec='sess:|page:',
+                   # downstream_timeout=2000
+                   ),
+        ServerList('pooly', 11331,
+                   [Server("2",
+                           host='localhost',
+                           port=11211,
+                           protocol='binary',
+                           # usr='test1',
+                           # pwd='password'
+                           ),
+                    Server("3",
+                           host='localhost',
+                           port=11311,
+                           protocol='binary',
+                           # usr='test1',
+                           # pwd='password'
+                           )],
+                   protocol=default_protocol)
+        ])
+
+Above, you see the 'storefront324' has two pools assigned, 'poolx' and
+'pooly', respectively.  poolx is on port 11221 and pooly is on port
+11331.
+
+To get the above equivalent with command-line moxi, you'd do...
+
+  moxi -z "11211=localhost:11211;11333=localhost=11211,localhost11311"
+       -Z protocol=binary
+
+In the above case, setting a -Z protocol=binary is equivalent to the
+MCP configuration message, since this example has all the downstream
+connections using binary protocol.
+
+However, if we needed some pools to be binary and others to be ascii
+protocol, and really wanted to start tweaking things, a deep level of
+control is only possible via MCP configuration of moxi.
+
+  configs['storefront324'] = ServerConfig([
+        ServerList('poolx', 11221,
+                   [Server("1",
+                           host='localhost',
+                           port=11211,
+                           protocol='binary'
+                           )]),
+        ServerList('pooly', 11331,
+                   [Server("1",
+                           host='localhost',
+                           port=11311,
+                           protocol='ascii' # pooly has different protocol
+                           )])
+        ])
+
+In moxi, the parser of the key-value information that's sent from MCP
+is the same cproxy_parse_behavior_key_val() function that's used for
+parsing -Z command-line key-value pairs.
+
+Here's a example of many deep control tweaks...
+
+  configs['storefront324'] = ServerConfig([
+        ServerList('production', 11221,
+                   [Server("1",
+                           host='localhost',
+                           port=11211,
+                           bucket='b1',
+                           weight=2,
+                           usr='test1',
+                           pwd='password'
+                           )],
+                   protocol='binary', # Server "1" inherits this protocol.
+                   front_cache_lifespan=15000,
+                   front_cache_spec='sess:|page:',
+                   downstream_timeout=2000
+                   ),
+        ServerList('staging', 11331,
+                   [Server("2",
+                           host='localhost',
+                           port=11211,
+                           protocol='ascii',
+                           usr='test1',
+                           pwd='password'
+                           ),
+                    Server("3",
+                           host='localhost',
+                           port=11311,
+                           protocol='ascii',
+                           usr='test1',
+                           pwd='password'
+                           )],
+                   protocol='binary') # Servers 2 & 3 override this protocol.
+        ])
+
