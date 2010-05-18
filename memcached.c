@@ -3887,7 +3887,7 @@ static void usage(int argc, char **argv) {
     printf("  %s [flags] apikey=<APIKEY>\n", argv[0]);
     printf("    or\n");
 #endif
-    printf("  %s [flags] -z=<port=<mc_host:mc_port(,*)>\n\n", argv[0]);
+    printf("  %s [flags] -z <port=<mc_host:mc_port(,*)>\n\n", argv[0]);
     printf("              moxi listens on the given port and forwards to\n"
            "              downstream memcached servers running at\n"
            "              mc_host:mc_port.  More than one mc_host:mc_port\n"
