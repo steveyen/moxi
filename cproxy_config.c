@@ -452,11 +452,13 @@ void cproxy_parse_behavior_key_val(char *key,
         } else if (wordeq(key, "protocol") ||
                    wordeq(key, "downstream_protocol")) {
             if (wordeq(val, "ascii") ||
-                wordeq(val, "memcached-ascii")) {
+                wordeq(val, "memcached-ascii") ||
+                wordeq(val, "membase-ascii")) {
                 behavior->downstream_protocol =
                     proxy_downstream_ascii_prot;
             } else if (wordeq(val, "binary") ||
-                       wordeq(val, "memcached-binary")) {
+                       wordeq(val, "memcached-binary") ||
+                       wordeq(val, "membase-binary")) {
                 behavior->downstream_protocol =
                     proxy_downstream_binary_prot;
             } else {
