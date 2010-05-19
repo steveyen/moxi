@@ -981,7 +981,7 @@ conn *cproxy_connect_downstream_conn(downstream *d,
 
     rc = mcs_server_st_connect(msst);
     if (rc == MEMCACHED_SUCCESS) {
-        int fd = msst->fd;
+        int fd = mcs_server_st_fd(msst);
         if (fd >= 0) {
             d->ptd->stats.stats.tot_downstream_connect++;
 
