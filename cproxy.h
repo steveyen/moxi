@@ -8,58 +8,11 @@
 #include "genhash.h"
 #include "work.h"
 #include "matcher.h"
+#include "mcs.h"
 
 // From libmemcached.
 //
 uint32_t murmur_hash(const char *key, size_t length);
-
-// From libmemcached.
-//
-memcached_return memcached_connect(memcached_server_st *ptr);
-memcached_return memcached_version(memcached_st *ptr);
-void             memcached_quit_server(memcached_server_st *ptr,
-                                       uint8_t io_death);
-memcached_return memcached_safe_read(memcached_server_st *ptr,
-                                     void *dta,
-                                     size_t size);
-ssize_t memcached_io_write(memcached_server_st *ptr,
-                           const void *buffer,
-                           size_t length, char with_flush);
-void memcached_io_reset(memcached_server_st *ptr);
-memcached_return memcached_do(memcached_server_st *ptr,
-                              const void *commmand,
-                              size_t command_length,
-                              uint8_t with_flush);
-
-// Some macros as level-of-indirection as opposed to direct
-// using libmemcached API.
-//
-#define mcs_return memcached_return
-
-#define mcs_st        memcached_st
-#define mcs_server_st memcached_server_st
-
-#define mcs_create(x)             memcached_create(x)
-#define mcs_free(x)               memcached_free(x)
-#define mcs_behavior_set(x, b, v) memcached_behavior_set(x, b, v)
-#define mcs_server_count(x)       memcached_server_count(x)
-#define mcs_server_push(x, s)     memcached_server_push(x, s)
-#define mcs_server_index(x, i)    (&((x)->hosts[(i)]))
-#define mcs_key_hash(x, k, len)   memcached_generate_hash(x, k, len)
-
-#define mcs_server_st_parse(str)  memcached_servers_parse(str)
-#define mcs_server_st_free(s)     memcached_server_list_free(s)
-#define mcs_server_st_quit(s, v)  memcached_quit_server(s, v)
-
-#define mcs_server_st_connect  memcached_connect
-#define mcs_server_st_do       memcached_do
-#define mcs_server_st_io_write memcached_io_write
-#define mcs_server_st_io_reset memcached_io_reset
-#define mcs_server_st_read     memcached_safe_read
-
-#define mcs_server_st_hostname(s) ((s)->hostname)
-#define mcs_server_st_port(s)     ((s)->port)
-#define mcs_server_st_fd(s)       ((s)->fd)
 
 // -------------------------------
 
@@ -107,7 +60,7 @@ typedef struct {
 
     bool key_alloc;        // True if mcache must alloc key memory.
 
-    genhash_t *map;       // NULL-able, keyed by string, value is item.
+    genhash_t *map;        // NULL-able, keyed by string, value is item.
 
     uint32_t max;          // Maxiumum number of items to keep.
 
@@ -181,6 +134,19 @@ struct proxy_behavior_pool {
     int             num;  // Number of server-level (SL) behaviors.
     proxy_behavior *arr;  // Array, size is num.
 };
+
+// Quick map of struct hierarchy...
+//
+// proxy_main
+//  - has list of...
+//    proxy
+//     - has array of...
+//       proxy_td (one proxy_td per worker thread)
+//       - has list of...
+//         downstream (in either reserved or released list)
+//         - has mst/libmemcached struct
+//         - has array of downstream conn's
+//         - has non-NULL upstream conn, when reserved
 
 /* Structure used and owned by main listener thread to
  * track all the outstanding proxy objects.
@@ -397,7 +363,7 @@ struct downstream {
     proxy_behavior *behaviors_arr; // RO: Snapshot of ptd->behavior_pool.arr.
     mcs_st          mst;           // RW: From libmemcached.
 
-    downstream *next;         // To track reserved/free lists.
+    downstream *next; // To track reserved/free lists.
 
     // Immutable function pointer that determines how we propagate
     // an upstream request to a downstream.  Eg, ascii vs binary,

@@ -155,8 +155,8 @@ proxy *cproxy_create(char    *name,
                 proxy_td *ptd = &p->thread_data[i];
                 ptd->proxy = p;
 
-                ptd->config        = strdup(p->config);
-                ptd->config_ver    = p->config_ver;
+                ptd->config     = strdup(p->config);
+                ptd->config_ver = p->config_ver;
 
                 ptd->behavior_pool.base = behavior_pool->base;
                 ptd->behavior_pool.num  = behavior_pool->num;
