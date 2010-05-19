@@ -145,22 +145,27 @@ struct hash_ops skeyhash_ops = {
 /** Returns pointer to first non-space char in string.
  */
 char *skipspace(char *s) {
-    if (s == NULL)
+    if (s == NULL) {
         return NULL;
+    }
 
-    while (isspace(*s) && *s != '\0')
+    while (isspace(*s) && *s != '\0') {
         s++;
+    }
+
     return s;
 }
 
 /** Modifies string by zero'ing out any trailing spaces.
  */
 char *trailspace(char *s) {
-    if (s == NULL)
+    if (s == NULL) {
         return NULL;
+    }
 
-    for (char *e = s + strlen(s) - 1; e >= s && isspace(*e); e--)
+    for (char *e = s + strlen(s) - 1; e >= s && isspace(*e); e--) {
         *e = '\0';
+    }
 
     return s;
 }
@@ -230,8 +235,9 @@ int cproxy_init(char *cfg_str,
     }
 
     if (cfg_str == NULL ||
-        strlen(cfg_str) <= 0)
+        strlen(cfg_str) <= 0) {
         return 0;
+    }
 
     if (cfg_str[0] == '.' ||
         cfg_str[0] == '/') {
@@ -246,23 +252,26 @@ int cproxy_init(char *cfg_str,
         }
     }
 
-    if (behavior_str == NULL)
+    if (behavior_str == NULL) {
         behavior_str = "";
+    }
 
     proxy_behavior behavior =
         cproxy_parse_behavior(behavior_str,
                               behavior_default_g);
 
-    if (behavior.cycle > 0)
+    if (behavior.cycle > 0) {
         msec_cycle = behavior.cycle;
+    }
 
     msec_clockevent_base = main_base;
     msec_clock_handler(0, 0, NULL);
 
-    if (strchr(cfg_str, '@') == NULL) // Not jid format.
+    if (strchr(cfg_str, '@') == NULL) { // Not jid format.
         return cproxy_init_string(cfg_str,
                                   behavior,
                                   nthreads);
+    }
 
 #ifdef HAVE_CONFLATE_H
     return cproxy_init_agent(cfg_str,
@@ -284,8 +293,9 @@ int cproxy_init_string(char *cfg_str,
      * host memcached1.foo.net on port 11211.
      */
     if (cfg_str== NULL ||
-        strlen(cfg_str) <= 0)
+        strlen(cfg_str) <= 0) {
         return 0;
+    }
 
     char *buff;
     char *next;
@@ -317,8 +327,9 @@ int cproxy_init_string(char *cfg_str,
 
         int behaviors_num = 1; // Number of servers.
         for (char *x = proxy_sect; *x != '\0'; x++) {
-            if (*x == ',')
+            if (*x == ',') {
                 behaviors_num++;
+            }
         }
 
         proxy_behavior_pool behavior_pool;
@@ -343,10 +354,11 @@ int cproxy_init_string(char *cfg_str,
             if (p != NULL) {
                 int n = cproxy_listen(p);
                 if (n > 0) {
-                    if (settings.verbose > 1)
+                    if (settings.verbose > 1) {
                         fprintf(stderr,
                                 "moxi listening on %d with %d conns\n",
                                 proxy_port, n);
+                    }
                 } else {
                     fprintf(stderr,
                             "moxi error -- port %d unavailable?\n",
@@ -377,8 +389,9 @@ proxy_behavior cproxy_parse_behavior(char          *behavior_str,
     struct proxy_behavior behavior = behavior_default;
 
     if (behavior_str == NULL ||
-        strlen(behavior_str) <= 0)
+        strlen(behavior_str) <= 0) {
         return behavior;
+    }
 
     // Parse the key-value behavior_str, to override the defaults.
     //
@@ -439,16 +452,17 @@ void cproxy_parse_behavior_key_val(char *key,
         } else if (wordeq(key, "protocol") ||
                    wordeq(key, "downstream_protocol")) {
             if (wordeq(val, "ascii") ||
-                wordeq(val, "memcached-ascii"))
+                wordeq(val, "memcached-ascii")) {
                 behavior->downstream_protocol =
                     proxy_downstream_ascii_prot;
-            else if (wordeq(val, "binary") ||
-                     wordeq(val, "memcached-binary"))
+            } else if (wordeq(val, "binary") ||
+                       wordeq(val, "memcached-binary")) {
                 behavior->downstream_protocol =
                     proxy_downstream_binary_prot;
-            else {
-                if (settings.verbose > 1)
+            } else {
+                if (settings.verbose > 1) {
                     fprintf(stderr, "unknown behavior prot: %s\n", val);
+                }
             }
         } else if (wordeq(key, "timeout") ||
                    wordeq(key, "downstream_timeout")) {
@@ -508,8 +522,9 @@ void cproxy_parse_behavior_key_val(char *key,
         } else if (wordeq(key, "port_listen")) {
             behavior->port_listen = strtol(val, NULL, 10);
         } else {
-            if (settings.verbose > 1)
+            if (settings.verbose > 1) {
                 fprintf(stderr, "unknown behavior key: %s\n", key);
+            }
         }
     }
 }
@@ -519,8 +534,9 @@ void cproxy_parse_behavior_key_val(char *key,
  */
 proxy_behavior *cproxy_copy_behaviors(int arr_size, proxy_behavior *arr) {
     proxy_behavior *rv = calloc(arr_size, sizeof(proxy_behavior));
-    if (rv != NULL)
+    if (rv != NULL) {
         memcpy(rv, arr, arr_size * sizeof(proxy_behavior));
+    }
     return rv;
 }
 
@@ -529,14 +545,17 @@ proxy_behavior *cproxy_copy_behaviors(int arr_size, proxy_behavior *arr) {
  */
 bool cproxy_equal_behaviors(int x_size, proxy_behavior *x,
                             int y_size, proxy_behavior *y) {
-    if (x_size != y_size)
+    if (x_size != y_size) {
         return false;
+    }
 
-    if (x == NULL && y == NULL)
+    if (x == NULL && y == NULL) {
         return true;
+    }
 
-    if (x == NULL || y == NULL)
+    if (x == NULL || y == NULL) {
         return false;
+    }
 
     for (int i = 0; i < x_size; i++) {
         if (cproxy_equal_behavior(&x[i], &y[i]) == false) {
@@ -555,11 +574,13 @@ bool cproxy_equal_behaviors(int x_size, proxy_behavior *x,
 
 bool cproxy_equal_behavior(proxy_behavior *x,
                            proxy_behavior *y) {
-    if (x == NULL && y == NULL)
+    if (x == NULL && y == NULL) {
         return true;
+    }
 
-    if (x == NULL || y == NULL)
+    if (x == NULL || y == NULL) {
         return false;
+    }
 
     return memcmp(x, y, sizeof(proxy_behavior)) == 0;
 }
@@ -585,10 +606,12 @@ void cproxy_dump_behavior_ex(proxy_behavior *b, char *prefix, int level,
     dump(dump_opaque, prefix, key, vbuf);    \
 }
 
-    if (level >= 2)
+    if (level >= 2) {
         vdump("cycle", "%u", b->cycle);
-    if (level >= 1)
+    }
+    if (level >= 1) {
         vdump("downstream_max", "%u", b->downstream_max);
+    }
 
     vdump("downstream_weight",   "%u", b->downstream_weight);
     vdump("downstream_retry",    "%u", b->downstream_retry);
@@ -597,36 +620,47 @@ void cproxy_dump_behavior_ex(proxy_behavior *b, char *prefix, int level,
           (b->downstream_timeout.tv_sec * 1000 +
            b->downstream_timeout.tv_usec / 1000));
 
-    if (level >= 1)
+    if (level >= 1) {
         vdump("wait_queue_timeout", "%ld", // In millisecs.
               (b->wait_queue_timeout.tv_sec * 1000 +
                b->wait_queue_timeout.tv_usec / 1000));
-    if (level >= 1)
+    }
+    if (level >= 1) {
         vdump("front_cache_max", "%u", b->front_cache_max);
-    if (level >= 1)
+    }
+    if (level >= 1) {
         vdump("front_cache_lifespan", "%u", b->front_cache_lifespan);
-    if (level >= 1)
+    }
+    if (level >= 1) {
         vdump("front_cache_spec", "%s", b->front_cache_spec);
-    if (level >= 1)
+    }
+    if (level >= 1) {
         vdump("front_cache_unspec", "%s", b->front_cache_unspec);
-    if (level >= 1)
+    }
+    if (level >= 1) {
         vdump("key_stats_max", "%u", b->key_stats_max);
-    if (level >= 1)
+    }
+    if (level >= 1) {
         vdump("key_stats_lifespan", "%u", b->key_stats_lifespan);
-    if (level >= 1)
+    }
+    if (level >= 1) {
         vdump("key_stats_spec", "%s", b->key_stats_spec);
-    if (level >= 1)
+    }
+    if (level >= 1) {
         vdump("key_stats_unspec", "%s", b->key_stats_unspec);
-    if (level >= 1)
+    }
+    if (level >= 1) {
         vdump("optimize_set", "%s", b->optimize_set);
+    }
 
     vdump("usr",    "%s", b->usr);
     vdump("host",   "%s", b->host);
     vdump("port",   "%d", b->port);
     vdump("bucket", "%s", b->bucket);
 
-    if (level >= 1)
+    if (level >= 1) {
         vdump("port_listen", "%d", b->port_listen);
+    }
 }
 
 void cproxy_dump_behavior_stderr(const void *dump_opaque,
@@ -636,8 +670,9 @@ void cproxy_dump_behavior_stderr(const void *dump_opaque,
     assert(key);
     assert(val);
 
-    if (prefix == NULL)
+    if (prefix == NULL) {
         prefix = "";
+    }
 
     fprintf(stderr, "%s %s: %s\n",
             prefix, key, val);

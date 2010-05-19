@@ -75,14 +75,16 @@ bool protocol_stats_merge_line(genhash_t *merger, char *line) {
 
     int nline = strlen(line); // Ex: "STATS uptime 123455"
     if (nline <= 0 ||
-        nline >= MERGE_BUF_SIZE)
+        nline >= MERGE_BUF_SIZE) {
         return false;
+    }
 
     token_t tokens[MAX_TOKENS];
     size_t  ntokens = scan_tokens(line, tokens, MAX_TOKENS, NULL);
 
-    if (ntokens != 4) // 3 + 1 for the terminal token.
+    if (ntokens != 4) { // 3 + 1 for the terminal token.
         return false;
+    }
 
     char *name     = tokens[NAME_TOKEN].value;
     int   name_len = tokens[NAME_TOKEN].length;
@@ -90,8 +92,9 @@ bool protocol_stats_merge_line(genhash_t *merger, char *line) {
         name_len <= 0 ||
         tokens[VALUE_TOKEN].value == NULL ||
         tokens[VALUE_TOKEN].length <= 0 ||
-        tokens[VALUE_TOKEN].length >= MERGE_BUF_SIZE)
+        tokens[VALUE_TOKEN].length >= MERGE_BUF_SIZE) {
         return false;
+    }
 
     return protocol_stats_merge_name_val(merger,
                                          tokens[PREFIX_TOKEN].value,
@@ -114,11 +117,13 @@ bool protocol_stats_merge_name_val(genhash_t *merger,
     assert(name);
     assert(val);
 
-    char *key = name + name_len;       // Key part for merge rule lookup.
-    while (key >= name && *key != ':') // Scan for last colon.
+    char *key = name + name_len;         // Key part for merge rule lookup.
+    while (key >= name && *key != ':') { // Scan for last colon.
         key--;
-    if (key < name)
+    }
+    if (key < name) {
         key = name;
+    }
     int key_len = name_len - (key - name);
     if (key_len > 0 &&
         key_len < MERGE_BUF_SIZE) {
@@ -161,8 +166,9 @@ bool protocol_stats_merge_name_val(genhash_t *merger,
         size_t  prev_ntokens = scan_tokens(prev, prev_tokens,
                                            MAX_TOKENS, NULL);
 
-        if (prev_ntokens != 4)
+        if (prev_ntokens != 4) {
             return true;
+        }
 
         strncpy(buf_val, val, val_len);
         buf_val[val_len] = '\0';
@@ -441,16 +447,18 @@ static int key_stats_len(void *it) {
 
 void key_stats_add_ref(void *it) {
     key_stats *i = it;
-    if (i != NULL)
+    if (i != NULL) {
         i->refcount++;
+    }
 }
 
 void key_stats_dec_ref(void *it) {
     key_stats *i = it;
     if (i != NULL) {
         i->refcount--;
-        if (i->refcount <= 0)
+        if (i->refcount <= 0) {
             free(it);
+        }
     }
 }
 

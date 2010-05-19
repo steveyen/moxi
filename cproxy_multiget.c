@@ -107,8 +107,9 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
         // to track keys for de-deplication.
         //
         d->multiget = genhash_init(128, skeyhash_ops);
-        if (settings.verbose > 1)
+        if (settings.verbose > 1) {
             fprintf(stderr, "cproxy multiget hash table new\n");
+        }
     }
 
     // Snapshot the volatile only once.
@@ -136,9 +137,10 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
 
         int cas_emit = (command[3] == 's');
 
-        if (settings.verbose > 1)
+        if (settings.verbose > 1) {
             fprintf(stderr, "forward multiget %s (%d %d)\n",
                     command, cmd_len, uc_num);
+        }
 
         while (space != NULL) {
             char *key = space + 1;
@@ -171,13 +173,14 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
                     matcher_check(&ptd->key_stats_unmatcher,
                                   key, key_len, false) == false;
 
-                if (do_key_stats)
+                if (do_key_stats) {
                     touch_key_stats(ptd, key, key_len,
                                     msec_current_time_snapshot,
                                     STATS_CMD_TYPE_REGULAR,
                                     STATS_CMD_GET_KEY,
                                     1, 0, 0,
                                     key_len, 0);
+                }
 
                 // Handle a front cache hit by queuing response.
                 //
@@ -195,13 +198,14 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
                         psc_get_key->hits++;
                         psc_get_key->write_bytes += it->nbytes;
 
-                        if (do_key_stats)
+                        if (do_key_stats) {
                             touch_key_stats(ptd, key, key_len,
                                             msec_current_time_snapshot,
                                             STATS_CMD_TYPE_REGULAR,
                                             STATS_CMD_GET_KEY,
                                             0, 1, 0,
                                             0, it->nbytes);
+                        }
 
                         // The refcount was inc'ed by mcache_get() for us.
                         //
@@ -230,37 +234,41 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
                             psc_get_key->hits++;
                             psc_get_key->write_bytes += it->nbytes;
 
-                            if (do_key_stats)
+                            if (do_key_stats) {
                                 touch_key_stats(ptd, key, key_len,
                                                 msec_current_time_snapshot,
                                                 STATS_CMD_TYPE_REGULAR,
                                                 STATS_CMD_GET_KEY,
                                                 0, 1, 0,
                                                 0, it->nbytes);
+                            }
 
                             // The refcount was inc'ed by item_get() for us.
                             //
                             item_remove(it);
 
-                            if (settings.verbose > 1)
+                            if (settings.verbose > 1) {
                                 fprintf(stderr,
                                         "optimize self multiget hit: %s\n",
                                         key);
+                            }
                         } else {
                             psc_get_key->misses++;
 
-                            if (do_key_stats)
+                            if (do_key_stats) {
                                 touch_key_stats(ptd, key, key_len,
                                                 msec_current_time_snapshot,
                                                 STATS_CMD_TYPE_REGULAR,
                                                 STATS_CMD_GET_KEY,
                                                 0, 0, 1,
                                                 0, 0);
+                            }
 
-                            if (settings.verbose > 1)
+                            if (settings.verbose > 1) {
                                 fprintf(stderr,
                                         "optimize self multiget miss: %s\n",
                                         key);
+                            }
                         }
 
                         goto loop_next;
@@ -285,8 +293,9 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
 
                             genhash_update(d->multiget, key, entry);
 
-                            if (entry->next != NULL)
+                            if (entry->next != NULL) {
                                 first_request = false;
+                            }
                         } else {
                             // TODO: Handle out of multiget entry memory.
                         }
@@ -351,9 +360,10 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
                     c->write_and_go = conn_pause;
                 }
             } else {
-                if (settings.verbose > 1)
+                if (settings.verbose > 1) {
                     fprintf(stderr,
                             "Couldn't update cproxy write event\n");
+                }
 
                 d->ptd->stats.stats.err_oom++;
                 cproxy_close_conn(c);
@@ -361,9 +371,10 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
         }
     }
 
-    if (settings.verbose > 1)
+    if (settings.verbose > 1) {
         fprintf(stderr, "forward multiget nwrite %d out of %d\n",
                 nwrite, nconns);
+    }
 
     d->downstream_used_start = nwrite;
     d->downstream_used       = nwrite;
@@ -435,13 +446,14 @@ void multiget_ascii_downstream_response(downstream *d, item *it) {
                     if (matcher_check(&ptd->key_stats_matcher,
                                       ITEM_key(it), it->nkey, true) == true &&
                         matcher_check(&ptd->key_stats_unmatcher,
-                                      ITEM_key(it), it->nkey, false) == false)
+                                      ITEM_key(it), it->nkey, false) == false) {
                         touch_key_stats(ptd, ITEM_key(it), it->nkey,
                                         msec_current_time,
                                         STATS_CMD_TYPE_REGULAR,
                                         STATS_CMD_GET_KEY,
                                         0, 1, 0,
                                         0, it->nbytes);
+                    }
 
                     if (entry != entry_first) {
                         ptd->stats.stats.tot_multiget_bytes_dedupe += it->nbytes;
@@ -468,13 +480,14 @@ void multiget_ascii_downstream_response(downstream *d, item *it) {
             if (matcher_check(&ptd->key_stats_matcher,
                               ITEM_key(it), it->nkey, true) == true &&
                 matcher_check(&ptd->key_stats_unmatcher,
-                              ITEM_key(it), it->nkey, false) == false)
+                              ITEM_key(it), it->nkey, false) == false) {
                 touch_key_stats(ptd, ITEM_key(it), it->nkey,
                                 msec_current_time,
                                 STATS_CMD_TYPE_REGULAR,
                                 STATS_CMD_GET_KEY,
                                 0, 1, 0,
                                 0, it->nbytes);
+            }
 
             uc = uc->next;
         }

@@ -158,8 +158,9 @@ void cproxy_init_a2b() {
     int i = 0;
     while (true) {
         struct A2BSpec *spec = &a2b_specs[i];
-        if (spec->line == NULL)
+        if (spec->line == NULL) {
             break;
+        }
 
         spec->ntokens = scan_tokens(spec->line,
                                     spec->tokens,
@@ -169,20 +170,23 @@ void cproxy_init_a2b() {
         int noreply_index = spec->ntokens - 2;
         if (spec->tokens[noreply_index].value &&
             strcmp(spec->tokens[noreply_index].value,
-                   "[noreply]") == 0)
+                   "[noreply]") == 0) {
             spec->noreply_allowed = true;
-        else
+        } else {
             spec->noreply_allowed = false;
+        }
 
         spec->num_optional = 0;
         for (int j = 0; j < spec->ntokens; j++) {
             if (spec->tokens[j].value &&
-                spec->tokens[j].value[0] == '[')
+                spec->tokens[j].value[0] == '[') {
                 spec->num_optional++;
+            }
         }
 
-        if (a2b_size_max < spec->size)
+        if (a2b_size_max < spec->size) {
             a2b_size_max = spec->size;
+        }
 
         assert(spec->cmd < (sizeof(a2b_spec_map) /
                             sizeof(struct A2BSpec *)));
@@ -216,10 +220,11 @@ int a2b_fill_request(short    cmd,
             cmd_ntokens <= (spec->ntokens)) {
             header->request.magic = PROTOCOL_BINARY_REQ;
 
-            if (noreply)
+            if (noreply) {
                 header->request.opcode = spec->cmdq;
-            else
+            } else {
                 header->request.opcode = spec->cmd;
+            }
 
             // Start at 1 to skip the CMD_TOKEN.
             //
@@ -260,9 +265,10 @@ bool a2b_fill_request_token(struct A2BSpec *spec,
 
     uint64_t delta;
 
-    if (settings.verbose > 2)
+    if (settings.verbose > 2) {
         fprintf(stderr, "a2b_fill_request_token %s\n",
                 spec->tokens[cur_token].value);
+    }
 
     char t = spec->tokens[cur_token].value[1];
     switch (t) {
@@ -353,9 +359,10 @@ void cproxy_process_a2b_downstream(conn *c) {
     assert(IS_BINARY(c->protocol));
     assert(IS_PROXY(c->protocol));
 
-    if (settings.verbose > 2)
+    if (settings.verbose > 2) {
         fprintf(stderr, "<%d cproxy_process_a2b_downstream\n",
                 c->sfd);
+    }
 
     // Snapshot rcurr, because the caller, try_read_command(), changes it.
     //
@@ -390,9 +397,10 @@ void cproxy_process_a2b_downstream(conn *c) {
     // - bin_reading_get_key means do nread for ext and key data.
     // - bin_read_set_value means do nread for item data.
     //
-    if (settings.verbose > 2)
+    if (settings.verbose > 2) {
         fprintf(stderr, "<%d cproxy_process_a2b_downstream %x\n",
                 c->sfd, c->cmd);
+    }
 
     if (keylen > 0 || extlen > 0) {
         assert(bodylen >= keylen + extlen);
@@ -459,10 +467,11 @@ void cproxy_process_a2b_downstream_nread(conn *c) {
     downstream *d = c->extra;
     assert(d);
 
-    if (settings.verbose > 2)
+    if (settings.verbose > 2) {
         fprintf(stderr,
                 "<%d cproxy_process_a2b_downstream_nread %d %d\n",
                 c->sfd, c->ileft, c->isize);
+    }
 
     protocol_binary_response_header *header =
         (protocol_binary_response_header *) &c->binary_header;
@@ -512,8 +521,9 @@ void cproxy_process_a2b_downstream_nread(conn *c) {
             conn *uc = d->upstream_conn;
             if (uc != NULL &&
                 uc->cmd_start != NULL &&
-                strncmp(uc->cmd_start, "gets ", 5) == 0)
+                strncmp(uc->cmd_start, "gets ", 5) == 0) {
                 cas = header->response.cas;
+            }
 
             ITEM_set_cas(it, cas);
 
@@ -541,10 +551,11 @@ void a2b_process_downstream_response(conn *c) {
     assert(IS_BINARY(c->protocol));
     assert(IS_PROXY(c->protocol));
 
-    if (settings.verbose > 2)
+    if (settings.verbose > 2) {
         fprintf(stderr,
                 "<%d cproxy_process_a2b_downstream_response\n",
                 c->sfd);
+    }
 
     protocol_binary_response_header *header =
         (protocol_binary_response_header *) &c->binary_header;
@@ -586,8 +597,9 @@ void a2b_process_downstream_response(conn *c) {
         if (status != 0) {
             assert(it == NULL);
 
-            if (status == PROTOCOL_BINARY_RESPONSE_KEY_ENOENT)
+            if (status == PROTOCOL_BINARY_RESPONSE_KEY_ENOENT) {
                 return; // Swallow miss response.
+            }
 
             // TODO: Handle error case.  Should we pause the conn
             //       or keep looking for more responses?
@@ -650,16 +662,18 @@ void a2b_process_downstream_response(conn *c) {
                 out_string(uc, "STORED");
                 break;
             case PROTOCOL_BINARY_RESPONSE_KEY_EEXISTS:
-                if (c->cmd == PROTOCOL_BINARY_CMD_ADD)
+                if (c->cmd == PROTOCOL_BINARY_CMD_ADD) {
                     out_string(uc, "NOT_STORED");
-                else
+                } else {
                     out_string(uc, "EXISTS");
+                }
                 break;
             case PROTOCOL_BINARY_RESPONSE_KEY_ENOENT:
-                if (c->cmd == PROTOCOL_BINARY_CMD_REPLACE)
+                if (c->cmd == PROTOCOL_BINARY_CMD_REPLACE) {
                     out_string(uc, "NOT_STORED");
-                else
+                } else {
                     out_string(uc, "NOT_FOUND");
+                }
                 break;
             case PROTOCOL_BINARY_RESPONSE_NOT_STORED:
                 out_string(uc, "NOT_STORED");
@@ -673,9 +687,10 @@ void a2b_process_downstream_response(conn *c) {
             cproxy_del_front_cache_key_ascii(d, uc->cmd_start);
 
             if (!update_event(uc, EV_WRITE | EV_PERSIST)) {
-                if (settings.verbose > 1)
+                if (settings.verbose > 1) {
                     fprintf(stderr,
                             "ERROR: Can't write upstream a2b event\n");
+                }
 
                 d->ptd->stats.stats.err_oom++;
                 cproxy_close_conn(uc);
@@ -709,9 +724,10 @@ void a2b_process_downstream_response(conn *c) {
             cproxy_del_front_cache_key_ascii(d, uc->cmd_start);
 
             if (!update_event(uc, EV_WRITE | EV_PERSIST)) {
-                if (settings.verbose > 1)
+                if (settings.verbose > 1) {
                     fprintf(stderr,
                             "ERROR: Can't write upstream a2b event\n");
+                }
 
                 d->ptd->stats.stats.err_oom++;
                 cproxy_close_conn(uc);
@@ -763,9 +779,10 @@ void a2b_process_downstream_response(conn *c) {
             cproxy_del_front_cache_key_ascii(d, uc->cmd_start);
 
             if (!update_event(uc, EV_WRITE | EV_PERSIST)) {
-                if (settings.verbose > 1)
+                if (settings.verbose > 1) {
                     fprintf(stderr,
                             "ERROR: Can't write upstream a2b arith event\n");
+                }
 
                 d->ptd->stats.stats.err_oom++;
                 cproxy_close_conn(uc);
@@ -948,15 +965,17 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
             assert(out_extlen == 0);
             assert(uc->noreply == false);
 
-            if (settings.verbose > 2)
+            if (settings.verbose > 2) {
                 fprintf(stderr, "a2b broadcast %s\n", command);
+            }
 
-            if (strncmp(command + 5, " reset", 6) == 0)
+            if (strncmp(command + 5, " reset", 6) == 0) {
                 return cproxy_broadcast_a2b_downstream(d, preq, size,
                                                        out_key,
                                                        out_keylen,
                                                        out_extlen, uc,
                                                        "RESET\r\n");
+            }
 
             if (cproxy_broadcast_a2b_downstream(d, preq, size,
                                                 out_key,
@@ -1017,12 +1036,14 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
                 add_iov(c, header, size);
 
                 if (out_key != NULL &&
-                    out_keylen > 0)
+                    out_keylen > 0) {
                     add_iov(c, out_key, out_keylen);
+                }
 
-                if (settings.verbose > 2)
+                if (settings.verbose > 2) {
                     fprintf(stderr, "forwarding a2b to %d, noreply %d\n",
                             c->sfd, uc->noreply);
+                }
 
                 conn_set_state(c, conn_mwrite);
                 c->write_and_go = conn_new_cmd;
@@ -1037,30 +1058,35 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
                         c->write_and_go = conn_pause;
 
                         if (key != NULL &&
-                            key_len > 0)
+                            key_len > 0) {
                             mcache_delete(&d->ptd->proxy->front_cache,
                                           key, key_len);
+                        }
                     }
 
                     return true;
                 } else {
                     // TODO: Error handling.
                     //
-                    if (settings.verbose > 1)
+                    if (settings.verbose > 1) {
                         fprintf(stderr, "ERROR: Couldn't a2b update write event\n");
+                    }
 
-                    if (d->upstream_suffix == NULL)
+                    if (d->upstream_suffix == NULL) {
                         d->upstream_suffix = "SERVER_ERROR a2b event oom\r\n";
+                    }
                 }
             } else {
                 // TODO: Error handling.
                 //
-                if (settings.verbose > 1)
+                if (settings.verbose > 1) {
                     fprintf(stderr, "ERROR: Couldn't a2b fill request: %s\n",
                             command);
+                }
 
-                if (d->upstream_suffix == NULL)
+                if (d->upstream_suffix == NULL) {
                     d->upstream_suffix = "CLIENT_ERROR a2b parse request\r\n";
+                }
             }
 
             d->ptd->stats.stats.err_oom++;
@@ -1099,8 +1125,9 @@ int a2b_multiget_skey(conn *c, char *skey, int skey_len) {
             req->message.header.request.bodylen  = htonl(key_len);
 
             if (add_iov(c, ITEM_data(it), sizeof(req->bytes)) == 0 &&
-                add_iov(c, key, key_len) == 0)
+                add_iov(c, key, key_len) == 0) {
                 return 0; // Success.
+            }
 
             return -1;
         }
@@ -1168,17 +1195,19 @@ bool cproxy_broadcast_a2b_downstream(downstream *d,
                         c->write_and_go = conn_pause;
                     }
                 } else {
-                    if (settings.verbose > 1)
+                    if (settings.verbose > 1) {
                         fprintf(stderr,
                                 "ERROR: Update cproxy write event failed\n");
+                    }
 
                     d->ptd->stats.stats.err_oom++;
                     cproxy_close_conn(c);
                 }
             } else {
-                if (settings.verbose > 1)
+                if (settings.verbose > 1) {
                     fprintf(stderr,
                             "ERROR: a2b broadcast prep conn failed\n");
+                }
 
                 d->ptd->stats.stats.err_downstream_write_prep++;
                 cproxy_close_conn(c);
@@ -1186,9 +1215,10 @@ bool cproxy_broadcast_a2b_downstream(downstream *d,
         }
     }
 
-    if (settings.verbose > 2)
+    if (settings.verbose > 2) {
         fprintf(stderr, "forward multiget nwrite %d out of %d\n",
                 nwrite, nconns);
+    }
 
     d->downstream_used_start = nwrite;
     d->downstream_used       = nwrite;

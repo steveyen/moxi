@@ -26,9 +26,10 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
     assert(IS_ASCII(c->protocol));
     assert(IS_PROXY(c->protocol));
 
-    if (settings.verbose > 2)
+    if (settings.verbose > 2) {
         fprintf(stderr, "<%d cproxy_process_upstream_ascii %s\n",
                 c->sfd, line);
+    }
 
     // Snapshot rcurr, because the caller, try_read_command(), changes it.
     //
@@ -62,8 +63,9 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
         STATS_CMD_TYPE_QUIET : STATS_CMD_TYPE_REGULAR;          \
     ptd->stats.stats_cmd[cmd_st][cmd_id].seen++;                \
     ptd->stats.stats_cmd[cmd_st][cmd_id].read_bytes += cmd_len; \
-    if (is_cas)                                                 \
-        ptd->stats.stats_cmd[cmd_st][cmd_id].cas++;
+    if (is_cas) {                                               \
+        ptd->stats.stats_cmd[cmd_st][cmd_id].cas++;             \
+    }
 
     if (ntokens >= 3 &&
         (strncmp(cmd, "get", 3) == 0)) {
@@ -135,7 +137,6 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
     } else if ((ntokens == 4 || ntokens == 5) &&
                (strncmp(cmd, "incr", 4) == 0) &&
                (c->cmd_curr = PROTOCOL_BINARY_CMD_INCREMENT)) {
-
         set_noreply_maybe(c, tokens, ntokens);
         cproxy_pause_upstream_for_downstream(ptd, c);
 
@@ -144,7 +145,6 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
     } else if ((ntokens == 4 || ntokens == 5) &&
                (strncmp(cmd, "decr", 4) == 0) &&
                (c->cmd_curr = PROTOCOL_BINARY_CMD_DECREMENT)) {
-
         set_noreply_maybe(c, tokens, ntokens);
         cproxy_pause_upstream_for_downstream(ptd, c);
 
@@ -153,7 +153,6 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
     } else if (ntokens >= 3 && ntokens <= 4 &&
                (strncmp(cmd, "delete", 6) == 0) &&
                (c->cmd_curr = PROTOCOL_BINARY_CMD_DELETE)) {
-
         set_noreply_maybe(c, tokens, ntokens);
         cproxy_pause_upstream_for_downstream(ptd, c);
 
@@ -162,7 +161,6 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
     } else if (ntokens >= 2 && ntokens <= 4 &&
                (strncmp(cmd, "flush_all", 9) == 0) &&
                (c->cmd_curr = PROTOCOL_BINARY_CMD_FLUSH)) {
-
         set_noreply_maybe(c, tokens, ntokens);
         cproxy_pause_upstream_for_downstream(ptd, c);
 
@@ -171,7 +169,6 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
     } else if (ntokens == 3 &&
                (strcmp(cmd, "stats reset") == 0) &&
                (c->cmd_curr = PROTOCOL_BINARY_CMD_STAT)) {
-
         cproxy_pause_upstream_for_downstream(ptd, c);
 
         SEEN(STATS_CMD_STATS_RESET, false, cmd_len);
@@ -179,7 +176,6 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
     } else if (ntokens == 2 &&
                (strcmp(cmd, "stats") == 0) &&
                (c->cmd_curr = PROTOCOL_BINARY_CMD_STAT)) {
-
         // Even though we've coded to handle advanced stats
         // like stats cachedump, prevent those here to avoid
         // locking downstream servers.
@@ -190,21 +186,18 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
 
     } else if (ntokens == 2 &&
                (strncmp(cmd, "version", 7) == 0)) {
-
         out_string(c, "VERSION " VERSION);
 
         SEEN(STATS_CMD_VERSION, false, cmd_len);
 
     } else if ((ntokens == 3 || ntokens == 4) &&
                (strncmp(cmd, "verbosity", 9) == 0)) {
-
         process_verbosity_command(c, tokens, ntokens);
 
         SEEN(STATS_CMD_VERBOSITY, false, cmd_len);
 
     } else if (ntokens == 2 &&
                (strncmp(cmd, "quit", 4) == 0)) {
-
         conn_set_state(c, conn_closing);
 
         SEEN(STATS_CMD_QUIT, false, cmd_len);
@@ -271,10 +264,11 @@ void cproxy_upstream_ascii_item_response(item *it, conn *uc,
                     add_iov(uc, ITEM_key(it), it->nkey) == 0 &&
                     add_iov(uc, ITEM_suffix(it),
                             it->nsuffix + it->nbytes) == 0) {
-                    if (settings.verbose > 2)
+                    if (settings.verbose > 2) {
                         fprintf(stderr,
                                 "<%d cproxy ascii item response success\n",
                                 uc->sfd);
+                    }
                 }
             }
         } else {
@@ -291,17 +285,19 @@ void cproxy_upstream_ascii_item_response(item *it, conn *uc,
                                 it->nsuffix - 2) == 0 &&
                         add_iov(uc, suffix, strlen(suffix)) == 0 &&
                         add_iov(uc, ITEM_data(it), it->nbytes) == 0) {
-                        if (settings.verbose > 2)
+                        if (settings.verbose > 2) {
                             fprintf(stderr,
                                     "<%d cproxy ascii item response ok\n",
                                     uc->sfd);
+                        }
                     }
                 }
             }
         }
     } else {
-        if (settings.verbose > 1)
+        if (settings.verbose > 1) {
             fprintf(stderr, "ERROR: unexpected downstream data block");
+        }
     }
 }
 
@@ -317,8 +313,9 @@ void cproxy_del_front_cache_key_ascii_response(downstream *d,
     assert(d->ptd->proxy);
     assert(response);
 
-    if (!mcache_started(&d->ptd->proxy->front_cache))
+    if (!mcache_started(&d->ptd->proxy->front_cache)) {
         return;
+    }
 
     // TODO: Not sure if we need all these checks, or just
     // clear the cache item no matter what.
@@ -351,8 +348,9 @@ void cproxy_del_front_cache_key_ascii(downstream *d,
                 mcache_delete(&d->ptd->proxy->front_cache,
                               key, key_len);
 
-                if (settings.verbose > 2)
+                if (settings.verbose > 2) {
                     fprintf(stderr, "front_cache del %s\n", key);
+                }
             }
         }
     }
@@ -380,9 +378,10 @@ bool cproxy_optimize_set_ascii(downstream *d, conn *uc,
         out_string(uc, "STORED");
 
         if (!update_event(uc, EV_WRITE | EV_PERSIST)) {
-            if (settings.verbose > 1)
+            if (settings.verbose > 1) {
                 fprintf(stderr,
                         "ERROR: Can't update upstream write event\n");
+            }
 
             d->ptd->stats.stats.err_oom++;
             cproxy_close_conn(uc);
@@ -409,8 +408,9 @@ void cproxy_optimize_to_self(downstream *d, conn *uc,
     d->ptd->stats.stats.tot_optimize_self++;
 
     if (command != NULL &&
-        settings.verbose > 2)
+        settings.verbose > 2) {
         fprintf(stderr, "optimize to self: %s\n", command);
+    }
 
     d->upstream_conn   = NULL;
     d->upstream_suffix = NULL;

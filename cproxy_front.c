@@ -67,8 +67,9 @@ void mcache_init(mcache *m, bool multithreaded,
 void mcache_reset_stats(mcache *m) {
     assert(m);
 
-    if (m->lock)
+    if (m->lock) {
         pthread_mutex_lock(m->lock);
+    }
 
     m->tot_get_hits    = 0;
     m->tot_get_expires = 0;
@@ -81,15 +82,17 @@ void mcache_reset_stats(mcache *m) {
     m->tot_deletes     = 0;
     m->tot_evictions   = 0;
 
-    if (m->lock)
+    if (m->lock) {
         pthread_mutex_unlock(m->lock);
+    }
 }
 
 void mcache_start(mcache *m, uint32_t max) {
     assert(m);
 
-    if (m->lock)
+    if (m->lock) {
         pthread_mutex_lock(m->lock);
+    }
 
     assert(m->funcs);
     assert(m->map == NULL);
@@ -110,20 +113,23 @@ void mcache_start(mcache *m, uint32_t max) {
         m->oldest_live = 0;
     }
 
-    if (m->lock)
+    if (m->lock) {
         pthread_mutex_unlock(m->lock);
+    }
 }
 
 bool mcache_started(mcache *m) {
     assert(m);
 
-    if (m->lock)
+    if (m->lock) {
         pthread_mutex_lock(m->lock);
+    }
 
     bool rv = m->map != NULL;
 
-    if (m->lock)
+    if (m->lock) {
         pthread_mutex_unlock(m->lock);
+    }
 
     return rv;
 }
@@ -131,8 +137,9 @@ bool mcache_started(mcache *m) {
 void mcache_stop(mcache *m) {
     assert(m);
 
-    if (m->lock)
+    if (m->lock) {
         pthread_mutex_lock(m->lock);
+    }
 
     genhash_t *x = m->map;
 
@@ -142,26 +149,30 @@ void mcache_stop(mcache *m) {
     m->lru_tail    = NULL;
     m->oldest_live = 0;
 
-    if (m->lock)
+    if (m->lock) {
         pthread_mutex_unlock(m->lock);
+    }
 
     // Destroying hash table outside the lock.
     //
-    if (x != NULL)
+    if (x != NULL) {
         genhash_free(x);
+    }
 }
 
 void *mcache_get(mcache *m, char *key, int key_len,
                  uint32_t curr_time) {
     assert(key);
 
-    if (m == NULL)
+    if (m == NULL) {
         return NULL;
+    }
 
     assert(m->funcs);
 
-    if (m->lock)
+    if (m->lock) {
         pthread_mutex_lock(m->lock);
+    }
 
     if (m->map != NULL) {
         void *it = genhash_find(m->map, key);
@@ -179,12 +190,14 @@ void *mcache_get(mcache *m, char *key, int key_len,
                 m->tot_get_hits++;
                 m->tot_get_bytes += m->funcs->item_len(it);
 
-                if (m->lock)
+                if (m->lock) {
                     pthread_mutex_unlock(m->lock);
+                }
 
-                if (settings.verbose > 1)
+                if (settings.verbose > 1) {
                     fprintf(stderr,
                             "mcache hit: %s\n", key);
+                }
 
                 return it;
             }
@@ -193,9 +206,10 @@ void *mcache_get(mcache *m, char *key, int key_len,
             //
             m->tot_get_expires++;
 
-            if (settings.verbose > 1)
+            if (settings.verbose > 1) {
                 fprintf(stderr,
                         "mcache expire: %s\n", key);
+            }
 
             genhash_delete(m->map, key);
         } else {
@@ -203,8 +217,9 @@ void *mcache_get(mcache *m, char *key, int key_len,
         }
     }
 
-    if (m->lock)
+    if (m->lock) {
         pthread_mutex_unlock(m->lock);
+    }
 
     return NULL;
 }
@@ -218,20 +233,23 @@ void mcache_set(mcache *m, void *it,
     assert(m->funcs->item_get_next(it) == NULL);
     assert(m->funcs->item_get_prev(it) == NULL);
 
-    if (m == NULL)
+    if (m == NULL) {
         return;
+    }
 
     // TODO: Our lock areas are possibly too wide.
     //
-    if (m->lock)
+    if (m->lock) {
         pthread_mutex_lock(m->lock);
+    }
 
     if (m->map != NULL) {
         // Evict some items if necessary.
         //
         for (int i = 0; m->lru_tail != NULL && i < 20; i++) {
-            if (genhash_size(m->map) < m->max)
+            if (genhash_size(m->map) < m->max) {
                 break;
+            }
 
             void *last_it = m->lru_tail;
 
@@ -278,17 +296,20 @@ void mcache_set(mcache *m, void *it,
                     mcache_item_unlink(m, existing);
                     mcache_item_touch(m, existing);
 
-                    if (mod_exptime_if_exists)
+                    if (mod_exptime_if_exists) {
                         m->funcs->item_set_exptime(existing, exptime);
+                    }
 
                     m->tot_add_skips++;
 
-                    if (settings.verbose > 1)
+                    if (settings.verbose > 1) {
                         fprintf(stderr,
                                 "mcache add-skip: %s\n", key);
+                    }
 
-                    if (key_buf != NULL)
+                    if (key_buf != NULL) {
                         free(key_buf);
+                    }
                 } else {
                     m->funcs->item_set_exptime(it, exptime);
                     m->funcs->item_add_ref(it);
@@ -298,9 +319,10 @@ void mcache_set(mcache *m, void *it,
                     m->tot_adds++;
                     m->tot_add_bytes += m->funcs->item_len(it);
 
-                    if (settings.verbose > 1)
+                    if (settings.verbose > 1) {
                         fprintf(stderr,
                                 "mcache add: %s\n", key);
+                    }
                 }
             } else {
                 m->tot_add_fails++;
@@ -310,8 +332,9 @@ void mcache_set(mcache *m, void *it,
         }
     }
 
-    if (m->lock)
+    if (m->lock) {
         pthread_mutex_unlock(m->lock);
+    }
 }
 
 void mcache_delete(mcache *m, char *key, int key_len) {
@@ -320,11 +343,13 @@ void mcache_delete(mcache *m, char *key, int key_len) {
     assert(key[key_len] == '\0' ||
            key[key_len] == ' ');
 
-    if (m == NULL)
+    if (m == NULL) {
         return;
+    }
 
-    if (m->lock)
+    if (m->lock) {
         pthread_mutex_lock(m->lock);
+    }
 
     if (m->map != NULL) {
         void *existing = genhash_find(m->map, key);
@@ -337,16 +362,19 @@ void mcache_delete(mcache *m, char *key, int key_len) {
         }
     }
 
-    if (m->lock)
+    if (m->lock) {
         pthread_mutex_unlock(m->lock);
+    }
 }
 
 void mcache_flush_all(mcache *m, uint32_t msec_exp) {
-    if (m == NULL)
+    if (m == NULL) {
         return;
+    }
 
-    if (m->lock)
+    if (m->lock) {
         pthread_mutex_lock(m->lock);
+    }
 
     if (m->map != NULL) {
         genhash_clear(m->map);
@@ -357,8 +385,9 @@ void mcache_flush_all(mcache *m, uint32_t msec_exp) {
         m->oldest_live = msec_exp;
     }
 
-    if (m->lock)
+    if (m->lock) {
         pthread_mutex_unlock(m->lock);
+    }
 }
 
 void mcache_item_unlink(mcache *m, void *it) {
@@ -366,19 +395,23 @@ void mcache_item_unlink(mcache *m, void *it) {
     assert(m->funcs);
     assert(it);
 
-    if (m->lru_head == it)
+    if (m->lru_head == it) {
         m->lru_head = m->funcs->item_get_next(it);
+    }
 
-    if (m->lru_tail == it)
+    if (m->lru_tail == it) {
         m->lru_tail = m->funcs->item_get_prev(it);
+    }
 
     void *next = m->funcs->item_get_next(it);
-    if (next != NULL)
+    if (next != NULL) {
         m->funcs->item_set_prev(next, m->funcs->item_get_prev(it));
+    }
 
     void *prev = m->funcs->item_get_prev(it);
-    if (prev != NULL)
+    if (prev != NULL) {
         m->funcs->item_set_next(prev, m->funcs->item_get_next(it));
+    }
 
     m->funcs->item_set_next(it, NULL);
     m->funcs->item_set_prev(it, NULL);
@@ -394,12 +427,14 @@ void mcache_item_touch(mcache *m, void *it) {
     assert(m->funcs->item_get_prev(it) == NULL);
     assert(it);
 
-    if (m->lru_head != NULL)
+    if (m->lru_head != NULL) {
         m->funcs->item_set_prev(m->lru_head, it);
+    }
     m->funcs->item_set_next(it, m->lru_head);
     m->lru_head = it;
-    if (m->lru_tail == NULL)
+    if (m->lru_tail == NULL) {
         m->lru_tail = it;
+    }
 }
 
 struct mcache_foreach_data {
@@ -415,8 +450,9 @@ void mcache_foreach_trampoline(const void *key, const void *value, void *_data) 
 
 void mcache_foreach(mcache *m, mcache_traversal_func f, void *userdata) {
     assert(m);
-    if (!m->map)
+    if (!m->map) {
         return;
+    }
     struct mcache_foreach_data data = {.f = f, .userdata = userdata};
     genhash_iter(m->map, mcache_foreach_trampoline, &data);
 }
@@ -443,14 +479,16 @@ static int item_len(void *it) {
 
 static void item_add_ref(void *it) {
     item *i = it;
-    if (i != NULL)
+    if (i != NULL) {
         i->refcount++; // TODO: Need item lock here?
+    }
 }
 
 static void item_dec_ref(void *it) {
     item *i = it;
-    if (i != NULL)
+    if (i != NULL) {
         item_remove(i);
+    }
 }
 
 static void *item_get_next(void *it) {

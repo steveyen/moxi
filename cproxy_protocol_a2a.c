@@ -34,9 +34,10 @@ void cproxy_process_a2a_downstream(conn *c, char *line) {
     assert(IS_ASCII(c->protocol));
     assert(IS_PROXY(c->protocol));
 
-    if (settings.verbose > 1)
+    if (settings.verbose > 1) {
         fprintf(stderr, "<%d cproxy_process_a2a_downstream %s\n",
                 c->sfd, line);
+    }
 
     downstream *d = c->extra;
 
@@ -76,17 +77,21 @@ void cproxy_process_a2a_downstream(conn *c, char *line) {
 
                     return; // Success.
                 } else {
-                    if (settings.verbose > 1)
+                    if (settings.verbose > 1) {
                         fprintf(stderr, "cproxy could not parse cas\n");
+                    }
                 }
             } else {
-                if (settings.verbose > 1)
+                if (settings.verbose > 1) {
                     fprintf(stderr, "cproxy could not item_alloc size %u\n",
                             vlen + 2);
+                }
             }
 
-            if (it != NULL)
+            if (it != NULL) {
                 item_remove(it);
+            }
+
             it = NULL;
 
             c->sbytes = vlen + 2; // Number of bytes to swallow.
@@ -143,8 +148,9 @@ void cproxy_process_a2a_downstream(conn *c, char *line) {
                         it = NULL;
                     }
 
-                    if (it != NULL)
+                    if (it != NULL) {
                         item_remove(it);
+                    }
                 }
             }
         }
@@ -163,9 +169,10 @@ void cproxy_process_a2a_downstream(conn *c, char *line) {
             out_string(uc, line);
 
             if (!update_event(uc, EV_WRITE | EV_PERSIST)) {
-                if (settings.verbose > 1)
+                if (settings.verbose > 1) {
                     fprintf(stderr,
                             "Can't update upstream write event\n");
+                }
 
                 d->ptd->stats.stats.err_oom++;
                 cproxy_close_conn(uc);
@@ -183,10 +190,11 @@ void cproxy_process_a2a_downstream(conn *c, char *line) {
 void cproxy_process_a2a_downstream_nread(conn *c) {
     assert(c != NULL);
 
-    if (settings.verbose > 1)
+    if (settings.verbose > 1) {
         fprintf(stderr,
                 "<%d cproxy_process_a2a_downstream_nread %d %d\n",
                 c->sfd, c->ileft, c->isize);
+    }
 
     downstream *d = c->extra;
     assert(d != NULL);
@@ -274,14 +282,16 @@ bool cproxy_forward_a2a_simple_downstream(downstream *d,
 
     assert(uc->next == NULL);
 
-    if (uc->cmd_curr == PROTOCOL_BINARY_CMD_FLUSH)
+    if (uc->cmd_curr == PROTOCOL_BINARY_CMD_FLUSH) {
         return cproxy_broadcast_a2a_downstream(d, command, uc,
                                                "OK\r\n");
+    }
 
     if (uc->cmd_curr == PROTOCOL_BINARY_CMD_STAT) {
-        if (strncmp(command + 5, " reset", 6) == 0)
+        if (strncmp(command + 5, " reset", 6) == 0) {
             return cproxy_broadcast_a2a_downstream(d, command, uc,
                                                    "RESET\r\n");
+        }
 
         if (cproxy_broadcast_a2a_downstream(d, command, uc,
                                             "END\r\n")) {
@@ -327,9 +337,10 @@ bool cproxy_forward_a2a_simple_downstream(downstream *d,
 
             out_string(c, command);
 
-            if (settings.verbose > 1)
+            if (settings.verbose > 1) {
                 fprintf(stderr, "forwarding to %d, noreply %d\n",
                         c->sfd, uc->noreply);
+            }
 
             if (update_event(c, EV_WRITE | EV_PERSIST)) {
                 d->downstream_used_start = 1;
@@ -352,8 +363,9 @@ bool cproxy_forward_a2a_simple_downstream(downstream *d,
                 return true;
             }
 
-            if (settings.verbose > 1)
+            if (settings.verbose > 1) {
                 fprintf(stderr, "Couldn't update cproxy write event\n");
+            }
 
             d->ptd->stats.stats.err_oom++;
             cproxy_close_conn(c);
@@ -413,9 +425,10 @@ bool cproxy_broadcast_a2a_downstream(downstream *d,
                         c->write_and_go = conn_pause;
                     }
                 } else {
-                    if (settings.verbose > 1)
+                    if (settings.verbose > 1) {
                         fprintf(stderr,
                                 "Update cproxy write event failed\n");
+                    }
 
                     d->ptd->stats.stats.err_oom++;
                     cproxy_close_conn(c);
@@ -427,9 +440,10 @@ bool cproxy_broadcast_a2a_downstream(downstream *d,
         }
     }
 
-    if (settings.verbose > 1)
+    if (settings.verbose > 1) {
         fprintf(stderr, "forward multiget nwrite %d out of %d\n",
                 nwrite, nconns);
+    }
 
     d->downstream_used_start = nwrite;
     d->downstream_used       = nwrite;
@@ -498,9 +512,10 @@ bool cproxy_forward_a2a_item_downstream(downstream *d, short cmd,
                  str_cas != NULL)) {
                 sprintf(str_exptime, " %u", it->exptime);
 
-                if (str_cas != NULL)
+                if (str_cas != NULL) {
                     sprintf(str_cas, " %llu",
                             (unsigned long long) ITEM_get_cas(it));
+                }
 
                 if (add_iov(c, verb, strlen(verb)) == 0 &&
                     add_iov(c, ITEM_key(it), it->nkey) == 0 &&
@@ -552,8 +567,9 @@ bool cproxy_forward_a2a_item_downstream(downstream *d, short cmd,
             cproxy_close_conn(c);
         }
 
-        if (settings.verbose > 1)
+        if (settings.verbose > 1) {
             fprintf(stderr, "Proxy item write out of memory");
+        }
     }
 
     return false;
