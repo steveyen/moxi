@@ -4,9 +4,57 @@
 #define CPROXY_H
 
 #include <libmemcached/memcached.h>
+
 #include "genhash.h"
 #include "work.h"
 #include "matcher.h"
+
+// From libmemcached.
+//
+uint32_t murmur_hash(const char *key, size_t length);
+
+// From libmemcached.
+//
+memcached_return memcached_connect(memcached_server_st *ptr);
+memcached_return memcached_version(memcached_st *ptr);
+void             memcached_quit_server(memcached_server_st *ptr,
+                                       uint8_t io_death);
+memcached_return memcached_safe_read(memcached_server_st *ptr,
+                                     void *dta,
+                                     size_t size);
+ssize_t memcached_io_write(memcached_server_st *ptr,
+                           const void *buffer,
+                           size_t length, char with_flush);
+void memcached_io_reset(memcached_server_st *ptr);
+memcached_return memcached_do(memcached_server_st *ptr,
+                              const void *commmand,
+                              size_t command_length,
+                              uint8_t with_flush);
+
+// Some macros as level-of-indirection as opposed to direct
+// using libmemcached API.
+//
+#define mcs_return memcached_return
+
+#define mcs_st        memcached_st
+#define mcs_server_st memcached_server_st
+
+#define mcs_create       memcached_create
+#define mcs_free         memcached_free
+#define mcs_behavior_set memcached_behavior_set
+#define mcs_server_count memcached_server_count
+#define mcs_server_push  memcached_server_push
+#define mcs_server_quit  memcached_quit_server
+#define mcs_key_hash     memcached_generate_hash
+
+#define mcs_server_st_parse memcached_servers_parse
+#define mcs_server_st_free  memcached_server_list_free
+
+#define mcs_server_st_connect  memcached_connect
+#define mcs_server_st_do       memcached_do
+#define mcs_server_st_io_write memcached_io_write
+#define mcs_server_st_io_reset memcached_io_reset
+#define mcs_server_st_read     memcached_safe_read
 
 int cproxy_init(char *cfg_str,
                 char *behavior_str,

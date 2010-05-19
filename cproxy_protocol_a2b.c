@@ -7,7 +7,6 @@
 #include <pthread.h>
 #include <assert.h>
 #include <math.h>
-#include <libmemcached/memcached.h>
 #include "memcached.h"
 #include "cproxy.h"
 #include "work.h"
@@ -1140,7 +1139,7 @@ bool cproxy_broadcast_a2b_downstream(downstream *d,
     req->request.bodylen = htonl(keylen + extlen);
 
     int nwrite = 0;
-    int nconns = memcached_server_count(&d->mst);
+    int nconns = mcs_server_count(&d->mst);
 
     for (int i = 0; i < nconns; i++) {
         conn *c = d->downstream_conns[i];

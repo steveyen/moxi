@@ -6,14 +6,9 @@
 #include <sysexits.h>
 #include <pthread.h>
 #include <assert.h>
-#include <libmemcached/memcached.h>
 #include "memcached.h"
 #include "cproxy.h"
 #include "work.h"
-
-// From libmemcached.
-//
-uint32_t murmur_hash(const char *key, size_t length);
 
 // Protocol STATS command handling.
 //

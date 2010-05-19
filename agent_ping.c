@@ -6,16 +6,10 @@
 #include <sysexits.h>
 #include <pthread.h>
 #include <assert.h>
-#include <libmemcached/memcached.h>
 #include "memcached.h"
 #include "cproxy.h"
 #include "work.h"
 #include "agent.h"
-
-// From libmemcached.
-//
-memcached_return memcached_connect(memcached_server_st *ptr);
-memcached_return memcached_version(memcached_st *ptr);
 
 // Local declarations.
 //

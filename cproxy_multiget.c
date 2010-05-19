@@ -6,7 +6,6 @@
 #include <sysexits.h>
 #include <pthread.h>
 #include <assert.h>
-#include <libmemcached/memcached.h>
 #include "memcached.h"
 #include "cproxy.h"
 
@@ -92,7 +91,7 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
         &ptd->stats.stats_cmd[STATS_CMD_TYPE_REGULAR][STATS_CMD_GET_KEY];
 
     int nwrite = 0;
-    int nconns = memcached_server_count(&d->mst);
+    int nconns = mcs_server_count(&d->mst);
 
     for (int i = 0; i < nconns; i++) {
         if (d->downstream_conns[i] != NULL &&

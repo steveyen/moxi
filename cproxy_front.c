@@ -7,7 +7,6 @@
 #include <pthread.h>
 #include <assert.h>
 #include <math.h>
-#include <libmemcached/memcached.h>
 #include "memcached.h"
 #include "cproxy.h"
 

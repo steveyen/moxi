@@ -7,27 +7,9 @@
 #include <pthread.h>
 #include <assert.h>
 #include <math.h>
-#include <libmemcached/memcached.h>
 #include "memcached.h"
 #include "cproxy.h"
 #include "work.h"
-
-// From libmemcached.
-//
-memcached_return memcached_connect(memcached_server_st *ptr);
-void             memcached_quit_server(memcached_server_st *ptr,
-                                       uint8_t io_death);
-memcached_return memcached_safe_read(memcached_server_st *ptr,
-                                     void *dta,
-                                     size_t size);
-ssize_t memcached_io_write(memcached_server_st *ptr,
-                           const void *buffer,
-                           size_t length, char with_flush);
-void memcached_io_reset(memcached_server_st *ptr);
-memcached_return memcached_do(memcached_server_st *ptr,
-                              const void *commmand,
-                              size_t command_length,
-                              uint8_t with_flush);
 
 // Internal forward declarations.
 //
@@ -50,7 +32,7 @@ conn *conn_list_remove(conn *head, conn **tail,
 
 bool is_compatible_request(conn *existing, conn *candidate);
 
-int init_memcached_st(memcached_st *mst, char *config);
+int init_mcs_st(memcached_st *mst, char *config);
 
 // Function tables.
 //
@@ -404,7 +386,7 @@ void cproxy_on_close_upstream_conn(conn *c) {
             //
             ptd->stats.stats.tot_downstream_close_on_upstream_close++;
 
-            int n = memcached_server_count(&d->mst);
+            int n = mcs_server_count(&d->mst);
 
             for (int i = 0; i < n; i++) {
                 conn *c = d->downstream_conns[i];
@@ -445,7 +427,7 @@ void cproxy_on_close_downstream_conn(conn *c) {
 
     c->extra = NULL;
 
-    int n = memcached_server_count(&d->mst);
+    int n = mcs_server_count(&d->mst);
     int k = -1; // Index of conn.
 
     for (int i = 0; i < n; i++) {
@@ -460,7 +442,7 @@ void cproxy_on_close_downstream_conn(conn *c) {
             d->ptd->stats.stats.tot_downstream_quit_server++;
 
             assert(d->mst.hosts[i].fd == c->sfd);
-            memcached_quit_server(&d->mst.hosts[i], 1);
+            mcs_server_quit(&d->mst.hosts[i], 1);
             assert(d->mst.hosts[i].fd == -1);
 
             k = i;
@@ -774,7 +756,7 @@ void cproxy_free_downstream(downstream *d) {
     d->ptd->downstream_num--;
     assert(d->ptd->downstream_num >= 0);
 
-    int n = memcached_server_count(&d->mst);
+    int n = mcs_server_count(&d->mst);
 
     if (d->downstream_conns != NULL) {
         for (int i = 0; i < n; i++) {
@@ -787,7 +769,7 @@ void cproxy_free_downstream(downstream *d) {
     // to go to conn_closing state.  Since we've already cleared
     // the conn->extra pointers, there's no extra release/free.
     //
-    memcached_free(&d->mst);
+    mcs_free(&d->mst);
 
     if (d->timeout_tv.tv_sec != 0 ||
         d->timeout_tv.tv_usec != 0)
@@ -843,7 +825,7 @@ downstream *cproxy_create_downstream(char *config,
 
         if (d->config != NULL &&
             d->behaviors_arr != NULL) {
-            int nconns = init_memcached_st(&d->mst, d->config);
+            int nconns = init_mcs_st(&d->mst, d->config);
             if (nconns > 0) {
                 d->downstream_conns = (conn **)
                     calloc(nconns, sizeof(conn *));
@@ -851,7 +833,7 @@ downstream *cproxy_create_downstream(char *config,
                     return d;
                 }
 
-                memcached_free(&d->mst);
+                mcs_free(&d->mst);
             }
         }
 
@@ -863,30 +845,30 @@ downstream *cproxy_create_downstream(char *config,
     return NULL;
 }
 
-int init_memcached_st(memcached_st *mst, char *config) {
+int init_mcs_st(memcached_st *mst, char *config) {
     assert(mst);
     assert(config);
 
-    if (memcached_create(mst) != NULL) {
-        memcached_behavior_set(mst, MEMCACHED_BEHAVIOR_NO_BLOCK, 1);
-        memcached_behavior_set(mst, MEMCACHED_BEHAVIOR_KETAMA, 1);
-        memcached_behavior_set(mst, MEMCACHED_BEHAVIOR_TCP_NODELAY, 1);
+    if (mcs_create(mst) != NULL) {
+        mcs_behavior_set(mst, MEMCACHED_BEHAVIOR_NO_BLOCK, 1);
+        mcs_behavior_set(mst, MEMCACHED_BEHAVIOR_KETAMA, 1);
+        mcs_behavior_set(mst, MEMCACHED_BEHAVIOR_TCP_NODELAY, 1);
 
-        memcached_server_st *mservers;
+        mcs_server_st *mservers;
 
-        mservers = memcached_servers_parse(config);
+        mservers = mcs_server_st_parse(config);
         if (mservers != NULL) {
-            memcached_server_push(mst, mservers);
-            memcached_server_list_free(mservers);
+            mcs_server_push(mst, mservers);
+            mcs_server_st_free(mservers);
 
-            return memcached_server_count(mst);
+            return mcs_server_count(mst);
         } else {
             if (settings.verbose > 1)
                 fprintf(stderr, "mserver_parse failed: %s\n",
                         config);
         }
 
-        memcached_free(mst);
+        mcs_free(mst);
     }
 
     return 0;
@@ -926,12 +908,12 @@ int cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread) {
     assert(d->ptd != NULL);
     assert(d->ptd->downstream_released != d); // Should not be in free list.
     assert(d->downstream_conns != NULL);
-    assert(memcached_server_count(&d->mst) > 0);
+    assert(mcs_server_count(&d->mst) > 0);
     assert(thread != NULL);
     assert(thread->base != NULL);
 
     int s = 0; // Number connected.
-    int n = memcached_server_count(&d->mst);
+    int n = mcs_server_count(&d->mst);
 
     assert(d->behaviors_num == n);
     assert(d->behaviors_arr != NULL);
@@ -951,7 +933,7 @@ int cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread) {
         if (d->downstream_conns[i] != NULL) {
             s++;
         } else {
-            memcached_quit_server(&d->mst.hosts[i], 1);
+           mcs_server_quit(&d->mst.hosts[i], 1);
         }
     }
 
@@ -970,9 +952,9 @@ conn *cproxy_connect_downstream_conn(downstream *d,
     assert(msst);
     assert(behavior);
 
-    memcached_return rc;
+    mcs_return rc;
 
-    rc = memcached_connect(msst);
+    rc = mcs_server_st_connect(msst);
     if (rc == MEMCACHED_SUCCESS) {
         int fd = msst->fd;
         if (fd >= 0) {
@@ -1024,7 +1006,7 @@ conn *cproxy_find_downstream_conn(downstream *d,
 
     int s = cproxy_server_index(d, key, key_length);
     if (s >= 0 &&
-        s < memcached_server_count(&d->mst)) {
+        s < mcs_server_count(&d->mst)) {
         if (self != NULL &&
             settings.port > 0 &&
             settings.port == d->mst.hosts[s].port &&
@@ -1075,21 +1057,10 @@ int cproxy_server_index(downstream *d, char *key, size_t key_length) {
     assert(key != NULL);
     assert(key_length > 0);
 
-    // memcached_return rc;
-    //
-    // rc = memcached_validate_key_length(key_length,
-    //          d->mst.flags & MEM_BINARY_PROTOCOL);
-    // unlikely (rc != MEMCACHED_SUCCESS)
-    //    return -1;
-
-    if (memcached_server_count(&d->mst) <= 0)
+    if (mcs_server_count(&d->mst) <= 0)
         return -1;
 
-    // if (memcached_key_test((char **) &key, &key_length, 1) ==
-    //     MEMCACHED_BAD_KEY_PROVIDED)
-    //     return -1;
-
-    return (int) memcached_generate_hash(&d->mst, key, key_length);
+    return (int) mcs_key_hash(&d->mst, key, key_length);
 }
 
 void cproxy_assign_downstream(proxy_td *ptd) {
@@ -1796,7 +1767,7 @@ void downstream_timeout(const int fd,
 
         d->ptd->stats.stats.tot_downstream_timeout++;
 
-        int n = memcached_server_count(&d->mst);
+        int n = mcs_server_count(&d->mst);
 
         for (int i = 0; i < n; i++) {
             if (d->downstream_conns[i] != NULL) {
@@ -1883,21 +1854,22 @@ bool cproxy_auth_downstream(memcached_server_st *server,
     req.request.datatype = PROTOCOL_BINARY_RAW_BYTES;
     req.request.bodylen  = htonl(key_len);
 
-    if (memcached_do(server, (const char *) req.bytes,
-                     sizeof(req.bytes), 0) != MEMCACHED_SUCCESS ||
-        memcached_io_write(server, buf, key_len, 1) == -1) {
-        memcached_io_reset(server);
+    if (mcs_server_st_do(server, (const char *) req.bytes,
+                         sizeof(req.bytes), 0) != MEMCACHED_SUCCESS ||
+        mcs_server_st_io_write(server, buf, key_len, 1) == -1) {
+        mcs_server_st_io_reset(server);
 
-        if (settings.verbose > 1)
+        if (settings.verbose > 1) {
             fprintf(stderr, "auth failure during write (%d)\n",
                     key_len);
+        }
 
         return false;
     }
 
     protocol_binary_response_header res = { .bytes = {0} };
-    if (memcached_safe_read(server, &res.bytes,
-                            sizeof(res.bytes)) == MEMCACHED_SUCCESS &&
+    if (mcs_server_st_read(server, &res.bytes,
+                           sizeof(res.bytes)) == MEMCACHED_SUCCESS &&
         res.response.magic == PROTOCOL_BINARY_RES) {
         res.response.status  = ntohs(res.response.status);
         res.response.keylen  = ntohs(res.response.keylen);
@@ -1908,10 +1880,12 @@ bool cproxy_auth_downstream(memcached_server_st *server,
         int len = res.response.bodylen;
         while (len > 0) {
             int amt = (len > sizeof(buf) ? sizeof(buf) : len);
-            if (memcached_safe_read(server,
-                                    buf,
-                                    amt) != MEMCACHED_SUCCESS)
+            if (mcs_server_st_read(server,
+                                   buf,
+                                   amt) != MEMCACHED_SUCCESS) {
                 return false;
+            }
+
             len -= amt;
         }
 
@@ -1921,8 +1895,9 @@ bool cproxy_auth_downstream(memcached_server_st *server,
         // - UNKNOWN_COMMAND - sasl-unaware server.
         //
         if (res.response.status == PROTOCOL_BINARY_RESPONSE_SUCCESS) {
-            if (settings.verbose > 2)
+            if (settings.verbose > 2) {
                 fprintf(stderr, "auth_downstream success\n");
+            }
 
             return true;
         }
@@ -1946,8 +1921,9 @@ bool cproxy_bucket_downstream(memcached_server_st *server,
         return true;
 
     int bucket_len = strlen(behavior->bucket);
-    if (bucket_len <= 0)
+    if (bucket_len <= 0) {
         return true; // When no bucket.
+    }
 
     protocol_binary_request_header req = { .bytes = {0} };
 
@@ -1957,23 +1933,24 @@ bool cproxy_bucket_downstream(memcached_server_st *server,
     req.request.datatype = PROTOCOL_BINARY_RAW_BYTES;
     req.request.bodylen  = htonl(bucket_len);
 
-    if (memcached_do(server, (const char *) req.bytes,
-                     sizeof(req.bytes), 0) != MEMCACHED_SUCCESS ||
-        memcached_io_write(server,
-                           behavior->bucket,
-                           bucket_len, 1) == -1) {
-        memcached_io_reset(server);
+    if (mcs_server_st_do(server, (const char *) req.bytes,
+                         sizeof(req.bytes), 0) != MEMCACHED_SUCCESS ||
+        mcs_server_st_io_write(server,
+                               behavior->bucket,
+                               bucket_len, 1) == -1) {
+        mcs_server_st_io_reset(server);
 
-        if (settings.verbose > 1)
+        if (settings.verbose > 1) {
             fprintf(stderr, "bucket failure during write (%d)\n",
                     bucket_len);
+        }
 
         return false;
     }
 
     protocol_binary_response_header res = { .bytes = {0} };
-    if (memcached_safe_read(server, &res.bytes,
-                            sizeof(res.bytes)) == MEMCACHED_SUCCESS &&
+    if (mcs_server_st_read(server, &res.bytes,
+                           sizeof(res.bytes)) == MEMCACHED_SUCCESS &&
         res.response.magic == PROTOCOL_BINARY_RES) {
         res.response.status  = ntohs(res.response.status);
         res.response.keylen  = ntohs(res.response.keylen);
@@ -1986,10 +1963,11 @@ bool cproxy_bucket_downstream(memcached_server_st *server,
         int len = res.response.bodylen;
         while (len > 0) {
             int amt = (len > sizeof(buf) ? sizeof(buf) : len);
-            if (memcached_safe_read(server,
-                                    buf,
-                                    amt) != MEMCACHED_SUCCESS)
+            if (mcs_server_st_read(server,
+                                   buf,
+                                   amt) != MEMCACHED_SUCCESS) {
                 return false;
+            }
             len -= amt;
         }
 
@@ -2006,10 +1984,11 @@ bool cproxy_bucket_downstream(memcached_server_st *server,
             return true;
         }
 
-        if (settings.verbose > 1)
+        if (settings.verbose > 1) {
             fprintf(stderr, "bucket_downstream failure, %s (%x)\n",
                     behavior->bucket,
                     res.response.status);
+        }
     }
 
     return false;
@@ -2018,7 +1997,7 @@ bool cproxy_bucket_downstream(memcached_server_st *server,
 int downstream_conn_index(downstream *d, conn *c) {
     assert(d);
 
-    int nconns = memcached_server_count(&d->mst);
+    int nconns = mcs_server_count(&d->mst);
     for (int i = 0; i < nconns; i++) {
         if (d->downstream_conns[i] == c) {
             return i;

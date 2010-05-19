@@ -26,7 +26,6 @@ void redirected_collect_memcached_stats_for_proxy(struct main_stats_collect_info
   (*redirected_collect_memcached_stats_for_proxy_target)(msci, proxy_name, proxy_port);
 }
 
-
 void reset_redirections(void)
 {
   redirected_collect_memcached_stats_for_proxy_target = collect_memcached_stats_for_proxy;

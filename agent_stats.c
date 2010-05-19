@@ -7,7 +7,6 @@
 #include <sysexits.h>
 #include <pthread.h>
 #include <assert.h>
-#include <libmemcached/memcached.h>
 #include <math.h>
 #include "memcached.h"
 #include "conflate.h"
@@ -166,7 +165,7 @@ out_free:
     memcached_free(&mst);
 }
 #ifdef REDIRECTS_FOR_MOCKS
-#define collect_memcached_stats_for_proxy redirected_collect_memcached_stats_for_proxy 
+#define collect_memcached_stats_for_proxy redirected_collect_memcached_stats_for_proxy
 #endif
 
 
