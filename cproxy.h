@@ -44,6 +44,7 @@ memcached_return memcached_do(memcached_server_st *ptr,
 #define mcs_behavior_set(x, b, v) memcached_behavior_set(x, b, v)
 #define mcs_server_count(x)       memcached_server_count(x)
 #define mcs_server_push(x, s)     memcached_server_push(x, s)
+#define mcs_server_index(x, i)    (&((x)->hosts[(i)]))
 #define mcs_key_hash(x, k, len)   memcached_generate_hash(x, k, len)
 
 #define mcs_server_st_parse(str)  memcached_servers_parse(str)
@@ -55,6 +56,12 @@ memcached_return memcached_do(memcached_server_st *ptr,
 #define mcs_server_st_io_write memcached_io_write
 #define mcs_server_st_io_reset memcached_io_reset
 #define mcs_server_st_read     memcached_safe_read
+
+#define mcs_server_st_hostname(s) ((s)->hostname)
+#define mcs_server_st_port(s)     ((s)->port)
+#define mcs_server_st_fd(s)       ((s)->fd)
+
+// -------------------------------
 
 int cproxy_init(char *cfg_str,
                 char *behavior_str,

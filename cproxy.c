@@ -450,9 +450,9 @@ void cproxy_on_close_downstream_conn(conn *c) {
 
             d->ptd->stats.stats.tot_downstream_quit_server++;
 
-            assert(d->mst.hosts[i].fd == c->sfd);
-            mcs_server_st_quit(&d->mst.hosts[i], 1);
-            assert(d->mst.hosts[i].fd == -1);
+            assert(mcs_server_st_fd(mcs_server_index(&d->mst, i)) == c->sfd);
+            mcs_server_st_quit(mcs_server_index(&d->mst, i), 1);
+            assert(mcs_server_st_fd(mcs_server_index(&d->mst, i)) == -1);
 
             k = i;
         }
@@ -951,14 +951,14 @@ int cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread) {
         if (d->downstream_conns[i] == NULL) {
             d->downstream_conns[i] =
                 cproxy_connect_downstream_conn(d, thread,
-                                               &d->mst.hosts[i],
+                                               mcs_server_index(&d->mst, i),
                                                &d->behaviors_arr[i]);
         }
 
         if (d->downstream_conns[i] != NULL) {
             s++;
         } else {
-            mcs_server_st_quit(&d->mst.hosts[i], 1);
+            mcs_server_st_quit(mcs_server_index(&d->mst, i), 1);
         }
     }
 
@@ -1035,8 +1035,8 @@ conn *cproxy_find_downstream_conn(downstream *d,
         s < mcs_server_count(&d->mst)) {
         if (self != NULL &&
             settings.port > 0 &&
-            settings.port == d->mst.hosts[s].port &&
-            strcmp(d->mst.hosts[s].hostname, cproxy_hostname) == 0) {
+            settings.port == mcs_server_st_port(mcs_server_index(&d->mst, s)) &&
+            strcmp(mcs_server_st_hostname(mcs_server_index(&d->mst, s)), cproxy_hostname) == 0) {
             *self = true;
         }
 
