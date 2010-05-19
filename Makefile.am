@@ -33,7 +33,7 @@ moxi_SOURCES = memcached.c memcached.h \
                     cproxy_stats.c \
                     cproxy_front.c \
                     matcher.c matcher.h \
-                    mcs.h
+                    mcs.c mcs.h
 
 timedrun_SOURCES = timedrun.c
 
