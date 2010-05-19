@@ -39,16 +39,16 @@ memcached_return memcached_do(memcached_server_st *ptr,
 #define mcs_st        memcached_st
 #define mcs_server_st memcached_server_st
 
-#define mcs_create       memcached_create
-#define mcs_free         memcached_free
-#define mcs_behavior_set memcached_behavior_set
-#define mcs_server_count memcached_server_count
-#define mcs_server_push  memcached_server_push
-#define mcs_server_quit  memcached_quit_server
-#define mcs_key_hash     memcached_generate_hash
+#define mcs_create(x)             memcached_create(x)
+#define mcs_free(x)               memcached_free(x)
+#define mcs_behavior_set(x, b, v) memcached_behavior_set(x, b, v)
+#define mcs_server_count(x)       memcached_server_count(x)
+#define mcs_server_push(x, s)     memcached_server_push(x, s)
+#define mcs_key_hash(x, k, len)   memcached_generate_hash(x, k, len)
 
-#define mcs_server_st_parse memcached_servers_parse
-#define mcs_server_st_free  memcached_server_list_free
+#define mcs_server_st_parse(str)  memcached_servers_parse(str)
+#define mcs_server_st_free(s)     memcached_server_list_free(s)
+#define mcs_server_st_quit(s, v)  memcached_quit_server(s, v)
 
 #define mcs_server_st_connect  memcached_connect
 #define mcs_server_st_do       memcached_do
@@ -388,7 +388,7 @@ struct downstream {
     uint32_t        config_ver;    // RW: Mutable, copy of proxy->config_ver.
     int             behaviors_num; // RO: Snapshot of ptd->behavior_pool.num.
     proxy_behavior *behaviors_arr; // RO: Snapshot of ptd->behavior_pool.arr.
-    memcached_st    mst;           // RW: From libmemcached.
+    mcs_st          mst;           // RW: From libmemcached.
 
     downstream *next;         // To track reserved/free lists.
 
@@ -457,15 +457,15 @@ int   cproxy_connect_downstream(downstream *d,
                                 LIBEVENT_THREAD *thread);
 conn *cproxy_connect_downstream_conn(downstream *d,
                                      LIBEVENT_THREAD *thread,
-                                     memcached_server_st *msst,
+                                     mcs_server_st *msst,
                                      proxy_behavior *behavior);
 
 void  cproxy_wait_any_downstream(proxy_td *ptd, conn *c);
 void  cproxy_assign_downstream(proxy_td *ptd);
 
-bool  cproxy_auth_downstream(memcached_server_st *server,
+bool  cproxy_auth_downstream(mcs_server_st *server,
                              proxy_behavior *behavior);
-bool  cproxy_bucket_downstream(memcached_server_st *server,
+bool  cproxy_bucket_downstream(mcs_server_st *server,
                                proxy_behavior *behavior);
 
 void  cproxy_pause_upstream_for_downstream(proxy_td *ptd, conn *upstream);

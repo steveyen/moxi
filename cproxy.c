@@ -32,7 +32,7 @@ conn *conn_list_remove(conn *head, conn **tail,
 
 bool is_compatible_request(conn *existing, conn *candidate);
 
-int init_mcs_st(memcached_st *mst, char *config);
+int init_mcs_st(mcs_st *mst, char *config);
 
 // Function tables.
 //
@@ -451,7 +451,7 @@ void cproxy_on_close_downstream_conn(conn *c) {
             d->ptd->stats.stats.tot_downstream_quit_server++;
 
             assert(d->mst.hosts[i].fd == c->sfd);
-            mcs_server_quit(&d->mst.hosts[i], 1);
+            mcs_server_st_quit(&d->mst.hosts[i], 1);
             assert(d->mst.hosts[i].fd == -1);
 
             k = i;
@@ -809,7 +809,7 @@ void cproxy_free_downstream(downstream *d) {
 }
 
 /* The config input is something libmemcached can parse.
- * See memcached_servers_parse().
+ * See mcs_server_st_parse().
  */
 downstream *cproxy_create_downstream(char *config,
                                      uint32_t config_ver,
@@ -868,7 +868,7 @@ downstream *cproxy_create_downstream(char *config,
     return NULL;
 }
 
-int init_mcs_st(memcached_st *mst, char *config) {
+int init_mcs_st(mcs_st *mst, char *config) {
     assert(mst);
     assert(config);
 
@@ -958,7 +958,7 @@ int cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread) {
         if (d->downstream_conns[i] != NULL) {
             s++;
         } else {
-           mcs_server_quit(&d->mst.hosts[i], 1);
+            mcs_server_st_quit(&d->mst.hosts[i], 1);
         }
     }
 
@@ -967,7 +967,7 @@ int cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread) {
 
 conn *cproxy_connect_downstream_conn(downstream *d,
                                      LIBEVENT_THREAD *thread,
-                                     memcached_server_st *msst,
+                                     mcs_server_st *msst,
                                      proxy_behavior *behavior) {
     assert(d);
     assert(d->ptd);
@@ -1868,7 +1868,7 @@ bool cproxy_start_downstream_timeout(downstream *d, conn *c) {
     return (evtimer_add(&d->timeout_event, &d->timeout_tv) == 0);
 }
 
-bool cproxy_auth_downstream(memcached_server_st *server,
+bool cproxy_auth_downstream(mcs_server_st *server,
                             proxy_behavior *behavior) {
     assert(server);
     assert(behavior);
@@ -1974,7 +1974,7 @@ bool cproxy_auth_downstream(memcached_server_st *server,
     return false;
 }
 
-bool cproxy_bucket_downstream(memcached_server_st *server,
+bool cproxy_bucket_downstream(mcs_server_st *server,
                               proxy_behavior *behavior) {
     assert(server);
     assert(behavior);
