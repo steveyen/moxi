@@ -98,7 +98,9 @@ int cproxy_init_agent(char *cfg_str,
 
     char *buff;
 
-    if (strncmp(cfg_str, "apikey=", 7) == 0) {
+    if (strncmp(cfg_str, "apikey=", 7) == 0 ||
+        strncmp(cfg_str, "auth=", 5) == 0 ||
+        strncmp(cfg_str, "url=", 4) == 0) {
         buff = trimstrdup(cfg_str);
     } else {
         buff = calloc(cfg_len + 50, sizeof(char));
@@ -130,12 +132,14 @@ int cproxy_init_agent(char *cfg_str,
 
                 if (key != NULL &&
                     val != NULL) {
-                    if (wordeq(key, "apikey")) {
+                    if (wordeq(key, "apikey") ||
+                        wordeq(key, "auth")) {
                         jid = strsep(&val, "%");
                         jpw = val;
                     } else if (wordeq(key, "config")) {
                         config = val;
-                    } else if (wordeq(key, "host")) {
+                    } else if (wordeq(key, "host") ||
+                               wordeq(key, "url")) {
                         host = val;
                     } else {
                         handled = false;
@@ -261,9 +265,11 @@ proxy_main *cproxy_init_agent_start(char *jid,
         init_conflate(&config);
 
         // Different jid's possible for production, staging, etc.
-        config.jid  = jid;  // "customer@stevenmb.local"
+        config.jid  = jid;  // "customer@stevenmb.local" or
+                            // "Administrator"
         config.pass = jpw;  // "password"
-        config.host = host; // "localhost"
+        config.host = host; // "localhost" or
+                            // "http://x.com:8080/pools/default/buckets/default"
         config.software   = PACKAGE;
         config.version    = VERSION;
         config.save_path  = config_path;
