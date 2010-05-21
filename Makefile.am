@@ -7,6 +7,7 @@ noinst_PROGRAMS = moxi-debug sizes testapp timedrun
 ##  change this
 INCLUDES = $(CONFLATE_CFLAGS)
 LIBS += $(CONFLATE_LIBS)
+LIBS += -lvbucket
 
 BUILT_SOURCES =
 
@@ -33,8 +34,7 @@ moxi_SOURCES = memcached.c memcached.h \
                     cproxy_stats.c \
                     cproxy_front.c \
                     matcher.c matcher.h \
-                    mcs.c mcs.h \
-                    cJSON.c cJSON.h
+                    mcs.c mcs.h
 
 timedrun_SOURCES = timedrun.c
 

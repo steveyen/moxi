@@ -10,6 +10,7 @@
 #include "cproxy.h"
 #include "work.h"
 #include "agent.h"
+#include <libvbucket/vbucket.h>
 
 // Integration with libconflate.
 //
@@ -355,6 +356,48 @@ void cproxy_on_new_config(void *data0, void *data1) {
 
     if (settings.verbose > 2) {
         fprintf(stderr, "conc new_config_ver %u\n", new_config_ver);
+    }
+
+    char **contents = get_key_values(kvs, "contents");
+    if (contents != NULL &&
+        contents[0] != NULL) {
+        // The contents[0] should be JSON that should look like...
+        //
+        // {"name":"default",
+        //  "nodes":[{"hostname":"10.17.1.46","status":"healthy",
+        //            "version":"0.3.0_114_g31859fe","os":"i386-apple-darwin9.8.0",
+        //            "ports":{"proxy":11213,"direct":11212}}],
+        //  "buckets":{"uri":"/pools/default/buckets"},
+        //  "controllers":{"ejectNode":{"uri":"/controller/ejectNode"},
+        //  "testWorkload":{"uri":"/pools/default/controller/testWorkload"}},
+        //  "stats":{"uri":"/pools/default/stats"},
+        //  "vbucketServerMap":{...more json here...}}
+        //
+        VBUCKET_CONFIG_HANDLE vch = vbucket_config_parse_string(contents[0]);
+        if (vch) {
+            proxy_behavior proxyb = m->behavior;
+
+            int pool_port = proxyb.port_listen;
+            int nodes_num = vbucket_config_get_num_servers(vch);
+            if (pool_port > 0 &&
+                nodes_num > 0) {
+                proxy_behavior_pool behavior_pool = {
+                    .base = proxyb,
+                    .num  = nodes_num,
+                    .arr  = calloc(nodes_num, sizeof(proxy_behavior))
+                };
+
+                if (behavior_pool.arr != NULL) {
+                    // TODO: Some code here.
+
+                    free(behavior_pool.arr);
+                }
+            }
+
+            vbucket_config_destroy(vch);
+        }
+
+        return; // Don't fall through since we received json Content.
     }
 
     // The kvs key-multivalues look roughly like...
