@@ -872,27 +872,13 @@ int init_mcs_st(mcs_st *mst, char *config) {
     assert(mst);
     assert(config);
 
-    if (mcs_create(mst) != NULL) {
-        mcs_behavior_set(mst, MEMCACHED_BEHAVIOR_NO_BLOCK, 1);
-        mcs_behavior_set(mst, MEMCACHED_BEHAVIOR_KETAMA, 1);
-        mcs_behavior_set(mst, MEMCACHED_BEHAVIOR_TCP_NODELAY, 1);
-
-        mcs_server_st *mservers;
-
-        mservers = mcs_server_st_parse(config);
-        if (mservers != NULL) {
-            mcs_server_push(mst, mservers);
-            mcs_server_st_free(mservers);
-
-            return mcs_server_count(mst);
-        } else {
-            if (settings.verbose > 1) {
-                fprintf(stderr, "mserver_parse failed: %s\n",
-                        config);
-            }
+    if (mcs_create(mst, config) != NULL) {
+        return mcs_server_count(mst);
+    } else {
+        if (settings.verbose > 1) {
+            fprintf(stderr, "mcs_create failed: %s\n",
+                    config);
         }
-
-        mcs_free(mst);
     }
 
     return 0;

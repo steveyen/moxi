@@ -11,48 +11,40 @@
 
 #ifdef MOXI_USE_VBUCKET
 
-mcs_st *mcs_create(mcs_st *ptr) {
-    return memcached_create(ptr);
+mcs_st *mcs_create(mcs_st *ptr, const char *config) {
+    memset(ptr, 0, sizeof(*ptr));
+    return ptr;
 }
 
 void mcs_free(mcs_st *ptr) {
-    memcached_free(ptr);
-}
-
-mcs_return mcs_behavior_set(mcs_st *ptr, memcached_behavior flag, uint64_t data) {
-    return memcached_behavior_set(ptr, flag, data);
+    if (ptr->servers) {
+        free(ptr->servers);
+    }
+    ptr->servers = NULL;
+    vbucket_config_destroy(ptr->vch);
 }
 
 uint32_t mcs_server_count(mcs_st *ptr) {
-    return memcached_server_count(ptr);
-}
-
-mcs_return mcs_server_push(mcs_st *ptr, mcs_server_st *list) {
-    return memcached_server_push(ptr, list);
+    return (uint32_t) vbucket_config_get_num_servers(*ptr);
 }
 
 mcs_server_st *mcs_server_index(mcs_st *ptr, int i) {
-    return &ptr->hosts[i];
+    return &ptr->servers[i];
 }
 
 uint32_t mcs_key_hash(mcs_st *ptr, const char *key, size_t key_length) {
-    return memcached_generate_hash(ptr, key, key_length);
-}
-
-mcs_server_st *mcs_server_st_parse(const char *str_servers) {
-    return memcached_servers_parse(str_servers); // Ex: "host:port,host2:port2"
-}
-
-void mcs_server_st_free(mcs_server_st *ptr) {
-    memcached_server_list_free(ptr);
+    return (uint32_t) vbucket_get_master(*ptr,
+                                         vbucket_config_get_vbucket_by_key(*ptr,
+                                                                           key, key_length));
 }
 
 void mcs_server_st_quit(mcs_server_st *ptr, uint8_t io_death) {
-    memcached_quit_server(ptr, io_death);
+    // TODO: memcached_quit_server(ptr, io_death);
 }
 
 mcs_return mcs_server_st_connect(mcs_server_st *ptr) {
-    return memcached_connect(ptr);
+    // TODO: return memcached_connect(ptr);
+    return -1;
 }
 
 mcs_return mcs_server_st_do(mcs_server_st *ptr,
@@ -76,7 +68,7 @@ mcs_return mcs_server_st_read(mcs_server_st *ptr,
 }
 
 void mcs_server_st_io_reset(mcs_server_st *ptr) {
-    memcached_io_reset(ptr);
+    // TODO: memcached_io_reset(ptr);
 }
 
 const char *mcs_server_st_hostname(mcs_server_st *ptr) {
@@ -91,26 +83,37 @@ int mcs_server_st_fd(mcs_server_st *ptr) {
     return ptr->fd;
 }
 
-#else // MOXI_USE_VBUCKET
+#else // !MOXI_USE_VBUCKET
 
-mcs_st *mcs_create(mcs_st *ptr) {
-    return memcached_create(ptr);
+mcs_st *mcs_create(mcs_st *ptr, const char *config) {
+    ptr = memcached_create(ptr);
+    if (ptr != NULL) {
+        memcached_behavior_set(ptr, MEMCACHED_BEHAVIOR_NO_BLOCK, 1);
+        memcached_behavior_set(ptr, MEMCACHED_BEHAVIOR_KETAMA, 1);
+        memcached_behavior_set(ptr, MEMCACHED_BEHAVIOR_TCP_NODELAY, 1);
+
+        memcached_server_st *mservers;
+
+        mservers = memcached_servers_parse(config);
+        if (mservers != NULL) {
+            memcached_server_push(ptr, mservers);
+            memcached_server_list_free(mservers);
+
+            return ptr;
+        }
+
+        mcs_free(ptr);
+    }
+
+    return NULL;
 }
 
 void mcs_free(mcs_st *ptr) {
     memcached_free(ptr);
 }
 
-mcs_return mcs_behavior_set(mcs_st *ptr, memcached_behavior flag, uint64_t data) {
-    return memcached_behavior_set(ptr, flag, data);
-}
-
 uint32_t mcs_server_count(mcs_st *ptr) {
     return memcached_server_count(ptr);
-}
-
-mcs_return mcs_server_push(mcs_st *ptr, mcs_server_st *list) {
-    return memcached_server_push(ptr, list);
 }
 
 mcs_server_st *mcs_server_index(mcs_st *ptr, int i) {
@@ -119,14 +122,6 @@ mcs_server_st *mcs_server_index(mcs_st *ptr, int i) {
 
 uint32_t mcs_key_hash(mcs_st *ptr, const char *key, size_t key_length) {
     return memcached_generate_hash(ptr, key, key_length);
-}
-
-mcs_server_st *mcs_server_st_parse(const char *str_servers) {
-    return memcached_servers_parse(str_servers); // Ex: "host:port,host2:port2"
-}
-
-void mcs_server_st_free(mcs_server_st *ptr) {
-    memcached_server_list_free(ptr);
 }
 
 void mcs_server_st_quit(mcs_server_st *ptr, uint8_t io_death) {
