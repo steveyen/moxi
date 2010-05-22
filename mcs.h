@@ -37,23 +37,23 @@ memcached_return memcached_do(memcached_server_st *ptr,
 #define mcs_return uint32_t
 
 typedef struct {
-    VBUCKET_CONFIG_HANDLE vch;
-    mcs_server_st servers[];
-} mcs_st;
-
-typedef struct {
     char hostname[200];
     int port;
     int fd;
 } mcs_server_st;
 
-#else
+typedef struct {
+    VBUCKET_CONFIG_HANDLE vch;
+    mcs_server_st *servers;    // Array, size == vbucket_config_get_num_servers(vch);
+} mcs_st;
+
+#else // !MOXI_US_VBUCKET
 
 #define mcs_return    memcached_return
 #define mcs_st        memcached_st
 #define mcs_server_st memcached_server_st
 
-#endif // MOXI_USE_VBUCKET
+#endif // !MOXI_USE_VBUCKET
 
 mcs_st *mcs_create(mcs_st *ptr, const char *config);
 void    mcs_free(mcs_st *ptr);
