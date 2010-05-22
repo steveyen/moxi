@@ -357,6 +357,7 @@ void cproxy_on_new_config(void *data0, void *data1) {
         fprintf(stderr, "conc new_config_ver %u\n", new_config_ver);
     }
 
+#ifdef MOXI_USE_VBUCKET
     char **contents = get_key_values(kvs, "contents");
     if (contents != NULL &&
         contents[0] != NULL) {
@@ -440,6 +441,7 @@ void cproxy_on_new_config(void *data0, void *data1) {
 
         return; // Don't fall through since we received json Content.
     }
+#endif
 
     // The kvs key-multivalues look roughly like...
     //

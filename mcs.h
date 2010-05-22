@@ -4,7 +4,12 @@
 #define MCS_H
 
 #include <libmemcached/memcached.h>
+
+#undef MOXI_USE_VBUCKET
+
+#ifdef MOXI_USE_VBUCKET
 #include <libvbucket/vbucket.h>
+#endif // MOXI_USE_VBUCKET
 
 // From libmemcached.
 //
@@ -27,9 +32,19 @@ memcached_return memcached_do(memcached_server_st *ptr,
 // The mcs API's are a level of indirection from direct libmemcached
 // API usage.
 //
+#ifdef MOXI_USE_VBUCKET
+
 #define mcs_return    memcached_return
 #define mcs_st        memcached_st
 #define mcs_server_st memcached_server_st
+
+#else
+
+#define mcs_return    memcached_return
+#define mcs_st        memcached_st
+#define mcs_server_st memcached_server_st
+
+#endif // MOXI_USE_VBUCKET
 
 mcs_st *mcs_create(mcs_st *ptr);
 void    mcs_free(mcs_st *ptr);
