@@ -6,6 +6,7 @@
 #include <libmemcached/memcached.h>
 
 #undef MOXI_USE_VBUCKET
+#define MOXI_USE_VBUCKET 1
 
 #ifdef MOXI_USE_VBUCKET
 #include <libvbucket/vbucket.h>

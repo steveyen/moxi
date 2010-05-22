@@ -6,6 +6,13 @@
 #include <errno.h>
 #include <sysexits.h>
 #include <sys/time.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <unistd.h>
+#include <netdb.h>
+#include <limits.h>
+#include <fcntl.h>
+#include <errno.h>
 #include <assert.h>
 #include "mcs.h"
 
@@ -22,6 +29,10 @@ mcs_st *mcs_create(mcs_st *ptr, const char *config) {
         if (n > 0) {
             ptr->servers = calloc(sizeof(mcs_server_st), n);
             if (ptr->servers != NULL) {
+                for (int i = 0; i < n; i++) {
+                    ptr->servers[i].fd = -1;
+                }
+
                 int j = 0;
                 for (; j < n; j++) {
                     const char *hostport = vbucket_config_get_server(ptr->vch, j);
@@ -82,12 +93,77 @@ uint32_t mcs_key_hash(mcs_st *ptr, const char *key, size_t key_length) {
 }
 
 void mcs_server_st_quit(mcs_server_st *ptr, uint8_t io_death) {
-    // TODO: memcached_quit_server(ptr, io_death);
+    // TODO: Should send QUIT msg.
+    //
+    if (ptr->fd != -1) {
+        close(ptr->fd);
+    }
+    ptr->fd = -1;
 }
 
 mcs_return mcs_server_st_connect(mcs_server_st *ptr) {
-    // TODO: return memcached_connect(ptr);
-    return -1;
+    int ret = -1;
+
+    if (ptr->fd == -1) {
+        struct addrinfo *ai   = NULL;
+        struct addrinfo *next = NULL;
+
+        struct addrinfo hints = { .ai_flags = AI_PASSIVE,
+                                  .ai_socktype = SOCK_STREAM,
+                                  .ai_family = AF_UNSPEC };
+
+        char port[50];
+        snprintf(port, sizeof(port), "%d", ptr->port);
+
+        int error = getaddrinfo(ptr->hostname, port, &hints, &ai);
+        if (error != 0) {
+            if (error != EAI_SYSTEM) {
+                // settings.extensions.logger->log(EXTENSION_LOG_WARNING, NULL,
+                //                                 "getaddrinfo(): %s\n", gai_strerror(error));
+            } else {
+                // settings.extensions.logger->log(EXTENSION_LOG_WARNING, NULL,
+                //                                 "getaddrinfo(): %s\n", strerror(error));
+            }
+
+            return -1;
+        }
+
+        for (next = ai; next; next = next->ai_next) {
+            int sock = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
+            if (sock == -1) {
+                // settings.extensions.logger->log(EXTENSION_LOG_WARNING, NULL,
+                //                                 "Failed to create socket: %s\n",
+                //                                 strerror(errno));
+                continue;
+            }
+
+            if (connect(sock, ai->ai_addr, ai->ai_addrlen) == -1) {
+                // settings.extensions.logger->log(EXTENSION_LOG_WARNING, NULL,
+                //                                 "Failed to connect socket: %s\n",
+                //                                 strerror(errno));
+                close(sock);
+                sock = -1;
+                continue;
+            }
+
+            int flags = fcntl(sock, F_GETFL, 0);
+            if (flags < 0 ||
+                fcntl(sock, F_SETFL, flags | O_NONBLOCK) < 0) {
+                perror("setting O_NONBLOCK");
+                close(sock);
+                sock = -1;
+                continue;
+            }
+
+            ptr->fd = sock;
+            ret = 0;
+            break;
+        }
+
+        freeaddrinfo(ai);
+    }
+
+    return ret;
 }
 
 mcs_return mcs_server_st_do(mcs_server_st *ptr,
