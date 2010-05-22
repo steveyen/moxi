@@ -90,7 +90,7 @@ proxy *cproxy_create(char    *name,
     assert(nthreads == settings.num_threads);
 
     if (settings.verbose > 1) {
-        fprintf(stderr, "cproxy_create on port %d, downstream %s\n",
+        fprintf(stderr, "cproxy_create on port %d, config %s\n",
                 port, config);
     }
 

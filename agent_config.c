@@ -10,7 +10,6 @@
 #include "cproxy.h"
 #include "work.h"
 #include "agent.h"
-#include <libvbucket/vbucket.h>
 
 // Integration with libconflate.
 //
@@ -361,7 +360,9 @@ void cproxy_on_new_config(void *data0, void *data1) {
     char **contents = get_key_values(kvs, "contents");
     if (contents != NULL &&
         contents[0] != NULL) {
-        // The contents[0] should be JSON that should look like...
+        char *config = trimstrdup(contents[0]);
+
+        // The config should be JSON that should look like...
         //
         // {"name":"default",
         //  "nodes":[{"hostname":"10.17.1.46","status":"healthy",
@@ -373,7 +374,7 @@ void cproxy_on_new_config(void *data0, void *data1) {
         //  "stats":{"uri":"/pools/default/stats"},
         //  "vbucketServerMap":{...more json here...}}
         //
-        VBUCKET_CONFIG_HANDLE vch = vbucket_config_parse_string(contents[0]);
+        VBUCKET_CONFIG_HANDLE vch = vbucket_config_parse_string(config);
         if (vch) {
             proxy_behavior proxyb = m->behavior;
 
@@ -388,7 +389,45 @@ void cproxy_on_new_config(void *data0, void *data1) {
                 };
 
                 if (behavior_pool.arr != NULL) {
-                    // TODO: Some code here.
+                    int j = 0;
+                    for (; j < nodes_num; j++) {
+                        // Inherit default behavior.
+                        //
+                        behavior_pool.arr[j] = behavior_pool.base;
+
+                        const char *hostport = vbucket_config_get_server(vch, j);
+                        if (hostport != NULL &&
+                            strlen(hostport) > 0 &&
+                            strlen(hostport) < sizeof(behavior_pool.arr[j].host) - 1) {
+                            strncpy(behavior_pool.arr[j].host,
+                                    hostport,
+                                    sizeof(behavior_pool.arr[j].host) - 1);
+                            char *colon = strchr(behavior_pool.arr[j].host, ':');
+                            if (colon != NULL) {
+                                *colon = '\0';
+                                behavior_pool.arr[j].port = atoi(colon + 1);
+                                if (behavior_pool.arr[j].port <= 0) {
+                                    break;
+                                }
+                            } else {
+                                break;
+                            }
+                        } else {
+                            break;
+                        }
+                    }
+
+                    if (j >= nodes_num) {
+                        cproxy_on_new_pool(m, "default", pool_port,
+                                           config, new_config_ver,
+                                           &behavior_pool);
+                    } else {
+                        if (settings.verbose > 1) {
+                            fprintf(stderr,
+                                    "ERROR: error receiving host:port for server config %d in %s\n",
+                                    j, config);
+                        }
+                    }
 
                     free(behavior_pool.arr);
                 }
@@ -396,6 +435,8 @@ void cproxy_on_new_config(void *data0, void *data1) {
 
             vbucket_config_destroy(vch);
         }
+
+        free(config);
 
         return; // Don't fall through since we received json Content.
     }

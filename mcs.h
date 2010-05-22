@@ -4,6 +4,7 @@
 #define MCS_H
 
 #include <libmemcached/memcached.h>
+#include <libvbucket/vbucket.h>
 
 // From libmemcached.
 //
