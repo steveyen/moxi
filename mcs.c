@@ -171,8 +171,13 @@ mcs_return mcs_server_st_do(mcs_server_st *ptr,
                             const void *command,
                             size_t command_length,
                             uint8_t with_flush) {
-    // TODO: return memcached_do(ptr, command, command_length, with_flush);
-    return -1;
+    if (mcs_server_st_connect(ptr) == MEMCACHED_SUCCESS) {
+        ssize_t n = mcs_server_st_io_write(ptr, command, command_length, with_flush);
+        if (n == command_length) {
+            return MEMCACHED_SUCCESS;
+        }
+    }
+    return MEMCACHED_FAILURE;
 }
 
 ssize_t mcs_server_st_io_write(mcs_server_st *ptr,
