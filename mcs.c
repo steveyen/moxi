@@ -3,16 +3,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <errno.h>
-#include <sysexits.h>
-#include <sys/time.h>
-#include <sys/types.h>
 #include <sys/socket.h>
 #include <unistd.h>
 #include <netdb.h>
-#include <limits.h>
+#include <netinet/tcp.h>
 #include <fcntl.h>
-#include <errno.h>
 #include <assert.h>
 #include "mcs.h"
 
@@ -93,7 +88,7 @@ uint32_t mcs_key_hash(mcs_st *ptr, const char *key, size_t key_length) {
 }
 
 void mcs_server_st_quit(mcs_server_st *ptr, uint8_t io_death) {
-    // TODO: Should send QUIT msg.
+    // TODO: Should send QUIT cmd.
     //
     if (ptr->fd != -1) {
         close(ptr->fd);
@@ -102,66 +97,72 @@ void mcs_server_st_quit(mcs_server_st *ptr, uint8_t io_death) {
 }
 
 mcs_return mcs_server_st_connect(mcs_server_st *ptr) {
-    int ret = -1;
+    if (ptr->fd != -1)
+        return MEMCACHED_SUCCESS;
 
-    if (ptr->fd == -1) {
-        struct addrinfo *ai   = NULL;
-        struct addrinfo *next = NULL;
+    int ret = MEMCACHED_FAILURE;
 
-        struct addrinfo hints = { .ai_flags = AI_PASSIVE,
-                                  .ai_socktype = SOCK_STREAM,
-                                  .ai_family = AF_UNSPEC };
+    struct addrinfo *ai   = NULL;
+    struct addrinfo *next = NULL;
 
-        char port[50];
-        snprintf(port, sizeof(port), "%d", ptr->port);
+    struct addrinfo hints = { .ai_flags = AI_PASSIVE,
+                              .ai_socktype = SOCK_STREAM,
+                              .ai_family = AF_UNSPEC };
 
-        int error = getaddrinfo(ptr->hostname, port, &hints, &ai);
-        if (error != 0) {
-            if (error != EAI_SYSTEM) {
-                // settings.extensions.logger->log(EXTENSION_LOG_WARNING, NULL,
-                //                                 "getaddrinfo(): %s\n", gai_strerror(error));
-            } else {
-                // settings.extensions.logger->log(EXTENSION_LOG_WARNING, NULL,
-                //                                 "getaddrinfo(): %s\n", strerror(error));
-            }
+    char port[50];
+    snprintf(port, sizeof(port), "%d", ptr->port);
 
-            return -1;
+    int error = getaddrinfo(ptr->hostname, port, &hints, &ai);
+    if (error != 0) {
+        if (error != EAI_SYSTEM) {
+            // settings.extensions.logger->log(EXTENSION_LOG_WARNING, NULL,
+            //                                 "getaddrinfo(): %s\n", gai_strerror(error));
+        } else {
+            // settings.extensions.logger->log(EXTENSION_LOG_WARNING, NULL,
+            //                                 "getaddrinfo(): %s\n", strerror(error));
         }
 
-        for (next = ai; next; next = next->ai_next) {
-            int sock = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
-            if (sock == -1) {
-                // settings.extensions.logger->log(EXTENSION_LOG_WARNING, NULL,
-                //                                 "Failed to create socket: %s\n",
-                //                                 strerror(errno));
-                continue;
-            }
-
-            if (connect(sock, ai->ai_addr, ai->ai_addrlen) == -1) {
-                // settings.extensions.logger->log(EXTENSION_LOG_WARNING, NULL,
-                //                                 "Failed to connect socket: %s\n",
-                //                                 strerror(errno));
-                close(sock);
-                sock = -1;
-                continue;
-            }
-
-            int flags = fcntl(sock, F_GETFL, 0);
-            if (flags < 0 ||
-                fcntl(sock, F_SETFL, flags | O_NONBLOCK) < 0) {
-                perror("setting O_NONBLOCK");
-                close(sock);
-                sock = -1;
-                continue;
-            }
-
-            ptr->fd = sock;
-            ret = 0;
-            break;
-        }
-
-        freeaddrinfo(ai);
+        return MEMCACHED_FAILURE;
     }
+
+    for (next = ai; next; next = next->ai_next) {
+        int sock = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
+        if (sock == -1) {
+            // settings.extensions.logger->log(EXTENSION_LOG_WARNING, NULL,
+            //                                 "Failed to create socket: %s\n",
+            //                                 strerror(errno));
+            continue;
+        }
+
+        if (connect(sock, ai->ai_addr, ai->ai_addrlen) == -1) {
+            // settings.extensions.logger->log(EXTENSION_LOG_WARNING, NULL,
+            //                                 "Failed to connect socket: %s\n",
+            //                                 strerror(errno));
+            close(sock);
+            sock = -1;
+            continue;
+        }
+
+        int flags = fcntl(sock, F_GETFL, 0);
+        if (flags < 0 ||
+            fcntl(sock, F_SETFL, flags | O_NONBLOCK) < 0) {
+            perror("setting O_NONBLOCK");
+            close(sock);
+            sock = -1;
+            continue;
+        }
+
+        flags = 1;
+
+        setsockopt(sock, IPPROTO_TCP, TCP_NODELAY,
+                   &flags, (socklen_t) sizeof(flags));
+
+        ptr->fd = sock;
+        ret = MEMCACHED_SUCCESS;
+        break;
+    }
+
+    freeaddrinfo(ai);
 
     return ret;
 }
