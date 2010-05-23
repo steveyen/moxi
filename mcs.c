@@ -68,7 +68,9 @@ void mcs_free(mcs_st *ptr) {
     if (ptr->servers) {
         free(ptr->servers);
     }
-    vbucket_config_destroy(ptr->vch);
+    if (ptr->vch) {
+        vbucket_config_destroy(ptr->vch);
+    }
     memset(ptr, 0, sizeof(*ptr));
 }
 
@@ -184,15 +186,27 @@ ssize_t mcs_server_st_io_write(mcs_server_st *ptr,
                                const void *buffer,
                                size_t length,
                                char with_flush) {
-    // TODO: return memcached_io_write(ptr, buffer, length, with_flush);
-    return -1;
+    assert(ptr->fd != -1);
+
+    return write(ptr->fd, buffer, length);
 }
 
 mcs_return mcs_server_st_read(mcs_server_st *ptr,
                               void *dta,
                               size_t size) {
-    // TODO: return memcached_safe_read(ptr, dta, size);
-    return -1;
+    char *data = dta;
+    size_t done = 0;
+
+    while (done < size) {
+        size_t n = read(ptr->fd, data + done, size - done);
+        if (n <= 0) {
+            return MEMCACHED_FAILURE;
+        }
+
+        done += (size_t) n;
+    }
+
+    return MEMCACHED_SUCCESS;
 }
 
 void mcs_server_st_io_reset(mcs_server_st *ptr) {
