@@ -14,6 +14,7 @@ Makefile
 Makefile.in
 /debian/changelog
 /scripts/rpm/moxi.spec
+/tmp
 config.guess
 config.h
 config.h.in
