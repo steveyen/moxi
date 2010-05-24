@@ -63,7 +63,7 @@ uint32_t       mcs_server_count(mcs_st *ptr);
 mcs_return     mcs_server_push(mcs_st *ptr, mcs_server_st *list);
 mcs_server_st *mcs_server_index(mcs_st *ptr, int i);
 
-uint32_t mcs_key_hash(mcs_st *ptr, const char *key, size_t key_length);
+uint32_t mcs_key_hash(mcs_st *ptr, const char *key, size_t key_length, int *vbucket);
 
 void mcs_server_st_quit(mcs_server_st *ptr, uint8_t io_death);
 

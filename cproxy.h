@@ -444,7 +444,9 @@ bool  cproxy_bucket_downstream(mcs_server_st *server,
 void  cproxy_pause_upstream_for_downstream(proxy_td *ptd, conn *upstream);
 conn *cproxy_find_downstream_conn(downstream *d, char *key, int key_length,
                                   bool *self);
-int   cproxy_server_index(downstream *d, char *key, size_t key_length);
+conn *cproxy_find_downstream_conn_ex(downstream *d, char *key, int key_length,
+                                     bool *self, int *vbucket);
+int   cproxy_server_index(downstream *d, char *key, size_t key_length, int *vbucket);
 bool  cproxy_prep_conn_for_write(conn *c);
 bool  cproxy_dettach_if_noreply(downstream *d, conn *uc);
 

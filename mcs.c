@@ -82,11 +82,13 @@ mcs_server_st *mcs_server_index(mcs_st *ptr, int i) {
     return &ptr->servers[i];
 }
 
-uint32_t mcs_key_hash(mcs_st *ptr, const char *key, size_t key_length) {
-    return (uint32_t) vbucket_get_master(ptr->vch,
-                                         vbucket_get_vbucket_by_key(ptr->vch,
-                                                                    key,
-                                                                    key_length));
+uint32_t mcs_key_hash(mcs_st *ptr, const char *key, size_t key_length, int *vbucket) {
+    int v = vbucket_get_vbucket_by_key(ptr->vch, key, key_length);
+    if (vbucket != NULL) {
+        *vbucket = v;
+    }
+
+    return (uint32_t) vbucket_get_master(ptr->vch, v);
 }
 
 void mcs_server_st_quit(mcs_server_st *ptr, uint8_t io_death) {
@@ -262,7 +264,11 @@ mcs_server_st *mcs_server_index(mcs_st *ptr, int i) {
     return &ptr->hosts[i];
 }
 
-uint32_t mcs_key_hash(mcs_st *ptr, const char *key, size_t key_length) {
+uint32_t mcs_key_hash(mcs_st *ptr, const char *key, size_t key_length, *vbucket) {
+    if (vbucket != NULL) {
+        *vbucket = -1;
+    }
+
     return memcached_generate_hash(ptr, key, key_length);
 }
 

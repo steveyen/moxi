@@ -1007,6 +1007,13 @@ conn *cproxy_connect_downstream_conn(downstream *d,
 conn *cproxy_find_downstream_conn(downstream *d,
                                   char *key, int key_length,
                                   bool *self) {
+    return cproxy_find_downstream_conn_ex(d, key, key_length, self, NULL);
+}
+
+conn *cproxy_find_downstream_conn_ex(downstream *d,
+                                     char *key, int key_length,
+                                     bool *self,
+                                     int *vbucket) {
     assert(d != NULL);
     assert(d->downstream_conns != NULL);
     assert(key != NULL);
@@ -1016,7 +1023,8 @@ conn *cproxy_find_downstream_conn(downstream *d,
         *self = false;
     }
 
-    int s = cproxy_server_index(d, key, key_length);
+    int v = -1;
+    int s = cproxy_server_index(d, key, key_length, &v);
     if (s >= 0 &&
         s < mcs_server_count(&d->mst)) {
         if (self != NULL &&
@@ -1024,6 +1032,10 @@ conn *cproxy_find_downstream_conn(downstream *d,
             settings.port == mcs_server_st_port(mcs_server_index(&d->mst, s)) &&
             strcmp(mcs_server_st_hostname(mcs_server_index(&d->mst, s)), cproxy_hostname) == 0) {
             *self = true;
+        }
+
+        if (vbucket != NULL) {
+            *vbucket = v;
         }
 
         return d->downstream_conns[s];
@@ -1066,7 +1078,7 @@ bool cproxy_prep_conn_for_write(conn *c) {
  * Do a hash through libmemcached to see which server (by index)
  * should hold a given key.
  */
-int cproxy_server_index(downstream *d, char *key, size_t key_length) {
+int cproxy_server_index(downstream *d, char *key, size_t key_length, int *vbucket) {
     assert(d != NULL);
     assert(key != NULL);
     assert(key_length > 0);
@@ -1075,7 +1087,7 @@ int cproxy_server_index(downstream *d, char *key, size_t key_length) {
         return -1;
     }
 
-    return (int) mcs_key_hash(&d->mst, key, key_length);
+    return (int) mcs_key_hash(&d->mst, key, key_length, vbucket);
 }
 
 void cproxy_assign_downstream(proxy_td *ptd) {

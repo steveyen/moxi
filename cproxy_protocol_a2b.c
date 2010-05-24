@@ -993,9 +993,10 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
     // Assuming we're already connected to downstream.
     //
     bool self = false;
+    int  vbucket = -1;
 
-    conn *c = cproxy_find_downstream_conn(d, key, key_len,
-                                          &self);
+    conn *c = cproxy_find_downstream_conn_ex(d, key, key_len,
+                                             &self, &vbucket);
     if (c != NULL) {
         if (self) {
             // TODO: This optimization could be done much earlier,
@@ -1029,6 +1030,13 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
                 assert(key     == (char *) out_key);
                 assert(key_len == (int)    out_keylen);
                 assert(header->request.bodylen == 0);
+
+                if (vbucket >= 0) {
+                    // TODO: Need finalized vbucket request spec here.
+                    //
+                    header->request.datatype |= 0x01;
+                    header->request.reserved = vbucket;
+                }
 
                 header->request.bodylen =
                     htonl(out_keylen + out_extlen);
@@ -1258,9 +1266,10 @@ bool cproxy_forward_a2b_item_downstream(downstream *d, short cmd,
     // Assuming we're already connected to downstream.
     //
     bool self = false;
+    int  vbucket = -1;
 
-    conn *c = cproxy_find_downstream_conn(d, ITEM_key(it), it->nkey,
-                                          &self);
+    conn *c = cproxy_find_downstream_conn_ex(d, ITEM_key(it), it->nkey,
+                                             &self, &vbucket);
     if (c != NULL) {
         if (self) {
             cproxy_optimize_to_self(d, uc, uc->cmd_start);
@@ -1289,6 +1298,13 @@ bool cproxy_forward_a2b_item_downstream(downstream *d, short cmd,
                     req->request.datatype = PROTOCOL_BINARY_RAW_BYTES;
                     req->request.keylen   = htons((uint16_t) it->nkey);
                     req->request.extlen   = extlen;
+
+                    if (vbucket >= 0) {
+                        // TODO: Need finalized vbucket request spec here.
+                        //
+                        req->request.datatype |= 0x01;
+                        req->request.reserved = vbucket;
+                    }
 
                     switch (cmd) {
                     case NREAD_SET:
