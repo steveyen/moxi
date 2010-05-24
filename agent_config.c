@@ -118,7 +118,7 @@ int cproxy_init_agent(char *cfg_str,
         char *jid    = NULL;
         char *jpw    = NULL;
         char *jpwmem = NULL;
-        char *config = NULL;
+        char *dbpath = NULL;
         char *host   = NULL;
 
         char *cur = trimstr(strsep(&next, ";"));
@@ -136,8 +136,9 @@ int cproxy_init_agent(char *cfg_str,
                         wordeq(key, "auth")) {
                         jid = strsep(&val, "%");
                         jpw = val;
-                    } else if (wordeq(key, "config")) {
-                        config = val;
+                    } else if (wordeq(key, "config") ||
+                               wordeq(key, "dbpath")) {
+                        dbpath = val;
                     } else if (wordeq(key, "host") ||
                                wordeq(key, "url")) {
                         host = val;
@@ -160,10 +161,8 @@ int cproxy_init_agent(char *cfg_str,
             }
         }
 
-        if (jid == NULL ||
-            strlen(jid) <= 0) {
-            fprintf(stderr, "missing conflate id\n");
-            exit(EXIT_FAILURE);
+        if (jid == NULL) {
+            jid = "";
         }
 
         if (jpw == NULL) {
@@ -187,38 +186,38 @@ int cproxy_init_agent(char *cfg_str,
             }
         }
 
-        if (jpw == NULL ||
-            strlen(jpw) <= 0) {
-            fprintf(stderr, "missing conflate password\n");
-            exit(EXIT_FAILURE);
+        if (jpw == NULL) {
+            jpw = "";
         }
 
-        int config_alloc = 0;
-        if (config == NULL) {
-            config_alloc = strlen(jid) + 100;
-            config = calloc(config_alloc, 1);
-            if (config != NULL) {
-                snprintf(config, config_alloc,
-                         CONFLATE_DB_PATH "/%s.cfg", jid);
+        int dbpath_alloc = 0;
+        if (dbpath == NULL) {
+            dbpath_alloc = strlen(jid) + strlen(CONFLATE_DB_PATH) + 100;
+            dbpath = calloc(dbpath_alloc, 1);
+            if (dbpath != NULL) {
+                snprintf(dbpath, dbpath_alloc,
+                         CONFLATE_DB_PATH "/conflate-%s.cfg",
+                         (jid != NULL && strlen(jid) > 0 ? jid : "default"));
+
             } else {
-                fprintf(stderr, "conflate config buf alloc\n");
+                fprintf(stderr, "conflate dbpath buf alloc\n");
                 exit(EXIT_FAILURE);
             }
         }
 
         if (settings.verbose > 1) {
-            fprintf(stderr, "cproxy_init jid %s\n", jid);
+            fprintf(stderr, "cproxy_init jid: %s host: %s dbpath: %s\n", jid, host, dbpath);
         }
 
-        if (cproxy_init_agent_start(jid, jpw, config, host,
+        if (cproxy_init_agent_start(jid, jpw, dbpath, host,
                                     behavior,
                                     nthreads) != NULL) {
             rv++;
         }
 
-        if (config_alloc > 0 &&
-            config != NULL) {
-            free(config);
+        if (dbpath_alloc > 0 &&
+            dbpath != NULL) {
+            free(dbpath);
         }
 
         if (jpwmem) {
@@ -233,13 +232,11 @@ int cproxy_init_agent(char *cfg_str,
 
 proxy_main *cproxy_init_agent_start(char *jid,
                                     char *jpw,
-                                    char *config_path,
+                                    char *dbpath,
                                     char *host,
                                     proxy_behavior behavior,
                                     int nthreads) {
-    assert(jid);
-    assert(jpw);
-    assert(config_path);
+    assert(dbpath);
 
     if (settings.verbose > 2) {
         fprintf(stderr, "cproxy_init_agent_start\n");;
@@ -269,10 +266,11 @@ proxy_main *cproxy_init_agent_start(char *jid,
                             // "Administrator"
         config.pass = jpw;  // "password"
         config.host = host; // "localhost" or
+                            // "http://x.com:8080"
                             // "http://x.com:8080/pools/default/buckets/default"
         config.software   = PACKAGE;
         config.version    = VERSION;
-        config.save_path  = config_path;
+        config.save_path  = dbpath;
         config.userdata   = m;
         config.new_config = on_conflate_new_config;
         config.log        = agent_logger;
