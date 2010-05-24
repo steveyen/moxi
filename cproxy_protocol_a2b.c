@@ -1032,9 +1032,6 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
                 assert(header->request.bodylen == 0);
 
                 if (vbucket >= 0) {
-                    // TODO: Need finalized vbucket request spec here.
-                    //
-                    header->request.datatype |= 0x01;
                     header->request.reserved = vbucket;
                 }
 
@@ -1300,9 +1297,6 @@ bool cproxy_forward_a2b_item_downstream(downstream *d, short cmd,
                     req->request.extlen   = extlen;
 
                     if (vbucket >= 0) {
-                        // TODO: Need finalized vbucket request spec here.
-                        //
-                        req->request.datatype |= 0x01;
                         req->request.reserved = vbucket;
                     }
 
