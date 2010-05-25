@@ -361,6 +361,10 @@ void cproxy_on_new_config(void *data0, void *data1) {
         contents[0] != NULL) {
         char *config = trimstrdup(contents[0]);
 
+        if (settings.verbose > 2) {
+            fprintf(stderr, "conc contents config %s\n", config);
+        }
+
         // The config should be JSON that should look like...
         //
         // {"name":"default",
@@ -375,10 +379,20 @@ void cproxy_on_new_config(void *data0, void *data1) {
         //
         VBUCKET_CONFIG_HANDLE vch = vbucket_config_parse_string(config);
         if (vch) {
+            if (settings.verbose > 2) {
+                fprintf(stderr, "conc vbucket_config_parse_string: %d\n", (vch != NULL));
+            }
+
             proxy_behavior proxyb = m->behavior;
 
             int pool_port = proxyb.port_listen;
             int nodes_num = vbucket_config_get_num_servers(vch);
+
+            if (settings.verbose > 2) {
+                fprintf(stderr, "conc pool_port: %d nodes_num: %d\n",
+                        pool_port, nodes_num);
+            }
+
             if (pool_port > 0 &&
                 nodes_num > 0) {
                 proxy_behavior_pool behavior_pool = {
