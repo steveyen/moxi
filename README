@@ -116,3 +116,21 @@ The memcached website is at:
 
     http://www.danga.com/memcached/
 
+----------
+
+For vbucket development, start the following...
+
+  ruby ./t/rest_mock.rb
+
+Then start a "pretend" memcached server...
+
+  ./moxi -vvv -p 11311
+
+Then...
+
+  ./moxi -vvv -z auth=,url=http://localhost:4567,#@ -Z port_listen=11211
+
+Then...
+
+  telnet localhost 11211
+
