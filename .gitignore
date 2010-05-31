@@ -43,6 +43,7 @@ memcached_dtrace.h
 *~
 memcached-*.tar.gz
 moxi-*.tar.gz
+moxi_*.tar.gz
 doc/protocol-binary-range.txt
 doc/protocol-binary.txt
 /sizes

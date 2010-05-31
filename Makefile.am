@@ -185,3 +185,18 @@ fc_rpm_inner:
 
 fc_rpm: dist
 	rpmtop=`rpm --eval "%{_topdir}"` $(MAKE) fc_rpm_inner
+
+TMP_DIR=./tmp
+TMP_VER=$(TMP_DIR)/version_num.tmp
+
+version:
+	test -d $(TMP_DIR) || mkdir $(TMP_DIR)
+	git describe | sed s/-/_/g > $(TMP_VER)
+
+bdist: version
+	rm -f ./moxi_*.tar.gz
+	rm -rf $(TMP_DIR)/moxi
+	mkdir $(TMP_DIR)/moxi
+	cp moxi $(TMP_DIR)/moxi
+	(cd $(TMP_DIR); tar cf - moxi) | gzip -9 > moxi_`cat $(TMP_VER)`-`uname -s`.`uname -m`.tar.gz
+	echo created moxi_`cat $(TMP_VER)`-`uname -s`.`uname -m`.tar.gz
