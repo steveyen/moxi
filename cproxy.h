@@ -3,8 +3,6 @@
 #ifndef CPROXY_H
 #define CPROXY_H
 
-#include <libmemcached/memcached.h>
-
 #include "genhash.h"
 #include "work.h"
 #include "matcher.h"
