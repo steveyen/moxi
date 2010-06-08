@@ -45,4 +45,13 @@ void cproxy_on_new_pool(proxy_main *m,
 
 char **get_key_values(kvpair_t *kvs, char *key);
 
+#if 1 /* JHP_STATS */
+void proxy_stats_dump_basic(ADD_STAT add_stats, void *c,
+                            const char *prefix);
+void proxy_stats_dump_proxy_main(ADD_STAT add_stats, void *c,
+                                 struct proxy_stats_cmd_info *pscip);
+void proxy_stats_dump_proxies(ADD_STAT add_stats, void *c,
+                              struct proxy_stats_cmd_info *pscip);
+#endif
+
 #endif /* AGENT_H */

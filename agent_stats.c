@@ -72,6 +72,29 @@ static void map_key_stats_foreach_merge(const void *key,
                                         const void *value,
                                         void *user_data);
 
+#if 1 /* JHP_STATS */
+static void proxy_stats_dump_behavior(ADD_STAT add_stats,
+                                      void *c,
+                                      const char *prefix,
+                                      proxy_behavior *b,
+                                      int level);
+static void proxy_stats_dump_frontcache(ADD_STAT add_stats,
+                                        void *c,
+                                        const char *prefix,
+                                        proxy *p);
+static void proxy_stats_dump_pstd_stats(ADD_STAT add_stats,
+                                        void *c,
+                                        const char *prefix,
+                                        proxy_stats *stats);
+static void proxy_stats_dump_stats_cmd(ADD_STAT add_stats,
+                                       void *c,
+                                       const char *prefix,
+                                       proxy_stats_cmd stats_cmd[][STATS_CMD_last]);
+static void map_key_stats_foreach_dump(const void *key,
+                                       const void *value,
+                                       void *user_data);
+#endif
+
 struct main_stats_proxy_info {
     char *name;
     int port;
@@ -254,14 +277,22 @@ enum conflate_mgmt_cb_result on_conflate_get_stats(void *userdata,
         struct main_stats_collect_info ase = msci;
         ase.prefix = "memcached_settings";
 
+#if 1 /* JHP_STATS */
+        process_stat_settings(add_stat_prefix_ase, &ase, NULL);
+#else
         process_stat_settings(add_stat_prefix_ase, &ase);
+#endif
     }
 
     if (msci.do_stats) {
         struct main_stats_collect_info ase = msci;
         ase.prefix = "memcached_stats";
 
+#if 1 /* JHP_STATS */
+        server_stats(add_stat_prefix_ase, &ase, NULL);
+#else
         server_stats(add_stat_prefix_ase, &ase);
+#endif
     }
 
     // Alloc here so the main listener thread has less work.
@@ -397,6 +428,386 @@ void map_key_stats_foreach_merge(const void *key,
         }
     }
 }
+
+#if 1 /* JHP_STATS */
+static void proxy_stats_dump_behavior(ADD_STAT add_stats, void *c, const char *prefix,
+                                      proxy_behavior *b, int level) {
+
+    if (level >= 2)
+        APPEND_PREFIX_STAT("cycle", "%u", b->cycle);
+
+    if (level >= 1)
+        APPEND_PREFIX_STAT("downstream_max", "%u", b->downstream_max);
+
+    APPEND_PREFIX_STAT("downstream_weight",   "%u", b->downstream_weight);
+    APPEND_PREFIX_STAT("downstream_retry",    "%u", b->downstream_retry);
+    APPEND_PREFIX_STAT("downstream_protocol", "%d", b->downstream_protocol);
+    APPEND_PREFIX_STAT("downstream_timeout", "%ld", // In millisecs.
+              (b->downstream_timeout.tv_sec * 1000 +
+               b->downstream_timeout.tv_usec / 1000));
+
+    if (level >= 1)
+        APPEND_PREFIX_STAT("wait_queue_timeout", "%ld", // In millisecs.
+              (b->wait_queue_timeout.tv_sec * 1000 +
+               b->wait_queue_timeout.tv_usec / 1000));
+
+    if (level >= 1)
+        APPEND_PREFIX_STAT("front_cache_max", "%u", b->front_cache_max);
+    if (level >= 1)
+        APPEND_PREFIX_STAT("front_cache_lifespan", "%u", b->front_cache_lifespan);
+    if (level >= 1)
+        APPEND_PREFIX_STAT("front_cache_spec", "%s", b->front_cache_spec);
+    if (level >= 1)
+        APPEND_PREFIX_STAT("front_cache_unspec", "%s", b->front_cache_unspec);
+    if (level >= 1)
+        APPEND_PREFIX_STAT("key_stats_max", "%u", b->key_stats_max);
+    if (level >= 1)
+        APPEND_PREFIX_STAT("key_stats_lifespan", "%u", b->key_stats_lifespan);
+    if (level >= 1)
+        APPEND_PREFIX_STAT("key_stats_spec", "%s", b->key_stats_spec);
+    if (level >= 1)
+        APPEND_PREFIX_STAT("key_stats_unspec", "%s", b->key_stats_unspec);
+    if (level >= 1)
+        APPEND_PREFIX_STAT("optimize_set", "%s", b->optimize_set);
+
+    APPEND_PREFIX_STAT("usr",    "%s", b->usr);
+    APPEND_PREFIX_STAT("host",   "%s", b->host);
+    APPEND_PREFIX_STAT("port",   "%d", b->port);
+    APPEND_PREFIX_STAT("bucket", "%s", b->bucket);
+
+    if (level >= 1)
+        APPEND_PREFIX_STAT("port_listen", "%d", b->port_listen);
+}
+#endif
+
+#if 1 /* JHP_STATS */
+static void proxy_stats_dump_frontcache(ADD_STAT add_stats, void *c,
+                                        const char *prefix, proxy *p) {
+
+    pthread_mutex_lock(p->front_cache.lock);
+
+    if (p->front_cache.map != NULL)
+        APPEND_PREFIX_STAT("size", "%u", genhash_size(p->front_cache.map));
+
+    APPEND_PREFIX_STAT("max", "%u", p->front_cache.max);
+    APPEND_PREFIX_STAT("oldest_live", "%u", p->front_cache.oldest_live);
+    APPEND_PREFIX_STAT("tot_get_hits",
+           "%llu", (long long unsigned int) p->front_cache.tot_get_hits);
+    APPEND_PREFIX_STAT("tot_get_expires",
+           "%llu", (long long unsigned int) p->front_cache.tot_get_expires);
+    APPEND_PREFIX_STAT("tot_get_misses",
+           "%llu", (long long unsigned int) p->front_cache.tot_get_misses);
+    APPEND_PREFIX_STAT("tot_get_bytes",
+           "%llu", (long long unsigned int) p->front_cache.tot_get_bytes);
+    APPEND_PREFIX_STAT("tot_adds",
+           "%llu", (long long unsigned int) p->front_cache.tot_adds);
+    APPEND_PREFIX_STAT("tot_add_skips",
+           "%llu", (long long unsigned int) p->front_cache.tot_add_skips);
+    APPEND_PREFIX_STAT("tot_add_fails",
+           "%llu", (long long unsigned int) p->front_cache.tot_add_fails);
+    APPEND_PREFIX_STAT("tot_add_bytes",
+           "%llu", (long long unsigned int) p->front_cache.tot_add_bytes);
+    APPEND_PREFIX_STAT("tot_deletes",
+           "%llu", (long long unsigned int) p->front_cache.tot_deletes);
+    APPEND_PREFIX_STAT("tot_evictions",
+           "%llu", (long long unsigned int) p->front_cache.tot_evictions);
+
+    pthread_mutex_unlock(p->front_cache.lock);
+}
+#endif
+
+#if 1 /* JHP_STATS */
+static void proxy_stats_dump_pstd_stats(ADD_STAT add_stats, void *c, const char *prefix,
+                                        proxy_stats *stats) {
+    assert(stats != NULL);
+
+    APPEND_PREFIX_STAT("num_upstream",
+              "%llu", (long long unsigned int) stats->num_upstream);
+    APPEND_PREFIX_STAT("tot_upstream",
+              "%llu", (long long unsigned int) stats->tot_upstream);
+    APPEND_PREFIX_STAT("num_downstream_conn",
+              "%llu", (long long unsigned int) stats->num_downstream_conn);
+    APPEND_PREFIX_STAT("tot_downstream_conn",
+              "%llu", (long long unsigned int) stats->tot_downstream_conn);
+    APPEND_PREFIX_STAT("tot_downstream_released",
+              "%llu", (long long unsigned int) stats->tot_downstream_released);
+    APPEND_PREFIX_STAT("tot_downstream_reserved",
+              "%llu", (long long unsigned int) stats->tot_downstream_reserved);
+    APPEND_PREFIX_STAT("tot_downstream_freed",
+              "%llu", (long long unsigned int) stats->tot_downstream_freed);
+    APPEND_PREFIX_STAT("tot_downstream_quit_server",
+              "%llu", (long long unsigned int) stats->tot_downstream_quit_server);
+    APPEND_PREFIX_STAT("tot_downstream_max_reached",
+              "%llu", (long long unsigned int) stats->tot_downstream_max_reached);
+    APPEND_PREFIX_STAT("tot_downstream_create_failed",
+              "%llu", (long long unsigned int) stats->tot_downstream_create_failed);
+    APPEND_PREFIX_STAT("tot_downstream_connect",
+              "%llu", (long long unsigned int) stats->tot_downstream_connect);
+    APPEND_PREFIX_STAT("tot_downstream_connect_failed",
+              "%llu", (long long unsigned int) stats->tot_downstream_connect_failed);
+    APPEND_PREFIX_STAT("tot_downstream_auth",
+              "%llu", (long long unsigned int) stats->tot_downstream_auth);
+    APPEND_PREFIX_STAT("tot_downstream_auth_failed",
+              "%llu", (long long unsigned int) stats->tot_downstream_auth_failed);
+    APPEND_PREFIX_STAT("tot_downstream_bucket",
+              "%llu", (long long unsigned int) stats->tot_downstream_bucket);
+    APPEND_PREFIX_STAT("tot_downstream_bucket_failed",
+              "%llu", (long long unsigned int) stats->tot_downstream_bucket_failed);
+    APPEND_PREFIX_STAT("tot_downstream_propagate_failed",
+              "%llu", (long long unsigned int) stats->tot_downstream_propagate_failed);
+    APPEND_PREFIX_STAT("tot_downstream_close_on_upstream_close",
+              "%llu", (long long unsigned int) stats->tot_downstream_close_on_upstream_close);
+    APPEND_PREFIX_STAT("tot_downstream_timeout",
+              "%llu", (long long unsigned int) stats->tot_downstream_timeout);
+    APPEND_PREFIX_STAT("tot_wait_queue_timeout",
+              "%llu", (long long unsigned int) stats->tot_wait_queue_timeout);
+    APPEND_PREFIX_STAT("tot_assign_downstream",
+              "%llu", (long long unsigned int) stats->tot_assign_downstream);
+    APPEND_PREFIX_STAT("tot_assign_upstream",
+              "%llu", (long long unsigned int) stats->tot_assign_upstream);
+    APPEND_PREFIX_STAT("tot_assign_recursion",
+              "%llu", (long long unsigned int) stats->tot_assign_recursion);
+    APPEND_PREFIX_STAT("tot_reset_upstream_avail",
+              "%llu", (long long unsigned int) stats->tot_reset_upstream_avail);
+    APPEND_PREFIX_STAT("tot_multiget_keys",
+              "%llu", (long long unsigned int) stats->tot_multiget_keys);
+    APPEND_PREFIX_STAT("tot_multiget_keys_dedupe",
+              "%llu", (long long unsigned int) stats->tot_multiget_keys_dedupe);
+    APPEND_PREFIX_STAT("tot_multiget_bytes_dedupe",
+              "%llu", (long long unsigned int) stats->tot_multiget_bytes_dedupe);
+    APPEND_PREFIX_STAT("tot_optimize_sets",
+              "%llu", (long long unsigned int) stats->tot_optimize_sets);
+    APPEND_PREFIX_STAT("tot_optimize_self",
+              "%llu", (long long unsigned int) stats->tot_optimize_self);
+    APPEND_PREFIX_STAT("tot_retry",
+              "%llu", (long long unsigned int) stats->tot_retry);
+    APPEND_PREFIX_STAT("err_oom",
+              "%llu", (long long unsigned int) stats->err_oom);
+    APPEND_PREFIX_STAT("err_upstream_write_prep",
+              "%llu", (long long unsigned int) stats->err_upstream_write_prep);
+    APPEND_PREFIX_STAT("err_downstream_write_prep",
+              "%llu", (long long unsigned int) stats->err_downstream_write_prep);
+}
+#endif
+
+#if 1 /* JHP_STATS */
+static void proxy_stats_dump_stats_cmd(ADD_STAT add_stats, void *c, const char *prefix,
+                                       proxy_stats_cmd stats_cmd[][STATS_CMD_last]) {
+    char keybuf[128];
+
+    for (int j = 0; j < STATS_CMD_TYPE_last; j++) {
+        for (int k = 0; k < STATS_CMD_last; k++) {
+            if (stats_cmd[j][k].seen != 0) {
+                snprintf(keybuf, sizeof(keybuf), "%s_%s:%s", 
+                         cmd_type_names[j], cmd_names[k], "seen");
+                APPEND_PREFIX_STAT(keybuf,
+                         "%llu", (long long unsigned int) stats_cmd[j][k].seen); 
+            }
+            if (stats_cmd[j][k].hits != 0) {
+                snprintf(keybuf, sizeof(keybuf), "%s_%s:%s", 
+                         cmd_type_names[j], cmd_names[k], "hits");
+                APPEND_PREFIX_STAT(keybuf,
+                         "%llu", (long long unsigned int) stats_cmd[j][k].hits); 
+            }
+            if (stats_cmd[j][k].misses != 0) {
+                snprintf(keybuf, sizeof(keybuf), "%s_%s:%s", 
+                         cmd_type_names[j], cmd_names[k], "misses");
+                APPEND_PREFIX_STAT(keybuf,
+                         "%llu", (long long unsigned int) stats_cmd[j][k].misses); 
+            } 
+            if (stats_cmd[j][k].read_bytes != 0) {
+                snprintf(keybuf, sizeof(keybuf), "%s_%s:%s", 
+                         cmd_type_names[j], cmd_names[k], "read_bytes");
+                APPEND_PREFIX_STAT(keybuf,
+                         "%llu", (long long unsigned int) stats_cmd[j][k].read_bytes);
+            }
+            if (stats_cmd[j][k].write_bytes != 0) {
+                snprintf(keybuf, sizeof(keybuf), "%s_%s:%s", 
+                         cmd_type_names[j], cmd_names[k], "write_bytes");
+                APPEND_PREFIX_STAT(keybuf,
+                         "%llu", (long long unsigned int) stats_cmd[j][k].write_bytes);
+            }
+            if (stats_cmd[j][k].cas != 0) {
+                snprintf(keybuf, sizeof(keybuf), "%s_%s:%s", 
+                         cmd_type_names[j], cmd_names[k], "cas");
+                APPEND_PREFIX_STAT(keybuf,
+                         "%llu", (long long unsigned int) stats_cmd[j][k].cas);
+            }
+        }
+    }
+}
+#endif
+
+#if 1 /* JHP_STATS */
+struct key_stats_dump_state {
+    const char *prefix;
+    ADD_STAT add_stats;
+    void *conn;
+    struct proxy_stats_cmd_info *pscip;
+};
+
+static void map_key_stats_foreach_dump(const void *key, const void *value,
+                                       void *user_data) {
+    const char *name = (const char *)key;
+    assert(name != NULL);
+    struct key_stats *stats = (struct key_stats *)value;
+    assert(stats != NULL);
+    struct key_stats_dump_state *state = (struct key_stats_dump_state *)user_data;
+    assert(state != NULL);
+    
+    assert(strcmp(name, stats->key) == 0);
+
+    ADD_STAT add_stats = state->add_stats;
+    void *c = state->conn;
+    char prefix[200+KEY_MAX_LENGTH];
+    snprintf(prefix, sizeof(prefix), "%s:%s", state->prefix, name);
+
+    proxy_stats_dump_stats_cmd(add_stats, c, prefix, stats->stats_cmd);
+
+    APPEND_PREFIX_STAT("added_at_msec", "%u", stats->added_at);
+}
+#endif
+
+#if 1 /* JHP_STATS */
+void proxy_stats_dump_basic(ADD_STAT add_stats, void *c, const char *prefix) {
+
+    APPEND_PREFIX_STAT("version", "%s", VERSION);
+    APPEND_PREFIX_STAT("nthreads", "%d", settings.num_threads);
+    APPEND_PREFIX_STAT("hostname", "%s", cproxy_hostname);
+}
+#endif
+
+#if 1 /* JHP_STATS */
+void proxy_stats_dump_proxy_main(ADD_STAT add_stats, void *c,
+                                 struct proxy_stats_cmd_info *pscip) {
+
+    if (pscip->do_info) {
+	const char *prefix = "proxy_main:";
+        APPEND_PREFIX_STAT("conf_type", "%s",
+               (proxy_main_g->conf_type==PROXY_CONF_TYPE_STATIC ? "static" : "dynamic"));
+    }
+    
+    if (pscip->do_behaviors) 
+        proxy_stats_dump_behavior(add_stats, c, "proxy_main:behavior:",
+                                  &proxy_main_g->behavior, 2);
+
+    if (pscip->do_stats) {
+	const char *prefix = "proxy_main:stats:";
+        APPEND_PREFIX_STAT("stat_configs",
+                    "%llu", (long long unsigned int) proxy_main_g->stat_configs);
+        APPEND_PREFIX_STAT("stat_config_fails",
+                    "%llu", (long long unsigned int) proxy_main_g->stat_config_fails);
+        APPEND_PREFIX_STAT("stat_proxy_starts",
+                    "%llu", (long long unsigned int) proxy_main_g->stat_proxy_starts);
+        APPEND_PREFIX_STAT("stat_proxy_start_fails",
+                    "%llu", (long long unsigned int) proxy_main_g->stat_proxy_start_fails);
+        APPEND_PREFIX_STAT("stat_proxy_existings",
+                    "%llu", (long long unsigned int) proxy_main_g->stat_proxy_existings);
+        APPEND_PREFIX_STAT("stat_proxy_shutdowns",
+                    "%llu", (long long unsigned int) proxy_main_g->stat_proxy_shutdowns);
+    }
+}
+#endif
+
+#if 1 /* JHP_STATS */
+void proxy_stats_dump_proxies(ADD_STAT add_stats, void *c,
+                              struct proxy_stats_cmd_info *pscip) {
+
+    char prefix[200];
+
+    if (pthread_mutex_trylock(&proxy_main_g->proxy_main_lock) != 0) {
+        /* Do not dump proxy stats 
+         * if dynamic reconfiguration is currently executing by other thread.
+         */
+        return;
+    }
+
+    for (proxy *p = proxy_main_g->proxy_head; p != NULL; p = p->next) {
+
+        pthread_mutex_lock(&p->proxy_lock);
+
+        if (pscip->do_info) {
+            snprintf(prefix, sizeof(prefix), "%u:%s:info:", p->port, p->name);
+            APPEND_PREFIX_STAT("port",          "%u", p->port);
+            APPEND_PREFIX_STAT("name",          "%s", p->name);
+            APPEND_PREFIX_STAT("config",        "%s", p->config);
+            APPEND_PREFIX_STAT("config_ver",    "%u", p->config_ver);
+            APPEND_PREFIX_STAT("behaviors_num", "%u", p->behavior_pool.num);
+        }
+
+        if (pscip->do_behaviors) {
+            snprintf(prefix, sizeof(prefix), "%u:%s:behavior:", p->port, p->name);
+            proxy_stats_dump_behavior(add_stats, c, prefix, &p->behavior_pool.base, 1);
+
+            for (int i = 0; i < p->behavior_pool.num; i++) {
+                snprintf(prefix, sizeof(prefix), "%u:%s:behavior-%u:", p->port, p->name, i);
+                proxy_stats_dump_behavior(add_stats, c, prefix, &p->behavior_pool.arr[i], 0);
+            }
+        }
+
+        if (pscip->do_stats) {
+            snprintf(prefix, sizeof(prefix), "%u:%s:stats:", p->port, p->name);
+            APPEND_PREFIX_STAT("listening", "%llu",
+                        (long long unsigned int) p->listening);
+            APPEND_PREFIX_STAT("listening_failed", "%llu",
+                        (long long unsigned int) p->listening_failed);
+        }
+
+        pthread_mutex_unlock(&p->proxy_lock);
+
+        if (pscip->do_frontcache) {
+            snprintf(prefix, sizeof(prefix), "%u:%s:frontcache:", p->port, p->name);
+            proxy_stats_dump_frontcache(add_stats, c, prefix, p);
+        }
+
+        if (pscip->do_stats) {
+            proxy_stats_td *pstd = calloc(1, sizeof(proxy_stats_td));;
+            if (pstd != NULL) {
+                pthread_mutex_lock(&p->proxy_lock);
+                for (int i = 1; i < proxy_main_g->nthreads; i++) {
+                    proxy_td *ptd = &p->thread_data[i];
+                    if (ptd != NULL)
+                        add_proxy_stats_td(pstd, &ptd->stats);
+                }
+                pthread_mutex_unlock(&p->proxy_lock);
+
+                snprintf(prefix, sizeof(prefix), "%u:%s:pstd_stats:", p->port, p->name);
+                proxy_stats_dump_pstd_stats(add_stats, c, prefix, &pstd->stats);
+                snprintf(prefix, sizeof(prefix), "%u:%s:pstd_stats_cmd:", p->port, p->name);
+                proxy_stats_dump_stats_cmd(add_stats, c, prefix, pstd->stats_cmd);
+  	        free(pstd);
+            }
+        }
+
+        if (pscip->do_keystats) {
+#if 1 /* Test is needed */
+            genhash_t *key_stats_map = NULL;
+#else
+            genhash_t *key_stats_map = genhash_init(16, strhash_ops);
+#endif
+            if (key_stats_map != NULL) {
+                pthread_mutex_lock(&p->proxy_lock);
+                for (int i = 1; i < proxy_main_g->nthreads; i++) {
+                     proxy_td *ptd = &p->thread_data[i];
+                     if (ptd != NULL)
+                         add_raw_key_stats(key_stats_map, &ptd->key_stats);
+                }
+                pthread_mutex_unlock(&p->proxy_lock);
+
+                snprintf(prefix, sizeof(prefix), "%u:%s:key_stats:", p->port, p->name);
+                struct key_stats_dump_state state = { .prefix = prefix,
+                                                      .add_stats = add_stats,
+                                                      .conn      = c,
+                                                      .pscip     = pscip };
+                genhash_iter(key_stats_map, map_key_stats_foreach_dump, &state);
+                genhash_free(key_stats_map);
+            }
+        }
+    }
+
+    pthread_mutex_unlock(&proxy_main_g->proxy_main_lock);
+}
+#endif
 
 
 /* Must be invoked on the main listener thread.
