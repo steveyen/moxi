@@ -1,6 +1,7 @@
 /* -*- Mode: C; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
@@ -127,6 +128,7 @@ static
 #undef collect_memcached_stats_for_proxy
 #endif
 void collect_memcached_stats_for_proxy(struct main_stats_collect_info *msci, const char *proxy_name, int proxy_port) {
+#ifndef MOXI_USE_VBUCKET
     memcached_st mst;
 
     memcached_create(&mst);
@@ -141,10 +143,10 @@ void collect_memcached_stats_for_proxy(struct main_stats_collect_info *msci, con
 
     char bufk[500];
 
-#define emit_s(key, val)                               \
-    snprintf(bufk, sizeof(bufk), "%u:%s:stats:%s",           \
-             proxy_port,                                  \
-             proxy_name != NULL ? proxy_name : "", key);     \
+#define emit_s(key, val)                                 \
+    snprintf(bufk, sizeof(bufk), "%u:%s:stats:%s",       \
+             proxy_port,                                 \
+             proxy_name != NULL ? proxy_name : "", key); \
     conflate_add_field(msci->result, bufk, val);
 
     char **keys = memcached_stat_get_keys(&mst, st, &error);
@@ -163,11 +165,12 @@ void collect_memcached_stats_for_proxy(struct main_stats_collect_info *msci, con
 
 out_free:
     memcached_free(&mst);
+#endif // !MOXI_USE_VBUCKET
 }
+
 #ifdef REDIRECTS_FOR_MOCKS
 #define collect_memcached_stats_for_proxy redirected_collect_memcached_stats_for_proxy
 #endif
-
 
 /* This callback is invoked by conflate on a conflate thread
  * when it wants proxy stats.

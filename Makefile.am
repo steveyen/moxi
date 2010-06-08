@@ -34,6 +34,7 @@ moxi_SOURCES = memcached.c memcached.h \
                     cproxy_stats.c \
                     cproxy_front.c \
                     matcher.c matcher.h \
+                    murmur_hash.c \
                     mcs.c mcs.h
 
 timedrun_SOURCES = timedrun.c
@@ -73,15 +74,15 @@ moxi_SOURCES += solaris_priv.c
 endif
 
 moxi_debug_SOURCES = $(moxi_SOURCES)
-moxi_debug_CPPFLAGS = -I$(top_srcdir)/libmemcached-0.30 -DCONFLATE_DB_PATH=\"$(CONFLATE_DB_PATH)\"
+moxi_debug_CPPFLAGS = -DCONFLATE_DB_PATH=\"$(CONFLATE_DB_PATH)\"
 moxi_CPPFLAGS = -DNDEBUG $(moxi_debug_CPPFLAGS)
-moxi_debug_LDADD = @PROFILER_LDFLAGS@ \
-                   libmemcached-0.30/libmemcached/libmemcached.la
+moxi_debug_LDADD = @PROFILER_LDFLAGS@
 moxi_debug_CFLAGS = @PROFILER_FLAGS@
 
-moxi_LDADD = libmemcached-0.30/libmemcached/libmemcached.la
+moxi_LDADD =
 moxi_DEPENDENCIES =
 moxi_debug_DEPENDENCIES =
+
 CLEANFILES=
 
 if BUILD_DTRACE
@@ -109,10 +110,10 @@ memcached_dtrace.o: $(moxi_OBJECTS)
 memcached_debug_dtrace.o: $(moxi_debug_OBJECTS)
 	$(DTRACE) $(DTRACEFLAGS) -G -o memcached_debug_dtrace.o -s ${srcdir}/memcached_dtrace.d $(moxi_debug_OBJECTS)
 
-SUBDIRS = doc libmemcached-0.30/libmemcached $(MAYBE_LIBCONFLATE)
-DIST_SUBDIRS = doc libmemcached-0.30/libmemcached $(MAYBE_LIBCONFLATE)
+SUBDIRS = doc $(MAYBE_LIBCONFLATE)
+DIST_SUBDIRS = doc $(MAYBE_LIBCONFLATE)
 DIST_DIRS = scripts
-EXTRA_DIST = doc scripts TODO t memcached.spec memcached_dtrace.d version.m4 libmemcached-0.30 protocol_binary.h patches debian
+EXTRA_DIST = doc scripts TODO t memcached.spec memcached_dtrace.d version.m4 protocol_binary.h patches debian
 
 MOSTLYCLEANFILES = *.gcov *.gcno *.gcda *.tcov
 

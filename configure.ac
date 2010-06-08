@@ -5,7 +5,6 @@ AC_CANONICAL_SYSTEM
 AC_CONFIG_SRCDIR(memcached.c)
 AM_INIT_AUTOMAKE(AC_PACKAGE_NAME, AC_PACKAGE_VERSION)
 AM_CONFIG_HEADER(config.h)
-AM_CONFIG_HEADER(libmemcached-0.30/libmemcached/libmemcached_config.h)
 
 AC_PROG_CC
 AC_PROG_CXX
@@ -119,17 +118,6 @@ AC_SUBST(PROFILER_LDFLAGS)
 AC_HEADER_TIME
 
 AC_SUBST(NO_STRICT_ALIASING)
-
-sinclude(libmemcached-0.30/m4/pod2man.m4)
-sinclude(libmemcached-0.30/m4/debug.m4)
-sinclude(libmemcached-0.30/m4/dtrace.m4)
-sinclude(libmemcached-0.30/m4/byteorder.m4)
-sinclude(libmemcached-0.30/m4/64bit.m4)
-sinclude(libmemcached-0.30/m4/protocol_binary.m4)
-sinclude(libmemcached-0.30/m4/memcached.m4)
-sinclude(libmemcached-0.30/m4/setsockopt.m4)
-sinclude(libmemcached-0.30/m4/hsieh.m4)
-sinclude(libmemcached-0.30/m4/util.m4)
 
 AC_ARG_ENABLE(coverage,
   [AS_HELP_STRING([--disable-coverage],[Disable code coverage])])
@@ -480,6 +468,6 @@ AC_SUBST([DATE], [`LANG=C date -R`])
 
 LIBS="$LIBS -lm"
 
-AC_CONFIG_FILES(Makefile doc/Makefile libmemcached-0.30/libmemcached/Makefile debian/changelog scripts/rpm/moxi.spec)
+AC_CONFIG_FILES(Makefile doc/Makefile debian/changelog scripts/rpm/moxi.spec)
 AC_OUTPUT
 

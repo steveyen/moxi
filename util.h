@@ -60,3 +60,6 @@ void vperror(const char *fmt, ...)
     __gcc_attribute__ ((format (printf, 1, 2)));
 
 #undef __gcc_attribute__
+
+uint64_t ntohll(uint64_t value);
+uint64_t htonll(uint64_t value);

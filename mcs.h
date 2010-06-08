@@ -3,14 +3,38 @@
 #ifndef MCS_H
 #define MCS_H
 
-#include <libmemcached/memcached.h>
-
 #undef MOXI_USE_VBUCKET
 #define MOXI_USE_VBUCKET 1
 
 #ifdef MOXI_USE_VBUCKET
 #include <libvbucket/vbucket.h>
 #endif // MOXI_USE_VBUCKET
+
+// The mcs API's are a level of indirection from direct libmemcached
+// API usage.
+//
+#ifdef MOXI_USE_VBUCKET
+
+typedef enum {
+  MEMCACHED_SUCCESS,
+  MEMCACHED_FAILURE,
+  MEMCACHED_MAXIMUM_RETURN /* Always add new error code before */
+} mcs_return;
+
+typedef struct {
+    char hostname[200];
+    int port;
+    int fd;
+} mcs_server_st;
+
+typedef struct {
+    VBUCKET_CONFIG_HANDLE vch;
+    mcs_server_st *servers;    // Array, size == vbucket_config_get_num_servers(vch);
+} mcs_st;
+
+#else // !MOXI_US_VBUCKET
+
+#include <libmemcached/memcached.h>
 
 // From libmemcached.
 //
@@ -29,26 +53,6 @@ memcached_return memcached_do(memcached_server_st *ptr,
                               const void *command,
                               size_t command_length,
                               uint8_t with_flush);
-
-// The mcs API's are a level of indirection from direct libmemcached
-// API usage.
-//
-#ifdef MOXI_USE_VBUCKET
-
-#define mcs_return uint32_t
-
-typedef struct {
-    char hostname[200];
-    int port;
-    int fd;
-} mcs_server_st;
-
-typedef struct {
-    VBUCKET_CONFIG_HANDLE vch;
-    mcs_server_st *servers;    // Array, size == vbucket_config_get_num_servers(vch);
-} mcs_st;
-
-#else // !MOXI_US_VBUCKET
 
 #define mcs_return    memcached_return
 #define mcs_st        memcached_st
