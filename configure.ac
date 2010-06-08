@@ -312,7 +312,14 @@ AC_SEARCH_LIBS(socket, socket)
 AC_SEARCH_LIBS(gethostbyname, nsl)
 AC_SEARCH_LIBS(umem_cache_create, umem)
 
-PKG_CHECK_MODULES([CHECK], [check >= 0.9.4])
+AC_ARG_WITH([check],
+        [AS_HELP_STRING([--with-check=yes], [look for check tool for unit tests])])
+
+if test "x$with_check" = "xno"; then
+  AC_MSG_NOTICE([skipping check unit-test dependency])
+else
+  PKG_CHECK_MODULES([CHECK], [check >= 0.9.4])
+fi
 
 AC_HEADER_STDBOOL
 AC_C_CONST
