@@ -281,16 +281,16 @@ LIBS="$LIBS -levent"
 
 if test $ac_cv_libevent_dir != "(system)"; then
   if test -d "$ac_cv_libevent_dir/lib" ; then
-    LDFLAGS="-L$ac_cv_libevent_dir/lib $LDFLAGS"
+    LDFLAGS="$LDFLAGS -L$ac_cv_libevent_dir/lib"
     le_libdir="$ac_cv_libevent_dir/lib"
   else
-    LDFLAGS="-L$ac_cv_libevent_dir $LDFLAGS"
+    LDFLAGS="$LDFLAGS -L$ac_cv_libevent_dir"
     le_libdir="$ac_cv_libevent_dir"
   fi
   if test -d "$ac_cv_libevent_dir/include" ; then
-    CPPFLAGS="-I$ac_cv_libevent_dir/include $CPPFLAGS"
+    CPPFLAGS="$CPPFLAGS -I$ac_cv_libevent_dir/include"
   else
-    CPPFLAGS="-I$ac_cv_libevent_dir $CPPFLAGS"
+    CPPFLAGS="$CPPFLAGS -I$ac_cv_libevent_dir"
   fi
 fi
 
