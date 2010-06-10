@@ -48,6 +48,7 @@
 #include <stddef.h>
 
 #include "cproxy.h"
+#include "stdin_check.h"
 
 /* FreeBSD 4.x doesn't have IOV_MAX exposed. */
 #ifndef IOV_MAX
@@ -4560,8 +4561,13 @@ int main (int argc, char **argv) {
 #endif
     }
 
-    if (cproxy_behavior)
+#ifndef MAIN_CHECK
+    stdin_check();
+#endif
+
+    if (cproxy_behavior) {
         free(cproxy_behavior);
+    }
 
     /* Drop privileges no longer needed */
     drop_privileges();
