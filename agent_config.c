@@ -376,7 +376,7 @@ void cproxy_on_new_config(void *data0, void *data1) {
         //  "controllers":{"ejectNode":{"uri":"/controller/ejectNode"},
         //  "testWorkload":{"uri":"/pools/default/controller/testWorkload"}},
         //  "stats":{"uri":"/pools/default/stats"},
-        //  "vbucketServerMap":{...more json here...}}
+        //  "vBucketServerMap":{...more json here...}}
         //
         VBUCKET_CONFIG_HANDLE vch = vbucket_config_parse_string(config);
         if (vch) {
