@@ -165,25 +165,33 @@ fi
 
 PKG_PROG_PKG_CONFIG
 
-AC_ARG_WITH(libconflate, [AS_HELP_STRING([--with-libconflate], [build with libconflate xmpp management @<:@default=check@:>@])],
+AC_ARG_WITH(libconflate, [AS_HELP_STRING([--with-libconflate], [build with libconflate management @<:@default=check@:>@])],
                            [], [with_libconflate=check])
+
 CONFLATE_CFLAGS=
 CONFLATE_LIBS=
+
 AC_SUBST(CONFLATE_CFLAGS)
 AC_SUBST(CONFLATE_LIBS)
+
 if test "x$with_libconflate" == xno; then
   echo "libconflate support is manually disabled"
 elif test "x$with_libconflate" = xbundled; then
   conflate_pkg_not_found=yes
+elif test "x$with_libconflate" = xhave; then
+  BUILD_WITH_CONFLATE=yes
+  AC_DEFINE([HAVE_CONFLATE_H], 1,
+            [Defined if building with libconflate management])
 else
   PKG_CHECK_MODULES([CONFLATE], [libconflate], [
        BUILD_WITH_CONFLATE=yes
        AC_DEFINE([HAVE_CONFLATE_H], 1,
-               [Defined if building with libconflate XMPP management])
+               [Defined if building with libconflate management])
     ], [
        conflate_pkg_not_found=yes
     ])
 fi
+
 if test "x$conflate_pkg_not_found" = "xyes"; then
   if test -f "$srcdir/libconflate/configure"; then
     if test "x$with_libconflate" = xbundled; then
@@ -196,7 +204,7 @@ if test "x$conflate_pkg_not_found" = "xyes"; then
     CONFLATE_CFLAGS="-Ilibconflate"
     BUILD_WITH_CONFLATE=yes
     AC_DEFINE([HAVE_CONFLATE_H], 1,
-              [Defined if building with libconflate XMPP management])
+              [Defined if building with libconflate management])
     AC_SUBST([MAYBE_LIBCONFLATE], [libconflate])
   else
     if test "x$with_libconflate" = xbundled; then
@@ -206,9 +214,10 @@ if test "x$conflate_pkg_not_found" = "xyes"; then
       AC_MSG_FAILURE([--with-libconflate was given, but pkg-config package for libconflate is missing])
     fi
     BUILD_WITH_CONFLATE=no
-    AC_MSG_NOTICE([support for libconflate XMPP management will be disabled])
+    AC_MSG_NOTICE([support for libconflate management will be disabled])
   fi
 fi
+
 AM_CONDITIONAL([BUILD_WITH_CONFLATE], [test "x$BUILD_WITH_CONFLATE" = xyes])
 
 trylibeventdir=""
@@ -431,7 +440,6 @@ AC_PATH_PROG([XSLTPROC], [xsltproc], "no")
 AM_CONDITIONAL([BUILD_SPECIFICATIONS],
                [test "x$enable_docs" != "xno" -a "x$XML2RFC" != "xno" -a "x$XSLTPROC" != "xno"])
 
-
 dnl Let the compiler be a bit more picky. Please note that you cannot
 dnl specify these flags to the compiler before AC_CHECK_FUNCS, because
 dnl the test program will generate a compilation warning and hence fail
@@ -458,6 +466,7 @@ then
 fi
 
 AC_ARG_VAR([CONFLATE_DB_PATH], [Directory for libconflate config database (default $prefix/var/lib/]AC_PACKAGE_NAME[)])
+
 if test "x$BUILD_WITH_CONFLATE" = "xyes"; then
   if test "x$CONFLATE_DB_PATH" = x; then
     CONFLATE_DB_PATH="$localstatedir/lib/$PACKAGE"
