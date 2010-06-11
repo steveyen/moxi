@@ -451,10 +451,11 @@ void cproxy_on_new_config(void *data0, void *data1) {
         }
 
         free(config);
-
-        return; // Don't fall through since we received json Content.
+    } else {
+        goto fail;
     }
-#endif
+
+#else // !MOXI_USE_VBUCKET
 
     // The kvs key-multivalues look roughly like...
     //
@@ -628,6 +629,8 @@ void cproxy_on_new_config(void *data0, void *data1) {
             goto fail;
         }
     }
+
+#endif // !MOXI_USE_VBUCKET
 
     // If there were any proxies that weren't updated in the
     // previous loop, we need to shut them down.  We mark the
