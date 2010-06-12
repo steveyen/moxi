@@ -240,6 +240,19 @@ int cproxy_init(char *cfg_str,
         return 0;
     }
 
+    if (behavior_str[0] == '.' ||
+        behavior_str[0] == '/') {
+        char *buf = readfile(behavior_str);
+        if (buf != NULL) {
+            int rv = cproxy_init(cfg_str, buf, nthreads, main_base);
+            free(buf);
+            return rv;
+        } else {
+            fprintf(stderr, "could not read behavior file: %s\n", behavior_str);
+            exit(EXIT_FAILURE);
+        }
+    }
+
     if (cfg_str[0] == '.' ||
         cfg_str[0] == '/') {
         char *buf = readfile(cfg_str);
