@@ -134,3 +134,25 @@ Then...
 
   telnet localhost 11211
 
+You can provide a vbucket server map in a file, such as vbucket1.cfg,
+that looks like...
+
+  11211 = {
+    "hashAlgorithm": "CRC",
+    "numReplicas": 0,
+    "serverList": ["memcached_svr1:11311"],
+    "vBucketMap":
+      [
+        [0],
+        [0]
+      ]
+  }
+
+The above configuration would tell moxi to listen on port 11211, and
+proxy to memcached_svr1:11311.  You would start moxi like...
+
+  moxi -z ./vbucket1.cfg
+
+The "./" path prefix is required so that moxi knows you're passing in
+a config file.
+
