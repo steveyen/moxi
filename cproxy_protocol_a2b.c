@@ -1028,7 +1028,7 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
                 assert(header->request.bodylen == 0);
 
                 if (vbucket >= 0) {
-                    header->request.reserved = vbucket;
+                    header->request.reserved = htons(vbucket);
                 }
 
                 header->request.bodylen =
@@ -1293,7 +1293,7 @@ bool cproxy_forward_a2b_item_downstream(downstream *d, short cmd,
                     req->request.extlen   = extlen;
 
                     if (vbucket >= 0) {
-                        req->request.reserved = vbucket;
+                        req->request.reserved = htons(vbucket);
                     }
 
                     switch (cmd) {
