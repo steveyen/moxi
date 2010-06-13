@@ -240,8 +240,9 @@ int cproxy_init(char *cfg_str,
         return 0;
     }
 
-    if (behavior_str[0] == '.' ||
-        behavior_str[0] == '/') {
+    if (behavior_str != NULL &&
+        (behavior_str[0] == '.' ||
+         behavior_str[0] == '/')) {
         char *buf = readfile(behavior_str);
         if (buf != NULL) {
             int rv = cproxy_init(cfg_str, buf, nthreads, main_base);
@@ -365,14 +366,12 @@ int cproxy_init_string(char *cfg_str,
                 behavior_pool.arr[i] = behavior;
             }
 
-#if 1 /* JHP_STATS_PRE */
             proxy_main *m = cproxy_gen_proxy_main(behavior, nthreads,
                                                   PROXY_CONF_TYPE_STATIC);
             if (m == NULL) {
                 fprintf(stderr, "could not alloc proxy_main\n");
                 exit(EXIT_FAILURE);
             }
-#endif
 
             proxy *p = cproxy_create(proxy_name,
                                      proxy_port,
@@ -381,12 +380,10 @@ int cproxy_init_string(char *cfg_str,
                                      &behavior_pool,
                                      nthreads);
             if (p != NULL) {
-#if 1 /* JHP_STATS_PRE */
                 pthread_mutex_lock(&m->proxy_main_lock);
                 p->next = m->proxy_head;
                 m->proxy_head = p;
                 pthread_mutex_unlock(&m->proxy_main_lock);
-#endif
 
                 int n = cproxy_listen(p);
                 if (n > 0) {
@@ -418,10 +415,8 @@ int cproxy_init_string(char *cfg_str,
     return 0;
 }
 
-#if 1 /* JHP_STATS_PRE */
 proxy_main *cproxy_gen_proxy_main(proxy_behavior behavior, int nthreads,
                                   enum_proxy_conf_type conf_type) {
-
     proxy_main *m = calloc(1, sizeof(proxy_main));
     if (m != NULL) {
         m->proxy_head = NULL;
@@ -438,12 +433,12 @@ proxy_main *cproxy_gen_proxy_main(proxy_behavior behavior, int nthreads,
         m->stat_proxy_existings   = 0;
         m->stat_proxy_shutdowns   = 0;
     }
+
     // global pointer to proxy_main structure
     proxy_main_g = m;
 
     return m;
 }
-#endif
 
 proxy_behavior cproxy_parse_behavior(char          *behavior_str,
                                      proxy_behavior behavior_default) {

@@ -1392,20 +1392,12 @@ static void process_bin_stat(conn *c) {
 
     if (nkey == 0) {
         /* request all statistics */
-#if 1 /* JHP_STATS */
         server_stats(&append_stats, c, NULL);
-#else
-        server_stats(&append_stats, c);
-#endif
         (void)get_stats(NULL, 0, &append_stats, c);
     } else if (strncmp(subcommand, "reset", 5) == 0) {
         stats_reset();
     } else if (strncmp(subcommand, "settings", 8) == 0) {
-#if 1 /* JHP_STATS */
         process_stat_settings(&append_stats, c, NULL);
-#else
-        process_stat_settings(&append_stats, c);
-#endif
     } else if (strncmp(subcommand, "detail", 6) == 0) {
         char *subcmd_pos = subcommand + 6;
         if (strncmp(subcmd_pos, " dump", 5) == 0) {
@@ -2154,7 +2146,6 @@ void append_stat(const char *name, ADD_STAT add_stats, void *c,
     add_stats(name, strlen(name), val_str, vlen, c);
 }
 
-#if 1 /* JHP_STATS */
 void append_prefix_stat(const char *prefix, const char *name, ADD_STAT add_stats, void *c,
                         const char *fmt, ...) {
     char val_str[STAT_VAL_LEN];
@@ -2170,15 +2161,14 @@ void append_prefix_stat(const char *prefix, const char *name, ADD_STAT add_stats
     vlen = vsnprintf(val_str, sizeof(val_str) - 1, fmt, ap);
     va_end(ap);
 
-    if (prefix == NULL)
+    if (prefix == NULL) {
         add_stats(name, strlen(name), val_str, vlen, c);
-    else {
+    } else {
         char key_str[STAT_KEY_LEN];
         strcpy(key_str, prefix); strcat(key_str, name);
         add_stats(key_str, strlen(key_str), val_str, vlen, c);
     }
 }
-#endif
 
 inline static void process_stats_detail(conn *c, const char *command) {
     assert(c != NULL);
@@ -2202,11 +2192,7 @@ inline static void process_stats_detail(conn *c, const char *command) {
 }
 
 /* return server specific stats only */
-#if 1 /* JHP_STATS */
 void server_stats(ADD_STAT add_stats, void *c, const char *prefix) {
-#else
-void server_stats(ADD_STAT add_stats, void *c) {
-#endif
     pid_t pid = getpid();
     rel_time_t now = current_time;
 
@@ -2222,7 +2208,6 @@ void server_stats(ADD_STAT add_stats, void *c) {
 
     STATS_LOCK();
 
-#if 1 /* JHP_STATS */
     APPEND_PREFIX_STAT("pid", "%lu", (long)pid);
     APPEND_PREFIX_STAT("uptime", "%u", now);
     APPEND_PREFIX_STAT("time", "%ld", now + (long)process_started);
@@ -2265,52 +2250,10 @@ void server_stats(ADD_STAT add_stats, void *c) {
     APPEND_PREFIX_STAT("listen_disabled_num", "%llu", (unsigned long long)stats.listen_disabled_num);
     APPEND_PREFIX_STAT("threads", "%d", settings.num_threads);
     APPEND_PREFIX_STAT("conn_yields", "%llu", (unsigned long long)thread_stats.conn_yields);
-#else
-    APPEND_STAT("pid", "%lu", (long)pid);
-    APPEND_STAT("uptime", "%u", now);
-    APPEND_STAT("time", "%ld", now + (long)process_started);
-    APPEND_STAT("version", "%s", VERSION);
-    APPEND_STAT("pointer_size", "%d", (int)(8 * sizeof(void *)));
-
-#ifndef WIN32
-    append_stat("rusage_user", add_stats, c, "%ld.%06ld",
-                (long)usage.ru_utime.tv_sec,
-                (long)usage.ru_utime.tv_usec);
-    append_stat("rusage_system", add_stats, c, "%ld.%06ld",
-                (long)usage.ru_stime.tv_sec,
-                (long)usage.ru_stime.tv_usec);
-#endif /* !WIN32 */
-
-    APPEND_STAT("curr_connections", "%u", stats.curr_conns - 1);
-    APPEND_STAT("total_connections", "%u", stats.total_conns);
-    APPEND_STAT("connection_structures", "%u", stats.conn_structs);
-    APPEND_STAT("cmd_get", "%llu", (unsigned long long)thread_stats.get_cmds);
-    APPEND_STAT("cmd_set", "%llu", (unsigned long long)slab_stats.set_cmds);
-    APPEND_STAT("cmd_flush", "%llu", (unsigned long long)thread_stats.flush_cmds);
-    APPEND_STAT("get_hits", "%llu", (unsigned long long)slab_stats.get_hits);
-    APPEND_STAT("get_misses", "%llu", (unsigned long long)thread_stats.get_misses);
-    APPEND_STAT("delete_misses", "%llu", (unsigned long long)thread_stats.delete_misses);
-    APPEND_STAT("delete_hits", "%llu", (unsigned long long)slab_stats.delete_hits);
-    APPEND_STAT("incr_misses", "%llu", (unsigned long long)thread_stats.incr_misses);
-    APPEND_STAT("incr_hits", "%llu", (unsigned long long)slab_stats.incr_hits);
-    APPEND_STAT("decr_misses", "%llu", (unsigned long long)thread_stats.decr_misses);
-    APPEND_STAT("decr_hits", "%llu", (unsigned long long)slab_stats.decr_hits);
-    APPEND_STAT("cas_misses", "%llu", (unsigned long long)thread_stats.cas_misses);
-    APPEND_STAT("cas_hits", "%llu", (unsigned long long)slab_stats.cas_hits);
-    APPEND_STAT("cas_badval", "%llu", (unsigned long long)slab_stats.cas_badval);
-    APPEND_STAT("bytes_read", "%llu", (unsigned long long)thread_stats.bytes_read);
-    APPEND_STAT("bytes_written", "%llu", (unsigned long long)thread_stats.bytes_written);
-    APPEND_STAT("limit_maxbytes", "%llu", (unsigned long long)settings.maxbytes);
-    APPEND_STAT("accepting_conns", "%u", stats.accepting_conns);
-    APPEND_STAT("listen_disabled_num", "%llu", (unsigned long long)stats.listen_disabled_num);
-    APPEND_STAT("threads", "%d", settings.num_threads);
-    APPEND_STAT("conn_yields", "%llu", (unsigned long long)thread_stats.conn_yields);
-#endif
 
     STATS_UNLOCK();
 }
 
-#if 1 /* JHP_STATS */
 void process_stat_settings(ADD_STAT add_stats, void *c, const char *prefix) {
     assert(add_stats);
     APPEND_PREFIX_STAT("maxbytes", "%u", (unsigned int)settings.maxbytes);
@@ -2336,33 +2279,6 @@ void process_stat_settings(ADD_STAT add_stats, void *c, const char *prefix) {
     APPEND_PREFIX_STAT("binding_protocol", "%s",
                 prot_text(settings.binding_protocol));
 }
-#else
-void process_stat_settings(ADD_STAT add_stats, void *c) {
-    assert(add_stats);
-    APPEND_STAT("maxbytes", "%u", (unsigned int)settings.maxbytes);
-    APPEND_STAT("maxconns", "%d", settings.maxconns);
-    APPEND_STAT("tcpport", "%d", settings.port);
-    APPEND_STAT("udpport", "%d", settings.udpport);
-    APPEND_STAT("inter", "%s", settings.inter ? settings.inter : "NULL");
-    APPEND_STAT("verbosity", "%d", settings.verbose);
-    APPEND_STAT("oldest", "%lu", (unsigned long)settings.oldest_live);
-    APPEND_STAT("evictions", "%s", settings.evict_to_free ? "on" : "off");
-    APPEND_STAT("domain_socket", "%s",
-                settings.socketpath ? settings.socketpath : "NULL");
-    APPEND_STAT("umask", "%o", settings.access);
-    APPEND_STAT("growth_factor", "%.2f", settings.factor);
-    APPEND_STAT("chunk_size", "%d", settings.chunk_size);
-    APPEND_STAT("num_threads", "%d", settings.num_threads);
-    APPEND_STAT("stat_key_prefix", "%c", settings.prefix_delimiter);
-    APPEND_STAT("detail_enabled", "%s",
-                settings.detail_enabled ? "yes" : "no");
-    APPEND_STAT("reqs_per_event", "%d", settings.reqs_per_event);
-    APPEND_STAT("cas_enabled", "%s", settings.use_cas ? "yes" : "no");
-    APPEND_STAT("tcp_backlog", "%d", settings.backlog);
-    APPEND_STAT("binding_protocol", "%s",
-                prot_text(settings.binding_protocol));
-}
-#endif
 
 static void process_stat(conn *c, token_t *tokens, const size_t ntokens) {
     const char *subcommand = tokens[SUBCOMMAND_TOKEN].value;
@@ -2374,11 +2290,7 @@ static void process_stat(conn *c, token_t *tokens, const size_t ntokens) {
     }
 
     if (ntokens == 2) {
-#if 1 /* JHP_STATS */
         server_stats(&append_stats, c, NULL);
-#else
-        server_stats(&append_stats, c);
-#endif
         (void)get_stats(NULL, 0, &append_stats, c);
     } else if (strcmp(subcommand, "reset") == 0) {
         stats_reset();
@@ -2393,11 +2305,7 @@ static void process_stat(conn *c, token_t *tokens, const size_t ntokens) {
         /* Output already generated */
         return ;
     } else if (strcmp(subcommand, "settings") == 0) {
-#if 1 /* JHP_STATS */
         process_stat_settings(&append_stats, c, NULL);
-#else
-        process_stat_settings(&append_stats, c);
-#endif
     } else if (strcmp(subcommand, "cachedump") == 0) {
         char *buf;
         unsigned int bytes, id, limit = 0;
@@ -3027,9 +2935,7 @@ void process_command(conn *c, char *command) {
     return;
 }
 
-#if 1 /* JHP_STATS */
 void process_stats_proxy_command(conn *c, token_t *tokens, const size_t ntokens) {
-
     if (ntokens == 4 && strcmp(tokens[2].value, "reset") == 0) {
         out_string(c, "OK");
     } else {
@@ -3069,7 +2975,6 @@ void process_stats_proxy_command(conn *c, token_t *tokens, const size_t ntokens)
     }
     return;
 }
-#endif
 
 /*
  * if we have a complete line in the buffer, process it.

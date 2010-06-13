@@ -243,26 +243,9 @@ proxy_main *cproxy_init_agent_start(char *jid,
         fprintf(stderr, "cproxy_init_agent_start\n");;
     }
 
-#if 1 /* JHP_STATS_PRE */
     proxy_main *m = cproxy_gen_proxy_main(behavior, nthreads,
                                           PROXY_CONF_TYPE_DYNAMIC);
-#else
-    proxy_main *m = calloc(1, sizeof(proxy_main));
-#endif
     if (m != NULL) {
-#if 0 /* JHP_STATS_PRE */
-        m->proxy_head = NULL;
-        m->nthreads   = nthreads;
-        m->behavior   = behavior;
-
-        m->stat_configs      = 0;
-        m->stat_config_fails = 0;
-        m->stat_proxy_starts      = 0;
-        m->stat_proxy_start_fails = 0;
-        m->stat_proxy_existings   = 0;
-        m->stat_proxy_shutdowns   = 0;
-#endif
-
         conflate_config_t config;
 
         memset(&config, 0, sizeof(config));
@@ -747,14 +730,12 @@ void cproxy_on_new_pool(proxy_main *m,
                           behavior_pool,
                           m->nthreads);
         if (p != NULL) {
-#if 1 /* JHP_STATS_PRE */
             pthread_mutex_lock(&m->proxy_main_lock);
-#endif
+
             p->next = m->proxy_head;
             m->proxy_head = p;
-#if 1 /* JHP_STATS_PRE */
+
             pthread_mutex_unlock(&m->proxy_main_lock);
-#endif
 
             int n = cproxy_listen(p);
             if (n > 0) {
@@ -782,9 +763,7 @@ void cproxy_on_new_pool(proxy_main *m,
         bool changed  = false;
         bool shutdown = false;
 
-#if 1 /* JHP_STATS_PRE */
         pthread_mutex_lock(&m->proxy_main_lock);
-#endif
 
         // Turn off the front_cache while we're reconfiguring.
         //
@@ -887,11 +866,9 @@ void cproxy_on_new_pool(proxy_main *m,
             }
         }
 
-        work_collect_wait(&wc);
-
-#if 1 /* JHP_STATS_PRE */
         pthread_mutex_unlock(&m->proxy_main_lock);
-#endif
+
+        work_collect_wait(&wc);
     }
 }
 

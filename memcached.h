@@ -114,10 +114,8 @@
 #define APPEND_STAT(name, fmt, val) \
     append_stat(name, add_stats, c, fmt, val);
 
-#if 1 /* JHP_STATS */
 #define APPEND_PREFIX_STAT(name, fmt, val) \
     append_prefix_stat(prefix, name, add_stats, c, fmt, val);
-#endif
 
 /** Append an indexed stat with a stat name (with format), value format
     and value */
@@ -268,7 +266,6 @@ struct stats {
     uint64_t      listen_disabled_num;
 };
 
-#if 1 /* JHP_STATS */
 struct proxy_stats_cmd_info {
     bool do_info;
     bool do_settings;
@@ -276,9 +273,8 @@ struct proxy_stats_cmd_info {
     bool do_frontcache;
     bool do_keystats;
     bool do_stats;
-    bool do_zeros; /* myght be used later */
+    bool do_zeros; /* might be used later */
 };
-#endif
 
 #define MAX_VERBOSITY_LEVEL 2
 
@@ -503,9 +499,7 @@ bool update_event(conn *c, const int new_flags);
 int try_read_command(conn *c);
 void process_command(conn *c, char *command);
 void process_update_command(conn *c, token_t *tokens, const size_t ntokens, int comm, bool handle_cas);
-#if 1 /* JHP_STATS */
 void process_stats_proxy_command(conn *c, token_t *tokens, const size_t ntokens);
-#endif
 void process_verbosity_command(conn *c, token_t *tokens, const size_t ntokens);
 void dispatch_bin_command(conn *c);
 void process_bin_noreply(conn *c);
@@ -595,18 +589,12 @@ void slab_stats_aggregate(struct thread_stats *stats, struct slab_stats *out);
 /* Stat processing functions */
 void append_stat(const char *name, ADD_STAT add_stats, void *c,
                  const char *fmt, ...);
-#if 1 /* JHP_STATS */
+
 void append_prefix_stat(const char *prefix, const char *name, ADD_STAT add_stats, void *c,
                         const char *fmt, ...);
-#endif
 
-#if 1 /* JHP_STATS */
 void server_stats(ADD_STAT add_stats, void *c, const char *prefix);
 void process_stat_settings(ADD_STAT add_stats, void *c, const char *prefix);
-#else
-void server_stats(ADD_STAT add_stats, void *c);
-void process_stat_settings(ADD_STAT add_stats, void *c);
-#endif
 
 enum store_item_type store_item(item *item, int comm, conn *c);
 

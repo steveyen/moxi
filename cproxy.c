@@ -73,9 +73,7 @@ conn_funcs cproxy_downstream_funcs = {
     .conn_binary_command_magic   = PROTOCOL_BINARY_RES
 };
 
-#if 1 /* JHP_STATS_PRE */
 proxy_main *proxy_main_g = NULL;
-#endif
 
 /* Main function to create a proxy struct.
  */

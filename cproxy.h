@@ -133,13 +133,11 @@ struct proxy_behavior_pool {
     proxy_behavior *arr;  // Array, size is num.
 };
 
-#if 1 /* JHP_STATS_PRE */
 typedef enum {
     PROXY_CONF_TYPE_STATIC = 0,
     PROXY_CONF_TYPE_DYNAMIC,
     PROXY_CONF_TYPE_last
 } enum_proxy_conf_type;
-#endif
 
 // Quick map of struct hierarchy...
 //
@@ -160,14 +158,12 @@ typedef enum {
 struct proxy_main {
     proxy_behavior behavior; // Default, main listener modifiable only.
 
-#if 1 /* JHP_STATS_PRE */
     enum_proxy_conf_type conf_type; // proxy configuration type
 
     // Any thread that changes proxy list must
     // first acquire the proxy_main_lock.
     //
     pthread_mutex_t proxy_main_lock;
-#endif
 
     // Start of proxy list.  Only the main listener thread
     // should access or modify this field.
@@ -406,9 +402,7 @@ struct downstream {
     struct event   timeout_event;
 };
 
-#if 1 /* JHP_STATS_PRE */
 extern proxy_main *proxy_main_g;
-#endif
 
 // Functions.
 //
@@ -513,10 +507,8 @@ bool cproxy_broadcast_a2b_downstream(downstream *d,
 
 // ---------------------------------------------------------------
 
-#if 1 /* JHP_STATS_PRE */
 proxy_main *cproxy_gen_proxy_main(proxy_behavior behavior,
                                   int nthreads, enum_proxy_conf_type conf_type);
-#endif
 
 proxy_behavior cproxy_parse_behavior(char          *behavior_str,
                                      proxy_behavior behavior_default);

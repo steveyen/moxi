@@ -72,7 +72,6 @@ static void map_key_stats_foreach_merge(const void *key,
                                         const void *value,
                                         void *user_data);
 
-#if 1 /* JHP_STATS */
 static void proxy_stats_dump_behavior(ADD_STAT add_stats,
                                       void *c,
                                       const char *prefix,
@@ -93,7 +92,6 @@ static void proxy_stats_dump_stats_cmd(ADD_STAT add_stats,
 static void map_key_stats_foreach_dump(const void *key,
                                        const void *value,
                                        void *user_data);
-#endif
 
 struct main_stats_proxy_info {
     char *name;
@@ -277,22 +275,14 @@ enum conflate_mgmt_cb_result on_conflate_get_stats(void *userdata,
         struct main_stats_collect_info ase = msci;
         ase.prefix = "memcached_settings";
 
-#if 1 /* JHP_STATS */
         process_stat_settings(add_stat_prefix_ase, &ase, NULL);
-#else
-        process_stat_settings(add_stat_prefix_ase, &ase);
-#endif
     }
 
     if (msci.do_stats) {
         struct main_stats_collect_info ase = msci;
         ase.prefix = "memcached_stats";
 
-#if 1 /* JHP_STATS */
         server_stats(add_stat_prefix_ase, &ase, NULL);
-#else
-        server_stats(add_stat_prefix_ase, &ase);
-#endif
     }
 
     // Alloc here so the main listener thread has less work.
@@ -429,7 +419,6 @@ void map_key_stats_foreach_merge(const void *key,
     }
 }
 
-#if 1 /* JHP_STATS */
 static void proxy_stats_dump_behavior(ADD_STAT add_stats, void *c, const char *prefix,
                                       proxy_behavior *b, int level) {
 
@@ -478,9 +467,7 @@ static void proxy_stats_dump_behavior(ADD_STAT add_stats, void *c, const char *p
     if (level >= 1)
         APPEND_PREFIX_STAT("port_listen", "%d", b->port_listen);
 }
-#endif
 
-#if 1 /* JHP_STATS */
 static void proxy_stats_dump_frontcache(ADD_STAT add_stats, void *c,
                                         const char *prefix, proxy *p) {
 
@@ -514,9 +501,7 @@ static void proxy_stats_dump_frontcache(ADD_STAT add_stats, void *c,
 
     pthread_mutex_unlock(p->front_cache.lock);
 }
-#endif
 
-#if 1 /* JHP_STATS */
 static void proxy_stats_dump_pstd_stats(ADD_STAT add_stats, void *c, const char *prefix,
                                         proxy_stats *stats) {
     assert(stats != NULL);
@@ -588,9 +573,7 @@ static void proxy_stats_dump_pstd_stats(ADD_STAT add_stats, void *c, const char 
     APPEND_PREFIX_STAT("err_downstream_write_prep",
               "%llu", (long long unsigned int) stats->err_downstream_write_prep);
 }
-#endif
 
-#if 1 /* JHP_STATS */
 static void proxy_stats_dump_stats_cmd(ADD_STAT add_stats, void *c, const char *prefix,
                                        proxy_stats_cmd stats_cmd[][STATS_CMD_last]) {
     char keybuf[128];
@@ -636,9 +619,7 @@ static void proxy_stats_dump_stats_cmd(ADD_STAT add_stats, void *c, const char *
         }
     }
 }
-#endif
 
-#if 1 /* JHP_STATS */
 struct key_stats_dump_state {
     const char *prefix;
     ADD_STAT add_stats;
@@ -666,33 +647,28 @@ static void map_key_stats_foreach_dump(const void *key, const void *value,
 
     APPEND_PREFIX_STAT("added_at_msec", "%u", stats->added_at);
 }
-#endif
 
-#if 1 /* JHP_STATS */
 void proxy_stats_dump_basic(ADD_STAT add_stats, void *c, const char *prefix) {
-
     APPEND_PREFIX_STAT("version", "%s", VERSION);
     APPEND_PREFIX_STAT("nthreads", "%d", settings.num_threads);
     APPEND_PREFIX_STAT("hostname", "%s", cproxy_hostname);
 }
-#endif
 
-#if 1 /* JHP_STATS */
 void proxy_stats_dump_proxy_main(ADD_STAT add_stats, void *c,
                                  struct proxy_stats_cmd_info *pscip) {
-
     if (pscip->do_info) {
 	const char *prefix = "proxy_main:";
         APPEND_PREFIX_STAT("conf_type", "%s",
                (proxy_main_g->conf_type==PROXY_CONF_TYPE_STATIC ? "static" : "dynamic"));
     }
     
-    if (pscip->do_behaviors) 
+    if (pscip->do_behaviors)  {
         proxy_stats_dump_behavior(add_stats, c, "proxy_main:behavior:",
                                   &proxy_main_g->behavior, 2);
+    }
 
     if (pscip->do_stats) {
-	const char *prefix = "proxy_main:stats:";
+        const char *prefix = "proxy_main:stats:";
         APPEND_PREFIX_STAT("stat_configs",
                     "%llu", (long long unsigned int) proxy_main_g->stat_configs);
         APPEND_PREFIX_STAT("stat_config_fails",
@@ -707,12 +683,9 @@ void proxy_stats_dump_proxy_main(ADD_STAT add_stats, void *c,
                     "%llu", (long long unsigned int) proxy_main_g->stat_proxy_shutdowns);
     }
 }
-#endif
 
-#if 1 /* JHP_STATS */
 void proxy_stats_dump_proxies(ADD_STAT add_stats, void *c,
                               struct proxy_stats_cmd_info *pscip) {
-
     char prefix[200];
 
     if (pthread_mutex_trylock(&proxy_main_g->proxy_main_lock) != 0) {
@@ -723,7 +696,6 @@ void proxy_stats_dump_proxies(ADD_STAT add_stats, void *c,
     }
 
     for (proxy *p = proxy_main_g->proxy_head; p != NULL; p = p->next) {
-
         pthread_mutex_lock(&p->proxy_lock);
 
         if (pscip->do_info) {
@@ -775,22 +747,22 @@ void proxy_stats_dump_proxies(ADD_STAT add_stats, void *c,
                 proxy_stats_dump_pstd_stats(add_stats, c, prefix, &pstd->stats);
                 snprintf(prefix, sizeof(prefix), "%u:%s:pstd_stats_cmd:", p->port, p->name);
                 proxy_stats_dump_stats_cmd(add_stats, c, prefix, pstd->stats_cmd);
-  	        free(pstd);
+
+                free(pstd);
             }
         }
 
         if (pscip->do_keystats) {
-#if 1 /* Test is needed */
+            /* TODO: Test is needed */
             genhash_t *key_stats_map = NULL;
-#else
-            genhash_t *key_stats_map = genhash_init(16, strhash_ops);
-#endif
+
             if (key_stats_map != NULL) {
                 pthread_mutex_lock(&p->proxy_lock);
                 for (int i = 1; i < proxy_main_g->nthreads; i++) {
                      proxy_td *ptd = &p->thread_data[i];
-                     if (ptd != NULL)
+                     if (ptd != NULL) {
                          add_raw_key_stats(key_stats_map, &ptd->key_stats);
+                     }
                 }
                 pthread_mutex_unlock(&p->proxy_lock);
 
@@ -807,8 +779,6 @@ void proxy_stats_dump_proxies(ADD_STAT add_stats, void *c,
 
     pthread_mutex_unlock(&proxy_main_g->proxy_main_lock);
 }
-#endif
-
 
 /* Must be invoked on the main listener thread.
  *

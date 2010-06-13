@@ -166,14 +166,12 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
 
         SEEN(STATS_CMD_FLUSH_ALL, false, cmd_len);
 
-#if 1 /* JHP_STATS */
     } else if (ntokens >= 3 && ntokens <= 4 &&
                (strncmp(cmd, "stats proxy", 10) == 0)) {
 
         process_stats_proxy_command(c, tokens, ntokens);
 
         SEEN(STATS_CMD_STATS, false, cmd_len);
-#endif
 
     } else if (ntokens == 3 &&
                (strcmp(cmd, "stats reset") == 0) &&
