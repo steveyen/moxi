@@ -581,37 +581,37 @@ static void proxy_stats_dump_stats_cmd(ADD_STAT add_stats, void *c, const char *
     for (int j = 0; j < STATS_CMD_TYPE_last; j++) {
         for (int k = 0; k < STATS_CMD_last; k++) {
             if (stats_cmd[j][k].seen != 0) {
-                snprintf(keybuf, sizeof(keybuf), "%s_%s:%s", 
+                snprintf(keybuf, sizeof(keybuf), "%s_%s:%s",
                          cmd_type_names[j], cmd_names[k], "seen");
                 APPEND_PREFIX_STAT(keybuf,
-                         "%llu", (long long unsigned int) stats_cmd[j][k].seen); 
+                         "%llu", (long long unsigned int) stats_cmd[j][k].seen);
             }
             if (stats_cmd[j][k].hits != 0) {
-                snprintf(keybuf, sizeof(keybuf), "%s_%s:%s", 
+                snprintf(keybuf, sizeof(keybuf), "%s_%s:%s",
                          cmd_type_names[j], cmd_names[k], "hits");
                 APPEND_PREFIX_STAT(keybuf,
-                         "%llu", (long long unsigned int) stats_cmd[j][k].hits); 
+                         "%llu", (long long unsigned int) stats_cmd[j][k].hits);
             }
             if (stats_cmd[j][k].misses != 0) {
-                snprintf(keybuf, sizeof(keybuf), "%s_%s:%s", 
+                snprintf(keybuf, sizeof(keybuf), "%s_%s:%s",
                          cmd_type_names[j], cmd_names[k], "misses");
                 APPEND_PREFIX_STAT(keybuf,
-                         "%llu", (long long unsigned int) stats_cmd[j][k].misses); 
-            } 
+                         "%llu", (long long unsigned int) stats_cmd[j][k].misses);
+            }
             if (stats_cmd[j][k].read_bytes != 0) {
-                snprintf(keybuf, sizeof(keybuf), "%s_%s:%s", 
+                snprintf(keybuf, sizeof(keybuf), "%s_%s:%s",
                          cmd_type_names[j], cmd_names[k], "read_bytes");
                 APPEND_PREFIX_STAT(keybuf,
                          "%llu", (long long unsigned int) stats_cmd[j][k].read_bytes);
             }
             if (stats_cmd[j][k].write_bytes != 0) {
-                snprintf(keybuf, sizeof(keybuf), "%s_%s:%s", 
+                snprintf(keybuf, sizeof(keybuf), "%s_%s:%s",
                          cmd_type_names[j], cmd_names[k], "write_bytes");
                 APPEND_PREFIX_STAT(keybuf,
                          "%llu", (long long unsigned int) stats_cmd[j][k].write_bytes);
             }
             if (stats_cmd[j][k].cas != 0) {
-                snprintf(keybuf, sizeof(keybuf), "%s_%s:%s", 
+                snprintf(keybuf, sizeof(keybuf), "%s_%s:%s",
                          cmd_type_names[j], cmd_names[k], "cas");
                 APPEND_PREFIX_STAT(keybuf,
                          "%llu", (long long unsigned int) stats_cmd[j][k].cas);
@@ -635,7 +635,7 @@ static void map_key_stats_foreach_dump(const void *key, const void *value,
     assert(stats != NULL);
     struct key_stats_dump_state *state = (struct key_stats_dump_state *)user_data;
     assert(state != NULL);
-    
+
     assert(strcmp(name, stats->key) == 0);
 
     ADD_STAT add_stats = state->add_stats;
@@ -661,7 +661,7 @@ void proxy_stats_dump_proxy_main(ADD_STAT add_stats, void *c,
         APPEND_PREFIX_STAT("conf_type", "%s",
                (proxy_main_g->conf_type==PROXY_CONF_TYPE_STATIC ? "static" : "dynamic"));
     }
-    
+
     if (pscip->do_behaviors)  {
         proxy_stats_dump_behavior(add_stats, c, "proxy_main:behavior:",
                                   &proxy_main_g->behavior, 2);
@@ -689,7 +689,7 @@ void proxy_stats_dump_proxies(ADD_STAT add_stats, void *c,
     char prefix[200];
 
     if (pthread_mutex_trylock(&proxy_main_g->proxy_main_lock) != 0) {
-        /* Do not dump proxy stats 
+        /* Do not dump proxy stats
          * if dynamic reconfiguration is currently executing by other thread.
          */
         return;
@@ -702,7 +702,24 @@ void proxy_stats_dump_proxies(ADD_STAT add_stats, void *c,
             snprintf(prefix, sizeof(prefix), "%u:%s:info:", p->port, p->name);
             APPEND_PREFIX_STAT("port",          "%u", p->port);
             APPEND_PREFIX_STAT("name",          "%s", p->name);
-            APPEND_PREFIX_STAT("config",        "%s", p->config);
+
+            char *buf = trimstrdup(p->config);
+            if (buf != NULL) {
+                // Remove embedded newlines, as config might be a JSON string.
+                char *slow = buf;
+                for (char *fast = buf; *fast != '\0'; fast++) {
+                    *slow = *fast;
+                    if (*slow != '\n' && *slow != '\r') {
+                        slow++;
+                    }
+                }
+                *slow = '\0';
+
+                APPEND_PREFIX_STAT("config", "%s", buf);
+
+                free(buf);
+            }
+
             APPEND_PREFIX_STAT("config_ver",    "%u", p->config_ver);
             APPEND_PREFIX_STAT("behaviors_num", "%u", p->behavior_pool.num);
         }
@@ -1356,7 +1373,7 @@ static void map_key_stats_foreach_emit_inner(const void *_key,
 void map_key_stats_foreach_emit(const void *k,
                                 const void *value,
                                 void *user_data) {
-    
+
     const char *name = (const char*)k;
     assert(name != NULL);
 
