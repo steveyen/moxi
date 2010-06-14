@@ -81,12 +81,14 @@ struct A2BSpec a2b_specs[] = {
     { .line = "incr <key> <value> [noreply]",
       .cmd  = PROTOCOL_BINARY_CMD_INCREMENT,
       .cmdq = PROTOCOL_BINARY_CMD_INCREMENTQ,
-      .size = sizeof(protocol_binary_request_incr)
+      // sizeof(protocol_binary_request_incr) returns 48, not 44.
+      .size = sizeof(protocol_binary_request_header) + 20
     },
     { .line = "decr <key> <value> [noreply]",
       .cmd  = PROTOCOL_BINARY_CMD_DECREMENT,
       .cmdq = PROTOCOL_BINARY_CMD_DECREMENTQ,
-      .size = sizeof(protocol_binary_request_decr)
+      // sizeof(protocol_binary_request_decr) returns 48, not 44.
+      .size = sizeof(protocol_binary_request_header) + 20
     },
     { .line = "flush_all [xpiration] [noreply]", // TODO: noreply tricky here.
       .cmd  = PROTOCOL_BINARY_CMD_FLUSH,
