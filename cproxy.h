@@ -571,7 +571,7 @@ struct multiget_entry {
 bool multiget_ascii_downstream(
     downstream *d, conn *uc,
     int (*emit_start)(conn *c, char *cmd, int cmd_len),
-    int (*emit_skey)(conn *c, char *skey, int skey_len),
+    int (*emit_skey)(conn *c, char *skey, int skey_len, int vbucket),
     int (*emit_end)(conn *c),
     mcache *front_cache);
 

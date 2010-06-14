@@ -74,7 +74,7 @@ void multiget_remove_upstream(const void *key,
 
 bool multiget_ascii_downstream(downstream *d, conn *uc,
     int (*emit_start)(conn *c, char *cmd, int cmd_len),
-    int (*emit_skey)(conn *c, char *skey, int skey_len),
+    int (*emit_skey)(conn *c, char *skey, int skey_len, int vbucket),
     int (*emit_end)(conn *c),
     mcache *front_cache) {
     assert(d != NULL);
@@ -217,9 +217,10 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
                 }
 
                 bool self = false;
+                int  vbucket = -1;
 
-                conn *c = cproxy_find_downstream_conn(d, key, key_len,
-                                                      &self);
+                conn *c = cproxy_find_downstream_conn_ex(d, key, key_len,
+                                                         &self, &vbucket);
                 if (c != NULL) {
                     if (self) {
                         // Optimization for talking with ourselves,
@@ -317,7 +318,7 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
                         // Provide the preceding space as optimization
                         // for ascii-to-ascii configuration.
                         //
-                        emit_skey(c, key - 1, key_len + 1);
+                        emit_skey(c, key - 1, key_len + 1, vbucket);
                     } else {
                         ptd->stats.stats.tot_multiget_keys_dedupe++;
 

@@ -16,7 +16,7 @@
 #define MAX_TOKENS 8
 
 int a2a_multiget_start(conn *c, char *cmd, int cmd_len);
-int a2a_multiget_skey(conn *c, char *skey, int skey_len);
+int a2a_multiget_skey(conn *c, char *skey, int skey_len, int vbucket);
 int a2a_multiget_end(conn *c);
 
 void cproxy_init_a2a() {
@@ -384,7 +384,7 @@ int a2a_multiget_start(conn *c, char *cmd, int cmd_len) {
 
 /* An skey is a space prefixed key string.
  */
-int a2a_multiget_skey(conn *c, char *skey, int skey_len) {
+int a2a_multiget_skey(conn *c, char *skey, int skey_len, int vbucket) {
     return add_iov(c, skey, skey_len);
 }
 

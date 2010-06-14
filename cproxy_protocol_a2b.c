@@ -139,7 +139,7 @@ bool a2b_fill_request_token(struct A2BSpec *spec,
 void a2b_process_downstream_response(conn *c);
 
 int a2b_multiget_start(conn *c, char *cmd, int cmd_len);
-int a2b_multiget_skey(conn *c, char *skey, int skey_len);
+int a2b_multiget_skey(conn *c, char *skey, int skey_len, int vbucket);
 int a2b_multiget_end(conn *c);
 
 void cproxy_init_a2b() {
@@ -1107,7 +1107,7 @@ int a2b_multiget_start(conn *c, char *cmd, int cmd_len) {
 
 /* An skey is a space prefixed key string.
  */
-int a2b_multiget_skey(conn *c, char *skey, int skey_len) {
+int a2b_multiget_skey(conn *c, char *skey, int skey_len, int vbucket) {
     char *key     = skey + 1;
     int   key_len = skey_len - 1;
 
@@ -1124,6 +1124,10 @@ int a2b_multiget_skey(conn *c, char *skey, int skey_len) {
             req->message.header.request.keylen = htons((uint16_t) key_len);
             req->message.header.request.datatype = PROTOCOL_BINARY_RAW_BYTES;
             req->message.header.request.bodylen  = htonl(key_len);
+
+            if (vbucket >= 0) {
+                req->message.header.request.reserved = htons(vbucket);
+            }
 
             if (add_iov(c, ITEM_data(it), sizeof(req->bytes)) == 0 &&
                 add_iov(c, key, key_len) == 0) {
