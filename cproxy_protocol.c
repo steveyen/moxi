@@ -238,8 +238,9 @@ void cproxy_process_upstream_ascii_nread(conn *c) {
         assert(ptd != NULL);
 
         cproxy_pause_upstream_for_downstream(ptd, c);
-    } else
+    } else {
         out_string(c, "CLIENT_ERROR bad data chunk");
+    }
 }
 
 /**
