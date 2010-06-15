@@ -1811,8 +1811,6 @@ downstream *downstream_list_remove(downstream *head, downstream *d) {
 /* Returns true if a candidate request is squashable
  * or de-duplicatable with an existing request, to
  * save on network hops.
- *
- * TODO: Handle upstream binary protocol.
  */
 bool is_compatible_request(conn *existing, conn *candidate) {
     // The not-my-vbucket error handling requires us to not
@@ -1821,9 +1819,16 @@ bool is_compatible_request(conn *existing, conn *candidate) {
     // to simplify the later codepaths.
     /*
     assert(existing);
-    assert(IS_ASCII(existing->protocol));
-    assert(IS_PROXY(existing->protocol));
     assert(existing->state == conn_pause);
+    assert(IS_PROXY(existing->protocol));
+
+    if (IS_BINARY(existing->protocol)) {
+        // TODO: Revisit multi-get squashing for binary another day.
+        //
+        return false;
+    }
+
+    assert(IS_ASCII(existing->protocol));
 
     if (candidate != NULL) {
         assert(IS_ASCII(candidate->protocol));
