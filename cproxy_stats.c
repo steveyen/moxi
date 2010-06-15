@@ -228,8 +228,8 @@ bool protocol_stats_merge_sum(char *v1, int v1len,
         sprintf(out, "%f", v1f + v2f);
         return true;
     } else {
-        uint64_t v1i = 0;
-        uint64_t v2i = 0;
+        long long unsigned int v1i = 0;
+        long long unsigned int v2i = 0;
 
         if (safe_strtoull(v1, &v1i) &&
             safe_strtoull(v2, &v2i)) {
@@ -251,8 +251,8 @@ bool protocol_stats_merge_smallest(char *v1, int v1len,
         sprintf(out, "%f", (v1f > v2f ? v1f : v2f));
         return true;
     } else {
-        uint64_t v1i = 0;
-        uint64_t v2i = 0;
+        long long unsigned int v1i = 0;
+        long long unsigned int v2i = 0;
 
         if (safe_strtoull(v1, &v1i) &&
             safe_strtoull(v2, &v2i)) {
