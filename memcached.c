@@ -325,6 +325,8 @@ static const char *prot_text(enum protocol prot) {
         case proxy_downstream_binary_prot:
             rv = "proxy-downstream-binary";
             break;
+        case negotiating_proxy_prot:
+            rv = "auto-negotiate-proxy";
         case negotiating_prot:
             rv = "auto-negotiate";
             break;
@@ -399,7 +401,7 @@ conn *conn_new(const int sfd, enum conn_states init_state,
                 prot_text(c->protocol));
         } else if (IS_UDP(transport)) {
             fprintf(stderr, "<%d server listening (udp)\n", sfd);
-        } else if (c->protocol == negotiating_prot) {
+        } else if (IS_NEGOTIATING(c->protocol)) {
             fprintf(stderr, "<%d new auto-negotiating client connection\n",
                     sfd);
         } else if (c->protocol == ascii_prot) {
@@ -2992,11 +2994,11 @@ int try_read_command(conn *c) {
     assert(c->rcurr <= (c->rbuf + c->rsize));
     assert(c->rbytes > 0);
 
-    if (c->protocol == negotiating_prot || c->transport == udp_transport)  {
+    if (IS_NEGOTIATING(c->protocol) || c->transport == udp_transport)  {
         if ((unsigned char)c->rbuf[0] == (unsigned char)PROTOCOL_BINARY_REQ) {
-            c->protocol = binary_prot;
+            c->protocol = IS_PROXY(c->protocol) ? proxy_upstream_binary_prot : binary_prot;
         } else {
-            c->protocol = ascii_prot;
+            c->protocol = IS_PROXY(c->protocol) ? proxy_upstream_ascii_prot : ascii_prot;
         }
 
         if (settings.verbose) {

@@ -231,7 +231,7 @@ int cproxy_listen(proxy *p) {
     //
     if (p->listening == 0) {
         int listening = cproxy_listen_port(p->port,
-                                           proxy_upstream_ascii_prot,
+                                           negotiating_proxy_prot,
                                            tcp_transport,
                                            p,
                                            &cproxy_listen_funcs);
