@@ -526,6 +526,8 @@ int server_socket(const int port,
 
 void drive_machine(conn *c);
 
+void write_bin_error(conn *c, protocol_binary_response_status err, int swallow);
+
 #include "stats.h"
 #include "slabs.h"
 #include "assoc.h"

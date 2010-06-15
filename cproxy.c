@@ -1287,24 +1287,28 @@ void upstream_error(conn *uc) {
     proxy_td *ptd = uc->extra;
     assert(ptd != NULL);
 
-    // TODO: Handle upstream binary protocol.
-    //
-    // Send an END on get/gets instead of generic SERVER_ERROR.
-    //
-    char *msg = "SERVER_ERROR proxy write to downstream\r\n";
+    if (IS_ASCII(uc->protocol)) {
+        char *msg = "SERVER_ERROR proxy write to downstream\r\n";
 
-    if (uc->cmd == -1 &&
-        uc->cmd_start != NULL &&
-        strncmp(uc->cmd_start, "get", 3) == 0) {
-        msg = "END\r\n";
-    }
+        // Send an END on get/gets instead of generic SERVER_ERROR.
+        //
+        if (uc->cmd == -1 &&
+            uc->cmd_start != NULL &&
+            strncmp(uc->cmd_start, "get", 3) == 0) {
+            msg = "END\r\n";
+        }
 
-    if (add_iov(uc, msg, strlen(msg)) == 0 &&
-        update_event(uc, EV_WRITE | EV_PERSIST)) {
-        conn_set_state(uc, conn_mwrite);
+        if (add_iov(uc, msg, strlen(msg)) == 0 &&
+            update_event(uc, EV_WRITE | EV_PERSIST)) {
+            conn_set_state(uc, conn_mwrite);
+        } else {
+            ptd->stats.stats.err_oom++;
+            cproxy_close_conn(uc);
+        }
     } else {
-        ptd->stats.stats.err_oom++;
-        cproxy_close_conn(uc);
+        assert(IS_BINARY(uc->protocol));
+
+        write_bin_error(uc, PROTOCOL_BINARY_RESPONSE_ENOMEM, 0);
     }
 }
 
@@ -1808,7 +1812,7 @@ downstream *downstream_list_remove(downstream *head, downstream *d) {
  * or de-duplicatable with an existing request, to
  * save on network hops.
  *
- * TODO: Handle binary upstream protocol.
+ * TODO: Handle upstream binary protocol.
  */
 bool is_compatible_request(conn *existing, conn *candidate) {
     // The not-my-vbucket error handling requires us to not

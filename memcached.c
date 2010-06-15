@@ -938,7 +938,7 @@ static void add_bin_header(conn *c, uint16_t err, uint8_t hdr_len, uint16_t key_
     add_iov(c, c->wbuf, sizeof(header->response));
 }
 
-static void write_bin_error(conn *c, protocol_binary_response_status err, int swallow) {
+void write_bin_error(conn *c, protocol_binary_response_status err, int swallow) {
     const char *errstr = "Unknown error";
     size_t len;
 
