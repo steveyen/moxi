@@ -1856,7 +1856,7 @@ bool cproxy_start_downstream_timeout(downstream *d, conn *c) {
     assert(IS_PROXY(uc->protocol));
 
     if (settings.verbose > 2) {
-        fprintf(stderr, "cproxy_start_downstream_timeout\n");
+        fprintf(stderr, "%d: cproxy_start_downstream_timeout\n", c->sfd);
     }
 
     evtimer_set(&d->timeout_event, downstream_timeout, d);
