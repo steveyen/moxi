@@ -1193,7 +1193,7 @@ void cproxy_assign_downstream(proxy_td *ptd) {
         }
 
         if (settings.verbose > 2) {
-            fprintf(stderr, "assign_downstream, matched to upstream %d\n",
+            fprintf(stderr, "%d: assign_downstream, matched to upstream\n",
                     d->upstream_conn->sfd);
         }
 
@@ -1294,7 +1294,7 @@ void cproxy_reset_upstream(conn *uc) {
     // May need to use the work_queue to call drive_machine() on the uc?
     //
     if (settings.verbose > 2) {
-        fprintf(stderr, "cproxy_reset_upstream with bytes available\n");
+        fprintf(stderr, "%d: cproxy_reset_upstream with bytes available\n", uc->sfd);
     }
 
     ptd->stats.stats.tot_reset_upstream_avail++;
@@ -1386,7 +1386,7 @@ void cproxy_pause_upstream_for_downstream(proxy_td *ptd, conn *upstream) {
     assert(upstream != NULL);
 
     if (settings.verbose > 2) {
-        fprintf(stderr, "%d pause_upstream_for_downstream\n",
+        fprintf(stderr, "%d: pause_upstream_for_downstream\n",
                 upstream->sfd);
     }
 
