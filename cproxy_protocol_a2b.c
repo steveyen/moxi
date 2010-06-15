@@ -46,17 +46,26 @@ struct A2BSpec a2b_specs[] = {
     { .line = "set <key> <flags> <exptime> <bytes> [noreply]",
       .cmd  = PROTOCOL_BINARY_CMD_SET,
       .cmdq = PROTOCOL_BINARY_CMD_SETQ,
-      .size = sizeof(protocol_binary_request_set)
+      // The size should be...
+      //   sizeof(protocol_binary_request_header) [24 bytes] +
+      //   sizeof(protocol_binary_request_set.message.body) [8 bytes]
+      .size = sizeof(protocol_binary_request_header) + 8
     },
     { .line = "add <key> <flags> <exptime> <bytes> [noreply]",
       .cmd  = PROTOCOL_BINARY_CMD_ADD,
       .cmdq = PROTOCOL_BINARY_CMD_ADDQ,
-      .size = sizeof(protocol_binary_request_add)
+      // The size should be...
+      //   sizeof(protocol_binary_request_header) [24 bytes] +
+      //   sizeof(protocol_binary_request_add.message.body) [8 bytes]
+      .size = sizeof(protocol_binary_request_header) + 8
     },
     { .line = "replace <key> <flags> <exptime> <bytes> [noreply]",
       .cmd  = PROTOCOL_BINARY_CMD_REPLACE,
       .cmdq = PROTOCOL_BINARY_CMD_REPLACEQ,
-      .size = sizeof(protocol_binary_request_replace)
+      // The size should be...
+      //   sizeof(protocol_binary_request_header) [24 bytes] +
+      //   sizeof(protocol_binary_request_replace.message.body) [8 bytes]
+      .size = sizeof(protocol_binary_request_header) + 8
     },
     { .line = "append <key> <skip_flags> <skip_exptime> <bytes> [noreply]",
       .cmd  = PROTOCOL_BINARY_CMD_APPEND,
@@ -71,7 +80,10 @@ struct A2BSpec a2b_specs[] = {
     { .line = "cas <key> <flags> <exptime> <bytes> <cas> [noreply]",
       .cmd  = PROTOCOL_BINARY_CMD_SET,
       .cmdq = PROTOCOL_BINARY_CMD_SETQ,
-      .size = sizeof(protocol_binary_request_set)
+      // The size should be...
+      //   sizeof(protocol_binary_request_header) [24 bytes] +
+      //   sizeof(protocol_binary_request_set.message.body) [8 bytes]
+      .size = sizeof(protocol_binary_request_header) + 8
     },
     { .line = "delete <key> [noreply]",
       .cmd  = PROTOCOL_BINARY_CMD_DELETE,
@@ -97,18 +109,27 @@ struct A2BSpec a2b_specs[] = {
     { .line = "flush_all [xpiration] [noreply]", // TODO: noreply tricky here.
       .cmd  = PROTOCOL_BINARY_CMD_FLUSH,
       .cmdq = PROTOCOL_BINARY_CMD_FLUSHQ,
-      .size = sizeof(protocol_binary_request_flush),
+      // The size should be...
+      //   sizeof(protocol_binary_request_header) [24 bytes] +
+      //   sizeof(protocol_binary_request_flush.message.body) [4 bytes]
+      .size = sizeof(protocol_binary_request_header) + 4,
       .broadcast = true
     },
     { .line = "get <key>*",
       .cmd  = PROTOCOL_BINARY_CMD_GETK,
       .cmdq = PROTOCOL_BINARY_CMD_GETKQ,
-      .size = sizeof(protocol_binary_request_getk)
+      // The size should be...
+      //   sizeof(protocol_binary_request_header) [24 bytes] +
+      //   sizeof(protocol_binary_request_getk.message.body) [4 bytes]
+      .size = sizeof(protocol_binary_request_header) + 4
     },
     { .line = "gets <key>*",
       .cmd  = PROTOCOL_BINARY_CMD_GETK,
       .cmdq = PROTOCOL_BINARY_CMD_GETKQ,
-      .size = sizeof(protocol_binary_request_getk)
+      // The size should be...
+      //   sizeof(protocol_binary_request_header) [24 bytes] +
+      //   sizeof(protocol_binary_request_getk.message.body) [4 bytes]
+      .size = sizeof(protocol_binary_request_header) + 4
     },
     { .line = "stats [args]*",
       .cmd  = PROTOCOL_BINARY_CMD_STAT,
@@ -654,8 +675,6 @@ void a2b_process_downstream_response(conn *c) {
     case PROTOCOL_BINARY_CMD_PREPEND:
         conn_set_state(c, conn_pause);
 
-        assert(c->noreply == false);
-
         if (uc != NULL) {
             assert(uc->next == NULL);
 
@@ -702,8 +721,6 @@ void a2b_process_downstream_response(conn *c) {
 
     case PROTOCOL_BINARY_CMD_DELETE:
         conn_set_state(c, conn_pause);
-
-        assert(c->noreply == false);
 
         if (uc != NULL) {
             assert(uc->next == NULL);
@@ -1388,8 +1405,14 @@ bool cproxy_forward_a2b_item_downstream(downstream *d, short cmd,
                             } else {
                                 c->write_and_go = conn_pause;
 
-                                mcache_delete(&d->ptd->proxy->front_cache,
-                                              ITEM_key(it), it->nkey);
+                                // TODO: At this point, the item key string is
+                                // not '\0' or space terminated, which is
+                                // required by the mcache API.
+                                // Be sure to config front_cache to be off
+                                // for binary protocol downstreams.
+                                //
+                                // mcache_delete(&d->ptd->proxy->front_cache,
+                                //               ITEM_key(it), it->nkey);
                             }
 
                             return true;

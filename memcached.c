@@ -2779,11 +2779,20 @@ void process_verbosity_command(conn *c, token_t *tokens, const size_t ntokens) {
     assert(c != NULL);
 
     set_noreply_maybe(c, tokens, ntokens);
+    if (c->noreply && ntokens == 3) {
+        /* "verbosity noreply" is not according to the correct syntax */
+        c->noreply = false;
+        out_string(c, "ERROR");
+        return;
+    }
 
-    level = strtoul(tokens[1].value, NULL, 10);
-    settings.verbose = level > MAX_VERBOSITY_LEVEL ? MAX_VERBOSITY_LEVEL : level;
-    out_string(c, "OK");
-    return;
+    if (safe_strtoul(tokens[1].value, &level)) {
+        // TODO: Ignore verbosity for now.
+        // settings.verbose = level > MAX_VERBOSITY_LEVEL ? MAX_VERBOSITY_LEVEL : level;
+        out_string(c, "OK");
+    } else {
+        out_string(c, "ERROR");
+    }
 }
 
 void process_command(conn *c, char *command) {

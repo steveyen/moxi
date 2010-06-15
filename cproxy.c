@@ -929,7 +929,7 @@ int cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread) {
     int s = 0; // Number connected.
     int n = mcs_server_count(&d->mst);
 
-    assert(d->behaviors_num == n);
+    assert(d->behaviors_num >= n);
     assert(d->behaviors_arr != NULL);
 
     for (int i = 0; i < n; i++) {
