@@ -402,6 +402,8 @@ bool cproxy_broadcast_a2a_downstream(downstream *d,
     assert(d->ptd != NULL);
     assert(d->ptd->proxy != NULL);
     assert(d->downstream_conns != NULL);
+    assert(d->downstream_used_start == 0);
+    assert(d->downstream_used == 0);
     assert(command != NULL);
     assert(uc != NULL);
     assert(uc->next == NULL);
@@ -441,28 +443,32 @@ bool cproxy_broadcast_a2a_downstream(downstream *d,
     }
 
     if (settings.verbose > 1) {
-        fprintf(stderr, "forward multiget nwrite %d out of %d\n",
-                nwrite, nconns);
+        fprintf(stderr, "%d: a2a broadcast nwrite %d out of %d\n",
+                uc->sfd, nwrite, nconns);
     }
 
-    d->downstream_used_start = nwrite;
-    d->downstream_used       = nwrite;
+    if (nwrite > 0) {
+        d->downstream_used_start = nwrite;
+        d->downstream_used       = nwrite;
 
-    if (cproxy_dettach_if_noreply(d, uc) == false) {
-        d->upstream_suffix = suffix;
-        d->upstream_retry = 0;
+        if (cproxy_dettach_if_noreply(d, uc) == false) {
+            d->upstream_suffix = suffix;
+            d->upstream_retry = 0;
 
-        cproxy_start_downstream_timeout(d, NULL);
-    } else {
-        // TODO: Handle flush_all's expiration parameter against
-        // the front_cache.
-        //
-        if (strncmp(command, "flush_all", 9) == 0) {
-            mcache_flush_all(&d->ptd->proxy->front_cache, 0);
+            cproxy_start_downstream_timeout(d, NULL);
+        } else {
+            // TODO: Handle flush_all's expiration parameter against
+            // the front_cache.
+            //
+            if (strncmp(command, "flush_all", 9) == 0) {
+                mcache_flush_all(&d->ptd->proxy->front_cache, 0);
+            }
         }
+
+        return true;
     }
 
-    return nwrite > 0;
+    return false;
 }
 
 /* Forward an upstream command that came with item data,

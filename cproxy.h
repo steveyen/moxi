@@ -371,16 +371,6 @@ struct downstream {
 
     downstream *next; // To track reserved/free lists.
 
-    // Immutable function pointer that determines how we propagate
-    // an upstream request to a downstream.  Eg, ascii vs binary,
-    // replicating or not, etc.
-    //
-    // TODO: Move propagate func ptr to a per-downstream-conn
-    // level, so we can have non-uniform downstream conns.
-    // For example, some downstream conn's are ascii, some binary.
-    //
-    bool (*propagate)(downstream *d);
-
     conn **downstream_conns;  // Wraps the fd's of mst with conns.
     int    downstream_used;   // Number of in-use downstream conns, might
                               // be >1 during scatter-gather commands.
@@ -471,8 +461,19 @@ void upstream_retry(void *data0, void *data1);
 
 int downstream_conn_index(downstream *d, conn *c);
 
+// ---------------------------------------------------------------
+
 void cproxy_process_upstream_ascii(conn *c, char *line);
 void cproxy_process_upstream_ascii_nread(conn *c);
+
+void cproxy_process_downstream_ascii(conn *c, char *line);
+void cproxy_process_downstream_ascii_nread(conn *c);
+
+void cproxy_process_upstream_binary(conn *c);
+void cproxy_process_upstream_binary_nread(conn *c);
+
+void cproxy_process_downstream_binary(conn *c);
+void cproxy_process_downstream_binary_nread(conn *c);
 
 // ---------------------------------------------------------------
 // a2a means ascii upstream, ascii downstream.
@@ -482,6 +483,7 @@ void cproxy_process_a2a_downstream(conn *c, char *line);
 void cproxy_process_a2a_downstream_nread(conn *c);
 
 bool cproxy_forward_a2a_downstream(downstream *d);
+
 bool cproxy_forward_a2a_multiget_downstream(downstream *d, conn *uc);
 bool cproxy_forward_a2a_simple_downstream(downstream *d, char *command,
                                           conn *uc);
@@ -510,6 +512,19 @@ bool cproxy_broadcast_a2b_downstream(downstream *d,
                                      uint16_t keylen,
                                      uint8_t  extlen,
                                      conn *uc, char *suffix);
+
+// ---------------------------------------------------------------
+// b2b means binary upstream, binary downstream.
+//
+void cproxy_init_b2b(void);
+void cproxy_process_b2b_downstream(conn *c);
+void cproxy_process_b2b_downstream_nread(conn *c);
+
+bool cproxy_forward_b2b_downstream(downstream *d);
+bool cproxy_forward_b2b_multiget_downstream(downstream *d, conn *uc);
+bool cproxy_forward_b2b_simple_downstream(downstream *d, conn *uc);
+
+bool cproxy_broadcast_b2b_downstream(downstream *d, conn *uc);
 
 // ---------------------------------------------------------------
 
@@ -562,6 +577,9 @@ void cproxy_close_conn(conn *c);
 void cproxy_reset_stats_td(proxy_stats_td *pstd);
 void cproxy_reset_stats(proxy_stats *ps);
 void cproxy_reset_stats_cmd(proxy_stats_cmd *sc);
+
+void cproxy_binary_cork_cmd(conn *uc);
+void cproxy_binary_uncork_cmds(downstream *d, conn *uc);
 
 // Multiget key de-duplication.
 //

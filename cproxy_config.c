@@ -233,6 +233,7 @@ int cproxy_init(char *cfg_str,
 
         cproxy_init_a2a();
         cproxy_init_a2b();
+        cproxy_init_b2b();
     }
 
     if (cfg_str == NULL ||

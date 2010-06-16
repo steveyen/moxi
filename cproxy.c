@@ -50,9 +50,9 @@ conn_funcs cproxy_upstream_funcs = {
     .conn_init                   = NULL,
     .conn_close                  = cproxy_on_close_upstream_conn,
     .conn_process_ascii_command  = cproxy_process_upstream_ascii,
-    .conn_process_binary_command = NULL,
+    .conn_process_binary_command = cproxy_process_upstream_binary,
     .conn_complete_nread_ascii   = cproxy_process_upstream_ascii_nread,
-    .conn_complete_nread_binary  = NULL,
+    .conn_complete_nread_binary  = cproxy_process_upstream_binary_nread,
     .conn_pause                  = NULL,
     .conn_realtime               = cproxy_realtime,
     .conn_binary_command_magic   = PROTOCOL_BINARY_REQ
@@ -61,16 +61,18 @@ conn_funcs cproxy_upstream_funcs = {
 conn_funcs cproxy_downstream_funcs = {
     .conn_init                   = cproxy_init_downstream_conn,
     .conn_close                  = cproxy_on_close_downstream_conn,
-    .conn_process_ascii_command  = cproxy_process_a2a_downstream,
-    .conn_process_binary_command = cproxy_process_a2b_downstream,
-    .conn_complete_nread_ascii   = cproxy_process_a2a_downstream_nread,
-    .conn_complete_nread_binary  = cproxy_process_a2b_downstream_nread,
+    .conn_process_ascii_command  = cproxy_process_downstream_ascii,
+    .conn_process_binary_command = cproxy_process_downstream_binary,
+    .conn_complete_nread_ascii   = cproxy_process_downstream_ascii_nread,
+    .conn_complete_nread_binary  = cproxy_process_downstream_binary_nread,
     .conn_pause                  = cproxy_on_pause_downstream_conn,
     .conn_realtime               = cproxy_realtime,
     .conn_binary_command_magic   = PROTOCOL_BINARY_RES
 };
 
 proxy_main *proxy_main_g = NULL;
+
+static bool cproxy_forward(downstream *d);
 
 /* Main function to create a proxy struct.
  */
@@ -659,6 +661,10 @@ bool cproxy_release_downstream(downstream *d, bool force) {
         fprintf(stderr, "release_downstream\n");
     }
 
+    // If we need to retry the command, we do so here,
+    // keeping the same downstream that would otherwise
+    // be released.
+    //
     if (!force &&
         d->upstream_retry > 0) {
         if (settings.verbose > 2) {
@@ -668,7 +674,7 @@ bool cproxy_release_downstream(downstream *d, bool force) {
 
         d->upstream_retry = 0;
 
-        if (d->propagate(d) == true) {
+        if (cproxy_forward(d) == true) {
             return true;
         } else {
             d->ptd->stats.stats.tot_downstream_propagate_failed++;
@@ -854,12 +860,6 @@ downstream *cproxy_create_downstream(char *config,
         // TODO: Handle non-uniform downstream protocols.
         //
         assert(IS_PROXY(behavior_pool->base.downstream_protocol));
-
-        if (IS_BINARY(behavior_pool->base.downstream_protocol)) {
-            d->propagate = cproxy_forward_a2b_downstream;
-        } else {
-            d->propagate = cproxy_forward_a2a_downstream;
-        }
 
         if (settings.verbose > 2) {
             fprintf(stderr,
@@ -1182,7 +1182,6 @@ void cproxy_assign_downstream(proxy_td *ptd) {
         assert(d->upstream_conn == NULL);
         assert(d->downstream_used == 0);
         assert(d->downstream_used_start == 0);
-        assert(d->propagate != NULL);
         assert(d->multiget == NULL);
         assert(d->merger == NULL);
         assert(d->timeout_tv.tv_sec == 0);
@@ -1232,14 +1231,14 @@ void cproxy_assign_downstream(proxy_td *ptd) {
                     d->upstream_conn->sfd);
         }
 
-        if (d->propagate(d) == false) {
+        if (cproxy_forward(d) == false) {
             // TODO: This stat is incorrect, as we might reach here
             // when we have entire front cache hit or talk-to-self
             // optimization hit on multiget.
             //
             ptd->stats.stats.tot_downstream_propagate_failed++;
 
-            // During propagate(), we might have recursed,
+            // During cproxy_forward(), we might have recursed,
             // especially in error situation if a downstream
             // conn got closed and released.  Check for recursion
             // before we touch d anymore.
@@ -1277,6 +1276,33 @@ void propagate_error(downstream *d) {
         conn *curr = d->upstream_conn;
         d->upstream_conn = d->upstream_conn->next;
         curr->next = NULL;
+    }
+}
+
+static bool cproxy_forward(downstream *d) {
+    assert(d != NULL);
+    assert(d->ptd != NULL);
+    assert(d->upstream_conn != NULL);
+
+    if (IS_ASCII(d->upstream_conn->protocol)) {
+        // ASCII upstream.
+        //
+        if (IS_ASCII(d->ptd->behavior_pool.base.downstream_protocol)) {
+            return cproxy_forward_a2a_downstream(d);
+        } else {
+            return cproxy_forward_a2b_downstream(d);
+        }
+    } else {
+        // BINARY upstream.
+        //
+        if (IS_BINARY(d->ptd->behavior_pool.base.downstream_protocol)) {
+            return cproxy_forward_b2b_downstream(d);
+        } else {
+            // TODO: Translation from binary upstream to ascii downstream unsupported.
+            //
+            assert(0);
+            return false;
+        }
     }
 }
 
@@ -2130,3 +2156,28 @@ int downstream_conn_index(downstream *d, conn *c) {
     return -1;
 }
 
+/**
+ * Optimization when we're talking with ourselves,
+ * so we don't need to go through network hop,
+ * for a simple one-liner command.
+ */
+void cproxy_optimize_to_self(downstream *d, conn *uc,
+                                   char *command) {
+    assert(d);
+    assert(d->ptd);
+    assert(uc);
+    assert(uc->next == NULL);
+
+    d->ptd->stats.stats.tot_optimize_self++;
+
+    if (command != NULL &&
+        settings.verbose > 2) {
+        fprintf(stderr, "%d: optimize to self: %s\n",
+                uc->sfd, command);
+    }
+
+    d->upstream_conn   = NULL;
+    d->upstream_suffix = NULL;
+
+    cproxy_release_downstream(d, false);
+}

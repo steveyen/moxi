@@ -14,7 +14,7 @@
 
 // Internal declarations.
 //
-protocol_binary_request_noop req_noop = {
+static protocol_binary_request_noop req_noop = {
     .bytes = {0}
 };
 
@@ -395,11 +395,6 @@ void cproxy_process_a2b_downstream(conn *c) {
     assert(IS_BINARY(c->protocol));
     assert(IS_PROXY(c->protocol));
 
-    if (settings.verbose > 2) {
-        fprintf(stderr, "<%d cproxy_process_a2b_downstream\n",
-                c->sfd);
-    }
-
     // Snapshot rcurr, because the caller, try_read_command(), changes it.
     //
     c->cmd_start = c->rcurr;
@@ -418,6 +413,8 @@ void cproxy_process_a2b_downstream(conn *c) {
     int      keylen  = header->response.keylen;
     uint32_t bodylen = header->response.bodylen;
 
+    assert(bodylen >= keylen + extlen);
+
     // Our approach is to read everything we can before
     // getting into big switch/case statements for the
     // actual processing.
@@ -427,20 +424,18 @@ void cproxy_process_a2b_downstream(conn *c) {
     // a GET family of response.
     //
     // If bodylen > extlen + keylen, then we should nread
-    // then ext+key and set ourselves up for a later item nread.
+    // the ext+key and set ourselves up for a later item nread.
     //
     // We overload the meaning of the conn substates...
     // - bin_reading_get_key means do nread for ext and key data.
     // - bin_read_set_value means do nread for item data.
     //
     if (settings.verbose > 2) {
-        fprintf(stderr, "<%d cproxy_process_a2b_downstream %x\n",
-                c->sfd, c->cmd);
+        fprintf(stderr, "<%d cproxy_process_a2b_downstream %x %d %d %u\n",
+                c->sfd, c->cmd, extlen, keylen, bodylen);
     }
 
     if (keylen > 0 || extlen > 0) {
-        assert(bodylen >= keylen + extlen);
-
         // One reason we reach here is during a
         // GET/GETQ/GETK/GETKQ hit response, because extlen
         // will be > 0 for the flags.
@@ -565,11 +560,8 @@ void cproxy_process_a2b_downstream_nread(conn *c) {
 
             conn_set_state(c, conn_nread);
         } else {
-            // TODO: Test this swallow pathway.
-            //
-            c->sbytes = vlen;
-
-            conn_set_state(c, conn_swallow);
+            d->ptd->stats.stats.err_oom++;
+            cproxy_close_conn(c);
         }
     } else {
         a2b_process_downstream_response(c);
@@ -1353,6 +1345,8 @@ bool cproxy_broadcast_a2b_downstream(downstream *d,
     assert(d->ptd != NULL);
     assert(d->ptd->proxy != NULL);
     assert(d->downstream_conns != NULL);
+    assert(d->downstream_used_start == 0);
+    assert(d->downstream_used == 0);
     assert(req != NULL);
     assert(req_size >= sizeof(req));
     assert(req->request.bodylen == 0);
@@ -1413,29 +1407,33 @@ bool cproxy_broadcast_a2b_downstream(downstream *d,
     }
 
     if (settings.verbose > 2) {
-        fprintf(stderr, "forward multiget nwrite %d out of %d\n",
-                nwrite, nconns);
+        fprintf(stderr, "%d: a2b broadcast nwrite %d out of %d\n",
+                uc->sfd, nwrite, nconns);
     }
 
-    d->downstream_used_start = nwrite;
-    d->downstream_used       = nwrite;
+    if (nwrite > 0) {
+        d->downstream_used_start = nwrite;
+        d->downstream_used       = nwrite;
 
-    if (cproxy_dettach_if_noreply(d, uc) == false) {
-        d->upstream_suffix = suffix;
-        d->upstream_retry = 0;
+        if (cproxy_dettach_if_noreply(d, uc) == false) {
+            d->upstream_suffix = suffix;
+            d->upstream_retry = 0;
 
-        cproxy_start_downstream_timeout(d, NULL);
-    } else {
-        // TODO: Handle flush_all's expiration parameter against
-        // the front_cache.
-        //
-        if (req->request.opcode == PROTOCOL_BINARY_CMD_FLUSH ||
-            req->request.opcode == PROTOCOL_BINARY_CMD_FLUSHQ) {
-            mcache_flush_all(&d->ptd->proxy->front_cache, 0);
+            cproxy_start_downstream_timeout(d, NULL);
+        } else {
+            // TODO: Handle flush_all's expiration parameter against
+            // the front_cache.
+            //
+            if (req->request.opcode == PROTOCOL_BINARY_CMD_FLUSH ||
+                req->request.opcode == PROTOCOL_BINARY_CMD_FLUSHQ) {
+                mcache_flush_all(&d->ptd->proxy->front_cache, 0);
+            }
         }
+
+        return true;
     }
 
-    return nwrite > 0;
+    return false;
 }
 
 /* Forward an upstream command that came with item data,

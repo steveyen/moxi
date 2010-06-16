@@ -203,7 +203,8 @@ enum network_transport {
 #define IS_PROXY(x) (x == proxy_upstream_ascii_prot || \
                      x == proxy_upstream_binary_prot || \
                      x == proxy_downstream_ascii_prot || \
-                     x == proxy_downstream_binary_prot)
+                     x == proxy_downstream_binary_prot || \
+                     x == negotiating_proxy_prot)
 
 #define NREAD_ADD 1
 #define NREAD_SET 2

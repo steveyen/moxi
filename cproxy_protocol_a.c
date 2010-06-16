@@ -402,28 +402,27 @@ bool cproxy_optimize_set_ascii(downstream *d, conn *uc,
     return false;
 }
 
-/**
- * Optimization when we're talking with ourselves,
- * so we don't need to go through network hop,
- * for a simple one-liner command.
- */
-void cproxy_optimize_to_self(downstream *d, conn *uc,
-                             char *command) {
-    assert(d);
-    assert(d->ptd);
-    assert(uc);
-    assert(uc->next == NULL);
+void cproxy_process_downstream_ascii(conn *c, char *line) {
+    downstream *d = c->extra;
+    assert(d != NULL);
+    assert(d->upstream_conn != NULL);
 
-    d->ptd->stats.stats.tot_optimize_self++;
-
-    if (command != NULL &&
-        settings.verbose > 2) {
-        fprintf(stderr, "optimize to self: %s\n", command);
+    if (IS_ASCII(d->upstream_conn->protocol)) {
+        cproxy_process_a2a_downstream(c, line);
+    } else {
+        assert(false); // TODO: b2a.
     }
-
-    d->upstream_conn   = NULL;
-    d->upstream_suffix = NULL;
-    d->upstream_retry  = 0;
-
-    cproxy_release_downstream(d, false);
 }
+
+void cproxy_process_downstream_ascii_nread(conn *c) {
+    downstream *d = c->extra;
+    assert(d != NULL);
+    assert(d->upstream_conn != NULL);
+
+    if (IS_ASCII(d->upstream_conn->protocol)) {
+        cproxy_process_a2a_downstream_nread(c);
+    } else {
+        assert(false); // TODO: b2a.
+    }
+}
+

@@ -3328,7 +3328,6 @@ void drive_machine(conn *c) {
     assert(c != NULL);
 
     while (!stop) {
-
         switch(c->state) {
         case conn_listening:
             addrlen = sizeof(addr);
