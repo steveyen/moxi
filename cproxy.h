@@ -392,6 +392,12 @@ struct downstream {
     int    downstream_used_start;
     conn  *upstream_conn;     // Non-NULL when downstream is reserved.
     char  *upstream_suffix;   // Last bit to write when downstreams are done.
+    int    upstream_retry;    // Will be >0 if we should retry the entire
+                              // command again when all downstreams are done.
+                              // Used in not-my-vbucket error case.  During
+                              // the retry, we'll reuse the same multiget
+                              // de-duplication tracking table to avoid
+                              // asking for successful keys again.
 
     genhash_t *multiget; // Keyed by string.
     genhash_t *merger;   // Keyed by string, for merging replies like STATS.
@@ -576,7 +582,7 @@ struct multiget_entry {
 bool multiget_ascii_downstream(
     downstream *d, conn *uc,
     int (*emit_start)(conn *c, char *cmd, int cmd_len),
-    int (*emit_skey)(conn *c, char *skey, int skey_len, int vbucket),
+    int (*emit_skey)(conn *c, char *skey, int skey_len, int vbucket, int key_index),
     int (*emit_end)(conn *c),
     mcache *front_cache);
 

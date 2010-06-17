@@ -172,7 +172,7 @@ bool a2b_fill_request_token(struct A2BSpec *spec,
 void a2b_process_downstream_response(conn *c);
 
 int a2b_multiget_start(conn *c, char *cmd, int cmd_len);
-int a2b_multiget_skey(conn *c, char *skey, int skey_len, int vbucket);
+int a2b_multiget_skey(conn *c, char *skey, int skey_len, int vbucket, int key_index);
 int a2b_multiget_end(conn *c);
 
 void cproxy_init_a2b() {
@@ -647,25 +647,118 @@ void a2b_process_downstream_response(conn *c) {
     // Handle not-my-vbucket error response.
     //
     if (status == PROTOCOL_BINARY_RESPONSE_NOT_MY_VBUCKET) {
-        // For non-GET commands, enqueue a retry after informing the vbucket map.
-        //
+        if (settings.verbose > 2) {
+            fprintf(stderr,
+                    "<%d cproxy_process_a2b_downstream_response not-my-vbucket, "
+                    "cmd: %x %d\n",
+                    c->sfd, header->response.opcode, uc != NULL);
+        }
+
         if (c->cmd != PROTOCOL_BINARY_CMD_GET &&
             c->cmd != PROTOCOL_BINARY_CMD_GETK) {
-            conn_set_state(c, conn_pause);
+            // For non-GET commands, enqueue a retry after informing
+            // the vbucket map.
+            //
+            if (uc == NULL) {
+                // If the client went away, though, don't retry.
+                //
+                conn_set_state(c, conn_pause);
+                return;
+            }
 
             int vbucket = ntohl(header->response.opaque);
 
-            mcs_server_invalid_vbucket(&d->mst, downstream_conn_index(d, c), vbucket);
+            if (settings.verbose > 2) {
+                fprintf(stderr,
+                        "<%d cproxy_process_a2b_downstream_response not-my-vbucket, "
+                        "cmd: %x not get/getk, vbucket: %d\n",
+                        c->sfd, header->response.opcode, vbucket);
+            }
+
+            mcs_server_invalid_vbucket(&d->mst, downstream_conn_index(d, c),
+                                       vbucket);
+
+            conn_set_state(c, conn_pause);
 
             assert(uc->thread);
             assert(uc->thread->work_queue);
 
+            // TODO: Add a stats counter here for this case.
+            //
             // Using work_send() so the call stack unwinds back to libevent.
             //
             work_send(uc->thread->work_queue, upstream_retry, uc->extra, uc);
-        }
 
-        return;
+            return;
+        } else {
+            // TODO: Add a stats counter here for this case.
+            //
+            // Handle ascii multi-GET commands by awaiting all NOOP's from
+            // downstream servers, eating the NOOP's, and retrying with
+            // the same multiget de-duplication map, which might be partially
+            // filled in already.
+            //
+            if (uc == NULL) {
+                // If the client went away, though, don't retry.
+                //
+                conn_set_state(c, conn_new_cmd);
+                return;
+            }
+
+            assert(d->multiget != NULL);
+            assert(uc->cmd_start != NULL);
+            assert(header->response.opaque != 0);
+
+            int   key_index = ntohl(header->response.opaque);
+            char *key       = uc->cmd_start + key_index;
+            int   key_len   = skey_len(key);
+
+            // The key is not NULL or space terminated.
+            //
+            char key_buf[KEY_MAX_LENGTH + 10];
+            assert(key_len <= KEY_MAX_LENGTH);
+            memcpy(key_buf, key, key_len);
+            key_buf[key_len] = '\0';
+
+            int vbucket = -1;
+
+            mcs_key_hash(&d->mst, key_buf, key_len, &vbucket);
+
+            mcs_server_invalid_vbucket(&d->mst, downstream_conn_index(d, c),
+                                       vbucket);
+
+            // Update the de-duplication map, removing the key, so that
+            // we'll reattempt another request for the key during the
+            // retry.
+            //
+            multiget_entry *entry = genhash_find(d->multiget, key_buf);
+
+            if (settings.verbose > 2) {
+                fprintf(stderr,
+                        "<%d cproxy_process_a2b_downstream_response not-my-vbucket, "
+                        "cmd: %x get/getk '%s' %d retry: %d, entry: %d, vbucket %d\n",
+                        c->sfd, header->response.opcode, key_buf, key_len,
+                        d->upstream_retry + 1, entry != NULL, vbucket);
+            }
+
+            genhash_delete(d->multiget, key_buf);
+
+            while (entry != NULL) {
+                multiget_entry *curr = entry;
+                entry = entry->next;
+                free(curr);
+            }
+
+            // Signal that we need to retry, where this counter is
+            // later checked after all NOOP's from downstreams are
+            // received.
+            //
+            d->upstream_retry++;
+
+            conn_set_state(c, conn_new_cmd);
+
+            return;
+        }
     }
 
     switch (c->cmd) {
@@ -955,7 +1048,6 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
     assert(uc != NULL);
     assert(uc->item == NULL);
     assert(uc->cmd_curr != -1);
-    assert(d->multiget == NULL);
     assert(d->merger == NULL);
 
     // Handles get and gets.
@@ -1161,6 +1253,7 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
 
                     if (d->upstream_suffix == NULL) {
                         d->upstream_suffix = "SERVER_ERROR a2b event oom\r\n";
+                        d->upstream_retry = 0;
                     }
                 }
             } else {
@@ -1173,6 +1266,7 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
 
                 if (d->upstream_suffix == NULL) {
                     d->upstream_suffix = "CLIENT_ERROR a2b parse request\r\n";
+                    d->upstream_retry = 0;
                 }
             }
 
@@ -1193,7 +1287,7 @@ int a2b_multiget_start(conn *c, char *cmd, int cmd_len) {
 
 /* An skey is a space prefixed key string.
  */
-int a2b_multiget_skey(conn *c, char *skey, int skey_len, int vbucket) {
+int a2b_multiget_skey(conn *c, char *skey, int skey_len, int vbucket, int key_index) {
     char *key     = skey + 1;
     int   key_len = skey_len - 1;
 
@@ -1210,9 +1304,21 @@ int a2b_multiget_skey(conn *c, char *skey, int skey_len, int vbucket) {
             req->message.header.request.keylen = htons((uint16_t) key_len);
             req->message.header.request.datatype = PROTOCOL_BINARY_RAW_BYTES;
             req->message.header.request.bodylen  = htonl(key_len);
+            req->message.header.request.opaque   = htonl(key_index);
 
             if (vbucket >= 0) {
                 req->message.header.request.reserved = htons(vbucket);
+
+                if (settings.verbose > 2) {
+                    char key_buf[KEY_MAX_LENGTH + 10];
+                    assert(key_len <= KEY_MAX_LENGTH);
+                    memcpy(key_buf, key, key_len);
+                    key_buf[key_len] = '\0';
+
+                    fprintf(stderr,
+                            "<%d a2b_multiget_skey '%s' %d %d\n",
+                            c->sfd, key_buf, vbucket, key_index);
+                }
             }
 
             if (add_iov(c, ITEM_data(it), sizeof(req->bytes)) == 0 &&
@@ -1316,6 +1422,7 @@ bool cproxy_broadcast_a2b_downstream(downstream *d,
 
     if (cproxy_dettach_if_noreply(d, uc) == false) {
         d->upstream_suffix = suffix;
+        d->upstream_retry = 0;
 
         cproxy_start_downstream_timeout(d, NULL);
     } else {

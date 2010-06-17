@@ -28,6 +28,8 @@ conn *conn_list_remove(conn *head, conn **tail,
 
 bool is_compatible_request(conn *existing, conn *candidate);
 
+void propagate_error(downstream *d);
+
 int init_mcs_st(mcs_st *mst, char *config);
 
 // Function tables.
@@ -363,6 +365,7 @@ void cproxy_on_close_upstream_conn(conn *c) {
                                             c, &found);
         if (d->upstream_conn == NULL) {
             d->upstream_suffix = NULL;
+            d->upstream_retry = 0;
 
             // Don't need to do anything else, as we'll now just
             // read and drop any remaining inflight downstream replies.
@@ -474,6 +477,7 @@ void cproxy_on_close_downstream_conn(conn *c) {
         //
         if (d->upstream_suffix == NULL) {
             d->upstream_suffix = "SERVER_ERROR proxy downstream closed\r\n";
+            d->upstream_retry = 0;
         }
 
         // We sometimes see that drive_machine/transmit will not see
@@ -503,6 +507,7 @@ void cproxy_on_close_downstream_conn(conn *c) {
                     d->upstream_conn->cmd_retries++;
                     uc_retry = d->upstream_conn;
                     d->upstream_suffix = NULL;
+                    d->upstream_retry = 0;
                 }
             }
         }
@@ -612,18 +617,18 @@ downstream *cproxy_reserve_downstream(proxy_td *ptd) {
 
         assert(d->upstream_conn == NULL);
         assert(d->upstream_suffix == NULL);
+        assert(d->upstream_retry == 0);
         assert(d->downstream_used == 0);
         assert(d->downstream_used_start == 0);
-        assert(d->multiget == NULL);
         assert(d->merger == NULL);
         assert(d->timeout_tv.tv_sec == 0);
         assert(d->timeout_tv.tv_usec == 0);
 
         d->upstream_conn = NULL;
         d->upstream_suffix = NULL;
+        d->upstream_retry = 0;
         d->downstream_used = 0;
         d->downstream_used_start = 0;
-        d->multiget = NULL;
         d->merger = NULL;
         d->timeout_tv.tv_sec = 0;
         d->timeout_tv.tv_usec = 0;
@@ -652,6 +657,24 @@ bool cproxy_release_downstream(downstream *d, bool force) {
 
     if (settings.verbose > 2) {
         fprintf(stderr, "release_downstream\n");
+    }
+
+    if (!force &&
+        d->upstream_retry > 0) {
+        if (settings.verbose > 2) {
+            fprintf(stderr, "%d: release_downstream, instead retrying %d\n",
+                    d->upstream_conn->sfd, d->upstream_retry);
+        }
+
+        d->upstream_retry = 0;
+
+        if (d->propagate(d) == true) {
+            return true;
+        } else {
+            d->ptd->stats.stats.tot_downstream_propagate_failed++;
+
+            propagate_error(d);
+        }
     }
 
     d->ptd->stats.stats.tot_downstream_released++;
@@ -720,6 +743,7 @@ bool cproxy_release_downstream(downstream *d, bool force) {
 
     d->upstream_conn = NULL;
     d->upstream_suffix = NULL; // No free(), expecting a static string.
+    d->upstream_retry = 0;
     d->downstream_used = 0;
     d->downstream_used_start = 0;
     d->multiget = NULL;
@@ -1209,21 +1233,7 @@ void cproxy_assign_downstream(proxy_td *ptd) {
                 break;
             }
 
-            while (d->upstream_conn != NULL) {
-                conn *uc = d->upstream_conn;
-
-                if (settings.verbose > 1) {
-                    fprintf(stderr,
-                            "ERROR: %d could not forward upstream to downstream\n",
-                            uc->sfd);
-                }
-
-                upstream_error(uc);
-
-                conn *curr = d->upstream_conn;
-                d->upstream_conn = d->upstream_conn->next;
-                curr->next = NULL;
-            }
+            propagate_error(d);
 
             cproxy_release_downstream(d, false);
         }
@@ -1231,6 +1241,26 @@ void cproxy_assign_downstream(proxy_td *ptd) {
 
     if (settings.verbose > 2) {
         fprintf(stderr, "assign_downstream, done\n");
+    }
+}
+
+void propagate_error(downstream *d) {
+    assert(d != NULL);
+
+    while (d->upstream_conn != NULL) {
+        conn *uc = d->upstream_conn;
+
+        if (settings.verbose > 1) {
+            fprintf(stderr,
+                    "ERROR: %d could not forward upstream to downstream\n",
+                    uc->sfd);
+        }
+
+        upstream_error(uc);
+
+        conn *curr = d->upstream_conn;
+        d->upstream_conn = d->upstream_conn->next;
+        curr->next = NULL;
     }
 }
 
@@ -1300,6 +1330,7 @@ bool cproxy_dettach_if_noreply(downstream *d, conn *uc) {
         uc->noreply        = false;
         d->upstream_conn   = NULL;
         d->upstream_suffix = NULL;
+        d->upstream_retry  = 0;
 
         cproxy_reset_upstream(uc);
 
@@ -1764,6 +1795,11 @@ downstream *downstream_list_remove(downstream *head, downstream *d) {
  * TODO: Handle binary upstream protocol.
  */
 bool is_compatible_request(conn *existing, conn *candidate) {
+    // The not-my-vbucket error handling requires us to not
+    // squash ascii multi-GET requests, due to reusing the
+    // multiget-deduplication machinery during retries and
+    // to simplify the later codepaths.
+    /*
     assert(existing);
     assert(IS_ASCII(existing->protocol));
     assert(IS_PROXY(existing->protocol));
@@ -1790,6 +1826,7 @@ bool is_compatible_request(conn *existing, conn *candidate) {
             return true;
         }
     }
+    */
 
     return false;
 }

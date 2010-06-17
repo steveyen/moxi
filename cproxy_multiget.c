@@ -25,7 +25,6 @@ void multiget_foreach_free(const void *key,
         &ptd->stats.stats_cmd[STATS_CMD_TYPE_REGULAR][STATS_CMD_GET_KEY];
 
     int length = 0;
-
     multiget_entry *entry = (multiget_entry*)value;
 
     while (entry != NULL) {
@@ -74,12 +73,11 @@ void multiget_remove_upstream(const void *key,
 
 bool multiget_ascii_downstream(downstream *d, conn *uc,
     int (*emit_start)(conn *c, char *cmd, int cmd_len),
-    int (*emit_skey)(conn *c, char *skey, int skey_len, int vbucket),
+    int (*emit_skey)(conn *c, char *skey, int skey_len, int vbucket, int key_index),
     int (*emit_end)(conn *c),
     mcache *front_cache) {
     assert(d != NULL);
     assert(d->downstream_conns != NULL);
-    assert(d->multiget == NULL);
     assert(uc != NULL);
     assert(uc->noreply == false);
 
@@ -103,13 +101,17 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
         }
     }
 
-    if (uc->next != NULL) {
-        // More than one upstream conn, so we need a hashtable
-        // to track keys for de-deplication.
-        //
+    // Always have a de-duplication map, due to not-my-vbucket error
+    // handling where any retry attempts should avoid retrying already
+    // successfully attempted keys.
+    //
+    // Previously, we used to only have a map when there was more than
+    // one upstream conn.
+    //
+    if (d->multiget == NULL) {
         d->multiget = genhash_init(128, skeyhash_ops);
         if (settings.verbose > 1) {
-            fprintf(stderr, "cproxy multiget hash table new\n");
+            fprintf(stderr, "%d: cproxy multiget hash table new\n", uc->sfd);
         }
     }
 
@@ -139,8 +141,8 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
         int cas_emit = (command[3] == 's');
 
         if (settings.verbose > 1) {
-            fprintf(stderr, "forward multiget %s (%d %d)\n",
-                    command, cmd_len, uc_num);
+            fprintf(stderr, "%d: forward multiget %s (%d %d)\n",
+                    uc_cur->sfd, command, cmd_len, uc_num);
         }
 
         while (space != NULL) {
@@ -278,11 +280,22 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
 
                     // See if we've already requested this key via
                     // the multiget hash table, in order to
-                    // de-deplicate repeated keys.
+                    // de-duplicate repeated keys.
                     //
                     bool first_request = true;
 
                     if (d->multiget != NULL) {
+                        if (settings.verbose > 2) {
+                            char key_buf[KEY_MAX_LENGTH + 10];
+                            assert(key_len <= KEY_MAX_LENGTH);
+                            memcpy(key_buf, key, key_len);
+                            key_buf[key_len] = '\0';
+
+                            fprintf(stderr,
+                                    "<%d multiget_ascii_downstream '%s' %d %d %d\n",
+                                    c->sfd, key_buf, vbucket, (int) (key - command), key_len);
+                        }
+
                         // TODO: Use Trond's allocator here.
                         //
                         multiget_entry *entry =
@@ -318,7 +331,7 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
                         // Provide the preceding space as optimization
                         // for ascii-to-ascii configuration.
                         //
-                        emit_skey(c, key - 1, key_len + 1, vbucket);
+                        emit_skey(c, key - 1, key_len + 1, vbucket, key - command);
                     } else {
                         ptd->stats.stats.tot_multiget_keys_dedupe++;
 
@@ -383,6 +396,7 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
 
     if (cproxy_dettach_if_noreply(d, uc) == false) {
         d->upstream_suffix = "END\r\n";
+        d->upstream_retry = 0;
 
         cproxy_start_downstream_timeout(d, NULL);
     }

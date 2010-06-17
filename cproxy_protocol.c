@@ -382,6 +382,7 @@ bool cproxy_optimize_set_ascii(downstream *d, conn *uc,
                       key, key_len, false)) {
         d->upstream_conn = NULL;
         d->upstream_suffix = NULL;
+        d->upstream_retry = 0;
 
         out_string(uc, "STORED");
 
@@ -422,6 +423,7 @@ void cproxy_optimize_to_self(downstream *d, conn *uc,
 
     d->upstream_conn   = NULL;
     d->upstream_suffix = NULL;
+    d->upstream_retry  = 0;
 
     cproxy_release_downstream(d, false);
 }

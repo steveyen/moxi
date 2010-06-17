@@ -303,8 +303,6 @@ int count_dot_pair(char *x, int xlen, char *y, int ylen) {
     int xdot = count_dot(x, xlen);
     int ydot = count_dot(y, ylen);
 
-    assert(xdot == ydot);
-
     return (xdot > ydot ? xdot : ydot);
 }
 
