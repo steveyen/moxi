@@ -101,9 +101,7 @@ uint32_t mcs_key_hash(mcs_st *ptr, const char *key, size_t key_length, int *vbuc
 }
 
 void mcs_server_invalid_vbucket(mcs_st *ptr, int server_index, int vbucket) {
-    // TODO: Make a real libvbucket update call here, invoked during not-my-vbucket errors.
-    //
-    assert(0);
+    vbucket_found_incorrect_master(ptr->vch, vbucket, server_index);
 }
 
 void mcs_server_st_quit(mcs_server_st *ptr, uint8_t io_death) {
