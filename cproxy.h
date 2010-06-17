@@ -465,6 +465,11 @@ bool  cproxy_dettach_if_noreply(downstream *d, conn *uc);
 
 void cproxy_reset_upstream(conn *uc);
 
+void upstream_error(conn *uc);
+void upstream_retry(void *data0, void *data1);
+
+int downstream_conn_index(downstream *d, conn *c);
+
 void cproxy_process_upstream_ascii(conn *c, char *line);
 void cproxy_process_upstream_ascii_nread(conn *c);
 

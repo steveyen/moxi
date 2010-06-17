@@ -644,6 +644,30 @@ void a2b_process_downstream_response(conn *c) {
         return;
     }
 
+    // Handle not-my-vbucket error response.
+    //
+    if (status == PROTOCOL_BINARY_RESPONSE_NOT_MY_VBUCKET) {
+        // For non-GET commands, enqueue a retry after informing the vbucket map.
+        //
+        if (c->cmd != PROTOCOL_BINARY_CMD_GET &&
+            c->cmd != PROTOCOL_BINARY_CMD_GETK) {
+            conn_set_state(c, conn_pause);
+
+            int vbucket = ntohl(header->response.opaque);
+
+            mcs_server_invalid_vbucket(&d->mst, downstream_conn_index(d, c), vbucket);
+
+            assert(uc->thread);
+            assert(uc->thread->work_queue);
+
+            // Using work_send() so the call stack unwinds back to libevent.
+            //
+            work_send(uc->thread->work_queue, upstream_retry, uc->extra, uc);
+        }
+
+        return;
+    }
+
     switch (c->cmd) {
     case PROTOCOL_BINARY_CMD_GET:   /* FALLTHROUGH */
     case PROTOCOL_BINARY_CMD_GETK:
@@ -1359,7 +1383,12 @@ bool cproxy_forward_a2b_item_downstream(downstream *d, short cmd,
                     req->request.extlen   = extlen;
 
                     if (vbucket >= 0) {
+                        // We also put the vbucket id into the opaque,
+                        // so we can have it later for not-my-vbucket
+                        // error handling.
+                        //
                         req->request.reserved = htons(vbucket);
+                        req->request.opaque   = htonl(vbucket);
                     }
 
                     switch (cmd) {

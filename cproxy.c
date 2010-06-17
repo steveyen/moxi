@@ -16,17 +16,12 @@
 //
 downstream *downstream_list_remove(downstream *head, downstream *d);
 
-int downstream_conn_index(downstream *d, conn *c);
-
 void downstream_timeout(const int fd,
                         const short which,
                         void *arg);
 void wait_queue_timeout(const int fd,
                         const short which,
                         void *arg);
-
-void upstream_error(conn *uc);
-void upstream_retry(void *data0, void *data1);
 
 conn *conn_list_remove(conn *head, conn **tail,
                        conn *c, bool *found);
