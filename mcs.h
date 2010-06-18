@@ -63,6 +63,8 @@ memcached_return memcached_do(memcached_server_st *ptr,
 mcs_st *mcs_create(mcs_st *ptr, const char *config);
 void    mcs_free(mcs_st *ptr);
 
+bool mcs_stable_update(mcs_st *curr_version, mcs_st *next_version);
+
 uint32_t       mcs_server_count(mcs_st *ptr);
 mcs_return     mcs_server_push(mcs_st *ptr, mcs_server_st *list);
 mcs_server_st *mcs_server_index(mcs_st *ptr, int i);

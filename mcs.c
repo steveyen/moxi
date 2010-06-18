@@ -91,6 +91,34 @@ mcs_server_st *mcs_server_index(mcs_st *ptr, int i) {
     return &ptr->servers[i];
 }
 
+/* Returns true if curr_version could be updated with next_version in
+ * a low-impact stable manner (server-list is the same), allowing the
+ * same connections to be reused.  Or returns false if the delta was
+ * too large for an in-place updating of curr_version with information
+ * from next_version.
+ *
+ * The next_version may be destroyed in this call, and the caller
+ * should afterwards only call mcs_free() on the next_version.
+ */
+bool mcs_stable_update(mcs_st *curr_version, mcs_st *next_version) {
+    bool rv = false;
+
+    VBUCKET_CONFIG_DIFF *diff = vbucket_compare(curr_version->vch, next_version->vch);
+    if (diff != NULL) {
+        if (!diff->sequence_changed) {
+            vbucket_config_destroy(curr_version->vch);
+            curr_version->vch = next_version->vch;
+            next_version->vch = 0;
+
+            rv = true;
+        }
+
+        vbucket_free_diff(diff);
+    }
+
+    return rv;
+}
+
 uint32_t mcs_key_hash(mcs_st *ptr, const char *key, size_t key_length, int *vbucket) {
     int v = vbucket_get_vbucket_by_key(ptr->vch, key, key_length);
     if (vbucket != NULL) {
@@ -275,6 +303,10 @@ uint32_t mcs_server_count(mcs_st *ptr) {
 
 mcs_server_st *mcs_server_index(mcs_st *ptr, int i) {
     return &ptr->hosts[i];
+}
+
+bool mcs_stable_update(mcs_st *curr_version, mcs_st *next_version) {
+    return false;
 }
 
 uint32_t mcs_key_hash(mcs_st *ptr, const char *key, size_t key_length, *vbucket) {

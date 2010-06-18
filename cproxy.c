@@ -919,14 +919,30 @@ bool cproxy_check_downstream_config(downstream *d) {
         rv = true;
     } else if (d->config != NULL &&
                d->ptd->config != NULL &&
-               strcmp(d->config,
-                      d->ptd->config) == 0 &&
                cproxy_equal_behaviors(d->behaviors_num,
                                       d->behaviors_arr,
                                       d->ptd->behavior_pool.num,
                                       d->ptd->behavior_pool.arr)) {
-        d->config_ver = d->ptd->config_ver;
-        rv = true;
+        // Parse the proxy/parent's config to see if we can
+        // reuse our existing downstream connections.
+        //
+        mcs_st next;
+
+        int n = init_mcs_st(&next, d->ptd->config);
+        if (n > 0) {
+            if (mcs_stable_update(&d->mst, &next)) {
+                if (settings.verbose > 2) {
+                    fprintf(stderr, "check_downstream_config stable update\n");
+                }
+
+                free(d->config);
+                d->config     = strdup(d->ptd->config);
+                d->config_ver = d->ptd->config_ver;
+                rv = true;
+            }
+
+            mcs_free(&next);
+        }
     }
 
     if (settings.verbose > 2) {
