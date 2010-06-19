@@ -101,20 +101,6 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
         }
     }
 
-    // Always have a de-duplication map, due to not-my-vbucket error
-    // handling where any retry attempts should avoid retrying already
-    // successfully attempted keys.
-    //
-    // Previously, we used to only have a map when there was more than
-    // one upstream conn.
-    //
-    if (d->multiget == NULL) {
-        d->multiget = genhash_init(128, skeyhash_ops);
-        if (settings.verbose > 1) {
-            fprintf(stderr, "%d: cproxy multiget hash table new\n", uc->sfd);
-        }
-    }
-
     // Snapshot the volatile only once.
     //
     uint32_t msec_current_time_snapshot = msec_current_time;
@@ -149,11 +135,14 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
             char *key = space + 1;
             char *next_space = strchr(key, ' ');
             int   key_len;
+            bool  key_last;
 
             if (next_space != NULL) {
                 key_len = next_space - key;
+                key_last = false;
             } else {
                 key_len = strlen(key);
+                key_last = true;
 
                 // We've reached the last key.
                 //
@@ -276,6 +265,22 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
                         }
 
                         goto loop_next;
+                    }
+
+                    // If there's more than one key, create a de-duplication map.
+                    // This is used to handle not-my-vbucket errors
+                    // where any later retry attempts should avoid
+                    // retrying already successfully attempted keys.
+                    //
+                    // Previously, we used to only have a map when there was more than
+                    // one upstream conn.
+                    //
+                    if (key_last == false &&
+                        d->multiget == NULL) {
+                        d->multiget = genhash_init(128, skeyhash_ops);
+                        if (settings.verbose > 1) {
+                            fprintf(stderr, "%d: cproxy multiget hash table new\n", uc->sfd);
+                        }
                     }
 
                     // See if we've already requested this key via
