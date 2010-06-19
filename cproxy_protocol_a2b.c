@@ -670,18 +670,36 @@ void a2b_process_downstream_response(conn *c) {
             mcs_server_invalid_vbucket(&d->mst, downstream_conn_index(d, c),
                                        vbucket);
 
-            conn_set_state(c, conn_pause);
-
-            assert(uc->thread);
-            assert(uc->thread->work_queue);
-
-            // TODO: Add a stats counter here for this case.
+            // As long as the upstream is still open and we haven't
+            // retried too many times already.
             //
-            // Using work_send() so the call stack unwinds back to libevent.
-            //
-            work_send(uc->thread->work_queue, upstream_retry, uc->extra, uc);
+            int max_retries = (mcs_server_count(&d->mst) * 2);
 
-            return;
+            if (uc != NULL &&
+                uc->cmd_retries < max_retries) {
+                uc->cmd_retries++;
+
+                conn_set_state(c, conn_pause);
+
+                assert(uc->thread);
+                assert(uc->thread->work_queue);
+
+                // TODO: Add a stats counter here for this case.
+                //
+                // Using work_send() so the call stack unwinds back to libevent.
+                //
+                work_send(uc->thread->work_queue, upstream_retry, uc->extra, uc);
+
+                return;
+            } else {
+                if (settings.verbose > 2) {
+                    fprintf(stderr,
+                            "%d: cproxy_process_a2b_downstream_response not-my-vbucket, "
+                            "cmd: %x skipping retry %d >= %d\n",
+                            c->sfd, header->response.opcode, uc->cmd_retries,
+                            max_retries);
+                }
+            }
         } else {
             // TODO: Add a stats counter here for this case.
             //
@@ -697,7 +715,6 @@ void a2b_process_downstream_response(conn *c) {
                 return;
             }
 
-            assert(d->multiget != NULL);
             assert(uc->cmd_start != NULL);
             assert(header->response.opaque != 0);
 
@@ -719,26 +736,37 @@ void a2b_process_downstream_response(conn *c) {
             mcs_server_invalid_vbucket(&d->mst, downstream_conn_index(d, c),
                                        vbucket);
 
+            if (settings.verbose > 2) {
+                fprintf(stderr,
+                        "<%d cproxy_process_a2b_downstream_response not-my-vbucket, "
+                        "cmd: %x get/getk '%s' %d retry: %d, vbucket %d\n",
+                        c->sfd, header->response.opcode, key_buf, key_len,
+                        d->upstream_retry + 1, vbucket);
+            }
+
             // Update the de-duplication map, removing the key, so that
             // we'll reattempt another request for the key during the
             // retry.
             //
-            multiget_entry *entry = genhash_find(d->multiget, key_buf);
+            if (d->multiget != NULL) {
+                multiget_entry *entry = genhash_find(d->multiget, key_buf);
 
-            if (settings.verbose > 2) {
-                fprintf(stderr,
-                        "<%d cproxy_process_a2b_downstream_response not-my-vbucket, "
-                        "cmd: %x get/getk '%s' %d retry: %d, entry: %d, vbucket %d\n",
-                        c->sfd, header->response.opcode, key_buf, key_len,
-                        d->upstream_retry + 1, entry != NULL, vbucket);
-            }
+                if (settings.verbose > 2) {
+                    fprintf(stderr,
+                            "<%d cproxy_process_a2b_downstream_response not-my-vbucket, "
+                            "cmd: %x get/getk '%s' %d retry: %d, entry: %d, vbucket %d "
+                            "deleting multiget entry\n",
+                            c->sfd, header->response.opcode, key_buf, key_len,
+                            d->upstream_retry + 1, entry != NULL, vbucket);
+                }
 
-            genhash_delete(d->multiget, key_buf);
+                genhash_delete(d->multiget, key_buf);
 
-            while (entry != NULL) {
-                multiget_entry *curr = entry;
-                entry = entry->next;
-                free(curr);
+                while (entry != NULL) {
+                    multiget_entry *curr = entry;
+                    entry = entry->next;
+                    free(curr);
+                }
             }
 
             // Signal that we need to retry, where this counter is

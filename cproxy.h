@@ -383,6 +383,7 @@ struct downstream {
                               // the retry, we'll reuse the same multiget
                               // de-duplication tracking table to avoid
                               // asking for successful keys again.
+    int    upstream_retries;  // Count number of upstream_retry attempts.
 
     genhash_t *multiget; // Keyed by string.
     genhash_t *merger;   // Keyed by string, for merging replies like STATS.

@@ -629,6 +629,7 @@ downstream *cproxy_reserve_downstream(proxy_td *ptd) {
         d->upstream_conn = NULL;
         d->upstream_suffix = NULL;
         d->upstream_retry = 0;
+        d->upstream_retries = 0;
         d->downstream_used = 0;
         d->downstream_used_start = 0;
         d->merger = NULL;
@@ -667,19 +668,33 @@ bool cproxy_release_downstream(downstream *d, bool force) {
     //
     if (!force &&
         d->upstream_retry > 0) {
-        if (settings.verbose > 2) {
-            fprintf(stderr, "%d: release_downstream, instead retrying %d\n",
-                    d->upstream_conn->sfd, d->upstream_retry);
-        }
-
         d->upstream_retry = 0;
+        d->upstream_retries++;
 
-        if (cproxy_forward(d) == true) {
-            return true;
+        // But, we can stop retrying if we've tried each server twice.
+        //
+        int max_retries = mcs_server_count(&d->mst) * 2;
+
+        if (d->upstream_retries <= max_retries) {
+            if (settings.verbose > 2) {
+                fprintf(stderr, "%d: release_downstream, instead retrying %d, %d <= %d\n",
+                        d->upstream_conn->sfd,
+                        d->upstream_retry, d->upstream_retries, max_retries);
+            }
+
+            if (cproxy_forward(d) == true) {
+                return true;
+            } else {
+                d->ptd->stats.stats.tot_downstream_propagate_failed++;
+
+                propagate_error(d);
+            }
         } else {
-            d->ptd->stats.stats.tot_downstream_propagate_failed++;
-
-            propagate_error(d);
+            if (settings.verbose > 2) {
+                fprintf(stderr, "%d: release_downstream, skipping retry %d, %d > %d\n",
+                        d->upstream_conn->sfd,
+                        d->upstream_retry, d->upstream_retries, max_retries);
+            }
         }
     }
 
@@ -750,6 +765,7 @@ bool cproxy_release_downstream(downstream *d, bool force) {
     d->upstream_conn = NULL;
     d->upstream_suffix = NULL; // No free(), expecting a static string.
     d->upstream_retry = 0;
+    d->upstream_retries = 0;
     d->downstream_used = 0;
     d->downstream_used_start = 0;
     d->multiget = NULL;
