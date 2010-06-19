@@ -29,8 +29,9 @@ void matcher_init(matcher *m, bool multithreaded) {
 void matcher_start(matcher *m, char *spec) {
     assert(m);
 
-    if (m->lock)
+    if (m->lock) {
         pthread_mutex_lock(m->lock);
+    }
 
     // The spec currently is a string of '|' separated prefixes.
     //
@@ -49,20 +50,23 @@ void matcher_start(matcher *m, char *spec) {
         }
     }
 
-    if (m->lock)
+    if (m->lock) {
         pthread_mutex_unlock(m->lock);
+    }
 }
 
 bool matcher_started(matcher *m) {
     assert(m);
 
-    if (m->lock)
+    if (m->lock) {
         pthread_mutex_lock(m->lock);
+    }
 
     bool rv = m->patterns != NULL && m->patterns_num > 0;
 
-    if (m->lock)
+    if (m->lock) {
         pthread_mutex_unlock(m->lock);
+    }
 
     return rv;
 }
@@ -70,8 +74,9 @@ bool matcher_started(matcher *m) {
 void matcher_stop(matcher *m) {
     assert(m);
 
-    if (m->lock)
+    if (m->lock) {
         pthread_mutex_lock(m->lock);
+    }
 
     if (m->patterns != NULL) {
         for (int i = 0; i < m->patterns_num; i++) {
@@ -93,15 +98,17 @@ void matcher_stop(matcher *m) {
 
     m->misses = 0;
 
-    if (m->lock)
+    if (m->lock) {
         pthread_mutex_unlock(m->lock);
+    }
 }
 
 matcher *matcher_clone(matcher *m, matcher *copy) {
     assert(m);
 
-    if (m->lock)
+    if (m->lock) {
         pthread_mutex_lock(m->lock);
+    }
 
     assert(m->patterns_num <= m->patterns_max);
 
@@ -121,8 +128,9 @@ matcher *matcher_clone(matcher *m, matcher *copy) {
             for (int i = 0; i < copy->patterns_num; i++) {
                 assert(m->patterns[i]);
                 copy->patterns[i] = strdup(m->patterns[i]);
-                if (copy->patterns[i] == NULL)
+                if (copy->patterns[i] == NULL) {
                     goto fail;
+                }
 
                 copy->lengths[i] = m->lengths[i];
 
@@ -137,8 +145,9 @@ matcher *matcher_clone(matcher *m, matcher *copy) {
     }
 
  fail:
-    if (m->lock)
+    if (m->lock) {
         pthread_mutex_unlock(m->lock);
+    }
 
     matcher_stop(copy);
 
@@ -153,8 +162,9 @@ void matcher_add(matcher *m, char *pattern) {
     assert(pattern);
 
     int length = strlen(pattern);
-    if (length <= 0)
+    if (length <= 0) {
         return;
+    }
 
     if (m->patterns_num >= m->patterns_max) {
         int    nmax = (m->patterns_num * 2) + 4; // 4 is slop when 0.
@@ -192,8 +202,9 @@ bool matcher_check(matcher *m, char *str, int str_len,
 
     bool found = false;
 
-    if (m->lock)
+    if (m->lock) {
         pthread_mutex_lock(m->lock);
+    }
 
     if (m->patterns != NULL &&
         m->patterns_num > 0) {
@@ -213,14 +224,16 @@ bool matcher_check(matcher *m, char *str, int str_len,
             }
         }
 
-        if (!found)
+        if (!found) {
             m->misses++;
+        }
     } else {
         found = default_when_unstarted;
     }
 
-    if (m->lock)
+    if (m->lock) {
         pthread_mutex_unlock(m->lock);
+    }
 
     return found;
 }

@@ -161,7 +161,7 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
                 //
                 bool do_key_stats =
                     matcher_check(&ptd->key_stats_matcher,
-                                  key, key_len, true) == true &&
+                                  key, key_len, false) == true &&
                     matcher_check(&ptd->key_stats_unmatcher,
                                   key, key_len, false) == false;
 
@@ -429,9 +429,9 @@ void multiget_ascii_downstream_response(downstream *d, item *it) {
 
     if (front_cache_lifespan > 0) {
         if (matcher_check(&p->front_cache_matcher,
-                          ITEM_key(it), it->nkey, true) == true &&
+                          ITEM_key(it), it->nkey, false) == true &&
             matcher_check(&p->front_cache_unmatcher,
-                           ITEM_key(it), it->nkey, false) == false) {
+                          ITEM_key(it), it->nkey, false) == false) {
             mcache_set(&p->front_cache, it,
                        front_cache_lifespan + msec_current_time,
                        true, false);
@@ -465,7 +465,7 @@ void multiget_ascii_downstream_response(downstream *d, item *it) {
                     psc_get_key->write_bytes += it->nbytes;
 
                     if (matcher_check(&ptd->key_stats_matcher,
-                                      ITEM_key(it), it->nkey, true) == true &&
+                                      ITEM_key(it), it->nkey, false) == true &&
                         matcher_check(&ptd->key_stats_unmatcher,
                                       ITEM_key(it), it->nkey, false) == false) {
                         touch_key_stats(ptd, ITEM_key(it), it->nkey,
@@ -499,7 +499,7 @@ void multiget_ascii_downstream_response(downstream *d, item *it) {
             psc_get_key->write_bytes += it->nbytes;
 
             if (matcher_check(&ptd->key_stats_matcher,
-                              ITEM_key(it), it->nkey, true) == true &&
+                              ITEM_key(it), it->nkey, false) == true &&
                 matcher_check(&ptd->key_stats_unmatcher,
                               ITEM_key(it), it->nkey, false) == false) {
                 touch_key_stats(ptd, ITEM_key(it), it->nkey,
