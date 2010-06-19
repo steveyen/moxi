@@ -382,6 +382,11 @@ LIBEVENT_THREAD *thread_by_index(int i) {
  * Allocates a new item.
  */
 item *item_alloc(char *key, size_t nkey, int flags, rel_time_t exptime, int nbytes) {
+#ifdef ITEM_MALLOC
+    // Skip past the lock, since we're using malloc.
+    return do_item_alloc(key, nkey, flags, exptime, nbytes);
+#endif
+
     item *it;
     pthread_mutex_lock(&cache_lock);
     it = do_item_alloc(key, nkey, flags, exptime, nbytes);
@@ -418,6 +423,12 @@ int item_link(item *item) {
  * needed.
  */
 void item_remove(item *item) {
+#ifdef ITEM_MALLOC
+    // Skip past the lock, since we're using malloc.
+    do_item_remove(item);
+    return;
+#endif
+
     pthread_mutex_lock(&cache_lock);
     do_item_remove(item);
     pthread_mutex_unlock(&cache_lock);

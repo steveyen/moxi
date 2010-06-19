@@ -100,6 +100,26 @@ item *do_item_alloc(char *key, const size_t nkey, const int flags, const rel_tim
         ntotal += sizeof(uint64_t);
     }
 
+#ifdef ITEM_MALLOC
+    item *itx = malloc(ntotal);
+    if (itx != NULL) {
+        itx->refcount = 1;
+        itx->slabs_clsid = 0;
+        itx->next = 0;
+        itx->prev = 0;
+        itx->h_next = 0;
+        itx->it_flags = settings.use_cas ? ITEM_CAS : 0;
+        itx->nkey = nkey;
+        itx->nbytes = nbytes;
+        memcpy(ITEM_key(itx), key, nkey);
+        itx->exptime = exptime;
+        memcpy(ITEM_suffix(itx), suffix, (size_t)nsuffix);
+        itx->nsuffix = nsuffix;
+    }
+
+    return itx;
+#endif
+
     unsigned int id = slabs_clsid(ntotal);
     if (id == 0)
         return 0;
@@ -213,6 +233,15 @@ item *do_item_alloc(char *key, const size_t nkey, const int flags, const rel_tim
 }
 
 void item_free(item *it) {
+#ifdef ITEM_MALLOC
+    assert(it->refcount > 0);
+    it->refcount--;
+    if (it->refcount == 0) {
+        free(it);
+    }
+    return;
+#endif
+
     size_t ntotal = ITEM_ntotal(it);
     unsigned int clsid;
     assert((it->it_flags & ITEM_LINKED) == 0);
@@ -318,6 +347,11 @@ void do_item_unlink(item *it) {
 }
 
 void do_item_remove(item *it) {
+#ifdef ITEM_MALLOC
+    item_free(it);
+    return;
+#endif
+
     MEMCACHED_ITEM_REMOVE(ITEM_key(it), it->nkey, it->nbytes);
     assert((it->it_flags & ITEM_SLABBED) == 0);
     if (it->refcount != 0) {
