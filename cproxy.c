@@ -183,8 +183,8 @@ proxy *cproxy_create(char    *name,
 
                 mcache_init(&ptd->key_stats, true,
                             &mcache_key_stats_funcs, false);
-                matcher_init(&ptd->key_stats_matcher, true);
-                matcher_init(&ptd->key_stats_unmatcher, true);
+                matcher_init(&ptd->key_stats_matcher, false);
+                matcher_init(&ptd->key_stats_unmatcher, false);
 
                 if (behavior_pool->base.key_stats_max > 0 &&
                     behavior_pool->base.key_stats_lifespan > 0) {
