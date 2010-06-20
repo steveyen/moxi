@@ -568,6 +568,59 @@ void cproxy_process_a2b_downstream_nread(conn *c) {
     }
 }
 
+static void a2b_out_error(conn *uc, uint16_t status) {
+    switch (status) {
+    case PROTOCOL_BINARY_RESPONSE_SUCCESS:
+        out_string(uc, "OK");
+        break;
+    case PROTOCOL_BINARY_RESPONSE_KEY_ENOENT:
+        out_string(uc, "NOT_FOUND");
+        break;
+    case PROTOCOL_BINARY_RESPONSE_KEY_EEXISTS:
+        out_string(uc, "EXISTS");
+        break;
+    case PROTOCOL_BINARY_RESPONSE_E2BIG:
+        out_string(uc, "SERVER_ERROR a2b e2big");
+        break;
+    case PROTOCOL_BINARY_RESPONSE_EINVAL:
+        out_string(uc, "SERVER_ERROR a2b einval");
+        break;
+    case PROTOCOL_BINARY_RESPONSE_NOT_STORED:
+        out_string(uc, "NOT_STORED");
+        break;
+    case PROTOCOL_BINARY_RESPONSE_DELTA_BADVAL:
+        out_string(uc, "SERVER_ERROR a2b delta_badval");
+        break;
+    case PROTOCOL_BINARY_RESPONSE_NOT_MY_VBUCKET:
+        out_string(uc, "SERVER_ERROR a2b not_my_vbucket");
+        break;
+    case PROTOCOL_BINARY_RESPONSE_AUTH_ERROR:
+        out_string(uc, "SERVER_ERROR a2b auth_error");
+        break;
+    case PROTOCOL_BINARY_RESPONSE_AUTH_CONTINUE:
+        out_string(uc, "SERVER_ERROR a2b auth_continue");
+        break;
+    case PROTOCOL_BINARY_RESPONSE_UNKNOWN_COMMAND:
+        out_string(uc, "SERVER_ERROR a2b unknown");
+        break;
+    case PROTOCOL_BINARY_RESPONSE_ENOMEM:
+        out_string(uc, "SERVER_ERROR a2b out of memory");
+        break;
+    case PROTOCOL_BINARY_RESPONSE_NOT_SUPPORTED:
+        out_string(uc, "SERVER_ERROR a2b not supported");
+        break;
+    case PROTOCOL_BINARY_RESPONSE_EINTERNAL:
+        out_string(uc, "SERVER_ERROR a2b einternal");
+        break;
+    case PROTOCOL_BINARY_RESPONSE_EBUSY:
+        out_string(uc, "SERVER_ERROR a2b ebusy");
+        break;
+    default:
+        out_string(uc, "SERVER_ERROR a2b error");
+        break;
+    }
+}
+
 /* Invoked when we have read a complete downstream binary response,
  * including header, ext, key, and item data, as appropriate.
  */
@@ -855,7 +908,7 @@ void a2b_process_downstream_response(conn *c) {
             assert(uc->next == NULL);
 
             switch (status) {
-            case 0:
+            case PROTOCOL_BINARY_RESPONSE_SUCCESS:
                 out_string(uc, "STORED");
                 break;
             case PROTOCOL_BINARY_RESPONSE_KEY_EEXISTS:
@@ -872,12 +925,8 @@ void a2b_process_downstream_response(conn *c) {
                     out_string(uc, "NOT_FOUND");
                 }
                 break;
-            case PROTOCOL_BINARY_RESPONSE_NOT_STORED:
-                out_string(uc, "NOT_STORED");
-                break;
-            case PROTOCOL_BINARY_RESPONSE_ENOMEM: // TODO.
             default:
-                out_string(uc, "SERVER_ERROR a2b error");
+                a2b_out_error(uc, status);
                 break;
             }
 
