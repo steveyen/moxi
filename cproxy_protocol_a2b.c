@@ -121,25 +121,19 @@ struct A2BSpec a2b_specs[] = {
       .size = sizeof(protocol_binary_request_header) + 4,
       .broadcast = true
     },
-    { .line = "get <key>*",
-      .cmd  = PROTOCOL_BINARY_CMD_GETK,
-      .cmdq = PROTOCOL_BINARY_CMD_GETKQ,
-      // The size should be...
-      //   sizeof(protocol_binary_request_header) [24 bytes] +
-      //   sizeof(protocol_binary_request_getk.message.body) [4 bytes]
-      .size = sizeof(protocol_binary_request_header) + 4
+    { .line = "get <key>*", // Multi-key GET/GETS
+      .cmd  = PROTOCOL_BINARY_CMD_GETKQ,
+      .cmdq = -1,
+      .size = sizeof(protocol_binary_request_header)
     },
-    { .line = "gets <key>*",
+    { .line = "get <key>", // Single-key GET/GETS.
       .cmd  = PROTOCOL_BINARY_CMD_GETK,
-      .cmdq = PROTOCOL_BINARY_CMD_GETKQ,
-      // The size should be...
-      //   sizeof(protocol_binary_request_header) [24 bytes] +
-      //   sizeof(protocol_binary_request_getk.message.body) [4 bytes]
-      .size = sizeof(protocol_binary_request_header) + 4
+      .cmdq = -1,
+      .size = sizeof(protocol_binary_request_header)
     },
     { .line = "stats [args]*",
       .cmd  = PROTOCOL_BINARY_CMD_STAT,
-      .cmdq = PROTOCOL_BINARY_CMD_NOOP,
+      .cmdq = -1,
       .size = sizeof(protocol_binary_request_stats),
       .broadcast = true
     },
@@ -250,6 +244,8 @@ int a2b_fill_request(short    cmd,
             header->request.magic = PROTOCOL_BINARY_REQ;
 
             if (noreply) {
+                assert(spec->cmd != -1);
+
                 header->request.opcode = spec->cmdq;
                 header->request.opaque = htonl(OPAQUE_IGNORE_REPLY);
 
@@ -276,6 +272,11 @@ int a2b_fill_request(short    cmd,
             }
 
             return spec->size; // Success.
+        }
+    } else {
+        if (settings.verbose > 2) {
+            fprintf(stderr,
+                    "a2b_fill_request unknown cmd: %x\n", cmd);
         }
     }
 
@@ -379,6 +380,22 @@ bool a2b_fill_request_token(struct A2BSpec *spec,
     //
     default:
         break;
+    }
+
+    return true;
+}
+
+static bool a2b_update_event_write(downstream *d, conn *uc) {
+    if (!update_event(uc, EV_WRITE | EV_PERSIST)) {
+        if (settings.verbose > 1) {
+            fprintf(stderr,
+                    "ERROR: Can't write upstream a2b event\n");
+        }
+
+        d->ptd->stats.stats.err_oom++;
+        cproxy_close_conn(uc);
+
+        return false;
     }
 
     return true;
@@ -498,12 +515,6 @@ void cproxy_process_a2b_downstream_nread(conn *c) {
     downstream *d = c->extra;
     assert(d);
 
-    if (settings.verbose > 2) {
-        fprintf(stderr,
-                "<%d cproxy_process_a2b_downstream_nread %d %d\n",
-                c->sfd, c->ileft, c->isize);
-    }
-
     protocol_binary_response_header *header =
         (protocol_binary_response_header *) &c->binary_header;
 
@@ -511,11 +522,24 @@ void cproxy_process_a2b_downstream_nread(conn *c) {
     int      keylen  = header->response.keylen;
     uint32_t bodylen = header->response.bodylen;
 
+    if (settings.verbose > 2) {
+        fprintf(stderr,
+                "<%d cproxy_process_a2b_downstream_nread %d %d, cmd %x %d %d\n",
+                c->sfd, c->ileft, c->isize, c->cmd, c->substate,
+                header->response.status);
+    }
+
     if (c->substate == bin_reading_get_key &&
         header->response.status == 0 &&
         (c->cmd == PROTOCOL_BINARY_CMD_GET ||
          c->cmd == PROTOCOL_BINARY_CMD_GETK ||
          c->cmd == PROTOCOL_BINARY_CMD_STAT)) {
+        if (settings.verbose > 2) {
+            fprintf(stderr,
+                    "<%d cproxy_process_a2b_downstream_nread %d %d %x get/getk/stat\n",
+                    c->sfd, c->ileft, c->isize, c->cmd);
+        }
+
         assert(c->item == NULL);
 
         // Alloc an item and continue with an item nread.
@@ -632,12 +656,6 @@ void a2b_process_downstream_response(conn *c) {
     assert(IS_BINARY(c->protocol));
     assert(IS_PROXY(c->protocol));
 
-    if (settings.verbose > 2) {
-        fprintf(stderr,
-                "<%d cproxy_process_a2b_downstream_response\n",
-                c->sfd);
-    }
-
     protocol_binary_response_header *header =
         (protocol_binary_response_header *) &c->binary_header;
 
@@ -645,6 +663,12 @@ void a2b_process_downstream_response(conn *c) {
     int      keylen  = header->response.keylen;
     uint32_t bodylen = header->response.bodylen;
     uint16_t status  = header->response.status;
+
+    if (settings.verbose > 2) {
+        fprintf(stderr,
+                "<%d cproxy_process_a2b_downstream_response, cmd: %x, item: %d, status: %d\n",
+                c->sfd, c->cmd, (c->item != NULL), status);
+    }
 
     // We reach here when we have the entire response,
     // including header, ext, key, and possibly item data.
@@ -699,10 +723,12 @@ void a2b_process_downstream_response(conn *c) {
                     c->sfd, header->response.opcode, uc != NULL);
         }
 
-        if (c->cmd != PROTOCOL_BINARY_CMD_GET &&
-            c->cmd != PROTOCOL_BINARY_CMD_GETK) {
-            // For non-GET commands, enqueue a retry after informing
-            // the vbucket map.
+        assert(it == NULL);
+
+        if (c->cmd != PROTOCOL_BINARY_CMD_GETK ||
+            c->noreply == false) {
+            // For non-multi-key GET commands, enqueue a retry after
+            // informing the vbucket map.  This includes single-key GET's.
             //
             if (uc == NULL) {
                 // If the client went away, though, don't retry.
@@ -829,22 +855,52 @@ void a2b_process_downstream_response(conn *c) {
             d->upstream_retry++;
 
             conn_set_state(c, conn_new_cmd);
-
             return;
         }
     }
 
     switch (c->cmd) {
-    case PROTOCOL_BINARY_CMD_GET:   /* FALLTHROUGH */
     case PROTOCOL_BINARY_CMD_GETK:
-        if (c->noreply) {
-            // We should keep processing for a non-quiet
-            // terminating response.
-            //
-            conn_set_state(c, conn_new_cmd);
-        } else {
-            conn_set_state(c, conn_pause);
+        if (settings.verbose > 2) {
+            fprintf(stderr,
+                    "%d: cproxy_process_a2b_downstream_response GETK "
+                    "noreply: %d\n", c->sfd, c->noreply);
         }
+
+        if (c->noreply == false) {
+            // Single-key GET/GETS.
+            //
+            if (status == 0) {
+                assert(it != NULL);
+                assert(it->nbytes >= 2);
+                assert(keylen > 0);
+                assert(extlen > 0);
+
+                if (bodylen >= keylen + extlen) {
+                    *(ITEM_data(it) + it->nbytes - 2) = '\r';
+                    *(ITEM_data(it) + it->nbytes - 1) = '\n';
+
+                    multiget_ascii_downstream_response(d, it);
+                } else {
+                    assert(false); // TODO.
+                }
+
+                item_remove(it);
+            }
+
+            conn_set_state(c, conn_pause);
+
+            a2b_update_event_write(d, uc);
+
+            return;
+        }
+
+        // Multi-key GET/GETS.
+        //
+        // We should keep processing for a non-quiet
+        // terminating response (NO-OP).
+        //
+        conn_set_state(c, conn_new_cmd);
 
         if (status != 0) {
             assert(it == NULL);
@@ -932,15 +988,7 @@ void a2b_process_downstream_response(conn *c) {
 
             cproxy_del_front_cache_key_ascii(d, uc->cmd_start);
 
-            if (!update_event(uc, EV_WRITE | EV_PERSIST)) {
-                if (settings.verbose > 1) {
-                    fprintf(stderr,
-                            "ERROR: Can't write upstream a2b event\n");
-                }
-
-                d->ptd->stats.stats.err_oom++;
-                cproxy_close_conn(uc);
-            }
+            a2b_update_event_write(d, uc);
         }
         break;
 
@@ -967,15 +1015,7 @@ void a2b_process_downstream_response(conn *c) {
 
             cproxy_del_front_cache_key_ascii(d, uc->cmd_start);
 
-            if (!update_event(uc, EV_WRITE | EV_PERSIST)) {
-                if (settings.verbose > 1) {
-                    fprintf(stderr,
-                            "ERROR: Can't write upstream a2b event\n");
-                }
-
-                d->ptd->stats.stats.err_oom++;
-                cproxy_close_conn(uc);
-            }
+            a2b_update_event_write(d, uc);
         }
         break;
 
@@ -1022,15 +1062,7 @@ void a2b_process_downstream_response(conn *c) {
 
             cproxy_del_front_cache_key_ascii(d, uc->cmd_start);
 
-            if (!update_event(uc, EV_WRITE | EV_PERSIST)) {
-                if (settings.verbose > 1) {
-                    fprintf(stderr,
-                            "ERROR: Can't write upstream a2b arith event\n");
-                }
-
-                d->ptd->stats.stats.err_oom++;
-                cproxy_close_conn(uc);
-            }
+            a2b_update_event_write(d, uc);
         }
         break;
 
@@ -1119,9 +1151,9 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
     assert(uc->cmd_curr != -1);
     assert(d->merger == NULL);
 
-    // Handles get and gets.
+    // Handles multi-key get and gets.
     //
-    if (uc->cmd_curr == PROTOCOL_BINARY_CMD_GET) {
+    if (uc->cmd_curr == PROTOCOL_BINARY_CMD_GETKQ) {
         // Only use front_cache for 'get', not for 'gets'.
         //
         mcache *front_cache =
@@ -1132,6 +1164,11 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
                                          a2b_multiget_skey,
                                          a2b_multiget_end,
                                          front_cache);
+    }
+
+    if (uc->cmd_curr == PROTOCOL_BINARY_CMD_GETK) {
+        d->upstream_suffix = "END\r\n";
+        d->upstream_retry = 0;
     }
 
     assert(uc->next == NULL);
@@ -1234,6 +1271,7 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
     }
 
     // Assuming we're already connected to downstream.
+    // Handle all other simple commands.
     //
     bool self = false;
     int  vbucket = -1;
@@ -1289,8 +1327,8 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
                 }
 
                 if (settings.verbose > 2) {
-                    fprintf(stderr, "forwarding a2b to %d, noreply %d\n",
-                            c->sfd, uc->noreply);
+                    fprintf(stderr, "forwarding a2b to %d, cmd %x, noreply %d\n",
+                            c->sfd, header->request.opcode, uc->noreply);
                 }
 
                 conn_set_state(c, conn_mwrite);
@@ -1329,8 +1367,8 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
                 // TODO: Error handling.
                 //
                 if (settings.verbose > 1) {
-                    fprintf(stderr, "ERROR: Couldn't a2b fill request: %s\n",
-                            command);
+                    fprintf(stderr, "ERROR: Couldn't a2b fill request: %s (%x)\n",
+                            command, uc->cmd_curr);
                 }
 
                 if (d->upstream_suffix == NULL) {

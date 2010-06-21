@@ -69,7 +69,13 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
 
     if (ntokens >= 3 &&
         (strncmp(cmd, "get", 3) == 0)) {
-        c->cmd_curr = PROTOCOL_BINARY_CMD_GET; // Note: CMD_GET == 0.
+        if (ntokens == 3) {
+            // Single-key get/gets optimization.
+            //
+            c->cmd_curr = PROTOCOL_BINARY_CMD_GETK;
+        } else {
+            c->cmd_curr = PROTOCOL_BINARY_CMD_GETKQ;
+        }
 
         // Handles get and gets.
         //
@@ -256,6 +262,12 @@ void cproxy_upstream_ascii_item_response(item *it, conn *uc,
     assert(uc->funcs != NULL);
     assert(IS_ASCII(uc->protocol));
     assert(IS_PROXY(uc->protocol));
+
+    if (settings.verbose > 2) {
+        fprintf(stderr,
+                "<%d cproxy ascii item response\n",
+                uc->sfd);
+    }
 
     if (strncmp(ITEM_data(it) + it->nbytes - 2, "\r\n", 2) == 0) {
         // TODO: Need to clean up half-written add_iov()'s.

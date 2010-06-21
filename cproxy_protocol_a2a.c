@@ -267,7 +267,8 @@ bool cproxy_forward_a2a_simple_downstream(downstream *d,
 
     // Handles get and gets.
     //
-    if (uc->cmd_curr == PROTOCOL_BINARY_CMD_GET) {
+    if (uc->cmd_curr == PROTOCOL_BINARY_CMD_GETK ||
+        uc->cmd_curr == PROTOCOL_BINARY_CMD_GETKQ) {
         // Only use front_cache for 'get', not for 'gets'.
         //
         mcache *front_cache =
