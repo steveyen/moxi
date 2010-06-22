@@ -662,6 +662,17 @@ bool cproxy_release_downstream(downstream *d, bool force) {
         fprintf(stderr, "release_downstream\n");
     }
 
+    // Always release the timeout_event, even if we're going to retry,
+    // to avoid pegging CPU with leaked timeout_events.
+    //
+    if (d->timeout_tv.tv_sec != 0 ||
+        d->timeout_tv.tv_usec != 0) {
+        evtimer_del(&d->timeout_event);
+    }
+
+    d->timeout_tv.tv_sec = 0;
+    d->timeout_tv.tv_usec = 0;
+
     // If we need to retry the command, we do so here,
     // keeping the same downstream that would otherwise
     // be released.
@@ -672,6 +683,8 @@ bool cproxy_release_downstream(downstream *d, bool force) {
         d->upstream_retries++;
 
         // But, we can stop retrying if we've tried each server twice.
+        //
+        // TODO: Add a stat for retrying.
         //
         int max_retries = mcs_server_count(&d->mst) * 2;
 
@@ -753,14 +766,6 @@ bool cproxy_release_downstream(downstream *d, bool force) {
         genhash_free(d->merger);
         d->merger = NULL;
     }
-
-    if (d->timeout_tv.tv_sec != 0 ||
-        d->timeout_tv.tv_usec != 0) {
-        evtimer_del(&d->timeout_event);
-    }
-
-    d->timeout_tv.tv_sec = 0;
-    d->timeout_tv.tv_usec = 0;
 
     d->upstream_conn = NULL;
     d->upstream_suffix = NULL; // No free(), expecting a static string.
