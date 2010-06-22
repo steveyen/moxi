@@ -742,7 +742,7 @@ void a2b_process_downstream_response(conn *c) {
             if (settings.verbose > 2) {
                 fprintf(stderr,
                         "<%d cproxy_process_a2b_downstream_response not-my-vbucket, "
-                        "cmd: %x not get/getk, vbucket: %d\n",
+                        "cmd: %x not multi-key get, vbucket: %d\n",
                         c->sfd, header->response.opcode, vbucket);
             }
 
@@ -1327,8 +1327,8 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
                 }
 
                 if (settings.verbose > 2) {
-                    fprintf(stderr, "forwarding a2b to %d, cmd %x, noreply %d\n",
-                            c->sfd, header->request.opcode, uc->noreply);
+                    fprintf(stderr, "forwarding a2b to %d, cmd %x, noreply %d, vbucket %d\n",
+                            c->sfd, header->request.opcode, uc->noreply, vbucket);
                 }
 
                 conn_set_state(c, conn_mwrite);
