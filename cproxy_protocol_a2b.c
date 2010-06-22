@@ -742,8 +742,8 @@ void a2b_process_downstream_response(conn *c) {
             if (settings.verbose > 2) {
                 fprintf(stderr,
                         "<%d cproxy_process_a2b_downstream_response not-my-vbucket, "
-                        "cmd: %x not multi-key get, vbucket: %d\n",
-                        c->sfd, header->response.opcode, vbucket);
+                        "cmd: %x not multi-key get, vbucket: %d, retries %d\n",
+                        c->sfd, header->response.opcode, vbucket, uc->cmd_retries);
             }
 
             mcs_server_invalid_vbucket(&d->mst, downstream_conn_index(d, c),
@@ -758,17 +758,11 @@ void a2b_process_downstream_response(conn *c) {
                 uc->cmd_retries < max_retries) {
                 uc->cmd_retries++;
 
-                conn_set_state(c, conn_pause);
-
-                assert(uc->thread);
-                assert(uc->thread->work_queue);
-
                 // TODO: Add a stats counter here for this case.
                 //
-                // Using work_send() so the call stack unwinds back to libevent.
-                //
-                work_send(uc->thread->work_queue, upstream_retry, uc->extra, uc);
+                d->upstream_retry++;
 
+                conn_set_state(c, conn_pause);
                 return;
             } else {
                 if (settings.verbose > 2) {
