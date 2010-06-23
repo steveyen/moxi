@@ -3210,9 +3210,10 @@ bool update_event(conn *c, const int new_flags) {
     if (c->ev_flags == new_flags)
         return true;
     if (event_del(&c->event) == -1) return false;
+    c->ev_flags = new_flags;
+    if (new_flags == 0) return true;
     event_set(&c->event, c->sfd, new_flags, event_handler, (void *)c);
     event_base_set(base, &c->event);
-    c->ev_flags = new_flags;
     if (event_add(&c->event, 0) == -1) return false;
     return true;
 }
@@ -3328,6 +3329,11 @@ void drive_machine(conn *c) {
     assert(c != NULL);
 
     while (!stop) {
+        if (settings.verbose > 2) {
+            fprintf(stderr, "%d: drive_machine %s\n",
+                    c->sfd, state_text(c->state));
+        }
+
         switch(c->state) {
         case conn_listening:
             addrlen = sizeof(addr);
@@ -3597,6 +3603,11 @@ void drive_machine(conn *c) {
             break;
 
         case conn_pause:
+            // In case whoever put us into conn_pause didn't clear out
+            // libevent registration, do so now.
+            //
+            update_event(c, 0);
+
             if (c->funcs->conn_pause != NULL)
                 c->funcs->conn_pause(c);
 
