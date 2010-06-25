@@ -1086,6 +1086,12 @@ conn *cproxy_find_downstream_conn_ex(downstream *d,
     int s = cproxy_server_index(d, key, key_length, &v);
     if (s >= 0 &&
         s < mcs_server_count(&d->mst)) {
+        if (settings.verbose > 2) {
+            fprintf(stderr,
+                    "cproxy_find_downstream_conn_ex server_index %d, vbucket %d\n",
+                    s, v);
+        }
+
         if (self != NULL &&
             settings.port > 0 &&
             settings.port == mcs_server_st_port(mcs_server_index(&d->mst, s)) &&
