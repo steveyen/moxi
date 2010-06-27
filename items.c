@@ -100,7 +100,7 @@ item *do_item_alloc(char *key, const size_t nkey, const int flags, const rel_tim
         ntotal += sizeof(uint64_t);
     }
 
-#ifdef ITEM_MALLOC
+#ifdef MOXI_ITEM_MALLOC
     item *itx = malloc(ntotal);
     if (itx != NULL) {
         itx->refcount = 1;
@@ -118,8 +118,7 @@ item *do_item_alloc(char *key, const size_t nkey, const int flags, const rel_tim
     }
 
     return itx;
-#endif
-
+#else
     unsigned int id = slabs_clsid(ntotal);
     if (id == 0)
         return 0;
@@ -230,18 +229,17 @@ item *do_item_alloc(char *key, const size_t nkey, const int flags, const rel_tim
     memcpy(ITEM_suffix(it), suffix, (size_t)nsuffix);
     it->nsuffix = nsuffix;
     return it;
+#endif
 }
 
 void item_free(item *it) {
-#ifdef ITEM_MALLOC
+#ifdef MOXI_ITEM_MALLOC
     assert(it->refcount > 0);
     it->refcount--;
     if (it->refcount == 0) {
         free(it);
     }
-    return;
-#endif
-
+#else
     size_t ntotal = ITEM_ntotal(it);
     unsigned int clsid;
     assert((it->it_flags & ITEM_LINKED) == 0);
@@ -255,6 +253,7 @@ void item_free(item *it) {
     it->it_flags |= ITEM_SLABBED;
     DEBUG_REFCNT(it, 'F');
     slabs_free(it, ntotal, clsid);
+#endif
 }
 
 /**
@@ -347,11 +346,9 @@ void do_item_unlink(item *it) {
 }
 
 void do_item_remove(item *it) {
-#ifdef ITEM_MALLOC
+#ifdef MOXI_ITEM_MALLOC
     item_free(it);
-    return;
-#endif
-
+#else
     MEMCACHED_ITEM_REMOVE(ITEM_key(it), it->nkey, it->nbytes);
     assert((it->it_flags & ITEM_SLABBED) == 0);
     if (it->refcount != 0) {
@@ -361,6 +358,7 @@ void do_item_remove(item *it) {
     if (it->refcount == 0 && (it->it_flags & ITEM_LINKED) == 0) {
         item_free(it);
     }
+#endif
 }
 
 void do_item_update(item *it) {

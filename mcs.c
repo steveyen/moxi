@@ -302,14 +302,14 @@ uint32_t mcs_server_count(mcs_st *ptr) {
 }
 
 mcs_server_st *mcs_server_index(mcs_st *ptr, int i) {
-    return &ptr->hosts[i];
+    return &ptr->servers[i];
 }
 
 bool mcs_stable_update(mcs_st *curr_version, mcs_st *next_version) {
     return false;
 }
 
-uint32_t mcs_key_hash(mcs_st *ptr, const char *key, size_t key_length, *vbucket) {
+uint32_t mcs_key_hash(mcs_st *ptr, const char *key, size_t key_length, int *vbucket) {
     if (vbucket != NULL) {
         *vbucket = -1;
     }

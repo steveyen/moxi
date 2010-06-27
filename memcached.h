@@ -25,9 +25,6 @@
 #include "protocol_binary.h"
 #include "cache.h"
 
-/** moxi has higher performance with thread-local malloc. */
-#define ITEM_MALLOC 1
-
 /** Maximum length of a key. */
 #define KEY_MAX_LENGTH 250
 

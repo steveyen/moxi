@@ -2960,8 +2960,10 @@ void process_stats_proxy_command(conn *c, token_t *tokens, const size_t ntokens)
             .do_zeros      = (do_all || ntokens == 4)
         };
 
+#ifdef HAVE_CONFLATE_H
         if (psci.do_info)
             proxy_stats_dump_basic(&append_stats, c, "basic:");
+#endif
 
         if (psci.do_settings)
             process_stat_settings(&append_stats, c, "memcached:settings:");
@@ -2969,9 +2971,11 @@ void process_stats_proxy_command(conn *c, token_t *tokens, const size_t ntokens)
         if (psci.do_stats)
             server_stats(&append_stats, c, "memcached:stats:" );
 
+#ifdef HAVE_CONFLATE_H
         proxy_stats_dump_proxy_main(&append_stats, c, &psci);
 
         proxy_stats_dump_proxies(&append_stats, c, &psci);
+#endif
 
         /* append terminator and start the transfer */
         append_stats(NULL, 0, NULL, 0, c);

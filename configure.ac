@@ -5,6 +5,7 @@ AC_CANONICAL_SYSTEM
 AC_CONFIG_SRCDIR(memcached.c)
 AM_INIT_AUTOMAKE(AC_PACKAGE_NAME, AC_PACKAGE_VERSION)
 AM_CONFIG_HEADER(config.h)
+AC_CONFIG_MACRO_DIR([m4])
 
 AC_PROG_CC
 AC_PROG_CXX
@@ -143,11 +144,12 @@ if test "x$enable_coverage" != "xno"; then
       fi
    fi
 fi
-AC_SUBST(PROFILER_FLAGS)
 
+AC_SUBST(PROFILER_FLAGS)
 
 AC_ARG_ENABLE(64bit,
   [AS_HELP_STRING([--enable-64bit],[build 64bit version])])
+
 if test "x$enable_64bit" = "xyes"
 then
     org_cflags=$CFLAGS
@@ -303,6 +305,21 @@ if test $ac_cv_libevent_dir != "(system)"; then
   fi
 fi
 
+AC_ARG_ENABLE(moxi-vbucket,
+  [AS_HELP_STRING([--enable-moxi-vbucket], [use libvbucket instead of libmemcached])])
+
+if test "x$enable_moxi_vbucket" != "xno"; then
+  AC_DEFINE([MOXI_USE_VBUCKET], 1, [Defined moxi to use libvbucket])
+  LIBS="$LIBS -lvbucket"
+fi
+
+AC_ARG_ENABLE(moxi-malloc,
+  [AS_HELP_STRING([--enable-moxi-malloc], [use malloc for items instead of slabber])])
+
+if test "x$enable_moxi_malloc" != "xno"; then
+  AC_DEFINE([MOXI_ITEM_MALLOC], 1, [Defined moxi to use malloc instead of slabber])
+fi
+
 dnl ----------------------------------------------------------------------------
 
 AC_SEARCH_LIBS(socket, socket)
@@ -372,6 +389,7 @@ AC_C_ENDIAN
 
 dnl Check whether the user's system supports pthread
 AC_SEARCH_LIBS(pthread_create, pthread)
+
 if test "x$ac_cv_search_pthread_create" = "xno"; then
   AC_MSG_ERROR([Can't enable threads without the POSIX thread library.])
 fi

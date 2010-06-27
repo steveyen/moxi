@@ -281,15 +281,15 @@ static void ping_server(char *server_name,
                 struct timeval start;
                 gettimeofday(&start, NULL);
 
-                memcached_return rc = memcached_connect(&mst.hosts[i]);
+                memcached_return rc = memcached_connect(&mst.servers[i]);
                 if (rc == MEMCACHED_SUCCESS) {
                     struct timeval tv_conn;
                     gettimeofday(&tv_conn, NULL);
                     tv_report("conn", start, tv_conn);
 
-                    if (cproxy_auth_downstream(&mst.hosts[i],
+                    if (cproxy_auth_downstream(&mst.servers[i],
                                                behavior) &&
-                        cproxy_bucket_downstream(&mst.hosts[i],
+                        cproxy_bucket_downstream(&mst.servers[i],
                                                  behavior)) {
                         struct timeval tv_auth;
                         gettimeofday(&tv_auth, NULL);

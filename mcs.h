@@ -3,8 +3,9 @@
 #ifndef MCS_H
 #define MCS_H
 
-#undef MOXI_USE_VBUCKET
-#define MOXI_USE_VBUCKET 1
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
 
 #ifdef MOXI_USE_VBUCKET
 #include <libvbucket/vbucket.h>
@@ -39,9 +40,6 @@ typedef struct {
 // From libmemcached.
 //
 memcached_return memcached_connect(memcached_server_st *ptr);
-memcached_return memcached_version(memcached_st *ptr);
-void             memcached_quit_server(memcached_server_st *ptr,
-                                       uint8_t io_death);
 memcached_return memcached_safe_read(memcached_server_st *ptr,
                                      void *dta,
                                      size_t size);

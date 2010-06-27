@@ -7,7 +7,6 @@ noinst_PROGRAMS = moxi-debug sizes testapp timedrun
 ##  change this
 INCLUDES = $(CONFLATE_CFLAGS)
 LIBS += $(CONFLATE_LIBS)
-LIBS += -lvbucket
 
 BUILT_SOURCES =
 
@@ -54,7 +53,6 @@ check_PROGRAMS = check_util \
 if BUILD_WITH_CONFLATE
 check_PROGRAMS += check_moxi_agent
 endif
-
 
 test_moxi:
 	./t/moxi_all.pl
