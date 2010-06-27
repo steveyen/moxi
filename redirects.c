@@ -17,11 +17,11 @@ void (*redirected_conflate_init_form_target)(conflate_form_result *r) = conflate
 #undef collect_memcached_stats_for_proxy
 
 void (*redirected_collect_memcached_stats_for_proxy_target)(struct main_stats_collect_info *msci,
-							    const char *proxy_name,
-							    int proxy_port) = collect_memcached_stats_for_proxy;
+                                const char *proxy_name,
+                                int proxy_port) = collect_memcached_stats_for_proxy;
 void redirected_collect_memcached_stats_for_proxy(struct main_stats_collect_info *msci,
-						  const char *proxy_name,
-						  int proxy_port)
+                          const char *proxy_name,
+                          int proxy_port)
 {
   (*redirected_collect_memcached_stats_for_proxy_target)(msci, proxy_name, proxy_port);
 }

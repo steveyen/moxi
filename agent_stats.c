@@ -657,7 +657,7 @@ void proxy_stats_dump_basic(ADD_STAT add_stats, void *c, const char *prefix) {
 void proxy_stats_dump_proxy_main(ADD_STAT add_stats, void *c,
                                  struct proxy_stats_cmd_info *pscip) {
     if (pscip->do_info) {
-	const char *prefix = "proxy_main:";
+        const char *prefix = "proxy_main:";
         APPEND_PREFIX_STAT("conf_type", "%s",
                (proxy_main_g->conf_type==PROXY_CONF_TYPE_STATIC ? "static" : "dynamic"));
     }

@@ -82,7 +82,7 @@ static PREFIX_STATS *stats_prefix_find(const char *key, const size_t nkey) {
     if (bailout) {
         return NULL;
     }
-  
+
     hashval = hash(key, length, 0) % PREFIX_HASH_SIZE;
 
     for (pfs = prefix_stats[hashval]; NULL != pfs; pfs = pfs->next) {

@@ -86,7 +86,7 @@ END_TEST
 static
 void setup(void)
 {
-	start_main("moxi", NULL);
+    start_main("moxi", NULL);
 }
 
 static Suite* work_suite(void)

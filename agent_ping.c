@@ -14,7 +14,6 @@
 
 // Local declarations.
 //
-
 struct ping_test_recipe {
     char *name;
     int keysize;
@@ -109,11 +108,12 @@ enum conflate_mgmt_cb_result on_conflate_ping_test(void *userdata,
     //    ksize=64
     //    vsize=524288
     //    iterations=50
+    //
     if (!form) {
         return RV_BADARG;
     }
 
-    char   detail_key[200];
+    char detail_key[200];
 
     // Discover test configuration.
     char **tests = get_key_values(form, "tests");
@@ -183,7 +183,7 @@ static void perform_ping_test(struct ping_test_recipe recipe,
                       key, recipe.keysize,
                       value, recipe.valsize,
                       0, 0) != MEMCACHED_SUCCESS) {
-        /* XXX:  Holy crap!  Failure */
+        /* XXX: Failure */
     }
 
     for (int i = 0 ; i < recipe.iterations; i++) {
@@ -215,7 +215,7 @@ static void perform_ping_test(struct ping_test_recipe recipe,
     free(key);
     free(value);
 }
-#endif // MOXI_USE_VBUCKET
+#endif // !MOXI_USE_VBUCKET
 
 static void ping_server(char *server_name,
                         struct ping_test_recipe *recipes,
@@ -333,6 +333,6 @@ static void ping_server(char *server_name,
 
         memcached_free(&mst);
     }
-#endif // MOXI_USE_VBUCKET
+#endif // !MOXI_USE_VBUCKET
 }
 

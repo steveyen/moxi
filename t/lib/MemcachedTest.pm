@@ -87,9 +87,9 @@ sub mem_gets {
     $_ = <$sock>;
     $_ = <$sock>;
 
-    return ($identifier,$val);    
+    return ($identifier,$val);
   }
-  
+
 }
 sub mem_gets_is {
     # works on single-line values only.  no newlines in value.
@@ -169,7 +169,7 @@ sub new_memcached {
     if ($args =~ /-s (\S+)/) {
         sleep 1;
 	my $filename = $1;
-	my $conn = IO::Socket::UNIX->new(Peer => $filename) || 
+	my $conn = IO::Socket::UNIX->new(Peer => $filename) ||
 	    croak("Failed to connect to unix domain socket: $! '$filename'");
 
 	return Memcached::Handle->new(pid  => -$childpid,

@@ -93,7 +93,6 @@ static size_t item_make_header(const uint8_t nkey, const int flags, const int nb
 /*@null@*/
 item *do_item_alloc(char *key, const size_t nkey, const int flags, const rel_time_t exptime, const int nbytes) {
     uint8_t nsuffix;
-    item *it = NULL;
     char suffix[40];
     size_t ntotal = item_make_header(nkey + 1, flags, nbytes, suffix, &nsuffix);
     if (settings.use_cas) {
@@ -125,6 +124,7 @@ item *do_item_alloc(char *key, const size_t nkey, const int flags, const rel_tim
 
     /* do a quick check if we have any expired items in the tail.. */
     int tries = 50;
+    item *it = NULL;
     item *search;
 
     for (search = tails[id];

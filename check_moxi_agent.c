@@ -220,7 +220,8 @@ uint64_t random_uint64t(void)
 }
 
 static
-void randomize_uint64t_struct(void *_ptr, struct field_description *desc, int sizeinbytes)
+void randomize_uint64t_struct(void *_ptr, struct field_description *desc,
+                              int sizeinbytes)
 {
   uint64_t *ptr = _ptr;
   int count = sizeinbytes/sizeof(struct field_description);
@@ -303,7 +304,8 @@ void gathering_conflate_add_field(conflate_form_result *r, const char *k, const 
 
   for (i = 0; i < arsize(proxy_stats_cmd_description); i++) {
     if (strcmp(rest_of_name, proxy_stats_cmd_description[i].name) == 0) {
-      field_write(&(gathered_stats.stats_cmd[type][cmd]), proxy_stats_cmd_description + i, value);
+      field_write(&(gathered_stats.stats_cmd[type][cmd]),
+                  proxy_stats_cmd_description + i, value);
       return;
     }
   }
@@ -315,8 +317,8 @@ static
 int collect_memcached_stats_for_proxy_called;
 static
 void cmd_stats_gathering_collect_memcached_stats_for_proxy(struct main_stats_collect_info *msci,
-							   const char *proxy_name,
-							   int proxy_port)
+                               const char *proxy_name,
+                               int proxy_port)
 {
   collect_memcached_stats_for_proxy_called = 1;
 }
@@ -339,6 +341,7 @@ START_TEST(test_cmd_stats_gathering)
     NULL,
     NULL
   };
+
   kvpair_t *c = mk_kvpairs(ca);
   int i,j,t;
 
@@ -358,44 +361,62 @@ START_TEST(test_cmd_stats_gathering)
 
   reset_random();
   for (t = 1; t < 3; t++) {
-    randomize_uint64t_struct(&(proxy->thread_data[t].stats.stats), proxy_stats_description, sizeof(proxy_stats_description));
+    randomize_uint64t_struct(&(proxy->thread_data[t].stats.stats),
+                             proxy_stats_description,
+                             sizeof(proxy_stats_description));
     for (i = 0; i < STATS_CMD_TYPE_last; i++) {
       for (j = 0; j < STATS_CMD_last; j++) {
-	randomize_uint64t_struct(&(proxy->thread_data[t].stats.stats_cmd[i][j]),
-				 proxy_stats_cmd_description, sizeof(proxy_stats_cmd_description));
+        randomize_uint64t_struct(&(proxy->thread_data[t].stats.stats_cmd[i][j]),
+                                 proxy_stats_cmd_description,
+                                 sizeof(proxy_stats_cmd_description));
       }
     }
   }
 
   redirected_conflate_add_field_target = gathering_conflate_add_field;
-  redirected_collect_memcached_stats_for_proxy_target = cmd_stats_gathering_collect_memcached_stats_for_proxy;
+  redirected_collect_memcached_stats_for_proxy_target =
+    cmd_stats_gathering_collect_memcached_stats_for_proxy;
 
-  ck_assert(memcmp(&(proxy->thread_data[0].stats), &(proxy->thread_data[1].stats), sizeof(proxy->thread_data[1].stats)) != 0);
+  ck_assert(memcmp(&(proxy->thread_data[0].stats),
+                   &(proxy->thread_data[1].stats),
+                   sizeof(proxy->thread_data[1].stats)) != 0);
 
-  on_conflate_get_stats(pmain, NULL, "get-stats", true, NULL, (conflate_form_result *)(intptr_t)gathering_conflate_add_field);
+  on_conflate_get_stats(pmain, NULL, "get-stats", true, NULL,
+                        (conflate_form_result *)(intptr_t)gathering_conflate_add_field);
 
   ck_assert(collect_memcached_stats_for_proxy_called);
 
-  ck_assert(memcmp(&(proxy->thread_data[0].stats), &(proxy->thread_data[1].stats), sizeof(proxy->thread_data[1].stats)) != 0);
+  ck_assert(memcmp(&(proxy->thread_data[0].stats)
+                   , &(proxy->thread_data[1].stats),
+                   sizeof(proxy->thread_data[1].stats)) != 0);
 
   for (i = 0; i < STATS_CMD_TYPE_last; i++) {
     for (j = 0; j < STATS_CMD_last; j++) {
       for (t = 0; t < arsize(proxy_stats_cmd_description); t++) {
-	uint64_t t1 = field_read(&(proxy->thread_data[1].stats.stats_cmd[i][j]), proxy_stats_cmd_description + t);
-	uint64_t t2 = field_read(&(proxy->thread_data[2].stats.stats_cmd[i][j]), proxy_stats_cmd_description + t);
-	uint64_t result = field_read(&(gathered_stats.stats_cmd[i][j]), proxy_stats_cmd_description + t);
-	fail_unless(result == t1 + t2, "comparing command stats for %s(%d).%s: 0x%llx = 0x%llx + 0x%llx\n", cmd_names[j], i, proxy_stats_cmd_description[t].name, result, t1, t2);
+    uint64_t t1 = field_read(&(proxy->thread_data[1].stats.stats_cmd[i][j]),
+                             proxy_stats_cmd_description + t);
+    uint64_t t2 = field_read(&(proxy->thread_data[2].stats.stats_cmd[i][j]),
+                             proxy_stats_cmd_description + t);
+    uint64_t result = field_read(&(gathered_stats.stats_cmd[i][j]),
+                                 proxy_stats_cmd_description + t);
+    fail_unless(result == t1 + t2,
+                "comparing command stats for %s(%d).%s: 0x%llx = 0x%llx + 0x%llx\n",
+                cmd_names[j], i, proxy_stats_cmd_description[t].name, result, t1, t2);
       }
     }
   }
 
   for (t = 0; t < arsize(proxy_stats_description); t++) {
-    uint64_t t1 = field_read(&(proxy->thread_data[1].stats.stats), proxy_stats_description + t);
-    uint64_t t2 = field_read(&(proxy->thread_data[2].stats.stats), proxy_stats_description + t);
-    uint64_t result = field_read(&(gathered_stats.stats), proxy_stats_description + t);
-    fail_unless(result == t1 + t2, "comparing stats field %s. 0x%llx = 0x%llx + 0x%llx\n", proxy_stats_description[t].name, result, t1, t2);
+    uint64_t t1 = field_read(&(proxy->thread_data[1].stats.stats),
+                             proxy_stats_description + t);
+    uint64_t t2 = field_read(&(proxy->thread_data[2].stats.stats),
+                             proxy_stats_description + t);
+    uint64_t result = field_read(&(gathered_stats.stats),
+                                 proxy_stats_description + t);
+    fail_unless(result == t1 + t2,
+                "comparing stats field %s. 0x%llx = 0x%llx + 0x%llx\n",
+                proxy_stats_description[t].name, result, t1, t2);
   }
-
 }
 END_TEST
 
@@ -484,6 +505,7 @@ START_TEST(test_easy_reconfig)
     NULL,
     NULL
   };
+
   kvpair_t *e = mk_kvpairs(ea);
 
   on_conflate_new_config(pmain, e);
@@ -525,11 +547,11 @@ void setup(void)
 
   unlink("t/check_moxi_agent.cfg");
   pmain = cproxy_init_agent_start("check_moxi_agent@localhost", // Fake JID.
-				  "password",                   // Fake password.
-				  "t/check_moxi_agent.cfg",
-				  NULL,
-				  pbg,
-				  settings.num_threads);
+                  "password",                   // Fake password.
+                  "t/check_moxi_agent.cfg",
+                  NULL,
+                  pbg,
+                  settings.num_threads);
   assert(pmain);
 }
 
