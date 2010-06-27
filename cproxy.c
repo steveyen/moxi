@@ -1436,6 +1436,7 @@ bool cproxy_dettach_if_noreply(downstream *d, conn *uc) {
 
 void cproxy_wait_any_downstream(proxy_td *ptd, conn *uc) {
     assert(uc != NULL);
+    assert(uc->next == NULL);
     assert(ptd != NULL);
     assert(!ptd->waiting_any_downstream_tail ||
            !ptd->waiting_any_downstream_tail->next);
