@@ -244,6 +244,12 @@ bool cproxy_forward_a2a_downstream(downstream *d) {
         }
     }
 
+    if (settings.verbose > 2) {
+        fprintf(stderr,
+                "%d: cproxy_forward_a2a_downstream connect failed\n",
+                uc->sfd);
+    }
+
     return false;
 }
 

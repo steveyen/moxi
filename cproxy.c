@@ -988,6 +988,10 @@ int cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread) {
     assert(d->behaviors_num >= n);
     assert(d->behaviors_arr != NULL);
 
+    if (settings.verbose > 2) {
+        fprintf(stderr, "cproxy_connect_downstream %d\n", n);
+    }
+
     for (int i = 0; i < n; i++) {
         assert(IS_PROXY(d->behaviors_arr[i].downstream_protocol));
 
@@ -1021,6 +1025,15 @@ conn *cproxy_connect_downstream_conn(downstream *d,
     assert(thread->base);
     assert(msst);
     assert(behavior);
+    assert(mcs_server_st_hostname(msst) != NULL);
+    assert(mcs_server_st_port(msst) > 0);
+    assert(mcs_server_st_fd(msst) == -1);
+
+    if (settings.verbose > 2) {
+        fprintf(stderr, "cproxy_connect_downstream_conn %s:%d\n",
+                mcs_server_st_hostname(msst),
+                mcs_server_st_port(msst));
+    }
 
     mcs_return rc;
 
@@ -1310,6 +1323,14 @@ static bool cproxy_forward(downstream *d) {
     assert(d != NULL);
     assert(d->ptd != NULL);
     assert(d->upstream_conn != NULL);
+
+    if (settings.verbose > 2) {
+        fprintf(stderr,
+                "%d: cproxy_forward prot %d to prot %d\n",
+                d->upstream_conn->sfd,
+                d->upstream_conn->protocol,
+                d->ptd->behavior_pool.base.downstream_protocol);
+    }
 
     if (IS_ASCII(d->upstream_conn->protocol)) {
         // ASCII upstream.

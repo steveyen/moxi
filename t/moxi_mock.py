@@ -12,6 +12,11 @@ import re
 #   ./moxi-debug -z 11333=localhost:11311 -p 0 -U 0 -vvv -t 1
 #                -Z downstream_max=1
 #
+# Or, if you're using the vbucket-aware moxi...
+#
+#   ./moxi-debug -z ./t/moxi_mock.cfg -p 0 -U 0 -vvv -t 1
+#                -Z downstream_max=1,downstream_protocol=ascii
+#
 # Then...
 #
 #   python ./t/moxi_mock.py
@@ -524,7 +529,9 @@ class TestProxy(unittest.TestCase):
         self.mock_send('END\r\n', 0)
         self.client_recv('VALUE client1 0 10\r\n0123456789\r\nEND\r\n', 1)
 
-    def testGetSquash(self):
+    # Dedupe of keys is disabled for now in vbucket-aware moxi.
+    #
+    def TODO_testGetSquash(self):
         """Test multiget by multiple clients are deduped"""
 
         # Assuming proxy's downstream_max is 1,
@@ -565,7 +572,9 @@ class TestProxy(unittest.TestCase):
                          'VALUE d 0 1\r\nd\r\n' +
                          'END\r\n', 2)
 
-    def testGetSquashOneKey(self):
+    # Dedupe of keys is disabled for now in vbucket-aware moxi.
+    #
+    def TODO_testGetSquashOneKey(self):
         """Test multiget of one key by multiple clients are deduped"""
 
         # Assuming proxy's downstream_max is 1,
@@ -607,7 +616,9 @@ class TestProxy(unittest.TestCase):
         self.client_recv('VALUE a 0 1\r\na\r\n' +
                          'END\r\n', 4)
 
-    def testGetSquashNoKeyOverlap(self):
+    # Dedupe of keys is disabled for now in vbucket-aware moxi.
+    #
+    def TODO_testGetSquashNoKeyOverlap(self):
         """Test multiget dedupe, but no key overlap"""
 
         # Assuming proxy's downstream_max is 1,
