@@ -348,8 +348,8 @@ typedef struct _stritem {
 typedef struct bin_cmd bin_cmd;
 
 struct bin_cmd {
-    item *request_item;  // Does not own a refcount.
-    item *response_item; // Does not own a refcount.
+    item *request_item;  // Has 1 refcount.
+    item *response_item; // Has 1 refcount.
     bin_cmd *next;
 };
 

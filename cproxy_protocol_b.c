@@ -105,7 +105,8 @@ void cproxy_process_upstream_binary_nread(conn *c) {
     uint32_t bodylen = header->request.bodylen;
 
     if (settings.verbose > 2) {
-        fprintf(stderr, "<%d cproxy_process_upstream_binary_nread %x %d %d %u\n",
+        fprintf(stderr,
+                "<%d cproxy_process_upstream_binary_nread %x %d %d %u\n",
                 c->sfd, c->cmd, extlen, keylen, bodylen);
     }
 
@@ -118,8 +119,10 @@ void cproxy_process_upstream_binary_nread(conn *c) {
 
     if (c->noreply) {
         if (settings.verbose > 2) {
-            fprintf(stderr, "<%d cproxy_process_upstream_binary_nread corking quiet command %x\n",
-                    c->sfd, c->cmd);
+            fprintf(stderr,
+                    "<%d cproxy_process_upstream_binary_nread "
+                    "corking quiet command %x %d\n",
+                    c->sfd, c->cmd, (c->corked != NULL));
         }
 
         // Hold onto or 'cork' all the binary quiet commands
@@ -140,21 +143,26 @@ void cproxy_process_upstream_binary_nread(conn *c) {
     cproxy_pause_upstream_for_downstream(ptd, c);
 }
 
-static void bin_cmd_append(bin_cmd **head, bin_cmd *bc) {
+static int bin_cmd_append(bin_cmd **head, bin_cmd *bc) {
     assert(head != NULL);
     assert(bc != NULL);
 
     bin_cmd *tail = *head;
 
+    int n = 1;
+
     while (tail != NULL) {
+        n++;
         if (tail->next == NULL) {
             tail->next = bc;
-            return;
+            return n;
         }
         tail = tail->next;
     }
 
     *head = bc;
+
+    return n; // Returns number of items in list.
 }
 
 bool cproxy_binary_cork_cmd(conn *c) {
@@ -165,18 +173,26 @@ bool cproxy_binary_cork_cmd(conn *c) {
 
     bin_cmd *bc = calloc(1, sizeof(bin_cmd));
     if (bc != NULL) {
-        if (add_conn_item(c, c->item) == true) {
-            // Transferred the item refcount from c->item to the c->ilist.
-            //
-            bc->request_item = c->item;
-            c->item = NULL;
+        // Transferred the item refcount from c->item to the bin_cmd.
+        //
+        bc->request_item = c->item;
+        c->item = NULL;
 
-            bin_cmd_append(&c->corked, bc);
+        int ncorked = bin_cmd_append(&c->corked, bc);
 
-            return true;
+        if (settings.verbose > 2) {
+            fprintf(stderr,
+                    "%d: cproxy_binary_cork_cmd, ncorked %d %d\n",
+                    c->sfd, ncorked, (c->corked != NULL));
         }
 
-        free(bc);
+        return true;
+    }
+
+    if (settings.verbose > 2) {
+        fprintf(stderr,
+                "%d: cproxy_binary_cork_cmd failed\n",
+                c->sfd);
     }
 
     return false;
@@ -186,8 +202,39 @@ void cproxy_binary_uncork_cmds(downstream *d, conn *uc) {
     assert(d != NULL);
     assert(uc != NULL);
 
+    if (settings.verbose > 2) {
+        fprintf(stderr,
+                "%d: cproxy_binary_uncork_cmds\n",
+                uc->sfd);
+    }
+
+    int n = 0;
+
     while (uc->corked != NULL) {
-        uc->corked = uc->corked->next;
+        bin_cmd *next = uc->corked->next;
+
+        item *it = uc->corked->request_item;
+        if (it != NULL) {
+            b2b_forward_item(uc, d, it);
+            n++;
+        }
+
+        if (uc->corked->request_item != NULL) {
+            item_remove(uc->corked->request_item);
+        }
+
+        if (uc->corked->response_item != NULL) {
+            item_remove(uc->corked->response_item);
+        }
+
+        free(uc->corked);
+        uc->corked = next;
+    }
+
+    if (settings.verbose > 2) {
+        fprintf(stderr,
+                "%d: cproxy_binary_uncork_cmds, uncorked %d\n",
+                uc->sfd, n);
     }
 }
 

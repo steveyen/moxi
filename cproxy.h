@@ -533,6 +533,13 @@ bool cproxy_broadcast_b2b_downstream(downstream *d, conn *uc);
 
 // ---------------------------------------------------------------
 
+bool b2b_forward_item(conn *uc, downstream *d, item *it);
+
+bool b2b_forward_item_vbucket(conn *uc, downstream *d, item *it,
+                              conn *c, bool self, int vbucket);
+
+// ---------------------------------------------------------------
+
 proxy_main *cproxy_gen_proxy_main(proxy_behavior behavior,
                                   int nthreads, enum_proxy_conf_type conf_type);
 

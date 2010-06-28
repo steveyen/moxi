@@ -499,12 +499,6 @@ static void conn_cleanup(conn *c) {
         free(c->write_and_free);
         c->write_and_free = 0;
     }
-
-    while (c->corked != NULL) {
-        bin_cmd *bc = c->corked;
-        c->corked = c->corked->next;
-        free(bc);
-    }
 }
 
 /*
@@ -527,6 +521,19 @@ void conn_free(conn *c) {
             free(c->suffixlist);
         if (c->iov)
             free(c->iov);
+
+        while (c->corked != NULL) {
+            bin_cmd *bc = c->corked;
+            c->corked = c->corked->next;
+            if (bc->request_item != NULL) {
+                item_remove(bc->request_item);
+            }
+            if (bc->response_item != NULL) {
+                item_remove(bc->response_item);
+            }
+            free(bc);
+        }
+
         free(c);
     }
 }

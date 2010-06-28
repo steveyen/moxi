@@ -18,9 +18,6 @@ static protocol_binary_request_noop req_noop = {
     .bytes = {0}
 };
 
-bool b2b_forward(conn *uc, downstream *d, conn *c, bool self, int vbucket,
-                 item *it);
-
 void cproxy_init_b2b() {
     memset(&req_noop, 0, sizeof(req_noop));
 
@@ -35,6 +32,12 @@ void cproxy_init_b2b() {
 bool cproxy_forward_b2b_downstream(downstream *d) {
     assert(d != NULL);
     assert(d->ptd != NULL);
+    assert(d->ptd->proxy != NULL);
+    assert(d->downstream_conns != NULL);
+    assert(d->downstream_used_start == 0);
+    assert(d->downstream_used == 0);
+    assert(d->multiget == NULL);
+    assert(d->merger == NULL);
 
     conn *uc = d->upstream_conn;
 
@@ -48,6 +51,7 @@ bool cproxy_forward_b2b_downstream(downstream *d) {
     assert(uc->cmd_start == NULL);
     assert(uc->thread != NULL);
     assert(uc->thread->base != NULL);
+    assert(uc->noreply == false);
     assert(IS_BINARY(uc->protocol));
     assert(IS_PROXY(uc->protocol));
 
@@ -96,38 +100,28 @@ bool cproxy_forward_b2b_downstream(downstream *d) {
 /* A simple command includes a key, for hashing.
  */
 bool cproxy_forward_b2b_simple_downstream(downstream *d, conn *uc) {
-    assert(d != NULL);
-    assert(d->ptd != NULL);
-    assert(d->ptd->proxy != NULL);
-    assert(d->downstream_conns != NULL);
-    assert(d->downstream_used_start == 0);
-    assert(d->downstream_used == 0);
+    return b2b_forward_item(uc, d, uc->item);
+}
+
+bool b2b_forward_item(conn *uc, downstream *d, item *it) {
     assert(uc != NULL);
     assert(uc->next == NULL);
     assert(uc->noreply == false);
-    assert(d->multiget == NULL);
-    assert(d->merger == NULL);
-
-    // Assuming we're already connected to downstream.
-    //
-    // TODO: Optimize to self codepath.
-    //
-    item *it = uc->item;
     assert(it != NULL);
 
     protocol_binary_request_header *req =
         (protocol_binary_request_header *) ITEM_data(it);
 
+    char *key    = ((char *) req) + req->request.extlen;
+    int   keylen = ntohs(req->request.keylen);
+
     if (settings.verbose > 2) {
         fprintf(stderr,
-                "%d: cproxy_forward_b2b_simple_downstream nbytes %u\n",
-                uc->sfd, it->nbytes);
+                "%d: b2b_forward_item nbytes %u, extlen %d, keylen %d",
+                uc->sfd, it->nbytes, req->request.extlen, keylen);
 
         cproxy_dump_header(uc->sfd, (char *) req);
     }
-
-    char *key    = ((char *) req) + req->request.extlen;
-    int   keylen = ntohs(req->request.keylen);
 
     if (settings.verbose > 2) {
         char buf[300];
@@ -135,8 +129,9 @@ bool cproxy_forward_b2b_simple_downstream(downstream *d, conn *uc) {
         buf[keylen] = '\0';
 
         fprintf(stderr,
-                "%d: cproxy_forward_b2b_simple_downstream %x %s %d %d\n",
-                uc->sfd, uc->cmd, key, keylen, req->request.extlen);
+                "%d: b2b_forward_item %x %s %d %d\n",
+                uc->sfd, req->request.opcode,
+                buf, keylen, req->request.extlen);
     }
 
     assert(key != NULL);
@@ -145,9 +140,10 @@ bool cproxy_forward_b2b_simple_downstream(downstream *d, conn *uc) {
     bool self = false;
     int  vbucket = -1;
 
-    conn *c = cproxy_find_downstream_conn_ex(d, key, keylen, &self, &vbucket);
+    conn *c = cproxy_find_downstream_conn_ex(d, key, keylen,
+                                             &self, &vbucket);
     if (c != NULL) {
-        if (b2b_forward(uc, d, c, self, vbucket, uc->item) == true) {
+        if (b2b_forward_item_vbucket(uc, d, it, c, self, vbucket) == true) {
             d->downstream_used_start = 1;
             d->downstream_used = 1;
 
@@ -159,15 +155,15 @@ bool cproxy_forward_b2b_simple_downstream(downstream *d, conn *uc) {
 
     if (settings.verbose > 2) {
         fprintf(stderr,
-                "%d: cproxy_forward_b2b_simple_downstream failed (%d)\n",
+                "%d: b2b_forward_item failed (%d)\n",
                 uc->sfd, (c != NULL));
     }
 
     return false;
 }
 
-bool b2b_forward(conn *uc, downstream *d, conn *c, bool self, int vbucket,
-                 item *it) {
+bool b2b_forward_item_vbucket(conn *uc, downstream *d, item *it,
+                              conn *c, bool self, int vbucket) {
     assert(d != NULL);
     assert(d->ptd != NULL);
     assert(uc != NULL);
@@ -175,8 +171,13 @@ bool b2b_forward(conn *uc, downstream *d, conn *c, bool self, int vbucket,
     assert(uc->noreply == false);
     assert(c != NULL);
 
+    // Assuming we're already connected to downstream.
+    //
+    // TODO: Optimize to self codepath.
+    //
     if (settings.verbose > 2) {
-        fprintf(stderr, "%d: b2b_forward %x to %d, vbucket %d\n",
+        fprintf(stderr,
+                "%d: b2b_forward_item_vbucket %x to %d, vbucket %d\n",
                 uc->sfd, uc->cmd, c->sfd, vbucket);
     }
 
@@ -220,8 +221,6 @@ bool cproxy_broadcast_b2b_downstream(downstream *d, conn *uc) {
     assert(d->ptd != NULL);
     assert(d->ptd->proxy != NULL);
     assert(d->downstream_conns != NULL);
-    assert(d->downstream_used_start == 0);
-    assert(d->downstream_used == 0);
     assert(uc != NULL);
     assert(uc->next == NULL);
     assert(uc->noreply == false);
@@ -232,7 +231,8 @@ bool cproxy_broadcast_b2b_downstream(downstream *d, conn *uc) {
     for (int i = 0; i < nconns; i++) {
         conn *c = d->downstream_conns[i];
         if (c != NULL &&
-            b2b_forward(uc, d, c, false, -1, uc->item) == true) {
+            b2b_forward_item_vbucket(uc, d, uc->item, c,
+                                     false, -1) == true) {
             nwrite++;
         }
     }
@@ -373,7 +373,7 @@ void cproxy_process_b2b_downstream_nread(conn *c) {
     if (uc != NULL) {
         if (settings.verbose > 2) {
             fprintf(stderr,
-                    "<%d cproxy_process_b2b_downstream_nread got %u\n",
+                    "<%d cproxy_process_b2b_downstream_nread got %u",
                     c->sfd, it->nbytes);
 
             cproxy_dump_header(c->sfd, ITEM_data(it));
