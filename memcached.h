@@ -345,6 +345,14 @@ typedef struct _stritem {
     /* then data with terminating \r\n (no terminating null; it's binary!) */
 } item;
 
+typedef struct bin_cmd bin_cmd;
+
+struct bin_cmd {
+    item *request_item;  // Does not own a refcount.
+    item *response_item; // Does not own a refcount.
+    bin_cmd *next;
+};
+
 typedef struct {
     pthread_t thread_id;        /* unique ID of this thread */
     struct event_base *base;    /* libevent handle this thread uses */
@@ -472,6 +480,8 @@ struct conn {
     char     *cmd_start;      // Pointer into rbuf, snapshot of rcurr.
     uint32_t  cmd_start_time; // Snapshot of msec_current_time.
     int       cmd_retries;
+
+    bin_cmd *corked;
 };
 
 extern conn *listen_conn;

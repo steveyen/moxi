@@ -443,6 +443,11 @@ conn *conn_new(const int sfd, enum conn_states init_state,
             fprintf(stderr, "<%d initialized conn_funcs to default\n", sfd);
     }
 
+    c->cmd_start = NULL;
+    c->cmd_start_time = 0;
+    c->cmd_retries = 0;
+    c->corked = NULL;
+
     c->extra = extra;
 
     event_set(&c->event, sfd, event_flags, event_handler, (void *)c);
@@ -479,7 +484,7 @@ static void conn_cleanup(conn *c) {
     }
 
     if (c->ileft != 0) {
-        for (; c->ileft > 0; c->ileft--,c->icurr++) {
+        for (; c->ileft > 0; c->ileft--, c->icurr++) {
             item_remove(*(c->icurr));
         }
     }
@@ -493,6 +498,12 @@ static void conn_cleanup(conn *c) {
     if (c->write_and_free) {
         free(c->write_and_free);
         c->write_and_free = 0;
+    }
+
+    while (c->corked != NULL) {
+        bin_cmd *bc = c->corked;
+        c->corked = c->corked->next;
+        free(bc);
     }
 }
 
@@ -1892,10 +1903,7 @@ void reset_cmd_handler(conn *c) {
     c->cmd = -1;
     c->cmd_curr = -1;
     c->substate = bin_no_state;
-    if(c->item != NULL) {
-        item_remove(c->item);
-        c->item = NULL;
-    }
+    conn_cleanup(c);
     conn_shrink(c);
     if (c->rbytes > 0) {
         conn_set_state(c, conn_parse_cmd);

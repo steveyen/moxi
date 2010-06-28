@@ -18,7 +18,8 @@ static protocol_binary_request_noop req_noop = {
     .bytes = {0}
 };
 
-bool b2b_forward(conn *uc, downstream *d, conn *c, bool self, int vbucket);
+bool b2b_forward(conn *uc, downstream *d, conn *c, bool self, int vbucket,
+                 item *it);
 
 void cproxy_init_b2b() {
     memset(&req_noop, 0, sizeof(req_noop));
@@ -53,9 +54,26 @@ bool cproxy_forward_b2b_downstream(downstream *d) {
     if (cproxy_connect_downstream(d, uc->thread) > 0) {
         assert(d->downstream_conns != NULL);
 
-        // TODO: Now would be the time to uncork.
+        int nconns = mcs_server_count(&d->mst);
+
+        for (int i = 0; i < nconns; i++) {
+            conn *c = d->downstream_conns[i];
+            if (c != NULL) {
+                assert(c->state == conn_pause);
+                assert(c->item == NULL);
+
+                if (cproxy_prep_conn_for_write(c) == false) {
+                    d->ptd->stats.stats.err_downstream_write_prep++;
+                    cproxy_close_conn(c);
+
+                    return false;
+                }
+            }
+        }
+
+        // Uncork the saved-up quiet binary commands.
         //
-        // cproxy_binary_uncork_cmds(d, uc);
+        cproxy_binary_uncork_cmds(d, uc);
 
         if (uc->cmd == PROTOCOL_BINARY_CMD_FLUSH ||
             uc->cmd == PROTOCOL_BINARY_CMD_NOOP ||
@@ -64,6 +82,12 @@ bool cproxy_forward_b2b_downstream(downstream *d) {
         }
 
         return cproxy_forward_b2b_simple_downstream(d, uc);
+    }
+
+    if (settings.verbose > 2) {
+        fprintf(stderr,
+                "%d: cproxy_forward_b2b_downstream connect failed\n",
+                uc->sfd);
     }
 
     return false;
@@ -88,35 +112,62 @@ bool cproxy_forward_b2b_simple_downstream(downstream *d, conn *uc) {
     //
     // TODO: Optimize to self codepath.
     //
-    char *key = binary_get_key(uc);
-    int  nkey = uc->binary_header.request.keylen;
+    item *it = uc->item;
+    assert(it != NULL);
+
+    protocol_binary_request_header *req =
+        (protocol_binary_request_header *) ITEM_data(it);
 
     if (settings.verbose > 2) {
-        fprintf(stderr, "%d: cproxy_forward_b2b_simple_downstream %x\n",
-                uc->sfd, uc->cmd);
+        fprintf(stderr,
+                "%d: cproxy_forward_b2b_simple_downstream nbytes %u\n",
+                uc->sfd, it->nbytes);
+
+        cproxy_dump_header(uc->sfd, (char *) req);
+    }
+
+    char *key    = ((char *) req) + req->request.extlen;
+    int   keylen = ntohs(req->request.keylen);
+
+    if (settings.verbose > 2) {
+        char buf[300];
+        memcpy(buf, key, keylen);
+        buf[keylen] = '\0';
+
+        fprintf(stderr,
+                "%d: cproxy_forward_b2b_simple_downstream %x %s %d %d\n",
+                uc->sfd, uc->cmd, key, keylen, req->request.extlen);
     }
 
     assert(key != NULL);
-    assert(nkey > 0);
+    assert(keylen > 0);
 
     bool self = false;
     int  vbucket = -1;
 
-    conn *c = cproxy_find_downstream_conn_ex(d, key, nkey, &self, &vbucket);
-    if (c != NULL &&
-        b2b_forward(uc, d, c, self, vbucket) == true) {
-        d->downstream_used_start = 1;
-        d->downstream_used = 1;
+    conn *c = cproxy_find_downstream_conn_ex(d, key, keylen, &self, &vbucket);
+    if (c != NULL) {
+        if (b2b_forward(uc, d, c, self, vbucket, uc->item) == true) {
+            d->downstream_used_start = 1;
+            d->downstream_used = 1;
 
-        cproxy_start_downstream_timeout(d, c);
+            cproxy_start_downstream_timeout(d, c);
 
-        return true;
+            return true;
+        }
+    }
+
+    if (settings.verbose > 2) {
+        fprintf(stderr,
+                "%d: cproxy_forward_b2b_simple_downstream failed (%d)\n",
+                uc->sfd, (c != NULL));
     }
 
     return false;
 }
 
-bool b2b_forward(conn *uc, downstream *d, conn *c, bool self, int vbucket) {
+bool b2b_forward(conn *uc, downstream *d, conn *c, bool self, int vbucket,
+                 item *it) {
     assert(d != NULL);
     assert(d->ptd != NULL);
     assert(uc != NULL);
@@ -125,62 +176,39 @@ bool b2b_forward(conn *uc, downstream *d, conn *c, bool self, int vbucket) {
     assert(c != NULL);
 
     if (settings.verbose > 2) {
-        fprintf(stderr, "%d: b2b_forward %x to %d\n",
-                uc->sfd, uc->cmd, c->sfd);
+        fprintf(stderr, "%d: b2b_forward %x to %d, vbucket %d\n",
+                uc->sfd, uc->cmd, c->sfd, vbucket);
     }
 
-    if (cproxy_prep_conn_for_write(c)) {
-        assert(c->state == conn_pause);
+    protocol_binary_request_header *req =
+        (protocol_binary_request_header *) ITEM_data(it);
 
-        protocol_binary_request_header *req = binary_get_request(uc);
-        if (req != NULL) {
-            assert(req->request.bodylen >= (uc->binary_header.request.keylen +
-                                            uc->binary_header.request.extlen));
+    if (vbucket >= 0) {
+        req->request.reserved = htons(vbucket);
+    }
 
-            if (add_iov(c, req,
-                        sizeof(uc->binary_header) +
-                        uc->binary_header.request.keylen +
-                        uc->binary_header.request.extlen) == 0) {
-                item *it = uc->item;
-                if (it != NULL) {
-                    assert(it->refcount == 1);
-                    assert(ITEM_data(it) != NULL);
+    if (add_conn_item(c, it) == true) {
+        // The caller keeps its refcount, and we need our own.
+        //
+        it->refcount++;
 
-                    if (add_conn_item(c, it) == true) {
-                        it->refcount++; // The uc keeps its refcount++, and we need our own.
+        if (add_iov(c, ITEM_data(it), it->nbytes) == 0) {
+            conn_set_state(c, conn_mwrite);
+            c->write_and_go = conn_new_cmd;
 
-                        if (settings.verbose > 2) {
-                            fprintf(stderr, "%d: b2b_forward %x to %d with item_len %d\n",
-                                    uc->sfd, uc->cmd, c->sfd, it->nbytes);
-                        }
-
-                        if (add_iov(c, ITEM_data(it), it->nbytes - 2) != 0) {
-                            goto error_oom;
-                        }
-                    }
+            if (update_event(c, EV_WRITE | EV_PERSIST)) {
+                if (settings.verbose > 2) {
+                    fprintf(stderr, "%d: b2b_forward %x to %d success\n",
+                            uc->sfd, uc->cmd, c->sfd);
                 }
 
-                conn_set_state(c, conn_mwrite);
-                c->write_and_go = conn_new_cmd;
-
-                if (update_event(c, EV_WRITE | EV_PERSIST)) {
-                    if (settings.verbose > 2) {
-                        fprintf(stderr, "%d: b2b_forward %x to %d success\n",
-                                uc->sfd, uc->cmd, c->sfd);
-                    }
-
-                    return true;
-                }
+                return true;
             }
         }
-
-    error_oom:
-        d->ptd->stats.stats.err_oom++;
-        cproxy_close_conn(c);
-    } else {
-        d->ptd->stats.stats.err_downstream_write_prep++;
-        cproxy_close_conn(c);
     }
+
+    d->ptd->stats.stats.err_oom++;
+    cproxy_close_conn(c);
 
     return false;
 }
@@ -196,7 +224,6 @@ bool cproxy_broadcast_b2b_downstream(downstream *d, conn *uc) {
     assert(d->downstream_used == 0);
     assert(uc != NULL);
     assert(uc->next == NULL);
-    assert(uc->item == NULL);
     assert(uc->noreply == false);
 
     int nwrite = 0;
@@ -205,7 +232,7 @@ bool cproxy_broadcast_b2b_downstream(downstream *d, conn *uc) {
     for (int i = 0; i < nconns; i++) {
         conn *c = d->downstream_conns[i];
         if (c != NULL &&
-            b2b_forward(uc, d, c, false, -1) == true) {
+            b2b_forward(uc, d, c, false, -1, uc->item) == true) {
             nwrite++;
         }
     }
@@ -242,6 +269,11 @@ void cproxy_process_b2b_downstream(conn *c) {
     downstream *d = c->extra;
     assert(d);
 
+    c->cmd_curr       = -1;
+    c->cmd_start      = NULL;
+    c->cmd_start_time = msec_current_time;
+    c->cmd_retries    = 0;
+
     int      extlen  = c->binary_header.request.extlen;
     int      keylen  = c->binary_header.request.keylen;
     uint32_t bodylen = c->binary_header.request.bodylen;
@@ -265,9 +297,6 @@ void cproxy_process_b2b_downstream(conn *c) {
     //
     char *ikey    = "q";
     int   ikeylen = 1;
-
-    assert(ikey);
-    assert(ikeylen > 0);
 
     c->item = item_alloc(ikey, ikeylen, 0, 0,
                          sizeof(c->binary_header) + bodylen);
@@ -315,8 +344,9 @@ void cproxy_process_b2b_downstream_nread(conn *c) {
     uint32_t bodylen = header->response.bodylen;
 
     if (settings.verbose > 2) {
-        fprintf(stderr, "<%d cproxy_process_b2b_downstream_nread %x %d %d %u\n",
-                c->sfd, c->cmd, extlen, keylen, bodylen);
+        fprintf(stderr,
+                "<%d cproxy_process_b2b_downstream_nread %x %d %d %u %d\n",
+                c->sfd, c->cmd, extlen, keylen, bodylen, c->noreply);
     }
 
     downstream *d = c->extra;
@@ -324,79 +354,47 @@ void cproxy_process_b2b_downstream_nread(conn *c) {
     assert(d->ptd != NULL);
     assert(d->ptd->proxy != NULL);
 
+    // TODO: Need to handle not-my-vbucket error by retrying.
+    // TODO: Need to handle quiet binary command error response,
+    //       in the right order.
+    // TODO: Need to handle not-my-vbucket error during a quiet cmd.
+    //
     item *it = c->item;
     assert(it != NULL);
     assert(it->refcount == 1);
-
-    c->item = NULL;
-
-    conn *uc = d->upstream_conn;
-    if (uc != NULL) {
-        if (settings.verbose > 2) {
-            fprintf(stderr, "<%d cproxy_process_b2b_downstream_nread writing %u\n",
-                    c->sfd, it->nbytes);
-
-            unsigned char *bb = (unsigned char *) ITEM_data(it);
-            fprintf(stderr, ">%d Write upstream binary protocol data:",
-                    uc->sfd);
-            for (int ii = 0; ii < sizeof(protocol_binary_response_header); ++ii) {
-                if (ii % 4 == 0) {
-                    fprintf(stderr, "\n<%d   ", uc->sfd);
-                }
-                fprintf(stderr, " 0x%02x", bb[ii]);
-            }
-            fprintf(stderr, "\n");
-        }
-
-        if (add_conn_item(uc, it) == true) {
-            if (add_iov(uc, ITEM_data(it), it->nbytes) != 0) {
-                goto error_oom;
-            }
-
-            it = NULL; // The uc now owns the item's refcount.
-        } else {
-            goto error_oom;
-        }
-    }
-
-    if (settings.verbose > 2) {
-        fprintf(stderr, "%d: cproxy_process_b2b_downstream_nread pausing\n",
-                c->sfd);
-    }
-
-    if (it != NULL) {
-        item_remove(it);
-    }
 
     if (c->noreply) {
         conn_set_state(c, conn_new_cmd);
     } else {
         conn_set_state(c, conn_pause);
+    }
 
+    conn *uc = d->upstream_conn;
+    if (uc != NULL) {
         if (settings.verbose > 2) {
-            fprintf(stderr, "%d: cproxy_process_b2b_downstream_nread pausing\n",
-                    c->sfd);
+            fprintf(stderr,
+                    "<%d cproxy_process_b2b_downstream_nread got %u\n",
+                    c->sfd, it->nbytes);
+
+            cproxy_dump_header(c->sfd, ITEM_data(it));
         }
 
-        if (uc != NULL) {
-            conn_set_state(uc, conn_mwrite);
-            c->write_and_go = conn_new_cmd;
+        if (add_conn_item(uc, it) == true) {
+            it->refcount++;
 
-            if (!update_event(uc, EV_WRITE | EV_PERSIST)) {
-                goto error_oom;
+            if (add_iov(uc, ITEM_data(it), it->nbytes) == 0 &&
+                cproxy_update_event_write(d, uc) == true) {
+                conn_set_state(uc, conn_mwrite);
+                goto done;
             }
         }
+
+        d->ptd->stats.stats.err_oom++;
+        cproxy_close_conn(uc);
     }
 
-    return;
-
- error_oom:
-    if (settings.verbose > 1) {
-        fprintf(stderr,
-                "ERROR: Can't write event\n");
-    }
-
-    d->ptd->stats.stats.err_oom++;
-    cproxy_close_conn(c);
+ done:
+    item_remove(c->item);
+    c->item = NULL;
 }
 

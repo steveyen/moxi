@@ -278,7 +278,7 @@ void cproxy_upstream_ascii_item_response(item *it, conn *uc,
             (cas_emit < 0 &&
              cas == CPROXY_NOT_CAS)) {
             if (add_conn_item(uc, it)) {
-                it->refcount++; // TODO: Need item lock here?
+                it->refcount++;
 
                 if (add_iov(uc, "VALUE ", 6) == 0 &&
                     add_iov(uc, ITEM_key(it), it->nkey) == 0 &&
@@ -297,7 +297,7 @@ void cproxy_upstream_ascii_item_response(item *it, conn *uc,
                 sprintf(suffix, " %llu\r\n", (unsigned long long) cas);
 
                 if (add_conn_item(uc, it)) {
-                    it->refcount++; // TODO: Need item lock here?
+                    it->refcount++;
 
                     if (add_iov(uc, "VALUE ", 6) == 0 &&
                         add_iov(uc, ITEM_key(it), it->nkey) == 0 &&

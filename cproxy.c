@@ -1152,6 +1152,21 @@ bool cproxy_prep_conn_for_write(conn *c) {
     return false;
 }
 
+bool cproxy_update_event_write(downstream *d, conn *c) {
+    assert(d != NULL);
+    assert(d->ptd != NULL);
+    assert(c != NULL);
+
+    if (!update_event(c, EV_WRITE | EV_PERSIST)) {
+        d->ptd->stats.stats.err_oom++;
+        cproxy_close_conn(c);
+
+        return false;
+    }
+
+    return true;
+}
+
 /**
  * Do a hash through libmemcached to see which server (by index)
  * should hold a given key.

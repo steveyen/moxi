@@ -385,22 +385,6 @@ bool a2b_fill_request_token(struct A2BSpec *spec,
     return true;
 }
 
-static bool a2b_update_event_write(downstream *d, conn *uc) {
-    if (!update_event(uc, EV_WRITE | EV_PERSIST)) {
-        if (settings.verbose > 1) {
-            fprintf(stderr,
-                    "ERROR: Can't write upstream a2b event\n");
-        }
-
-        d->ptd->stats.stats.err_oom++;
-        cproxy_close_conn(uc);
-
-        return false;
-    }
-
-    return true;
-}
-
 /* Called when we receive a binary response header from
  * a downstream server, via try_read_command()/drive_machine().
  */
@@ -884,7 +868,7 @@ void a2b_process_downstream_response(conn *c) {
 
             conn_set_state(c, conn_pause);
 
-            a2b_update_event_write(d, uc);
+            cproxy_update_event_write(d, uc);
 
             return;
         }
@@ -982,7 +966,7 @@ void a2b_process_downstream_response(conn *c) {
 
             cproxy_del_front_cache_key_ascii(d, uc->cmd_start);
 
-            a2b_update_event_write(d, uc);
+            cproxy_update_event_write(d, uc);
         }
         break;
 
@@ -1009,7 +993,7 @@ void a2b_process_downstream_response(conn *c) {
 
             cproxy_del_front_cache_key_ascii(d, uc->cmd_start);
 
-            a2b_update_event_write(d, uc);
+            cproxy_update_event_write(d, uc);
         }
         break;
 
@@ -1056,7 +1040,7 @@ void a2b_process_downstream_response(conn *c) {
 
             cproxy_del_front_cache_key_ascii(d, uc->cmd_start);
 
-            a2b_update_event_write(d, uc);
+            cproxy_update_event_write(d, uc);
         }
         break;
 

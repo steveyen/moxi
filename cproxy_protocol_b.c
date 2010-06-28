@@ -1,6 +1,7 @@
 /* -*- Mode: C; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <errno.h>
 #include <sysexits.h>
@@ -12,19 +13,14 @@
 
 void cproxy_process_upstream_binary(conn *c) {
     assert(c != NULL);
+    assert(c->cmd >= 0);
     assert(c->next == NULL);
-    assert(c->extra != NULL);
     assert(c->item == NULL);
     assert(IS_BINARY(c->protocol));
     assert(IS_PROXY(c->protocol));
 
     proxy_td *ptd = c->extra;
     assert(ptd != NULL);
-
-    if (settings.verbose > 2) {
-        fprintf(stderr, "<%d cproxy_process_upstream_binary\n",
-                c->sfd);
-    }
 
     if (!cproxy_prep_conn_for_write(c)) {
         ptd->stats.stats.err_upstream_write_prep++;
@@ -37,36 +33,80 @@ void cproxy_process_upstream_binary(conn *c) {
     c->cmd_start_time = msec_current_time;
     c->cmd_retries    = 0;
 
-    int extlen = c->binary_header.request.extlen;
-    int keylen = c->binary_header.request.keylen;
+    int      extlen  = c->binary_header.request.extlen;
+    int      keylen  = c->binary_header.request.keylen;
     uint32_t bodylen = c->binary_header.request.bodylen;
 
-    if (c->cmd == PROTOCOL_BINARY_CMD_NOOP &&
-        extlen == 0 && keylen == 0 && bodylen == 0) {
-        c->noreply = false;
+    assert(bodylen >= keylen + extlen);
 
-        // For a NOOP, we have received everything.
-        //
-        cproxy_pause_upstream_for_downstream(ptd, c);
-    } else {
-        // Because binary protocol is very regular, we can
-        // reuse a lot of existing dispatch machinery.
-        //
+    if (settings.verbose > 2) {
+        fprintf(stderr, "<%d cproxy_process_upstream_binary %x %d %d %u\n",
+                c->sfd, c->cmd, extlen, keylen, bodylen);
+    }
+
+    process_bin_noreply(c); // Map quiet c->cmd values into non-quiet.
+
+    if (c->cmd == PROTOCOL_BINARY_CMD_VERSION ||
+        c->cmd == PROTOCOL_BINARY_CMD_QUIT) {
         dispatch_bin_command(c);
+        return;
+    }
+
+    // Alloc an item and continue with an rest-of-body nread if
+    // necessary.  The item will hold the entire request message
+    // (the header + body).
+    //
+    char *ikey    = "u";
+    int   ikeylen = 1;
+
+    c->item = item_alloc(ikey, ikeylen, 0, 0,
+                         sizeof(c->binary_header) + bodylen);
+    if (c->item != NULL) {
+        item *it = c->item;
+        void *rb = c->rcurr;
+
+        assert(it->refcount == 1);
+
+        memcpy(ITEM_data(it), rb, sizeof(c->binary_header));
+
+        if (bodylen > 0) {
+            c->ritem = ITEM_data(it) + sizeof(c->binary_header);
+            c->rlbytes = bodylen;
+            c->substate = bin_read_set_value;
+
+            conn_set_state(c, conn_nread);
+        } else {
+            // Since we have no body bytes, we can go immediately to
+            // the nread completed processing step.
+            //
+            cproxy_pause_upstream_for_downstream(ptd, c);
+        }
+    } else {
+        ptd->stats.stats.err_oom++;
+        cproxy_close_conn(c);
     }
 }
 
-/* We get here after reading the key + extras values,
- * and possibly an item.
+/* We get here after reading the header+body into an item.
  */
 void cproxy_process_upstream_binary_nread(conn *c) {
     assert(c != NULL);
     assert(c->cmd >= 0);
     assert(c->next == NULL);
+    assert(c->cmd_start == NULL);
+    assert(IS_BINARY(c->protocol));
+    assert(IS_PROXY(c->protocol));
+
+    protocol_binary_request_header *header =
+        (protocol_binary_request_header *) &c->binary_header;
+
+    int      extlen  = header->request.extlen;
+    int      keylen  = header->request.keylen;
+    uint32_t bodylen = header->request.bodylen;
 
     if (settings.verbose > 2) {
-        fprintf(stderr, "<%d cproxy_process_upstream_binary_nread\n",
-                c->sfd);
+        fprintf(stderr, "<%d cproxy_process_upstream_binary_nread %x %d %d %u\n",
+                c->sfd, c->cmd, extlen, keylen, bodylen);
     }
 
     // pthread_mutex_lock(&c->thread->stats.mutex);
@@ -76,24 +116,6 @@ void cproxy_process_upstream_binary_nread(conn *c) {
     proxy_td *ptd = c->extra;
     assert(ptd != NULL);
 
-    if (c->substate == bin_reading_set_header) {
-        // Have the existing machinery do the item_alloc, etc.
-        //
-        if (settings.verbose > 2) {
-            fprintf(stderr, "<%d cproxy_process_upstream_binary_nread bin_reading_set_header\n",
-                    c->sfd);
-        }
-
-        assert(c->item == NULL);
-
-        complete_nread_binary(c);
-
-        return;
-    }
-
-    // At this point, we have the key, extras, and item (if they
-    // were provided) all received.
-    //
     if (c->noreply) {
         if (settings.verbose > 2) {
             fprintf(stderr, "<%d cproxy_process_upstream_binary_nread corking quiet command %x\n",
@@ -103,9 +125,12 @@ void cproxy_process_upstream_binary_nread(conn *c) {
         // Hold onto or 'cork' all the binary quiet commands
         // until there's a later non-quiet command.
         //
-        cproxy_binary_cork_cmd(c);
-
-        conn_set_state(c, conn_new_cmd);
+        if (cproxy_binary_cork_cmd(c)) {
+            conn_set_state(c, conn_new_cmd);
+        } else {
+            ptd->stats.stats.err_oom++;
+            cproxy_close_conn(c);
+        }
 
         return;
     }
@@ -115,14 +140,55 @@ void cproxy_process_upstream_binary_nread(conn *c) {
     cproxy_pause_upstream_for_downstream(ptd, c);
 }
 
-void cproxy_binary_cork_cmd(conn *c) {
-    // TODO: Save the quiet binary command for later uncorking.
-    //
-    assert(false);
+static void bin_cmd_append(bin_cmd **head, bin_cmd *bc) {
+    assert(head != NULL);
+    assert(bc != NULL);
+
+    bin_cmd *tail = *head;
+
+    while (tail != NULL) {
+        if (tail->next == NULL) {
+            tail->next = bc;
+            return;
+        }
+        tail = tail->next;
+    }
+
+    *head = bc;
 }
 
-void cproxy_binary_uncork_cmds(downstream *d, conn *c) {
-    assert(false);
+bool cproxy_binary_cork_cmd(conn *c) {
+    // Save the quiet binary command for later uncorking.
+    //
+    assert(c != NULL);
+    assert(c->item != NULL);
+
+    bin_cmd *bc = calloc(1, sizeof(bin_cmd));
+    if (bc != NULL) {
+        if (add_conn_item(c, c->item) == true) {
+            // Transferred the item refcount from c->item to the c->ilist.
+            //
+            bc->request_item = c->item;
+            c->item = NULL;
+
+            bin_cmd_append(&c->corked, bc);
+
+            return true;
+        }
+
+        free(bc);
+    }
+
+    return false;
+}
+
+void cproxy_binary_uncork_cmds(downstream *d, conn *uc) {
+    assert(d != NULL);
+    assert(uc != NULL);
+
+    while (uc->corked != NULL) {
+        uc->corked = uc->corked->next;
+    }
 }
 
 void cproxy_process_downstream_binary(conn *c) {
@@ -149,3 +215,14 @@ void cproxy_process_downstream_binary_nread(conn *c) {
     }
 }
 
+void cproxy_dump_header(int prefix, char *bb) {
+    if (settings.verbose > 2) {
+        for (int ii = 0; ii < sizeof(protocol_binary_request_header); ++ii) {
+            if (ii % 4 == 0) {
+                fprintf(stderr, "\n%d   ", prefix);
+            }
+            fprintf(stderr, " 0x%02x", (unsigned char) bb[ii]);
+        }
+        fprintf(stderr, "\n");
+    }
+}

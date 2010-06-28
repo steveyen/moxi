@@ -457,10 +457,14 @@ bool  cproxy_dettach_if_noreply(downstream *d, conn *uc);
 
 void cproxy_reset_upstream(conn *uc);
 
+bool cproxy_update_event_write(downstream *d, conn *c);
+
 void upstream_error(conn *uc);
 void upstream_retry(void *data0, void *data1);
 
 int downstream_conn_index(downstream *d, conn *c);
+
+void cproxy_dump_header(int prefix, char *bb);
 
 // ---------------------------------------------------------------
 
@@ -579,7 +583,7 @@ void cproxy_reset_stats_td(proxy_stats_td *pstd);
 void cproxy_reset_stats(proxy_stats *ps);
 void cproxy_reset_stats_cmd(proxy_stats_cmd *sc);
 
-void cproxy_binary_cork_cmd(conn *uc);
+bool cproxy_binary_cork_cmd(conn *uc);
 void cproxy_binary_uncork_cmds(downstream *d, conn *uc);
 
 // Multiget key de-duplication.
