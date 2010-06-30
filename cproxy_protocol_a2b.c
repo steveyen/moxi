@@ -722,24 +722,23 @@ void a2b_process_downstream_response(conn *c) {
             }
 
             int vbucket = ntohl(header->response.opaque);
+            int sindex = downstream_conn_index(d, c);
 
             if (settings.verbose > 2) {
                 fprintf(stderr,
                         "<%d cproxy_process_a2b_downstream_response not-my-vbucket, "
-                        "cmd: %x not multi-key get, vbucket: %d, retries %d\n",
-                        c->sfd, header->response.opcode, vbucket, uc->cmd_retries);
+                        "cmd: %x not multi-key get, sindex %d, vbucket %d, retries %d\n",
+                        c->sfd, header->response.opcode, sindex, vbucket, uc->cmd_retries);
             }
 
-            mcs_server_invalid_vbucket(&d->mst, downstream_conn_index(d, c),
-                                       vbucket);
+            mcs_server_invalid_vbucket(&d->mst, sindex, vbucket);
 
             // As long as the upstream is still open and we haven't
             // retried too many times already.
             //
             int max_retries = (mcs_server_count(&d->mst) * 2);
 
-            if (uc != NULL &&
-                uc->cmd_retries < max_retries) {
+            if (uc->cmd_retries < max_retries) {
                 uc->cmd_retries++;
 
                 // TODO: Add a stats counter here for this case.
@@ -748,14 +747,14 @@ void a2b_process_downstream_response(conn *c) {
 
                 conn_set_state(c, conn_pause);
                 return;
-            } else {
-                if (settings.verbose > 2) {
-                    fprintf(stderr,
-                            "%d: cproxy_process_a2b_downstream_response not-my-vbucket, "
-                            "cmd: %x skipping retry %d >= %d\n",
-                            c->sfd, header->response.opcode, uc->cmd_retries,
-                            max_retries);
-                }
+            }
+
+            if (settings.verbose > 2) {
+                fprintf(stderr,
+                        "%d: cproxy_process_a2b_downstream_response not-my-vbucket, "
+                        "cmd: %x skipping retry %d >= %d\n",
+                        c->sfd, header->response.opcode, uc->cmd_retries,
+                        max_retries);
             }
         } else {
             // TODO: Add a stats counter here for this case.
@@ -766,7 +765,8 @@ void a2b_process_downstream_response(conn *c) {
             // filled in already.
             //
             if (uc == NULL) {
-                // If the client went away, though, don't retry.
+                // If the client went away, though, don't retry,
+                // but keep looking for that NOOP.
                 //
                 conn_set_state(c, conn_new_cmd);
                 return;
@@ -787,19 +787,19 @@ void a2b_process_downstream_response(conn *c) {
             key_buf[key_len] = '\0';
 
             int vbucket = -1;
+            int sindex = downstream_conn_index(d, c);
 
             mcs_key_hash(&d->mst, key_buf, key_len, &vbucket);
-
-            mcs_server_invalid_vbucket(&d->mst, downstream_conn_index(d, c),
-                                       vbucket);
 
             if (settings.verbose > 2) {
                 fprintf(stderr,
                         "<%d cproxy_process_a2b_downstream_response not-my-vbucket, "
-                        "cmd: %x get/getk '%s' %d retry: %d, vbucket %d\n",
+                        "cmd: %x get/getk '%s' %d retry %d, sindex %d, vbucket %d\n",
                         c->sfd, header->response.opcode, key_buf, key_len,
-                        d->upstream_retry + 1, vbucket);
+                        d->upstream_retry + 1, sindex, vbucket);
             }
+
+            mcs_server_invalid_vbucket(&d->mst, sindex, vbucket);
 
             // Update the de-duplication map, removing the key, so that
             // we'll reattempt another request for the key during the
