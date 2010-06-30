@@ -318,40 +318,14 @@ void on_conflate_new_config(void *userdata, kvpair_t *config) {
     work_collect_wait(&completion);
 }
 
-static
-void cproxy_on_new_config(void *data0, void *data1) {
-    work_collect *completion = data0;
-    proxy_main *m = completion->data;
-    assert(m);
-
-    kvpair_t *kvs = data1;
-    assert(kvs);
-    assert(is_listen_thread());
-
-    m->stat_configs++;
-
-    uint32_t max_config_ver = 0;
-
-    for (proxy *p = m->proxy_head; p != NULL; p = p->next) {
-        pthread_mutex_lock(&p->proxy_lock);
-        if (max_config_ver < p->config_ver) {
-            max_config_ver = p->config_ver;
-        }
-        pthread_mutex_unlock(&p->proxy_lock);
-    }
-
-    uint32_t new_config_ver = max_config_ver + 1;
-
-    if (settings.verbose > 2) {
-        fprintf(stderr, "conc new_config_ver %u\n", new_config_ver);
-    }
-
 #ifdef MOXI_USE_VBUCKET
-    char **contents = get_key_values(kvs, "contents");
-    if (contents != NULL &&
-        contents[0] != NULL) {
-        char *config = trimstrdup(contents[0]);
 
+static
+bool cproxy_on_new_config_json(proxy_main *m, uint32_t new_config_ver, char *config) {
+    bool rv = false;
+
+    if (m != NULL &&
+        config != NULL) {
         if (settings.verbose > 2) {
             fprintf(stderr, "conc contents config %s\n", config);
         }
@@ -425,6 +399,7 @@ void cproxy_on_new_config(void *data0, void *data1) {
                         cproxy_on_new_pool(m, "default", pool_port,
                                            config, new_config_ver,
                                            &behavior_pool);
+                        rv = true;
                     } else {
                         if (settings.verbose > 1) {
                             fprintf(stderr,
@@ -439,14 +414,15 @@ void cproxy_on_new_config(void *data0, void *data1) {
 
             vbucket_config_destroy(vch);
         }
-
-        free(config);
-    } else {
-        goto fail;
     }
+
+    return rv;
+}
 
 #else // !MOXI_USE_VBUCKET
 
+static
+bool cproxy_on_new_config_kvs(proxy_main *m, uint32_t new_config_ver, kvpair_t *kvs) {
     // The kvs key-multivalues look roughly like...
     //
     //  pool-customer1-a
@@ -484,7 +460,7 @@ void cproxy_on_new_config(void *data0, void *data1) {
     char **bindings = get_key_values(kvs, "bindings");
 
     if (pools == NULL) {
-        goto fail;
+        return false;
     }
 
     int npools    = 0;
@@ -501,7 +477,7 @@ void cproxy_on_new_config(void *data0, void *data1) {
         if (settings.verbose > 1) {
             fprintf(stderr, "npools does not match nbindings\n");
         }
-        goto fail;
+        return false;
     }
 
     char **behavior_kvs = get_key_values(kvs, "behavior");
@@ -594,7 +570,7 @@ void cproxy_on_new_config(void *data0, void *data1) {
                             if (settings.verbose > 1) {
                                 fprintf(stderr, "ERROR: oom on re-config malloc\n");;
                             }
-                            goto fail;
+                            return false;
                         }
                     } else {
                         // Note: ignore when no servers for an existing pool.
@@ -605,7 +581,7 @@ void cproxy_on_new_config(void *data0, void *data1) {
                     if (settings.verbose > 1) {
                         fprintf(stderr, "ERROR: conc missing pool port\n");
                     }
-                    goto fail;
+                    return false;
                 }
             } else {
                 // Note: ignore when no servers for an existing pool.
@@ -616,10 +592,60 @@ void cproxy_on_new_config(void *data0, void *data1) {
             if (settings.verbose > 1) {
                 fprintf(stderr, "ERROR: conc missing pool name\n");
             }
-            goto fail;
+            return false;
         }
     }
 
+    return true;
+}
+
+#endif // !MOXI_USE_VBUCKET
+
+static
+void cproxy_on_new_config(void *data0, void *data1) {
+    work_collect *completion = data0;
+    proxy_main *m = completion->data;
+    assert(m);
+
+    kvpair_t *kvs = data1;
+    assert(kvs);
+    assert(is_listen_thread());
+
+    m->stat_configs++;
+
+    uint32_t max_config_ver = 0;
+
+    for (proxy *p = m->proxy_head; p != NULL; p = p->next) {
+        pthread_mutex_lock(&p->proxy_lock);
+        if (max_config_ver < p->config_ver) {
+            max_config_ver = p->config_ver;
+        }
+        pthread_mutex_unlock(&p->proxy_lock);
+    }
+
+    uint32_t new_config_ver = max_config_ver + 1;
+
+    if (settings.verbose > 2) {
+        fprintf(stderr, "conc new_config_ver %u\n", new_config_ver);
+    }
+
+#ifdef MOXI_USE_VBUCKET
+    char **contents = get_key_values(kvs, "contents");
+    if (contents != NULL &&
+        contents[0] != NULL) {
+        char *config = trimstrdup(contents[0]);
+        if (config != NULL) {
+            cproxy_on_new_config_json(m, new_config_ver, config);
+
+            free(config);
+        } else {
+            goto fail;
+        }
+    }
+#else // !MOXI_USE_VBUCKET
+    if (cproxy_on_new_config_kvs(m, new_config_ver, kvs) == false) {
+        goto fail;
+    }
 #endif // !MOXI_USE_VBUCKET
 
     // If there were any proxies that weren't updated in the
