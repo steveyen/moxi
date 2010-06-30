@@ -33,7 +33,13 @@ typedef struct {
     mcs_server_st *servers;    // Array, size == vbucket_config_get_num_servers(vch);
 } mcs_st;
 
-#else // !MOXI_US_VBUCKET
+#define MOXI_DEFAULT_LISTEN_PORT      11211
+#define MEMCACHED_DEFAULT_LISTEN_PORT 0
+
+#else // !MOXI_USE_VBUCKET
+
+#define MOXI_DEFAULT_LISTEN_PORT      0
+#define MEMCACHED_DEFAULT_LISTEN_PORT 11210
 
 #include <libmemcached/memcached.h>
 

@@ -64,7 +64,7 @@ proxy_behavior behavior_default_g = {
     .bucket = {0},
     .usr = {0},
     .pwd = {0},
-    .port_listen = 0
+    .port_listen = MOXI_DEFAULT_LISTEN_PORT
 };
 
 /** Length of key that may be zero or space terminated.
@@ -289,7 +289,11 @@ int cproxy_init(char *cfg_str,
     msec_clockevent_base = main_base;
     msec_clock_handler(0, 0, NULL);
 
-    if (strchr(cfg_str, '@') == NULL) { // Not jid format.
+    // Not jid format and not a URL, so it must be a simple cmd-line
+    // or file-based config.
+    //
+    if (strchr(cfg_str, '@') == NULL &&
+        strstr(cfg_str, "http://") == NULL) {
         return cproxy_init_string(cfg_str,
                                   behavior,
                                   nthreads);

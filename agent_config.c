@@ -80,6 +80,14 @@ static void init_extensions(void)
  *  Only the apikey is needed, so it can also look like...
  *
  *    jidname@jhostname%jpassword
+ *
+ *  Or...
+ *
+ *    http://host:port/default/pools/bucketsStreamingConfig/default
+ *    url=http://host:port/default/pools/bucketsStreamingConfig/default
+ *    auth=,url=http://host:port/default/pools/bucketsStreamingConfig/default
+ *    auth=USER%PSWD,url=http://host:port/default/pools/bucketsStreamingConfig/default
+ *    auth=Administrator%password,url=http://host:port/default/pools/bucketsStreamingConfig/default
  */
 int cproxy_init_agent(char *cfg_str,
                       proxy_behavior behavior,
@@ -106,7 +114,11 @@ int cproxy_init_agent(char *cfg_str,
     } else {
         buff = calloc(cfg_len + 50, sizeof(char));
         if (buff != NULL) {
-            snprintf(buff, cfg_len + 50, "apikey=%s", cfg_str);
+            if (strncmp(cfg_str, "http://", 7) == 0) {
+                snprintf(buff, cfg_len + 50, "url=%s", cfg_str);
+            } else {
+                snprintf(buff, cfg_len + 50, "apikey=%s", cfg_str);
+            }
         }
         buff = trimstr(buff);
     }

@@ -3993,18 +3993,20 @@ static void clock_handler(const int fd, const short which, void *arg) {
 static void usage(int argc, char **argv) {
     printf(PACKAGE " " VERSION "\n");
     printf("\n");
-#ifdef HAVE_CONFLATE_H
-    printf("  %s [flags] apikey=<APIKEY>\n", argv[0]);
+#ifdef MOXI_USE_VBUCKET
+    printf("  %s [flags] http://host:port/some/vBucketMapJson\n", argv[0]);
     printf("    or\n");
-#endif
+    printf("  %s [flags] -z ./path/to/configFile\n", argv[0]);
+#else
     printf("  %s [flags] -z <port=<mc_host:mc_port(,*)>\n\n", argv[0]);
     printf("              moxi listens on the given port and forwards to\n"
            "              downstream memcached servers running at\n"
            "              mc_host:mc_port.  More than one mc_host:mc_port\n"
            "              can be listed, separated by commas.\n"
            "              For example, -z 11211=server1:11211,server2:11211\n");
+#endif
     printf("\nThe optional [flags] are...\n\n"
-           "-p <num>      TCP port number to listen on (default: 11211)\n"
+           "-p <num>      TCP port number to listen on (default: 11210)\n"
            "              to have moxi be a memcached server\n"
            "-U <num>      UDP port number to listen on (default: 11211, 0 is off)\n"
            "              to have moxi be a memcached server\n"
@@ -4053,6 +4055,8 @@ static void usage(int argc, char **argv) {
     printf("-C            Disable use of CAS\n");
     printf("-b            Set the backlog queue limit (default: 1024)\n");
     printf("-B            Binding protocol - one of ascii, binary, or auto (default)\n");
+    printf("-Z <key=val*> Optional comma-separated key=value behaviors, such as...\n");
+    printf("              port_listen=11211,downstream_max=1,downstream_protocol=binary\n");
     return;
 }
 
@@ -4455,7 +4459,7 @@ int main (int argc, char **argv) {
         // Default behavior when we're a proxy is to also
         // behave as a memcached on port 11210.
         //
-        settings.port = 11210;
+        settings.port = MEMCACHED_DEFAULT_LISTEN_PORT;
     }
 
     if (maxcore != 0) {
@@ -4651,6 +4655,7 @@ int main (int argc, char **argv) {
         int i = argc - 1;
         while (i > 0) {
             if (strncmp(argv[i], "apikey=", 7) == 0 ||
+                strncmp(argv[i], "http://", 7) == 0 ||
                 strchr(argv[i], '@') != NULL) {
                 cproxy_init(argv[i], cproxy_behavior,
                             settings.num_threads,
