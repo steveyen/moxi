@@ -1308,6 +1308,7 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
 
                 if (vbucket >= 0) {
                     header->request.reserved = htons(vbucket);
+                    header->request.opaque   = htonl(vbucket);
                 }
 
                 header->request.bodylen =
