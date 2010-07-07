@@ -1,59 +1,86 @@
-moxi - a memcached proxy with energy and pep
+moxi - a memcached/membase proxy with energy and pep
 
 Dependencies:
 
    -- libevent, http://www.monkey.org/~provos/libevent/ (libevent-dev)
+
+   -- libconflate, http://github.com/northscale/libconflate
+
+   -- libvbucket, http://github.com/northscale/libvbucket
+
+As a backwards-compatible (ketama/consistent-hashing) alternative to
+libvbucket, you may instead use libmemcached instead of libvbucket...
+
    -- libmemcached, http://tangent.org/552/libmemcached.html
 
-To compile moxi, after you got the dependencies:
+To use moxi against membase, however, you'll want libvbucket.
 
-  ./autogen.sh
+----------
+
+To compile moxi (assuming you want libvbucket), after you got the
+dependencies built and installed:
+
+  ./config/autorun.sh
   ./configure
   make
 
 For example, if libevent is installed in /opt/local, you'd do...
 
-  ./autogen.sh
+  ./config/autorun.sh
   ./configure --with-libevent=/opt/local
   make
 
+----------
+
 Using moxi:
 
-In moxi terminology, "upstream" are the memcached clients,
-and "downstream" are the memcached servers.
+To have moxi load a "vBucket" json configuration from a REST/HTTP
+server, try...
 
-  moxi -z <port=<memcached_host:memcached_port(,*)>>
+  moxi http://host:port/url/of/vBucketServerMapJSON
 
-moxi will listen on the given port and accept connections from
-upstream memcached clients.  It will forward requests to downstream
-memcached servers running on memcached_host:memcached_port.  For
-example...
+Against a NorthScale server, for example, this would look like...
 
-  moxi -z 11211=my_memcached_server:11222
+  moxi http://host:8080/pools/default/bucketsStreamingConfig/default
 
-Above, moxi will listen on port 11211 and forward requests
-to the memcached running on my_memcached_server that's listening
-on port 11222.
+The above, also, is just shorthand (assuming you have no other flags
+specified), for the following explicit command-line...
 
-You can list more than one memcached_host:memcached_port,
-separated by commas.  For example...
-
-  moxi -z 11211=memcached_1:11211,memcached_2:11211
-
-The default downstream port is 11211, so you can also
-just use...
-
-  moxi -z 11211=memcached_1,memcached_2
-
-If you have some memcached servers running on the same server,
-but on different ports, you can put moxi in front of them
-with something like...
-
-  moxi -z 11211=server:11222,server:11233
+  moxi -z url=http://host:8080/url/of/vBucketServerMap.json
 
 To get more command line usage info:
 
   moxi -h
+
+----------
+
+File-based configuration:
+
+You may also provide a configuration file to moxi that holds a static
+vBucket server map.  The file (such as vbucket1.cfg) would look
+like...
+
+  11211 = {
+    "hashAlgorithm": "CRC",
+    "numReplicas": 0,
+    "serverList": ["memcached_svr1:11311"],
+    "vBucketMap":
+      [
+        [0],
+        [0]
+      ]
+  }
+
+The above configuration would tell moxi to listen on port 11211, and
+proxy to memcached_svr1:11311.  To use a static configuration file,
+you would start moxi like...
+
+  moxi -z ./vbucket1.cfg
+
+The "./" path prefix is required so that moxi knows you're passing in
+a config file.
+
+----------
 
 Tests:
 
@@ -93,10 +120,29 @@ Tests:
   ./moxi -z 11333=localhost:11311 -t 1
   python t/moxi_mock.py
 
+----------
+
+For vbucket development, start the following...
+
+  ruby ./t/rest_mock.rb
+
+Then start a "pretend" memcached server...
+
+  ./moxi -vvv -p 11311
+
+Then...
+
+  ./moxi -vvv -z url=http://localhost:4567/pools/default/bucketsStreaming/default -Z port_listen=11211
+
+Then...
+
+  telnet localhost 11211
+
+----------
+
 More notes:
 
-If using Linux, you need a kernel with epoll.  Sure, libevent will
-work with normal select, but it sucks.
+If using Linux, you need a kernel with epoll (it's better than select()).
 
 epoll isn't in Linux 2.4 yet, but there's a backport at:
 
@@ -118,41 +164,47 @@ The memcached website is at:
 
 ----------
 
-For vbucket development, start the following...
+Using moxi with libmemcached (instead of libvbucket)...
 
-  ruby ./t/rest_mock.rb
+If you want to use moxi explicitly using ketama / consistent-hashing,
+you'll need to compile moxi with libmemcached.
 
-Then start a "pretend" memcached server...
+First, you would configure moxi differently at build-time...
 
-  ./moxi -vvv -p 11311
+  ./configure --enable-moxi-vbucket=no \
+     CFLAGS=<libmemcached/include> \
+     LDFLAGS=<libmemcahed/lib>
 
-Then...
+After building, moxi understands the following kind of command-line...
 
-  ./moxi -vvv -z auth=,url=http://localhost:4567/pools/default/bucketsStreaming/default,#@ -Z port_listen=11211
+  moxi -z <port=<more-config>>
 
-Then...
+  moxi -z <port=<memcached_host:memcached_port(,*)>>
 
-  telnet localhost 11211
+moxi will listen on the given port and accept connections from
+upstream memcached clients.  It will forward requests to downstream
+memcached servers running on memcached_host:memcached_port.  For
+example...
 
-You can provide a vbucket server map in a file, such as vbucket1.cfg,
-that looks like...
+  moxi -z 11211=my_memcached_server:11222
 
-  11211 = {
-    "hashAlgorithm": "CRC",
-    "numReplicas": 0,
-    "serverList": ["memcached_svr1:11311"],
-    "vBucketMap":
-      [
-        [0],
-        [0]
-      ]
-  }
+Above, moxi will listen on port 11211 and forward requests
+to the memcached running on my_memcached_server that's listening
+on port 11222.
 
-The above configuration would tell moxi to listen on port 11211, and
-proxy to memcached_svr1:11311.  You would start moxi like...
+You can list more than one memcached_host:memcached_port,
+separated by commas.  For example...
 
-  moxi -z ./vbucket1.cfg
+  moxi -z 11211=memcached_1:11211,memcached_2:11211
 
-The "./" path prefix is required so that moxi knows you're passing in
-a config file.
+The default downstream port is 11211, so you can also
+just use...
+
+  moxi -z 11211=memcached_1,memcached_2
+
+If you have some memcached servers running on the same server,
+but on different ports, you can put moxi in front of them
+with something like...
+
+  moxi -z 11211=server:11222,server:11233
 
