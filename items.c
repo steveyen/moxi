@@ -269,6 +269,7 @@ bool item_size_ok(const size_t nkey, const int flags, const int nbytes) {
 }
 
 static void item_link_q(item *it) { /* item is the new head */
+#ifndef MOXI_ITEM_MALLOC
     item **head, **tail;
     /* always true, warns: assert(it->slabs_clsid <= LARGEST_ID); */
     assert((it->it_flags & ITEM_SLABBED) == 0);
@@ -284,9 +285,11 @@ static void item_link_q(item *it) { /* item is the new head */
     if (*tail == 0) *tail = it;
     sizes[it->slabs_clsid]++;
     return;
+#endif
 }
 
 static void item_unlink_q(item *it) {
+#ifndef MOXI_ITEM_MALLOC
     item **head, **tail;
     /* always true, warns: assert(it->slabs_clsid <= LARGEST_ID); */
     head = &heads[it->slabs_clsid];
@@ -307,6 +310,7 @@ static void item_unlink_q(item *it) {
     if (it->prev) it->prev->next = it->next;
     sizes[it->slabs_clsid]--;
     return;
+#endif
 }
 
 int do_item_link(item *it) {
@@ -316,6 +320,10 @@ int do_item_link(item *it) {
     it->it_flags |= ITEM_LINKED;
     it->time = current_time;
     assoc_insert(it);
+
+#ifdef MOXI_ITEM_MALLOC
+    it->refcount++;
+#endif
 
     STATS_LOCK();
     stats.curr_bytes += ITEM_ntotal(it);
@@ -341,7 +349,10 @@ void do_item_unlink(item *it) {
         STATS_UNLOCK();
         assoc_delete(ITEM_key(it), it->nkey);
         item_unlink_q(it);
+
+#ifndef MOXI_ITEM_MALLOC
         if (it->refcount == 0) item_free(it);
+#endif
     }
 }
 
