@@ -4055,6 +4055,7 @@ static void usage(int argc, char **argv) {
     printf("-C            Disable use of CAS\n");
     printf("-b            Set the backlog queue limit (default: 1024)\n");
     printf("-B            Binding protocol - one of ascii, binary, or auto (default)\n");
+    printf("-Y <y|n>      Exit when stdin closes (default: n)\n");
     printf("-Z <key=val*> Optional comma-separated key=value behaviors, such as...\n");
     printf("              port_listen=11211,downstream_max=1,downstream_protocol=binary\n");
     return;
@@ -4275,6 +4276,7 @@ int main (int argc, char **argv) {
     bool lock_memory = false;
     bool do_daemonize = false;
     bool preallocate = false;
+    bool check_stdin = false;
     int maxcore = 0;
     char *username = NULL;
     char *pid_file = NULL;
@@ -4327,6 +4329,7 @@ int main (int argc, char **argv) {
           "z:"  /* cproxy configuration */
           "Z:"  /* cproxy behavior */
           "B:"  /* Binding protocol */
+          "Y:"  /* exit when stdin closes, for windows compatibility */
         ))) {
         switch (c) {
         case 'a':
@@ -4433,6 +4436,9 @@ int main (int argc, char **argv) {
             break;
         case 'Z' :
             cproxy_behavior = strdup(optarg);
+            break;
+        case 'Y' :
+            check_stdin = (optarg[0] == 'y');
             break;
         case 'B':
             if (strcmp(optarg, "auto") == 0) {
@@ -4676,7 +4682,9 @@ int main (int argc, char **argv) {
     }
 
 #ifndef MAIN_CHECK
-    stdin_check();
+    if (check_stdin) {
+      stdin_check();
+    }
 #endif
 
     if (cproxy_behavior) {
