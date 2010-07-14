@@ -446,6 +446,9 @@ static enum test_return test_vperror(void) {
 
 
 static enum test_return test_issue_72(void) {
+    // SKIP: moxi doesn't handle MEMCACHED_PORT_FILENAME now.
+    return TEST_SKIP;
+
     in_port_t port;
     pid_t pid = start_server(&port, false);
     int sock = connect_server("127.0.0.1", port);
