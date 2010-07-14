@@ -10,10 +10,12 @@ croak("moxi binary not executable\n") unless -x _;
 
 sub go {
   my ($topology, $protocol) = @_;
+  print "------------------------------------\n";
   print "testing $topology $protocol\n";
-  if (system("./t/moxi.pl $topology $protocol") != 0) {
-    print("failed $topology $protocol test\n");
-    exit;
+  my $result = system("./t/moxi.pl $topology $protocol");
+  if ($result != 0) {
+    print("fail moxi.pl $topology $protocol test\n");
+    exit $result;
   }
 }
 
@@ -29,13 +31,17 @@ go('fanoutin', 'ascii');
 go('simple', 'binary');
 go('fanout', 'binary');
 
+print "------------------------------------\n";
+
 # Fork moxi-debug for moxi-specific testing.
 #
-my $childargs = "-z 11333=localhost:11311 -p 0 -U 0 -v -t 1 -Z downstream_max=1";
+my $childargs =
+      " -z ./t/moxi_mock.cfg".
+      " -p 0 -U 0 -v -t 1 -Z \"downstream_max=1,downstream_protocol=ascii\"";
 if ($< == 0) {
    $childargs .= " -u root";
 }
-my $childpid  = fork();
+my $childpid = fork();
 
 unless ($childpid) {
     setpgrp();
@@ -44,7 +50,8 @@ unless ($childpid) {
 }
 setpgrp($childpid, $childpid);
 
-system("python ./t/moxi_mock.py");
+my $result = system("python ./t/moxi_mock.py");
 
 kill 2, -$childpid;
 
+exit $result;

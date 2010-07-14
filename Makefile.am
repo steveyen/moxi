@@ -124,7 +124,9 @@ memcached-debug: moxi-debug
 test: memcached-debug sizes testapp
 	$(srcdir)/sizes
 	$(srcdir)/testapp
-	prove $(srcdir)/t
+	./t/moxi_all.pl
+
+test_gcov: test
 	@if test `basename $(PROFILER)` = "gcov"; then \
 	  for file in moxi_debug-*.gc??; do \
 	    mv -f $$file `echo $$file | sed 's/moxi_debug-//'`; \
