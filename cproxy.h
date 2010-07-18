@@ -540,6 +540,16 @@ bool b2b_forward_item_vbucket(conn *uc, downstream *d, item *it,
 
 // ---------------------------------------------------------------
 
+// Magic opaque value that tells us to eat a binary quiet command
+// response.  That is, do not send the response up to the ascii client
+// which originally made its request with noreply.
+//
+#define OPAQUE_IGNORE_REPLY 0x0411F00D
+
+bool cproxy_binary_ignore_reply(conn *c, protocol_binary_response_header *header, item *it);
+
+// ---------------------------------------------------------------
+
 proxy_main *cproxy_gen_proxy_main(proxy_behavior behavior,
                                   int nthreads, enum_proxy_conf_type conf_type);
 

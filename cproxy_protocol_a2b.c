@@ -22,12 +22,6 @@ static protocol_binary_request_noop req_noop = {
 #define KEY_TOKEN  1
 #define MAX_TOKENS 9
 
-// Magic opaque value that tells us to eat a binary quiet command
-// response.  That is, do not send the response up to the ascii client
-// which originally made its request with noreply.
-//
-#define OPAQUE_IGNORE_REPLY 0x0411F00D
-
 // A2B means ascii-to-binary (or, ascii upstream and binary downstream).
 //
 struct A2BSpec {
@@ -670,32 +664,11 @@ void a2b_process_downstream_response(conn *c) {
     //
     c->item = NULL;
 
-    conn *uc = d->upstream_conn;
-
-    if (c->noreply &&
-        OPAQUE_IGNORE_REPLY == ntohl(header->response.opaque)) {
-        // Handle when the client sent an ascii noreply command,
-        // and we now need to eat the binary error responses.
-        // So, drop the current response (should be an error response)
-        // and go to read the next response message.
-        //
-        if (settings.verbose > 2) {
-            fprintf(stderr,
-                    "<%d cproxy_process_a2b_downstream_response OPAQUE_IGNORE_REPLY, "
-                    "cmd: %x, status: %x, ignoring reply\n",
-                    c->sfd, header->response.opcode, header->response.status);
-        }
-
-        assert(header->response.status != PROTOCOL_BINARY_RESPONSE_SUCCESS);
-
-        conn_set_state(c, conn_new_cmd);
-
-        if (it != NULL) {
-            item_remove(it);
-        }
-
+    if (cproxy_binary_ignore_reply(c, header, it)) {
         return;
     }
+
+    conn *uc = d->upstream_conn;
 
     // Handle not-my-vbucket error response.
     //

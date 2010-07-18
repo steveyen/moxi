@@ -357,6 +357,10 @@ void cproxy_process_b2b_downstream_nread(conn *c) {
     assert(it != NULL);
     assert(it->refcount == 1);
 
+    if (cproxy_binary_ignore_reply(c, header, it)) {
+        return;
+    }
+
     if (c->noreply) {
         conn_set_state(c, conn_new_cmd);
     } else {

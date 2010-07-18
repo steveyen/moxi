@@ -273,3 +273,30 @@ void cproxy_dump_header(int prefix, char *bb) {
         fprintf(stderr, "\n");
     }
 }
+
+bool cproxy_binary_ignore_reply(conn *c, protocol_binary_response_header *header, item *it) {
+    if (c->noreply &&
+        OPAQUE_IGNORE_REPLY == ntohl(header->response.opaque)) {
+        // Handle when the client sent an ascii noreply command,
+        // and we now need to eat the binary error responses.
+        // So, drop the current response (should be an error response)
+        // and go to read the next response message.
+        //
+        if (settings.verbose > 2) {
+            fprintf(stderr,
+                    "<%d cproxy_process_a2b_downstream_response OPAQUE_IGNORE_REPLY, "
+                    "cmd: %x, status: %x, ignoring reply\n",
+                    c->sfd, header->response.opcode, header->response.status);
+        }
+
+        conn_set_state(c, conn_new_cmd);
+
+        if (it != NULL) {
+            item_remove(it);
+        }
+
+        return true;
+    }
+
+    return false;
+}
