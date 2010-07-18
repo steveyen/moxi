@@ -1427,8 +1427,14 @@ void cproxy_reset_upstream(conn *uc) {
     //
     // May need to use the work_queue to call drive_machine() on the uc?
     //
+    // TODO: Whoever wrote this code probably didn't understand
+    // conn->rbytes at the time, so this codepath is hit (but is
+    // harmless).  This happens, for example, during ascii noreply
+    // commands.
+    //
     if (settings.verbose > 2) {
-        fprintf(stderr, "%d: cproxy_reset_upstream with bytes available\n", uc->sfd);
+        fprintf(stderr, "%d: cproxy_reset_upstream with bytes available: %d\n",
+                uc->sfd, uc->rbytes);
     }
 
     ptd->stats.stats.tot_reset_upstream_avail++;
