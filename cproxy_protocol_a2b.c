@@ -163,6 +163,8 @@ int a2b_multiget_start(conn *c, char *cmd, int cmd_len);
 int a2b_multiget_skey(conn *c, char *skey, int skey_len, int vbucket, int key_index);
 int a2b_multiget_end(conn *c);
 
+void a2b_set_opaque(conn *c, protocol_binary_request_header *header, bool noreply);
+
 void cproxy_init_a2b() {
     memset(&req_noop, 0, sizeof(req_noop));
 
@@ -1271,6 +1273,8 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
                 header->request.bodylen =
                     htonl(out_keylen + out_extlen);
 
+                a2b_set_opaque(c, header, uc->noreply);
+
                 add_iov(c, header, size);
 
                 if (out_key != NULL &&
@@ -1279,8 +1283,10 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
                 }
 
                 if (settings.verbose > 2) {
-                    fprintf(stderr, "forwarding a2b to %d, cmd %x, noreply %d, vbucket %d\n",
+                    fprintf(stderr, "forwarding a2b to %d, cmd %x, noreply %d, vbucket %d",
                             c->sfd, header->request.opcode, uc->noreply, vbucket);
+
+                    cproxy_dump_header(c->sfd, (char *) header);
                 }
 
                 conn_set_state(c, conn_mwrite);
@@ -1608,19 +1614,7 @@ bool cproxy_forward_a2b_item_downstream(downstream *d, short cmd,
                         break;
                     }
 
-                    if (uc->noreply) {
-                        // Set a magic opaque value during quiet commands that tells us later
-                        // that we can ignore the downstream's error response messge,
-                        // since the upstream ascii client doesn't want it.
-                        //
-                        req->request.opaque = htonl(OPAQUE_IGNORE_REPLY);
-
-                        if (settings.verbose > 2) {
-                            fprintf(stderr,
-                                    "%d: cproxy_forward_a2b_item_downstream OPAQUE_IGNORE_REPLY, cmdq: %x\n",
-                                    c->sfd, req->request.opcode);
-                        }
-                    }
+                    a2b_set_opaque(c, req, uc->noreply);
 
                     if (cmd != NREAD_APPEND &&
                         cmd != NREAD_PREPEND) {
@@ -1688,3 +1682,18 @@ bool cproxy_forward_a2b_item_downstream(downstream *d, short cmd,
     return false;
 }
 
+void a2b_set_opaque(conn *c, protocol_binary_request_header *header, bool noreply) {
+    if (noreply) {
+        // Set a magic opaque value during quiet commands that tells us later
+        // that we can ignore the downstream's error response messge,
+        // since the upstream ascii client doesn't want it.
+        //
+        header->request.opaque = htonl(OPAQUE_IGNORE_REPLY);
+
+        if (settings.verbose > 2) {
+            fprintf(stderr,
+                    "%d: a2b_set_opaque OPAQUE_IGNORE_REPLY, cmdq: %x\n",
+                    c->sfd, header->request.opcode);
+        }
+    }
+}
