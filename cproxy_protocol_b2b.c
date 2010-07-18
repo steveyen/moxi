@@ -112,16 +112,8 @@ bool b2b_forward_item(conn *uc, downstream *d, item *it) {
     protocol_binary_request_header *req =
         (protocol_binary_request_header *) ITEM_data(it);
 
-    char *key    = ((char *) req) + req->request.extlen;
+    char *key    = ((char *) req) + sizeof(*req) + req->request.extlen;
     int   keylen = ntohs(req->request.keylen);
-
-    if (settings.verbose > 2) {
-        fprintf(stderr,
-                "%d: b2b_forward_item nbytes %u, extlen %d, keylen %d",
-                uc->sfd, it->nbytes, req->request.extlen, keylen);
-
-        cproxy_dump_header(uc->sfd, (char *) req);
-    }
 
     if (settings.verbose > 2) {
         char buf[300];
@@ -129,9 +121,10 @@ bool b2b_forward_item(conn *uc, downstream *d, item *it) {
         buf[keylen] = '\0';
 
         fprintf(stderr,
-                "%d: b2b_forward_item %x %s %d %d\n",
-                uc->sfd, req->request.opcode,
-                buf, keylen, req->request.extlen);
+                "%d: b2b_forward_item nbytes %u, extlen %d, keylen %d opcode %x key (%s)",
+                uc->sfd, it->nbytes, req->request.extlen, keylen, req->request.opcode, buf);
+
+        cproxy_dump_header(uc->sfd, (char *) req);
     }
 
     assert(key != NULL);
