@@ -359,6 +359,9 @@ void cproxy_reset_stats(proxy_stats *ps) {
     ps->tot_assign_recursion = 0;
     ps->tot_reset_upstream_avail = 0;
     ps->tot_retry = 0;
+    ps->tot_retry_vbucket = 0;
+    ps->tot_upstream_paused = 0;
+    ps->tot_upstream_unpaused = 0;
     ps->tot_multiget_keys = 0;
     ps->tot_multiget_keys_dedupe = 0;
     ps->tot_multiget_bytes_dedupe = 0;

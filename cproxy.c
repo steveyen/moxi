@@ -43,6 +43,7 @@ conn_funcs cproxy_listen_funcs = {
     .conn_complete_nread_binary  = NULL,
     .conn_pause                  = NULL,
     .conn_realtime               = NULL,
+    .conn_state_change           = NULL,
     .conn_binary_command_magic   = 0
 };
 
@@ -55,6 +56,7 @@ conn_funcs cproxy_upstream_funcs = {
     .conn_complete_nread_binary  = cproxy_process_upstream_binary_nread,
     .conn_pause                  = NULL,
     .conn_realtime               = cproxy_realtime,
+    .conn_state_change           = cproxy_upstream_state_change,
     .conn_binary_command_magic   = PROTOCOL_BINARY_REQ
 };
 
@@ -67,6 +69,7 @@ conn_funcs cproxy_downstream_funcs = {
     .conn_complete_nread_binary  = cproxy_process_downstream_binary_nread,
     .conn_pause                  = cproxy_on_pause_downstream_conn,
     .conn_realtime               = cproxy_realtime,
+    .conn_state_change           = NULL,
     .conn_binary_command_magic   = PROTOCOL_BINARY_RES
 };
 
@@ -2248,4 +2251,18 @@ void cproxy_optimize_to_self(downstream *d, conn *uc,
     d->upstream_suffix = NULL;
 
     cproxy_release_downstream(d, false);
+}
+
+void cproxy_upstream_state_change(conn *c, enum conn_states next_state) {
+    assert(c != NULL);
+
+    proxy_td *ptd = c->extra;
+    if (ptd != NULL) {
+        if (c->state == conn_pause) {
+            ptd->stats.stats.tot_upstream_unpaused++;
+        }
+        if (next_state == conn_pause) {
+            ptd->stats.stats.tot_upstream_paused++;
+        }
+    }
 }

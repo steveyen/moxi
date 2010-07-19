@@ -404,9 +404,8 @@ void cproxy_process_b2b_downstream_nread(conn *c) {
             if (uc->cmd_retries < max_retries) {
                 uc->cmd_retries++;
 
-                // TODO: Add a stats counter here for this case.
-                //
                 d->upstream_retry++;
+                d->ptd->stats.stats.tot_retry_vbucket++;
 
                 return;
             }

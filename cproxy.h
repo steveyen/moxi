@@ -250,6 +250,9 @@ struct proxy_stats {
     uint64_t tot_assign_recursion;
     uint64_t tot_reset_upstream_avail;
     uint64_t tot_retry;
+    uint64_t tot_retry_vbucket;
+    uint64_t tot_upstream_paused;
+    uint64_t tot_upstream_unpaused;
     uint64_t tot_multiget_keys;
     uint64_t tot_multiget_keys_dedupe;
     uint64_t tot_multiget_bytes_dedupe;
@@ -418,6 +421,8 @@ void      cproxy_init_downstream_conn(conn *c);
 void      cproxy_on_close_upstream_conn(conn *c);
 void      cproxy_on_close_downstream_conn(conn *c);
 void      cproxy_on_pause_downstream_conn(conn *c);
+
+void cproxy_upstream_state_change(conn *c, enum conn_states next_state);
 
 void cproxy_add_downstream(proxy_td *ptd);
 void cproxy_free_downstream(downstream *d);

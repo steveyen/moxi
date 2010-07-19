@@ -120,7 +120,8 @@ conn_funcs conn_funcs_default = {
     .conn_complete_nread_binary  = complete_nread_binary,
     .conn_pause                  = NULL,
     .conn_realtime               = realtime,
-    .conn_binary_command_magic   = PROTOCOL_BINARY_REQ
+    .conn_binary_command_magic   = PROTOCOL_BINARY_REQ,
+    .conn_state_change           = NULL
 };
 
 #ifdef MAIN_CHECK
@@ -650,6 +651,11 @@ void conn_set_state(conn *c, enum conn_states state) {
     assert(state >= conn_listening && state < conn_max_state);
 
     if (state != c->state) {
+        if (c->funcs != NULL &&
+            c->funcs->conn_state_change != NULL) {
+            c->funcs->conn_state_change(c, state);
+        }
+
         if (settings.verbose > 2) {
             fprintf(stderr, "%d: going from %s to %s\n",
                     c->sfd, state_text(c->state),

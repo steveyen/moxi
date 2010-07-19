@@ -381,6 +381,7 @@ struct conn_funcs {
     void (*conn_complete_nread_binary)(conn *c);
     void (*conn_pause)(conn *c);
     rel_time_t (*conn_realtime)(const time_t exptime);
+    void (*conn_state_change)(conn *c, enum conn_states next_state);
 
     /* PROTOCOL_BINARY_REQ/RES */
     uint8_t conn_binary_command_magic;

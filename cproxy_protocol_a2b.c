@@ -716,9 +716,8 @@ void a2b_process_downstream_response(conn *c) {
             if (uc->cmd_retries < max_retries) {
                 uc->cmd_retries++;
 
-                // TODO: Add a stats counter here for this case.
-                //
                 d->upstream_retry++;
+                d->ptd->stats.stats.tot_retry_vbucket++;
 
                 conn_set_state(c, conn_pause);
                 return;
@@ -732,8 +731,6 @@ void a2b_process_downstream_response(conn *c) {
                         max_retries);
             }
         } else {
-            // TODO: Add a stats counter here for this case.
-            //
             // Handle ascii multi-GET commands by awaiting all NOOP's from
             // downstream servers, eating the NOOP's, and retrying with
             // the same multiget de-duplication map, which might be partially
@@ -806,6 +803,7 @@ void a2b_process_downstream_response(conn *c) {
             // received.
             //
             d->upstream_retry++;
+            d->ptd->stats.stats.tot_retry_vbucket++;
 
             conn_set_state(c, conn_new_cmd);
             return;

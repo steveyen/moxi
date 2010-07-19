@@ -566,6 +566,12 @@ static void proxy_stats_dump_pstd_stats(ADD_STAT add_stats, void *c, const char 
               "%llu", (long long unsigned int) stats->tot_optimize_self);
     APPEND_PREFIX_STAT("tot_retry",
               "%llu", (long long unsigned int) stats->tot_retry);
+    APPEND_PREFIX_STAT("tot_retry_vbucket",
+              "%llu", (long long unsigned int) stats->tot_retry_vbucket);
+    APPEND_PREFIX_STAT("tot_upstream_paused",
+              "%llu", (long long unsigned int) stats->tot_upstream_paused);
+    APPEND_PREFIX_STAT("tot_upstream_unpaused",
+              "%llu", (long long unsigned int) stats->tot_upstream_unpaused);
     APPEND_PREFIX_STAT("err_oom",
               "%llu", (long long unsigned int) stats->err_oom);
     APPEND_PREFIX_STAT("err_upstream_write_prep",
@@ -1095,8 +1101,11 @@ static void add_proxy_stats(proxy_stats *agg, proxy_stats *x) {
     agg->tot_multiget_bytes_dedupe += x->tot_multiget_bytes_dedupe;
     agg->tot_optimize_sets        += x->tot_optimize_sets;
     agg->tot_optimize_self        += x->tot_optimize_self;
-    agg->tot_retry += x->tot_retry;
-    agg->err_oom   += x->err_oom;
+    agg->tot_retry                += x->tot_retry;
+    agg->tot_retry_vbucket        += x->tot_retry_vbucket;
+    agg->tot_upstream_paused      += x->tot_upstream_paused;
+    agg->tot_upstream_unpaused    += x->tot_upstream_unpaused;
+    agg->err_oom                  += x->err_oom;
     agg->err_upstream_write_prep   += x->err_upstream_write_prep;
     agg->err_downstream_write_prep += x->err_downstream_write_prep;
 }
@@ -1332,6 +1341,12 @@ void map_pstd_foreach_emit(const void *k,
               pstd->stats.tot_optimize_self);
     more_stat("tot_retry",
               pstd->stats.tot_retry);
+    more_stat("tot_retry_vbucket",
+              pstd->stats.tot_retry_vbucket);
+    more_stat("tot_upstream_paused",
+              pstd->stats.tot_upstream_paused);
+    more_stat("tot_upstream_unpaused",
+              pstd->stats.tot_upstream_unpaused);
     more_stat("err_oom",
               pstd->stats.err_oom);
     more_stat("err_upstream_write_prep",
