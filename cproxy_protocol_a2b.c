@@ -1119,6 +1119,7 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
 
     if (uc->cmd_curr == PROTOCOL_BINARY_CMD_GETK) {
         d->upstream_suffix = "END\r\n";
+        d->upstream_suffix_len = 0;
         d->upstream_retry = 0;
     }
 
@@ -1316,6 +1317,7 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
 
                     if (d->upstream_suffix == NULL) {
                         d->upstream_suffix = "SERVER_ERROR a2b event oom\r\n";
+                        d->upstream_suffix_len = 0;
                         d->upstream_retry = 0;
                     }
                 }
@@ -1329,6 +1331,7 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
 
                 if (d->upstream_suffix == NULL) {
                     d->upstream_suffix = "CLIENT_ERROR a2b parse request\r\n";
+                    d->upstream_suffix_len = 0;
                     d->upstream_retry = 0;
                 }
             }
@@ -1488,6 +1491,7 @@ bool cproxy_broadcast_a2b_downstream(downstream *d,
 
         if (cproxy_dettach_if_noreply(d, uc) == false) {
             d->upstream_suffix = suffix;
+            d->upstream_suffix_len = 0;
             d->upstream_retry = 0;
 
             cproxy_start_downstream_timeout(d, NULL);

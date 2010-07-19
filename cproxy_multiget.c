@@ -401,6 +401,7 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
 
     if (cproxy_dettach_if_noreply(d, uc) == false) {
         d->upstream_suffix = "END\r\n";
+        d->upstream_suffix_len = 0;
         d->upstream_retry = 0;
 
         cproxy_start_downstream_timeout(d, NULL);

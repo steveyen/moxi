@@ -372,6 +372,7 @@ void cproxy_on_close_upstream_conn(conn *c) {
                                             c, &found);
         if (d->upstream_conn == NULL) {
             d->upstream_suffix = NULL;
+            d->upstream_suffix_len = 0;
             d->upstream_retry = 0;
 
             // Don't need to do anything else, as we'll now just
@@ -484,6 +485,7 @@ void cproxy_on_close_downstream_conn(conn *c) {
         //
         if (d->upstream_suffix == NULL) {
             d->upstream_suffix = "SERVER_ERROR proxy downstream closed\r\n";
+            d->upstream_suffix_len = 0;
             d->upstream_retry = 0;
         }
 
@@ -514,6 +516,7 @@ void cproxy_on_close_downstream_conn(conn *c) {
                     d->upstream_conn->cmd_retries++;
                     uc_retry = d->upstream_conn;
                     d->upstream_suffix = NULL;
+                    d->upstream_suffix_len = 0;
                     d->upstream_retry = 0;
                 }
             }
@@ -624,6 +627,7 @@ downstream *cproxy_reserve_downstream(proxy_td *ptd) {
 
         assert(d->upstream_conn == NULL);
         assert(d->upstream_suffix == NULL);
+        assert(d->upstream_suffix_len == 0);
         assert(d->upstream_retry == 0);
         assert(d->downstream_used == 0);
         assert(d->downstream_used_start == 0);
@@ -633,6 +637,7 @@ downstream *cproxy_reserve_downstream(proxy_td *ptd) {
 
         d->upstream_conn = NULL;
         d->upstream_suffix = NULL;
+        d->upstream_suffix_len = 0;
         d->upstream_retry = 0;
         d->upstream_retries = 0;
         d->downstream_used = 0;
@@ -742,9 +747,25 @@ bool cproxy_release_downstream(downstream *d, bool force) {
             // way to mark the end of a scatter-gather or
             // multiline response.
             //
+            if (settings.verbose > 2) {
+                if (d->upstream_suffix_len > 0) {
+                    fprintf(stderr, "%d: release_downstream writing suffix binary: %d",
+                            d->upstream_conn->sfd, d->upstream_suffix_len);
+                    cproxy_dump_header(d->upstream_conn->sfd, d->upstream_suffix);
+                } else {
+                    fprintf(stderr, "%d: release_downstream writing suffix ascii: %s\n",
+                            d->upstream_conn->sfd, d->upstream_suffix);
+                }
+            }
+
+            int suffix_len = d->upstream_suffix_len;
+            if (suffix_len == 0) {
+                suffix_len = strlen(d->upstream_suffix);
+            }
+
             if (add_iov(d->upstream_conn,
                         d->upstream_suffix,
-                        strlen(d->upstream_suffix)) == 0 &&
+                        suffix_len) == 0 &&
                 update_event(d->upstream_conn, EV_WRITE | EV_PERSIST)) {
                 conn_set_state(d->upstream_conn, conn_mwrite);
             } else {
@@ -774,6 +795,7 @@ bool cproxy_release_downstream(downstream *d, bool force) {
 
     d->upstream_conn = NULL;
     d->upstream_suffix = NULL; // No free(), expecting a static string.
+    d->upstream_suffix_len = 0;
     d->upstream_retry = 0;
     d->upstream_retries = 0;
     d->downstream_used = 0;
@@ -1450,6 +1472,7 @@ bool cproxy_dettach_if_noreply(downstream *d, conn *uc) {
         uc->noreply        = false;
         d->upstream_conn   = NULL;
         d->upstream_suffix = NULL;
+        d->upstream_suffix_len = 0;
         d->upstream_retry  = 0;
 
         cproxy_reset_upstream(uc);
@@ -2253,6 +2276,7 @@ void cproxy_optimize_to_self(downstream *d, conn *uc,
 
     d->upstream_conn   = NULL;
     d->upstream_suffix = NULL;
+    d->upstream_suffix_len = 0;
 
     cproxy_release_downstream(d, false);
 }

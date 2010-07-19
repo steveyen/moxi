@@ -460,6 +460,7 @@ bool cproxy_broadcast_a2a_downstream(downstream *d,
 
         if (cproxy_dettach_if_noreply(d, uc) == false) {
             d->upstream_suffix = suffix;
+            d->upstream_suffix_len = 0;
             d->upstream_retry = 0;
 
             cproxy_start_downstream_timeout(d, NULL);

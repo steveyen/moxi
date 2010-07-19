@@ -380,6 +380,7 @@ struct downstream {
     int    downstream_used_start;
     conn  *upstream_conn;     // Non-NULL when downstream is reserved.
     char  *upstream_suffix;   // Last bit to write when downstreams are done.
+    int    upstream_suffix_len; // When >0, overrides strlen(upstream_suffix) for binary.
     int    upstream_retry;    // Will be >0 if we should retry the entire
                               // command again when all downstreams are done.
                               // Used in not-my-vbucket error case.  During

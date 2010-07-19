@@ -236,12 +236,46 @@ bool cproxy_broadcast_b2b_downstream(downstream *d, conn *uc) {
     }
 
     if (nwrite > 0) {
-        d->downstream_used_start = nwrite;
-        d->downstream_used       = nwrite;
+        // TODO: Handle binary 'stats reset' sub-command.
+        //
+        if (uc->cmd == PROTOCOL_BINARY_CMD_STAT &&
+            d->merger == NULL) {
+            d->merger = genhash_init(128, skeyhash_ops);
+        }
 
-        cproxy_start_downstream_timeout(d, NULL);
+        item *it = item_alloc("h", 1, 0, 0,
+                              sizeof(protocol_binary_response_header));
+        if (it != NULL) {
+            protocol_binary_response_header *header =
+                (protocol_binary_response_header *) ITEM_data(it);
 
-        return true;
+            memset(ITEM_data(it), 0, it->nbytes);
+
+            header->response.magic  = (uint8_t) PROTOCOL_BINARY_RES;
+            header->response.opcode = uc->binary_header.request.opcode;
+            header->response.opaque = uc->opaque;
+
+            if (add_conn_item(uc, it)) {
+                d->upstream_suffix     = ITEM_data(it);
+                d->upstream_suffix_len = it->nbytes;
+
+                if (settings.verbose > 2) {
+                    fprintf(stderr, "%d: b2b broadcast upstream_suffix", uc->sfd);
+                    cproxy_dump_header(uc->sfd, ITEM_data(it));
+                }
+
+                // TODO: Handle FLUSHQ (quiet binary flush_all).
+                //
+                d->downstream_used_start = nwrite;
+                d->downstream_used       = nwrite;
+
+                cproxy_start_downstream_timeout(d, NULL);
+
+                return true;
+            }
+
+            item_remove(it);
+        }
     }
 
     return false;
@@ -336,11 +370,12 @@ void cproxy_process_b2b_downstream_nread(conn *c) {
     int      keylen  = header->response.keylen;
     uint32_t bodylen = header->response.bodylen;
     int      status  = header->response.status;
+    int      opcode  = header->response.opcode;
 
     if (settings.verbose > 2) {
         fprintf(stderr,
-                "<%d cproxy_process_b2b_downstream_nread %x %d %d %u %d %x\n",
-                c->sfd, c->cmd, extlen, keylen, bodylen, c->noreply, status);
+                "<%d cproxy_process_b2b_downstream_nread %x %x %d %d %u %d %x\n",
+                c->sfd, c->cmd, opcode, extlen, keylen, bodylen, c->noreply, status);
     }
 
     downstream *d = c->extra;
@@ -365,6 +400,30 @@ void cproxy_process_b2b_downstream_nread(conn *c) {
         conn_set_state(c, conn_new_cmd);
     } else {
         conn_set_state(c, conn_pause);
+
+        if (opcode == PROTOCOL_BINARY_CMD_NOOP ||
+            opcode == PROTOCOL_BINARY_CMD_FLUSH) {
+            goto done;
+        }
+
+        if (opcode == PROTOCOL_BINARY_CMD_STAT) {
+            if (status == PROTOCOL_BINARY_RESPONSE_SUCCESS) {
+                if (keylen > 0) {
+                    if (d->merger != NULL) {
+                        char *key = (ITEM_data(it)) + sizeof(*header) + extlen;
+                        char *val = key + keylen;
+
+                        protocol_stats_merge_name_val(d->merger, "STAT", 4,
+                                                      key, keylen,
+                                                      val, bodylen - keylen - extlen);
+                    }
+
+                    conn_set_state(c, conn_new_cmd); // Get next STATS response.
+                }
+            }
+
+            goto done;
+        }
 
         // If the client is still there, we should handle
         // a not-my-vbucket error with a possible retry.
@@ -407,7 +466,7 @@ void cproxy_process_b2b_downstream_nread(conn *c) {
                 d->upstream_retry++;
                 d->ptd->stats.stats.tot_retry_vbucket++;
 
-                return;
+                goto done;
             }
 
             if (settings.verbose > 2) {
@@ -420,6 +479,8 @@ void cproxy_process_b2b_downstream_nread(conn *c) {
         }
     }
 
+    // Write the response to the upstream connection.
+    //
     if (uc != NULL) {
         if (settings.verbose > 2) {
             fprintf(stderr,
@@ -432,9 +493,19 @@ void cproxy_process_b2b_downstream_nread(conn *c) {
         if (add_conn_item(uc, it) == true) {
             it->refcount++;
 
-            if (add_iov(uc, ITEM_data(it), it->nbytes) == 0 &&
-                cproxy_update_event_write(d, uc) == true) {
-                conn_set_state(uc, conn_mwrite);
+            if (add_iov(uc, ITEM_data(it), it->nbytes) == 0) {
+                // If we got a quiet response, however, don't change the
+                // upstream connection's state (should be in paused state),
+                // as we expect the downstream server to provide a
+                // verbal/non-quiet response that moves the downstream
+                // conn through the conn_pause countdown codepath.
+                //
+                if (c->noreply == false) {
+                    cproxy_update_event_write(d, uc);
+
+                    conn_set_state(uc, conn_mwrite);
+                }
+
                 goto done;
             }
         }

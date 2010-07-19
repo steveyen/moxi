@@ -284,6 +284,55 @@ void protocol_stats_foreach_write(const void *key,
 
     int nline = strlen(line);
     if (nline > 0) {
+        if (settings.verbose > 2) {
+            fprintf(stderr, "%d: cproxy_stats writing: %s\n", uc->sfd, line);
+        }
+
+        if (IS_BINARY(uc->protocol)) {
+            token_t line_tokens[MAX_TOKENS];
+            size_t  line_ntokens = scan_tokens(line, line_tokens, MAX_TOKENS, NULL);
+
+            if (line_ntokens == 4) {
+                uint16_t key_len  = line_tokens[NAME_TOKEN].length;
+                uint32_t data_len = line_tokens[VALUE_TOKEN].length;
+
+                item *it = item_alloc("s", 1, 0, 0,
+                                      sizeof(protocol_binary_response_stats) + key_len + data_len);
+                if (it != NULL) {
+                    protocol_binary_response_stats *header =
+                        (protocol_binary_response_stats *) ITEM_data(it);
+
+                    memset(ITEM_data(it), 0, it->nbytes);
+
+                    header->message.header.response.magic = (uint8_t) PROTOCOL_BINARY_RES;
+                    header->message.header.response.opcode = uc->binary_header.request.opcode;
+                    header->message.header.response.keylen  = (uint16_t) htons(key_len);
+                    header->message.header.response.bodylen = htonl(key_len + data_len);
+                    header->message.header.response.opaque  = uc->opaque;
+
+                    memcpy((ITEM_data(it)) + sizeof(protocol_binary_response_stats),
+                           line_tokens[NAME_TOKEN].value, key_len);
+                    memcpy((ITEM_data(it)) + sizeof(protocol_binary_response_stats) + key_len,
+                           line_tokens[VALUE_TOKEN].value, data_len);
+
+                    if (add_conn_item(uc, it)) {
+                        add_iov(uc, ITEM_data(it), it->nbytes);
+
+                        if (settings.verbose > 2) {
+                            fprintf(stderr, "%d: cproxy_stats writing binary", uc->sfd);
+                            cproxy_dump_header(uc->sfd, ITEM_data(it));
+                        }
+
+                        return;
+                    }
+
+                    item_remove(it);
+                }
+            }
+
+            return;
+        }
+
         item *it = item_alloc("s", 1, 0, 0, nline + 2);
         if (it != NULL) {
             strncpy(ITEM_data(it), line, nline);
