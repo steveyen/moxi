@@ -389,6 +389,12 @@ void cproxy_process_b2b_downstream_nread(conn *c) {
     //
     conn *uc = d->upstream_conn;
     item *it = c->item;
+
+    // Clear c->item because we either move it to the upstream or
+    // item_remove() it on error.
+    //
+    c->item = NULL;
+
     assert(it != NULL);
     assert(it->refcount == 1);
 
@@ -515,7 +521,8 @@ void cproxy_process_b2b_downstream_nread(conn *c) {
     }
 
  done:
-    item_remove(c->item);
-    c->item = NULL;
+    if (it != NULL) {
+        item_remove(it);
+    }
 }
 
