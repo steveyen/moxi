@@ -229,8 +229,6 @@ int cproxy_listen(proxy *p) {
 
     // Idempotent, remembers if it already created listening socket(s).
     //
-    // TODO: Handle upstream binary protocol.
-    //
     if (p->listening == 0) {
         int listening = cproxy_listen_port(p->port,
                                            negotiating_proxy_prot,
