@@ -242,6 +242,10 @@ int cproxy_listen(proxy *p) {
             p->listening += listening;
         } else {
             p->listening_failed++;
+
+            fprintf(stderr, "ERROR: could not listen on port %d.\n"
+                            "Please use -Z port_listen=PORT_NUM to specify a different port number.\n", p->port);
+            exit(1);
         }
     }
 
