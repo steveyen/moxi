@@ -118,7 +118,7 @@ bool protocol_stats_merge_name_val(genhash_t *merger,
     assert(name);
     assert(val);
 
-    char *key = name + name_len;         // Key part for merge rule lookup.
+    char *key = name + name_len - 1;     // Key part for merge rule lookup.
     while (key >= name && *key != ':') { // Scan for last colon.
         key--;
     }
