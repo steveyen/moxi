@@ -125,6 +125,16 @@ void cproxy_process_upstream_binary_nread(conn *c) {
                     c->sfd, c->cmd, (c->corked != NULL));
         }
 
+        // TODO: We currently don't support binary FLUSHQ.
+        //
+        // Rather than having the downstream connections get
+        // into a wonky state, prevent it.
+        //
+        if (header->request.opcode == PROTOCOL_BINARY_CMD_FLUSHQ) {
+            cproxy_close_conn(c);
+            return;
+        }
+
         // Hold onto or 'cork' all the binary quiet commands
         // until there's a later non-quiet command.
         //
