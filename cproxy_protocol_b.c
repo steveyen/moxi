@@ -131,7 +131,13 @@ void cproxy_process_upstream_binary_nread(conn *c) {
         // into a wonky state, prevent it.
         //
         if (header->request.opcode == PROTOCOL_BINARY_CMD_FLUSHQ) {
-            cproxy_close_conn(c);
+            // Note: don't use cproxy_close_conn(c), as it goes
+            // through the drive_machine() loop again.
+            //
+            // cproxy_close_conn(c);
+
+            conn_set_state(c, conn_closing);
+
             return;
         }
 
