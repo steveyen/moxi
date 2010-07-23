@@ -50,6 +50,7 @@
 #include "cproxy.h"
 #include "agent.h"
 #include "stdin_check.h"
+#include "log.h"
 
 /* FreeBSD 4.x doesn't have IOV_MAX exposed. */
 #ifndef IOV_MAX
@@ -127,6 +128,9 @@ conn_funcs conn_funcs_default = {
 #ifdef MAIN_CHECK
 int main_check(int argc, char **argv);
 #endif
+
+/* global logger handle */
+moxi_log *ml;
 
 /*
  * given time value that's either unix time or delta from current unix time, return
@@ -4290,6 +4294,9 @@ int main (int argc, char **argv) {
     char *cproxy_behavior = NULL;
 #ifndef MAIN_CHECK
     struct passwd *pw;
+    char *log_file = NULL;
+    int use_syslog = 1;
+    int log_level = 0;
 #endif
     struct rlimit rlim;
     /* listening sockets */
@@ -4336,6 +4343,7 @@ int main (int argc, char **argv) {
           "Z:"  /* cproxy behavior */
           "B:"  /* Binding protocol */
           "Y:"  /* exit when stdin closes, for windows compatibility */
+          "O:"  /* log file name */
         ))) {
         switch (c) {
         case 'a':
@@ -4459,11 +4467,38 @@ int main (int argc, char **argv) {
                 exit(EX_USAGE);
             }
             break;
+        case 'O' :
+#ifndef MAIN_CHECK
+            if (!optarg) {
+                fprintf(stderr, "Log File path not provided, resorting to syslog");
+            } else {
+                use_syslog = 0;
+                log_file = strdup(optarg);
+                break;
+            }
+#endif
+            break;
         default:
             fprintf(stderr, "Illegal argument \"%c\"\n", c);
             return 1;
         }
     }
+
+#ifndef MAIN_CHECK
+    /*
+     * initalize log file
+     */
+    ml = (struct moxi_log *)calloc(1, sizeof(struct moxi_log));
+    ml->log_file = log_file;
+    ml->use_syslog = use_syslog;
+    ml->log_ident = "moxi";
+    ml->log_mode = use_syslog ? ERRORLOG_SYSLOG : 0;
+    ml->log_level = log_level ? log_level : 5;
+
+    log_error_open(ml);
+    moxi_log_write("mox log %s", "initialized");
+
+#endif
 
     if (cproxy_cfg
         && settings.port == UNSPECIFIED
