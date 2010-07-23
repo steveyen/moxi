@@ -30,6 +30,7 @@ INSTALL
 Makefile
 Makefile.in
 TAGS
+a.out*
 aclocal.m4
 autom4te.cache
 compile
