@@ -66,12 +66,12 @@ class MockServer(threading.Thread):
 # A session in the fake memcached server.
 #
 class MockSession(threading.Thread):
-    def __init__(self, client, address, server):
+    def __init__(self, client, address, server, recvlen_in=1024):
         threading.Thread.__init__(self)
         self.server  = server
         self.client  = client
         self.address = address
-        self.recvlen = 1000
+        self.recvlen = recvlen_in
         self.running     = 0
         self.running_max = 10
         self.received = []
