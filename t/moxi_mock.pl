@@ -28,7 +28,7 @@ unless ($childpid) {
 }
 setpgrp($childpid, $childpid);
 
-my $result = system("python ./t/moxi_mock.py");
+my $result = system("python ./t/moxi_mock_a2" . $protocol_name . ".py");
 
 kill 2, -$childpid;
 
