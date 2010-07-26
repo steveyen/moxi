@@ -198,9 +198,7 @@ class ProxyClientBase(unittest.TestCase):
 
         return self.mock_server().sessions[session_idx]
 
-    def mock_recv_message(self, what, session_idx=0):
-        debug(1, "mock_recv expect: " + what)
-
+    def mock_recv_message(self, session_idx=0):
         session = self.mock_session(session_idx)
 
         wait_max = 5
@@ -217,13 +215,13 @@ class ProxyClientBase(unittest.TestCase):
         if len(session.received) > 0:
             message = session.received.pop(0)
 
-        debug(1, "mock_recv actual: " + message);
-
         return message
 
     def mock_recv(self, what, session_idx=0):
         # Useful for ascii messages.
-        message = self.mock_recv_message(what, session_idx)
+        debug(1, "mock_recv expect: " + what)
+        message = self.mock_recv_message(session_idx)
+        debug(1, "mock_recv actual: " + message);
         self.assertTrue(what == message or re.match(what, message) is not None)
 
     def wait(self, x):
