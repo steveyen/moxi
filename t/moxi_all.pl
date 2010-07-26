@@ -33,5 +33,8 @@ go('fanout', 'binary');
 
 print "------------------------------------\n";
 
-return system("./t/moxi_mock.pl ascii");
+my $res = system("./t/moxi_mock.pl ascii");
+
+exit $res;
+
 
