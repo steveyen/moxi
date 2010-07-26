@@ -276,7 +276,3 @@ $prefix =~ s/TOPOLOGY/{$topology }/g;
 eval($prefix . `cat $test_name`);
 
 print($@);
-
-
-
-
