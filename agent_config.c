@@ -425,6 +425,9 @@ bool cproxy_on_new_config_json(proxy_main *m, uint32_t new_config_ver, char *con
             }
 
             vbucket_config_destroy(vch);
+        } else {
+            fprintf(stderr, "ERROR: bad JSON configuration: %s\n", config);
+            exit(EXIT_FAILURE);
         }
     }
 
