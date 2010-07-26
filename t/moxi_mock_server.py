@@ -7,6 +7,12 @@ import threading
 import time
 import re
 
+from memcacheConstants import REQ_MAGIC_BYTE, RES_MAGIC_BYTE
+from memcacheConstants import REQ_PKT_FMT, RES_PKT_FMT, MIN_RECV_PACKET
+from memcacheConstants import SET_PKT_FMT, DEL_PKT_FMT, INCRDECR_RES_FMT
+
+import memcacheConstants
+
 def debug(level, x):
     if level < 1:
         print(x)
@@ -244,4 +250,18 @@ class ProxyClientBase(unittest.TestCase):
         session = self.mock_server().sessions[session_idx]
 
         return len(session.received) <= 0
+
+    def dump(self, header, prefix=''):
+        length = len(header)
+        if length > MIN_RECV_PACKET:
+            length = MIN_RECV_PACKET
+        r = ''
+        for i in range(length):
+            c = header[i]
+            if i % 4 == 0:
+                r = r + prefix + ' '
+            r = r + ('0x%02X ' % ord(c))
+            if i % 4 == 3 and i > 0:
+                r = r + '\n'
+        return r
 
