@@ -16,6 +16,7 @@ def debug(level, x):
 class MockServer(threading.Thread):
     def __init__(self, port):
         threading.Thread.__init__(self)
+        self.daemon = True
         self.host     = ''
         self.port     = port
         self.backlog  = 5
@@ -68,6 +69,7 @@ class MockServer(threading.Thread):
 class MockSession(threading.Thread):
     def __init__(self, client, address, server, recvlen_in=1024):
         threading.Thread.__init__(self)
+        self.daemon = True
         self.server  = server
         self.client  = client
         self.address = address
