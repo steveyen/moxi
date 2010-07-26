@@ -2,7 +2,12 @@
 
 # This program starts moxi and then runs the python mock server tests.
 #
+#  ./t/moxi_mock.pl
+#  ./t/moxi_mock.pl ascii
+#  ./t/moxi_mock.pl ascii TestProxyAscii.testBasicQuit
+#
 my $protocol_name = $ARGV[0] || 'ascii';
+my $test_name     = $ARGV[1] || '';
 
 print "moxi_mock.pl: " . $protocol_name . "\n";
 
@@ -28,7 +33,7 @@ unless ($childpid) {
 }
 setpgrp($childpid, $childpid);
 
-my $result = system("python ./t/moxi_mock_a2" . $protocol_name . ".py");
+my $result = system("python ./t/moxi_mock_a2" . $protocol_name . ".py " . $test_name);
 
 kill 2, -$childpid;
 
