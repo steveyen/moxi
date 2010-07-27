@@ -9,7 +9,7 @@ import re
 
 import moxi_mock_server
 
-# Before you run moxi_mock_a2ascii.py, start a moxi like...
+# Before you run moxi_mock_a2a.py, start a moxi like...
 #
 #   ./moxi-debug -z 11333=localhost:11311 -p 0 -U 0 -vvv -t 1
 #                -Z downstream_max=1
@@ -21,7 +21,7 @@ import moxi_mock_server
 #
 # Then...
 #
-#   python ./t/moxi_mock_a2ascii.py
+#   python ./t/moxi_mock_a2a.py
 #
 # ----------------------------------
 
