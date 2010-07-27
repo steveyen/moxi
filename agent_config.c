@@ -24,6 +24,8 @@ static bool update_behaviors_config(proxy_behavior **curr,
                                     int   next_num,
                                     char *descrip);
 
+void close_outdated_proxies(proxy_main *m, uint32_t new_config_ver);
+
 char *parse_kvs_servers(char *prefix,
                         char *pool_name,
                         kvpair_t *kvs,
@@ -429,7 +431,7 @@ bool cproxy_on_new_config_json(proxy_main *m, uint32_t new_config_ver, char *con
 
             vbucket_config_destroy(vch);
         } else {
-            fprintf(stderr, "ERROR: bad JSON configuration: %s\n", config);
+            moxi_log_write("ERROR: bad JSON configuration: %s\n", config);
             exit(EXIT_FAILURE);
         }
     }
@@ -671,6 +673,26 @@ void cproxy_on_new_config(void *data0, void *data1) {
     // proxy->config as NULL, and cproxy_check_downstream_config()
     // will catch it.
     //
+    close_outdated_proxies(m, new_config_ver);
+
+    free_kvpair(kvs);
+
+ out:
+    work_collect_one(completion);
+    return;
+
+ fail:
+    m->stat_config_fails++;
+    free_kvpair(kvs);
+
+    if (settings.verbose > 1) {
+        moxi_log_write(stderr, "ERROR: conc failed config %llu\n",
+                       (long long unsigned int) m->stat_config_fails);
+    }
+    goto out;
+}
+
+void close_outdated_proxies(proxy_main *m, uint32_t new_config_ver) {
     // TODO: Close any listening conns for the proxy?
     // TODO: Close any upstream conns for the proxy?
     // TODO: We still need to free proxy memory, after all its
@@ -712,22 +734,6 @@ void cproxy_on_new_config(void *data0, void *data1) {
             free(name);
         }
     }
-
-    free_kvpair(kvs);
-
- out:
-    work_collect_one(completion);
-    return;
-
- fail:
-    m->stat_config_fails++;
-    free_kvpair(kvs);
-
-    if (settings.verbose > 1) {
-        moxi_log_write("ERROR: conc failed config %llu\n",
-                (long long unsigned int) m->stat_config_fails);
-    }
-    goto out;
 }
 
 /**
