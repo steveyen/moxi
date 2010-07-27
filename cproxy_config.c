@@ -600,7 +600,8 @@ void cproxy_parse_behavior_key_val(char *key,
  * Size of array should be arr_size.
  */
 proxy_behavior *cproxy_copy_behaviors(int arr_size, proxy_behavior *arr) {
-    proxy_behavior *rv = calloc(arr_size, sizeof(proxy_behavior));
+    int arr_size_alloc = arr_size > 0 ? arr_size : 1;
+    proxy_behavior *rv = calloc(arr_size_alloc, sizeof(proxy_behavior));
     if (rv != NULL) {
         memcpy(rv, arr, arr_size * sizeof(proxy_behavior));
     }

@@ -38,6 +38,14 @@ char **parse_kvs_behavior(kvpair_t *kvs,
                           char *name,
                           proxy_behavior *behavior);
 
+static char *NULL_BUCKET = "[<NULL_BUCKET>]";
+
+static void cproxy_init_null_bucket(proxy_main *m);
+
+static void cproxy_on_new_config(void *data0, void *data1);
+static bool cproxy_on_new_config_json_one(proxy_main *m, uint32_t new_config_ver,
+                                          char *config, char *name);
+
 static void agent_logger(void *userdata,
                          enum conflate_log_level lvl,
                          const char *msg, ...)
@@ -265,6 +273,10 @@ proxy_main *cproxy_init_agent_start(char *jid,
     proxy_main *m = cproxy_gen_proxy_main(behavior, nthreads,
                                           PROXY_CONF_TYPE_DYNAMIC);
     if (m != NULL) {
+        if (behavior.default_bucket_name[0] == '\0') {
+            cproxy_init_null_bucket(m);
+        }
+
         conflate_config_t config;
 
         memset(&config, 0, sizeof(config));
@@ -287,7 +299,7 @@ proxy_main *cproxy_init_agent_start(char *jid,
 
         if (start_conflate(config)) {
             if (settings.verbose > 2) {
-                moxi_log_write("cproxy_init done\n");
+                moxi_log_write("cproxy_init_agent_start done\n");
             }
 
             return m;
@@ -303,9 +315,25 @@ proxy_main *cproxy_init_agent_start(char *jid,
     return NULL;
 }
 
-static void cproxy_on_new_config(void *data0, void *data1);
-static bool cproxy_on_new_config_json_one(proxy_main *m, uint32_t new_config_ver,
-                                          char *config, char *name);
+static void cproxy_init_null_bucket(proxy_main *m) {
+    proxy_behavior proxyb = m->behavior;
+
+    int pool_port = proxyb.port_listen;
+    int nodes_num = 0;
+
+    if (pool_port > 0) {
+        proxy_behavior_pool behavior_pool = {
+            .base = proxyb,
+            .num  = nodes_num,
+            .arr  = calloc(nodes_num + 1, sizeof(proxy_behavior))
+        };
+
+        if (behavior_pool.arr != NULL) {
+            cproxy_on_new_pool(m, NULL_BUCKET, pool_port,
+                               "", 0, &behavior_pool);
+        }
+    }
+}
 
 void on_conflate_new_config(void *userdata, kvpair_t *config) {
     assert(config != NULL);
@@ -778,7 +806,12 @@ void close_outdated_proxies(proxy_main *m, uint32_t new_config_ver) {
 
         pthread_mutex_unlock(&p->proxy_lock);
 
-        if (down) {
+        // Next, check that we're not shutting down the NULL_BUCKET.
+        //
+        // Otherwise, passing in a NULL config string signals that
+        // a bucket's proxy struct should be shut down.
+        //
+        if (down && (strcmp(NULL_BUCKET, name) != 0)) {
             cproxy_on_new_pool(m, name, port, NULL, new_config_ver,
                                &empty_pool);
         }
