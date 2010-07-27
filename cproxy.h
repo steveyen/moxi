@@ -400,8 +400,6 @@ struct downstream {
     struct event   timeout_event;
 };
 
-extern proxy_main *proxy_main_g;
-
 // Functions.
 //
 proxy *cproxy_create(proxy_main *main,

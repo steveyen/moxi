@@ -439,9 +439,6 @@ proxy_main *cproxy_gen_proxy_main(proxy_behavior behavior, int nthreads,
         m->stat_proxy_shutdowns   = 0;
     }
 
-    // global pointer to proxy_main structure
-    proxy_main_g = m;
-
     return m;
 }
 

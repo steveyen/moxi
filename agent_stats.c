@@ -662,46 +662,68 @@ void proxy_stats_dump_basic(ADD_STAT add_stats, conn *c, const char *prefix) {
 
 void proxy_stats_dump_proxy_main(ADD_STAT add_stats, conn *c,
                                  struct proxy_stats_cmd_info *pscip) {
+    assert(c != NULL);
+
+    proxy_td *ptd = c->extra;
+    if (ptd == NULL ||
+        ptd->proxy == NULL ||
+        ptd->proxy->main == NULL) {
+        return;
+    }
+
+    proxy_main *pm = ptd->proxy->main;
+
     if (pscip->do_info) {
         const char *prefix = "proxy_main:";
         APPEND_PREFIX_STAT("conf_type", "%s",
-               (proxy_main_g->conf_type==PROXY_CONF_TYPE_STATIC ? "static" : "dynamic"));
+               (pm->conf_type==PROXY_CONF_TYPE_STATIC ? "static" : "dynamic"));
     }
 
     if (pscip->do_behaviors)  {
         proxy_stats_dump_behavior(add_stats, c, "proxy_main:behavior:",
-                                  &proxy_main_g->behavior, 2);
+                                  &pm->behavior, 2);
     }
 
     if (pscip->do_stats) {
         const char *prefix = "proxy_main:stats:";
         APPEND_PREFIX_STAT("stat_configs",
-                    "%llu", (long long unsigned int) proxy_main_g->stat_configs);
+                    "%llu", (long long unsigned int) pm->stat_configs);
         APPEND_PREFIX_STAT("stat_config_fails",
-                    "%llu", (long long unsigned int) proxy_main_g->stat_config_fails);
+                    "%llu", (long long unsigned int) pm->stat_config_fails);
         APPEND_PREFIX_STAT("stat_proxy_starts",
-                    "%llu", (long long unsigned int) proxy_main_g->stat_proxy_starts);
+                    "%llu", (long long unsigned int) pm->stat_proxy_starts);
         APPEND_PREFIX_STAT("stat_proxy_start_fails",
-                    "%llu", (long long unsigned int) proxy_main_g->stat_proxy_start_fails);
+                    "%llu", (long long unsigned int) pm->stat_proxy_start_fails);
         APPEND_PREFIX_STAT("stat_proxy_existings",
-                    "%llu", (long long unsigned int) proxy_main_g->stat_proxy_existings);
+                    "%llu", (long long unsigned int) pm->stat_proxy_existings);
         APPEND_PREFIX_STAT("stat_proxy_shutdowns",
-                    "%llu", (long long unsigned int) proxy_main_g->stat_proxy_shutdowns);
+                    "%llu", (long long unsigned int) pm->stat_proxy_shutdowns);
     }
 }
 
 void proxy_stats_dump_proxies(ADD_STAT add_stats, conn *c,
                               struct proxy_stats_cmd_info *pscip) {
+    assert(c != NULL);
+
+    proxy_td *ptd = c->extra;
+    if (ptd == NULL ||
+        ptd->proxy == NULL ||
+        ptd->proxy->main == NULL) {
+        return;
+    }
+
+    proxy_main *pm = ptd->proxy->main;
+
     char prefix[200];
 
-    if (pthread_mutex_trylock(&proxy_main_g->proxy_main_lock) != 0) {
+    if (pthread_mutex_trylock(&pm->proxy_main_lock) != 0) {
         /* Do not dump proxy stats
          * if dynamic reconfiguration is currently executing by other thread.
          */
         return;
     }
 
-    for (proxy *p = proxy_main_g->proxy_head; p != NULL; p = p->next) {
+    for (proxy *p = pm->proxy_head; p != NULL; p = p->next) {
         pthread_mutex_lock(&p->proxy_lock);
 
         if (pscip->do_info) {
@@ -759,7 +781,7 @@ void proxy_stats_dump_proxies(ADD_STAT add_stats, conn *c,
             proxy_stats_td *pstd = calloc(1, sizeof(proxy_stats_td));;
             if (pstd != NULL) {
                 pthread_mutex_lock(&p->proxy_lock);
-                for (int i = 1; i < proxy_main_g->nthreads; i++) {
+                for (int i = 1; i < pm->nthreads; i++) {
                     proxy_td *ptd = &p->thread_data[i];
                     if (ptd != NULL)
                         add_proxy_stats_td(pstd, &ptd->stats);
@@ -781,7 +803,7 @@ void proxy_stats_dump_proxies(ADD_STAT add_stats, conn *c,
 
             if (key_stats_map != NULL) {
                 pthread_mutex_lock(&p->proxy_lock);
-                for (int i = 1; i < proxy_main_g->nthreads; i++) {
+                for (int i = 1; i < pm->nthreads; i++) {
                      proxy_td *ptd = &p->thread_data[i];
                      if (ptd != NULL) {
                          add_raw_key_stats(key_stats_map, &ptd->key_stats);
@@ -800,7 +822,7 @@ void proxy_stats_dump_proxies(ADD_STAT add_stats, conn *c,
         }
     }
 
-    pthread_mutex_unlock(&proxy_main_g->proxy_main_lock);
+    pthread_mutex_unlock(&pm->proxy_main_lock);
 }
 
 /* Must be invoked on the main listener thread.
@@ -1258,7 +1280,6 @@ static void emit_proxy_stats_cmd(conflate_form_result *result,
 void map_pstd_foreach_emit(const void *k,
                            const void *value,
                            void *user_data) {
-
     const char *name = (const char*)k;
     assert(name != NULL);
 
@@ -1368,7 +1389,7 @@ static void map_key_stats_foreach_emit_inner(const void *_key,
                                               void *user_data) {
     struct key_stats_emit_state *state = user_data;
     const char *key = _key;
-    struct key_stats *stats = (struct key_stats *)value;
+    struct key_stats *stats = (struct key_stats *) value;
 
     assert(strcmp(key, stats->key) == 0);
 
@@ -1389,10 +1410,10 @@ void map_key_stats_foreach_emit(const void *k,
                                 const void *value,
                                 void *user_data) {
 
-    const char *name = (const char*)k;
+    const char *name = (const char *) k;
     assert(name != NULL);
 
-    genhash_t *map_key_stats = (genhash_t *)value;
+    genhash_t *map_key_stats = (genhash_t *) value;
     assert(map_key_stats != NULL);
 
     const struct main_stats_collect_info *emit = user_data;
@@ -1400,7 +1421,7 @@ void map_key_stats_foreach_emit(const void *k,
     assert(emit->result);
 
     struct key_stats_emit_state state = {.name = name,
-                                         .emit = emit};
+                                         .emit = emit };
 
     genhash_iter(map_key_stats, map_key_stats_foreach_emit_inner, &state);
 }

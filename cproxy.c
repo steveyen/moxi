@@ -74,8 +74,6 @@ conn_funcs cproxy_downstream_funcs = {
     .conn_binary_command_magic   = PROTOCOL_BINARY_RES
 };
 
-proxy_main *proxy_main_g = NULL;
-
 static bool cproxy_forward(downstream *d);
 
 /* Main function to create a proxy struct.
