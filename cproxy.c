@@ -234,8 +234,16 @@ int cproxy_listen(proxy *p) {
     // Idempotent, remembers if it already created listening socket(s).
     //
     if (p->listening == 0) {
-        int listening = cproxy_listen_port(p->port,
-                                           negotiating_proxy_prot,
+        enum protocol listen_protocol = negotiating_proxy_prot;
+
+        if (IS_ASCII(settings.binding_protocol)) {
+            listen_protocol = proxy_upstream_ascii_prot;
+        }
+        if (IS_BINARY(settings.binding_protocol)) {
+            listen_protocol = proxy_upstream_binary_prot;
+        }
+
+        int listening = cproxy_listen_port(p->port, listen_protocol,
                                            tcp_transport,
                                            p,
                                            &cproxy_listen_funcs);
