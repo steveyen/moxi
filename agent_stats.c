@@ -421,7 +421,6 @@ void map_key_stats_foreach_merge(const void *key,
 
 static void proxy_stats_dump_behavior(ADD_STAT add_stats, conn *c, const char *prefix,
                                       proxy_behavior *b, int level) {
-
     if (level >= 2)
         APPEND_PREFIX_STAT("cycle", "%u", b->cycle);
 
@@ -466,11 +465,12 @@ static void proxy_stats_dump_behavior(ADD_STAT add_stats, conn *c, const char *p
 
     if (level >= 1)
         APPEND_PREFIX_STAT("port_listen", "%d", b->port_listen);
+    if (level >= 1)
+        APPEND_PREFIX_STAT("default_bucket_name", "%s", b->default_bucket_name);
 }
 
 static void proxy_stats_dump_frontcache(ADD_STAT add_stats, conn *c,
                                         const char *prefix, proxy *p) {
-
     pthread_mutex_lock(p->front_cache.lock);
 
     if (p->front_cache.map != NULL)

@@ -65,7 +65,8 @@ proxy_behavior behavior_default_g = {
     .bucket = {0},
     .usr = {0},
     .pwd = {0},
-    .port_listen = MOXI_DEFAULT_LISTEN_PORT
+    .port_listen = MOXI_DEFAULT_LISTEN_PORT,
+    .default_bucket_name = "default"
 };
 
 /** Length of key that may be zero or space terminated.
@@ -540,11 +541,11 @@ void cproxy_parse_behavior_key_val(char *key,
         } else if (wordeq(key, "front_cache_lifespan")) {
             behavior->front_cache_lifespan = strtol(val, NULL, 10);
         } else if (wordeq(key, "front_cache_spec")) {
-            if (strlen(val) < sizeof(behavior->front_cache_spec) + 1) {
+            if (strlen(val) < sizeof(behavior->front_cache_spec)) {
                 strcpy(behavior->front_cache_spec, val);
             }
         } else if (wordeq(key, "front_cache_unspec")) {
-            if (strlen(val) < sizeof(behavior->front_cache_unspec) + 1) {
+            if (strlen(val) < sizeof(behavior->front_cache_unspec)) {
                 strcpy(behavior->front_cache_unspec, val);
             }
         } else if (wordeq(key, "key_stats_max")) {
@@ -552,37 +553,41 @@ void cproxy_parse_behavior_key_val(char *key,
         } else if (wordeq(key, "key_stats_lifespan")) {
             behavior->key_stats_lifespan = strtol(val, NULL, 10);
         } else if (wordeq(key, "key_stats_spec")) {
-            if (strlen(val) < sizeof(behavior->key_stats_spec) + 1) {
+            if (strlen(val) < sizeof(behavior->key_stats_spec)) {
                 strcpy(behavior->key_stats_spec, val);
             }
         } else if (wordeq(key, "key_stats_unspec")) {
-            if (strlen(val) < sizeof(behavior->key_stats_unspec) + 1) {
+            if (strlen(val) < sizeof(behavior->key_stats_unspec)) {
                 strcpy(behavior->key_stats_unspec, val);
             }
         } else if (wordeq(key, "optimize_set")) {
-            if (strlen(val) < sizeof(behavior->optimize_set) + 1) {
+            if (strlen(val) < sizeof(behavior->optimize_set)) {
                 strcpy(behavior->optimize_set, val);
             }
         } else if (wordeq(key, "usr")) {
-            if (strlen(val) < sizeof(behavior->usr) + 1) {
+            if (strlen(val) < sizeof(behavior->usr)) {
                 strcpy(behavior->usr, val);
             }
         } else if (wordeq(key, "pwd")) {
-            if (strlen(val) < sizeof(behavior->pwd) + 1) {
+            if (strlen(val) < sizeof(behavior->pwd)) {
                 strcpy(behavior->pwd, val);
             }
         } else if (wordeq(key, "host")) {
-            if (strlen(val) < sizeof(behavior->host) + 1) {
+            if (strlen(val) < sizeof(behavior->host)) {
                 strcpy(behavior->host, val);
             }
         } else if (wordeq(key, "port")) {
             behavior->port = strtol(val, NULL, 10);
         } else if (wordeq(key, "bucket")) {
-            if (strlen(val) < sizeof(behavior->bucket) + 1) {
+            if (strlen(val) < sizeof(behavior->bucket)) {
                 strcpy(behavior->bucket, val);
             }
         } else if (wordeq(key, "port_listen")) {
             behavior->port_listen = strtol(val, NULL, 10);
+        } else if (wordeq(key, "default_bucket_name")) {
+            if (strlen(val) < sizeof(behavior->default_bucket_name)) {
+                strcpy(behavior->default_bucket_name, val);
+            }
         } else {
             if (settings.verbose > 1) {
                 moxi_log_write("unknown behavior key: %s\n", key);
@@ -722,6 +727,10 @@ void cproxy_dump_behavior_ex(proxy_behavior *b, char *prefix, int level,
 
     if (level >= 1) {
         vdump("port_listen", "%d", b->port_listen);
+    }
+
+    if (level >= 1) {
+        vdump("default_bucket_name", "%s", b->default_bucket_name);
     }
 }
 

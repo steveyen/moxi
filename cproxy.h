@@ -120,6 +120,11 @@ struct proxy_behavior {
     // ML: Port for proxy_main to listen on.
     //
     int port_listen;
+
+    char default_bucket_name[250]; // ML: The named bucket (proxy->name)
+                                   // that upstream conn's should start on.
+                                   // When empty (""), then only binary SASL
+                                   // clients can actually do anything useful.
 };
 
 struct proxy_behavior_pool {
