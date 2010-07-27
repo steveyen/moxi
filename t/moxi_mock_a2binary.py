@@ -38,31 +38,19 @@ class TestProxyBinary(moxi_mock_server.ProxyClientBase):
 
     # -------------------------------------------------
 
-    def expectReqHeader(self, response, cmdExpect, keyExpect=None, valExpect=None):
-        magic, cmd, keylen, extralen, dtype, errcode, remaining, opaque, cas=\
-            struct.unpack(RES_PKT_FMT, response)
-
-    def expectReq(self, response, cmdExpect, keyExpect=None, valExpect=None):
-        magic, cmd, keylen, extralen, dtype, errcode, remaining, opaque, cas=\
-            struct.unpack(RES_PKT_FMT, response)
-        self.assertEqual(cmd, cmdExpect)
-        self.assertEqual(key, keyExpect)
-        self.assertEqual(val, valExpect)
-        return cmd, key, TODO
-
-    def packReq(self, cmd, key, val, opaque, extraHeader='', cas=0):
+    def packReq(self, cmd, reserved=0, key='', val='', opaque=0, extraHeader='', cas=0):
         dtype=0
         msg=struct.pack(REQ_PKT_FMT, REQ_MAGIC_BYTE,
-            cmd, len(key), len(extraHeader), dtype, self.vbucketId,
+            cmd, len(key), len(extraHeader), dtype, reserved,
                 len(key) + len(extraHeader) + len(val), opaque, cas)
-        return msg
+        return msg + extraHeader + key + val
 
-    def packRes(self, cmd, key, val, opaque, extraHeader='', cas=0):
+    def packRes(self, cmd, status=0, key='', val='', opaque=0, extraHeader='', cas=0):
         dtype=0
-        msg=struct.pack(REQ_PKT_FMT, REQ_MAGIC_BYTE,
-            cmd, len(key), len(extraHeader), dtype, self.vbucketId,
+        msg=struct.pack(REQ_PKT_FMT, RES_MAGIC_BYTE,
+            cmd, len(key), len(extraHeader), dtype, status,
                 len(key) + len(extraHeader) + len(val), opaque, cas)
-        return msg
+        return msg + extraHeader + key + val
 
     def testBasicVersion(self):
         """Test version command does not reach mock server"""
@@ -75,31 +63,40 @@ class TestProxyBinary(moxi_mock_server.ProxyClientBase):
         self.client_recv("VERSION .*\r\n")
         self.assertTrue(self.mock_quiet())
 
-    def SOON_testBasicSerialGet(self):
+    def testBasicSerialGet(self):
         """Test basic serial get commands"""
         self.client_connect()
-        self.client_send("get keyNotThere0\r\n")
 
-        self.mock_recv('get keyNotThere0\r\n')
-        self.mock_send('END\r\n')
+        self.client_send("get keyNotThere0\r\n")
+        self.mock_recv(self.packReq(memcacheConstants.CMD_GETK, key='keyNotThere0'))
+        self.mock_send(self.packRes(memcacheConstants.CMD_GETK,
+                                    status=memcacheConstants.ERR_NOT_FOUND,
+                                    key='keyNotThere0'))
         self.client_recv("END\r\n")
 
         self.client_send("get keyNotThere1\r\n")
-        self.mock_recv('get keyNotThere1\r\n')
-        self.mock_send('END\r\n')
+        self.mock_recv(self.packReq(memcacheConstants.CMD_GETK, key='keyNotThere1'))
+        self.mock_send(self.packRes(memcacheConstants.CMD_GETK,
+                                    status=memcacheConstants.ERR_NOT_FOUND,
+                                    key='keyNotThere1'))
         self.client_recv("END\r\n")
 
         self.client_send("get keyNotThere2\r\n")
-        self.mock_recv('get keyNotThere2\r\n')
-        self.mock_send('END\r\n')
+        self.mock_recv(self.packReq(memcacheConstants.CMD_GETK, key='keyNotThere2'))
+        self.mock_send(self.packRes(memcacheConstants.CMD_GETK,
+                                    status=memcacheConstants.ERR_NOT_FOUND,
+                                    key='keyNotThere2'))
         self.client_recv("END\r\n")
 
-    def SOON_testBasicQuit(self):
+    def testBasicQuit(self):
         """Test quit command does not reach mock server"""
         self.client_connect()
+
         self.client_send("get keyNotThere\r\n")
-        self.mock_recv('get keyNotThere\r\n')
-        self.mock_send('END\r\n')
+        self.mock_recv(self.packReq(memcacheConstants.CMD_GETK, key='keyNotThere'))
+        self.mock_send(self.packRes(memcacheConstants.CMD_GETK,
+                                    status=memcacheConstants.ERR_NOT_FOUND,
+                                    key='keyNotThere'))
         self.client_recv("END\r\n")
 
         self.client_send("quit\r\n")
@@ -112,39 +109,60 @@ class TestProxyBinary(moxi_mock_server.ProxyClientBase):
         self.client_recv('.*ERROR.*\r\n')
         self.assertTrue(self.mock_quiet())
 
-    def SOON_testSimpleSet(self):
+    def doTestSimpleSet(self, flg=0, exp=0, val='1'):
         """Test simple set against mock server"""
         self.client_connect()
-        self.client_send('set simpleSet 0 0 1\r\n')
-        self.client_send('1\r\n')
-        self.mock_recv('set simpleSet 0 0 1\r\n1\r\n')
-        self.mock_send('STORED\r\n')
+        self.client_send('set simpleSet %d %d %d\r\n' % (flg, exp, len(val)))
+        self.client_send(val + '\r\n')
+        self.mock_recv(self.packReq(memcacheConstants.CMD_SET, key='simpleSet',
+                                    extraHeader=struct.pack(memcacheConstants.SET_PKT_FMT, flg, exp),
+                                    val=val))
+        self.mock_send(self.packRes(memcacheConstants.CMD_SET, status=0))
         self.client_recv('STORED\r\n')
 
-    def SOON_testFlushAllBroadcast(self):
+    def testSimpleSet(self):
+        self.doTestSimpleSet()
+
+    def testSimpleSetWithParams(self):
+        self.doTestSimpleSet(flg=1234, exp=4321)
+
+    def testSimpleSetWithEmptyVal(self):
+        self.doTestSimpleSet(flg=1234, exp=4321, val='')
+
+    def doTestFlushAllBroadcast(self, exp=0):
         """Test flush_all scatter/gather"""
         self.client_connect()
-        self.client_send('flush_all\r\n')
-        self.mock_recv('flush_all\r\n')
-        self.mock_send('OK\r\n')
+        self.client_send('flush_all %d\r\n' % exp)
+        self.mock_recv(self.packReq(memcacheConstants.CMD_FLUSH,
+                                    extraHeader=struct.pack(memcacheConstants.FLUSH_PKT_FMT, exp)))
+        self.mock_send(self.packRes(memcacheConstants.CMD_FLUSH, status=0))
         self.client_recv('OK\r\n')
 
-    def SOON_testSplitResponseOverSeveralWrites(self):
+    def testFlushAllBroadcast(self):
+        self.doTestFlushAllBroadcast()
+
+    def testFlushAllWithTime(self):
+        self.doTestFlushAllBroadcast(exp=1234)
+
+    def testSplitResponseOverSeveralWrites(self):
         """Test split a response over several writes"""
         self.client_connect()
         self.client_send('set splitResponse 0 0 1\r\n')
         self.client_send('1\r\n')
-        self.mock_recv("set splitResponse 0 0 1\r\n1\r\n")
-        self.mock_send('STO')
+        self.mock_recv(self.packReq(memcacheConstants.CMD_SET, key='splitResponse',
+                                    extraHeader=struct.pack(memcacheConstants.SET_PKT_FMT, 0, 0),
+                                    val='1'))
+        r = self.packRes(memcacheConstants.CMD_SET, status=0)
+        self.mock_send(r[0:3])
         self.wait(1)
-        self.mock_send('RED')
+        self.mock_send(r[3:6])
         self.wait(1)
-        self.mock_send('\r')
+        self.mock_send(r[6:22])
         self.wait(1)
-        self.mock_send('\n')
+        self.mock_send(r[22:]) # Header is 24 bytes.
         self.client_recv('STORED\r\n')
 
-    def SOON_testSplitRequestOverSeveralWrites(self):
+    def testSplitRequestOverSeveralWrites(self):
         """Test split a request over several writes"""
         self.client_connect()
         self.client_send('set splitRequest ')
@@ -156,137 +174,243 @@ class TestProxyBinary(moxi_mock_server.ProxyClientBase):
         self.client_send('hel')
         self.wait(1)
         self.client_send('lo\r\n')
-        self.mock_recv("set splitRequest 0 0 5\r\nhello\r\n")
-        self.mock_send('STORED\r\n')
+        self.mock_recv(self.packReq(memcacheConstants.CMD_SET, key='splitRequest',
+                                    extraHeader=struct.pack(memcacheConstants.SET_PKT_FMT, 0, 0),
+                                    val='hello'))
+        self.mock_send(self.packRes(memcacheConstants.CMD_SET, status=0))
         self.client_recv('STORED\r\n')
 
-    def SOON_testTerminateResponseWithServerClose(self):
+    def testTerminateResponseWithServerClose(self):
         """Test chop the response with a server close"""
         self.client_connect()
         self.client_send('set chopped 0 0 1\r\n')
         self.client_send('1\r\n')
-        self.mock_recv("set chopped 0 0 1\r\n1\r\n")
+        self.mock_recv(self.packReq(memcacheConstants.CMD_SET, key='chopped',
+                                    extraHeader=struct.pack(memcacheConstants.SET_PKT_FMT, 0, 0),
+                                    val='1'))
         self.mock_close()
         self.client_recv('.*ERROR .*\r\n')
 
-    def SOON_testGetValue(self):
+    def testMultiGetValueAllMiss(self):
         """Test the proxy handles VALUE response"""
         self.client_connect()
         self.client_send('get someVal0 someVal1\r\n')
-        self.mock_recv("get someVal0 someVal1\r\n")
-        self.mock_send('END\r\n')
+        # Note: dependency on moxi's a2b implementation: the opaque's
+        # each key's offsets into the multiget request string.
+        self.mock_recv(self.packReq(memcacheConstants.CMD_GETKQ, key='someVal0', opaque=4) +
+                       self.packReq(memcacheConstants.CMD_GETKQ, key='someVal1', opaque=13) +
+                       self.packReq(memcacheConstants.CMD_NOOP))
+        self.mock_send(self.packRes(memcacheConstants.CMD_NOOP))
         self.client_recv('END\r\n')
 
+    def testMultiGetValueSomeHit(self):
+        self.client_connect()
         self.client_send('get someVal0 someVal1\r\n')
-        self.mock_recv("get someVal0 someVal1\r\n")
-        self.mock_send('VALUE someVal0 0 10\r\n')
-        self.mock_send('0123456789\r\n')
-        self.mock_send('END\r\n')
+        self.mock_recv(self.packReq(memcacheConstants.CMD_GETKQ, key='someVal0', opaque=4) +
+                       self.packReq(memcacheConstants.CMD_GETKQ, key='someVal1', opaque=13) +
+                       self.packReq(memcacheConstants.CMD_NOOP))
+        self.mock_send(self.packRes(memcacheConstants.CMD_GETKQ, key='someVal0', opaque=4,
+                                    extraHeader=struct.pack(memcacheConstants.GET_RES_FMT, 0),
+                                    val='0123456789'))
+        self.mock_send(self.packRes(memcacheConstants.CMD_NOOP))
         self.client_recv('VALUE someVal0 0 10\r\n0123456789\r\nEND\r\n')
 
+    def testMultiGetValueAllHit(self):
+        self.client_connect()
         self.client_send('get someVal0 someVal1\r\n')
-        self.mock_recv("get someVal0 someVal1\r\n")
-        self.mock_send('VALUE someVal0 0 10\r\n')
-        self.mock_send('0123456789\r\n')
-        self.mock_send('VALUE someVal1 0 10\r\n')
-        self.mock_send('0123456789\r\n')
-        self.mock_send('END\r\n')
+        self.mock_recv(self.packReq(memcacheConstants.CMD_GETKQ, key='someVal0', opaque=4) +
+                       self.packReq(memcacheConstants.CMD_GETKQ, key='someVal1', opaque=13) +
+                       self.packReq(memcacheConstants.CMD_NOOP))
+        self.mock_send(self.packRes(memcacheConstants.CMD_GETKQ, key='someVal0', opaque=4,
+                                    extraHeader=struct.pack(memcacheConstants.GET_RES_FMT, 0),
+                                    val='0123456789'))
+        self.mock_send(self.packRes(memcacheConstants.CMD_GETKQ, key='someVal1', opaque=13,
+                                    extraHeader=struct.pack(memcacheConstants.GET_RES_FMT, 0),
+                                    val='0123456789'))
+        self.mock_send(self.packRes(memcacheConstants.CMD_NOOP))
         self.client_recv('VALUE someVal0 0 10\r\n0123456789\r\nVALUE someVal1 0 10\r\n0123456789\r\nEND\r\n')
 
-    def SOON_testGetEmptyValue(self):
+    def testMultiGetValueAllReversedHit(self):
+        self.client_connect()
+        self.client_send('get someVal0 someVal1\r\n')
+        self.mock_recv(self.packReq(memcacheConstants.CMD_GETKQ, key='someVal0', opaque=4) +
+                       self.packReq(memcacheConstants.CMD_GETKQ, key='someVal1', opaque=13) +
+                       self.packReq(memcacheConstants.CMD_NOOP))
+        self.mock_send(self.packRes(memcacheConstants.CMD_GETKQ, key='someVal1', opaque=13,
+                                    extraHeader=struct.pack(memcacheConstants.GET_RES_FMT, 0),
+                                    val='0123456789'))
+        self.mock_send(self.packRes(memcacheConstants.CMD_GETKQ, key='someVal0', opaque=4,
+                                    extraHeader=struct.pack(memcacheConstants.GET_RES_FMT, 0),
+                                    val='0123456789'))
+        self.mock_send(self.packRes(memcacheConstants.CMD_NOOP))
+        self.client_recv('VALUE someVal1 0 10\r\n0123456789\r\nVALUE someVal0 0 10\r\n0123456789\r\nEND\r\n')
+
+    def testGetEmptyValue(self):
         """Test the proxy handles empty VALUE response"""
         self.client_connect()
         self.client_send('get someVal\r\n')
-        self.mock_recv("get someVal\r\n")
-        self.mock_send('VALUE someVal 0 0\r\n')
-        self.mock_send('\r\n')
-        self.mock_send('END\r\n')
+        self.mock_recv(self.packReq(memcacheConstants.CMD_GETK, key='someVal'))
+        self.mock_send(self.packRes(memcacheConstants.CMD_GETK, key='someVal',
+                                    extraHeader=struct.pack(memcacheConstants.GET_RES_FMT, 0),
+                                    val=''))
         self.client_recv('VALUE someVal 0 0\r\n\r\nEND\r\n')
 
-    def SOON_testTerminateResponseWithServerCloseInValue(self):
+    def testTerminateResponseWithServerCloseInValue(self):
         """Test chop the VALUE response with a server close"""
         self.client_connect()
         self.client_send('get someChoppedVal\r\n')
-        self.mock_recv("get someChoppedVal\r\n")
-        self.mock_send('VALUE someChoppedVal 0 10\r\n')
-        self.mock_send('012345')
+        self.mock_recv(self.packReq(memcacheConstants.CMD_GETK, key='someChoppedVal'))
+        r = self.packRes(memcacheConstants.CMD_GETK, key='someChoppedVal',
+                                    extraHeader=struct.pack(memcacheConstants.GET_RES_FMT, 0),
+                                    val='0123456789')
+        self.mock_send(r[0:30]) # Header (24) + Ext (4) + Value (10) == 38, so missing a few bytes.
         self.mock_close()
         self.client_recv('END\r\n')
 
-    def SOON_testTerminateResponseWithServerCloseIn2ndValue(self):
+    def testTerminateResponseWithServerCloseIn2ndValue(self):
         """Test chop the 2nd VALUE response with a server close"""
         self.client_connect()
         self.client_send('get someWholeVal someChoppedVal\r\n')
-        self.mock_recv("get someWholeVal someChoppedVal\r\n")
-        self.mock_send('VALUE someWholeVal 0 10\r\n')
-        self.mock_send('0123456789\r\n')
-        self.mock_send('VALUE someChoppedVal 0')
+        self.mock_recv(self.packReq(memcacheConstants.CMD_GETKQ, key='someWholeVal', opaque=4) +
+                       self.packReq(memcacheConstants.CMD_GETKQ, key='someChoppedVal', opaque=17) +
+                       self.packReq(memcacheConstants.CMD_NOOP))
+        r = (self.packRes(memcacheConstants.CMD_GETK, key='someWholeVal',
+                                    extraHeader=struct.pack(memcacheConstants.GET_RES_FMT, 0),
+                                    opaque=4,
+                                    val='0123456789') +
+             self.packRes(memcacheConstants.CMD_GETK, key='someChoppedVal',
+                                    extraHeader=struct.pack(memcacheConstants.GET_RES_FMT, 0),
+                                    opaque=17,
+                                    val='0123456789') +
+             self.packRes(memcacheConstants.CMD_NOOP))
+        self.mock_send(r[0:(24 + 4 + 12 + 10 + 5)])
         self.mock_close()
         self.client_recv('VALUE someWholeVal 0 10\r\n0123456789\r\nEND\r\n')
 
-    def SOON_testTerminateResponseWithServerCloseIn2ndValueData(self):
+    def testTerminateResponseWithServerCloseIn2ndValueData(self):
         """Test chop the 2nd VALUE data response with a server close"""
         self.client_connect()
         self.client_send('get someWholeVal someChoppedVal\r\n')
-        self.mock_recv("get someWholeVal someChoppedVal\r\n")
-        self.mock_send('VALUE someWholeVal 0 10\r\n')
-        self.mock_send('0123456789\r\n')
-        self.mock_send('VALUE someChoppedVal 0 10\r\n')
-        self.mock_send('012345')
+        self.mock_recv(self.packReq(memcacheConstants.CMD_GETKQ, key='someWholeVal', opaque=4) +
+                       self.packReq(memcacheConstants.CMD_GETKQ, key='someChoppedVal', opaque=17) +
+                       self.packReq(memcacheConstants.CMD_NOOP))
+        r = (self.packRes(memcacheConstants.CMD_GETK, key='someWholeVal',
+                                    extraHeader=struct.pack(memcacheConstants.GET_RES_FMT, 0),
+                                    opaque=4,
+                                    val='0123456789') +
+             self.packRes(memcacheConstants.CMD_GETK, key='someChoppedVal',
+                                    extraHeader=struct.pack(memcacheConstants.GET_RES_FMT, 0),
+                                    opaque=17,
+                                    val='0123456789') +
+             self.packRes(memcacheConstants.CMD_NOOP))
+        self.mock_send(r[0:(24 + 4 + 12 + 10 + 24 + 4 + 20)])
         self.mock_close()
         self.client_recv('VALUE someWholeVal 0 10\r\n0123456789\r\nEND\r\n')
 
-    def SOON_testTerminateResponseWithServerCloseAfterValueHeader(self):
-        """Test chop response after VALUE header"""
+    def testTerminateResponseWithServerCloseInNOOP(self):
+        """Test chop NOOP terminator"""
         self.client_connect()
         self.client_send('get someWholeVal someChoppedVal\r\n')
-        self.mock_recv("get someWholeVal someChoppedVal\r\n")
-        self.mock_send('VALUE someWholeVal 0 10\r\n')
-        self.mock_send('0123456789\r\n')
-        self.mock_send('VALUE someChoppedVal 0 10\r\n')
+        self.mock_recv(self.packReq(memcacheConstants.CMD_GETKQ, key='someWholeVal', opaque=4) +
+                       self.packReq(memcacheConstants.CMD_GETKQ, key='someChoppedVal', opaque=17) +
+                       self.packReq(memcacheConstants.CMD_NOOP))
+        r = (self.packRes(memcacheConstants.CMD_GETK, key='someWholeVal',
+                                    extraHeader=struct.pack(memcacheConstants.GET_RES_FMT, 0),
+                                    opaque=4,
+                                    val='0123456789') +
+             self.packRes(memcacheConstants.CMD_GETK, key='someChoppedVal',
+                                    extraHeader=struct.pack(memcacheConstants.GET_RES_FMT, 0),
+                                    opaque=17,
+                                    val='0123456789') +
+             self.packRes(memcacheConstants.CMD_NOOP))
+        self.mock_send(r[:-4])
         self.mock_close()
-        self.client_recv('VALUE someWholeVal 0 10\r\n0123456789\r\nEND\r\n')
+        # TODO: Need to diagnose why moxi gives this response.
+        self.client_recv('VALUE someWholeVal 0 10\r\n0123456789\r\n' +
+                         'END\r\n')
 
-    def SOON_testServerGoingDownAndUp(self):
+    def testTerminateResponseWithServerCloseAfterValueHeader(self):
+        """Test chop response after 2nd item header"""
+        self.client_connect()
+        self.client_send('get someWholeVal someChoppedVal\r\n')
+        self.mock_recv(self.packReq(memcacheConstants.CMD_GETKQ, key='someWholeVal', opaque=4) +
+                       self.packReq(memcacheConstants.CMD_GETKQ, key='someChoppedVal', opaque=17) +
+                       self.packReq(memcacheConstants.CMD_NOOP))
+        r = (self.packRes(memcacheConstants.CMD_GETK, key='someWholeVal',
+                                    extraHeader=struct.pack(memcacheConstants.GET_RES_FMT, 0),
+                                    opaque=4,
+                                    val='0123456789') +
+             self.packRes(memcacheConstants.CMD_GETK, key='someChoppedVal',
+                                    extraHeader=struct.pack(memcacheConstants.GET_RES_FMT, 0),
+                                    opaque=17,
+                                    val='0123456789') +
+             self.packRes(memcacheConstants.CMD_NOOP))
+        self.mock_send(r[0:(24 + 4 + 12 + 10 + 24)])
+        self.mock_close()
+        self.client_recv('VALUE someWholeVal 0 10\r\n0123456789\r\n' +
+                         'END\r\n')
+
+    def testTerminateResponseWithServerCloseAfter1stItem(self):
+        """Test chop response after 1st item"""
+        self.client_connect()
+        self.client_send('get someWholeVal someChoppedVal\r\n')
+        self.mock_recv(self.packReq(memcacheConstants.CMD_GETKQ, key='someWholeVal', opaque=4) +
+                       self.packReq(memcacheConstants.CMD_GETKQ, key='someChoppedVal', opaque=17) +
+                       self.packReq(memcacheConstants.CMD_NOOP))
+        r = (self.packRes(memcacheConstants.CMD_GETK, key='someWholeVal',
+                                    extraHeader=struct.pack(memcacheConstants.GET_RES_FMT, 0),
+                                    opaque=4,
+                                    val='0123456789') +
+             self.packRes(memcacheConstants.CMD_GETK, key='someChoppedVal',
+                                    extraHeader=struct.pack(memcacheConstants.GET_RES_FMT, 0),
+                                    opaque=17,
+                                    val='0123456789') +
+             self.packRes(memcacheConstants.CMD_NOOP))
+        self.mock_send(r[0:(24 + 4 + 12 + 10)])
+        self.mock_close()
+        self.client_recv('VALUE someWholeVal 0 10\r\n0123456789\r\n' +
+                         'END\r\n')
+
+    def testServerGoingDownAndUp(self):
         """Test server going up and down with no client impact"""
         self.client_connect()
         self.client_send('get someUp\r\n')
-        self.mock_recv("get someUp\r\n")
-        self.mock_send('VALUE someUp 0 10\r\n')
-        self.mock_send('0123456789\r\n')
-        self.mock_send('END\r\n')
+        self.mock_recv(self.packReq(memcacheConstants.CMD_GETK, key='someUp'))
+        self.mock_send(self.packRes(memcacheConstants.CMD_GETK, key='someUp',
+                                    extraHeader=struct.pack(memcacheConstants.GET_RES_FMT, 0),
+                                    val='0123456789'))
         self.client_recv('VALUE someUp 0 10\r\n0123456789\r\nEND\r\n')
 
         self.mock_close()
 
         self.client_send('get someUp\r\n')
-        self.mock_recv("get someUp\r\n")
-        self.mock_send('VALUE someUp 0 10\r\n')
-        self.mock_send('0123456789\r\n')
-        self.mock_send('END\r\n')
+        self.mock_recv(self.packReq(memcacheConstants.CMD_GETK, key='someUp'))
+        self.mock_send(self.packRes(memcacheConstants.CMD_GETK, key='someUp',
+                                    extraHeader=struct.pack(memcacheConstants.GET_RES_FMT, 0),
+                                    val='0123456789'))
         self.client_recv('VALUE someUp 0 10\r\n0123456789\r\nEND\r\n')
 
-    def SOON_testServerGoingDownAndUpAfterEND(self):
-        """Test server going up and down after END with no client impact"""
+    def testServerGoingDownAndUpAfterResponse(self):
+        """Test server going up and down after response with no client impact"""
         self.client_connect()
         self.client_send('get someUp\r\n')
-        self.mock_recv("get someUp\r\n")
-        self.mock_send('VALUE someUp 0 10\r\n')
-        self.mock_send('0123456789\r\n')
-        self.mock_send('END\r\n')
+        self.mock_recv(self.packReq(memcacheConstants.CMD_GETK, key='someUp'))
+        self.mock_send(self.packRes(memcacheConstants.CMD_GETK, key='someUp',
+                                    extraHeader=struct.pack(memcacheConstants.GET_RES_FMT, 0),
+                                    val='0123456789'))
 
         self.mock_close() # Try close before client_recv().
 
         self.client_recv('VALUE someUp 0 10\r\n0123456789\r\nEND\r\n')
 
         self.client_send('get someUp\r\n')
-        self.mock_recv("get someUp\r\n")
-        self.mock_send('VALUE someUp 0 10\r\n')
-        self.mock_send('0123456789\r\n')
-        self.mock_send('END\r\n')
+        self.mock_recv(self.packReq(memcacheConstants.CMD_GETK, key='someUp'))
+        self.mock_send(self.packRes(memcacheConstants.CMD_GETK, key='someUp',
+                                    extraHeader=struct.pack(memcacheConstants.GET_RES_FMT, 0),
+                                    val='0123456789'))
         self.client_recv('VALUE someUp 0 10\r\n0123456789\r\nEND\r\n')
 
-    def SOON_testTwoSerialClients(self):
+    def testTwoSerialClients(self):
         """Test two serial clients"""
 
         # Assuming proxy's downstream_max is 1,
@@ -294,10 +418,10 @@ class TestProxyBinary(moxi_mock_server.ProxyClientBase):
 
         self.client_connect(0)
         self.client_send('get client0\r\n', 0)
-        self.mock_recv("get client0\r\n", 0)
-        self.mock_send('VALUE client0 0 10\r\n', 0)
-        self.mock_send('0123456789\r\n', 0)
-        self.mock_send('END\r\n', 0)
+        self.mock_recv(self.packReq(memcacheConstants.CMD_GETK, key='client0'))
+        self.mock_send(self.packRes(memcacheConstants.CMD_GETK, key='client0',
+                                    extraHeader=struct.pack(memcacheConstants.GET_RES_FMT, 0),
+                                    val='0123456789'))
         self.client_recv('VALUE client0 0 10\r\n0123456789\r\nEND\r\n', 0)
 
         # Note that mock server sees 1 session that's reused
@@ -305,13 +429,13 @@ class TestProxyBinary(moxi_mock_server.ProxyClientBase):
 
         self.client_connect(1)
         self.client_send('get client1\r\n', 1)
-        self.mock_recv("get client1\r\n", 0)
-        self.mock_send('VALUE client1 0 10\r\n', 0)
-        self.mock_send('0123456789\r\n', 0)
-        self.mock_send('END\r\n', 0)
+        self.mock_recv(self.packReq(memcacheConstants.CMD_GETK, key='client1'))
+        self.mock_send(self.packRes(memcacheConstants.CMD_GETK, key='client1',
+                                    extraHeader=struct.pack(memcacheConstants.GET_RES_FMT, 0),
+                                    val='0123456789'))
         self.client_recv('VALUE client1 0 10\r\n0123456789\r\nEND\r\n', 1)
 
-    def SOON_testTwoSerialClientsConnectingUpfront(self):
+    def testTwoSerialClientsConnectingUpfront(self):
         """Test two serial clients that both connect upfront"""
 
         # Assuming proxy's downstream_max is 1,
@@ -321,20 +445,20 @@ class TestProxyBinary(moxi_mock_server.ProxyClientBase):
         self.client_connect(1)
 
         self.client_send('get client0\r\n', 0)
-        self.mock_recv("get client0\r\n", 0)
-        self.mock_send('VALUE client0 0 10\r\n', 0)
-        self.mock_send('0123456789\r\n', 0)
-        self.mock_send('END\r\n', 0)
+        self.mock_recv(self.packReq(memcacheConstants.CMD_GETK, key='client0'))
+        self.mock_send(self.packRes(memcacheConstants.CMD_GETK, key='client0',
+                                    extraHeader=struct.pack(memcacheConstants.GET_RES_FMT, 0),
+                                    val='0123456789'))
         self.client_recv('VALUE client0 0 10\r\n0123456789\r\nEND\r\n', 0)
 
         # Note that mock server sees 1 session that's reused
         # even though two clients are connected.
 
         self.client_send('get client1\r\n', 1)
-        self.mock_recv("get client1\r\n", 0)
-        self.mock_send('VALUE client1 0 10\r\n', 0)
-        self.mock_send('0123456789\r\n', 0)
-        self.mock_send('END\r\n', 0)
+        self.mock_recv(self.packReq(memcacheConstants.CMD_GETK, key='client1'))
+        self.mock_send(self.packRes(memcacheConstants.CMD_GETK, key='client1',
+                                    extraHeader=struct.pack(memcacheConstants.GET_RES_FMT, 0),
+                                    val='0123456789'))
         self.client_recv('VALUE client1 0 10\r\n0123456789\r\nEND\r\n', 1)
 
     # Dedupe of keys is disabled for now in vbucket-aware moxi.
