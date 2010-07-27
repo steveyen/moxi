@@ -12,6 +12,7 @@
 #include "work.h"
 #include "agent.h"
 #include "log.h"
+#include "cJSON.h"
 
 // Integration with libconflate.
 //
@@ -305,6 +306,9 @@ proxy_main *cproxy_init_agent_start(char *jid,
 static
 void cproxy_on_new_config(void *data0, void *data1);
 
+static
+bool cproxy_on_new_config_json_one(proxy_main *m, uint32_t new_config_ver, char *config);
+
 void on_conflate_new_config(void *userdata, kvpair_t *config) {
     assert(config != NULL);
 
@@ -340,6 +344,42 @@ void on_conflate_new_config(void *userdata, kvpair_t *config) {
 
 static
 bool cproxy_on_new_config_json(proxy_main *m, uint32_t new_config_ver, char *config) {
+    bool rv = false;
+
+    cJSON *c = cJSON_Parse(config);
+    if (c != NULL) {
+        cJSON *jMaps = cJSON_GetObjectItem(c, "vBucketServerMaps");
+        if (jMaps != NULL) {
+            if (jMaps->type == cJSON_Array) {
+                int numMaps = cJSON_GetArraySize(jMaps);
+                for (int i = 0; i < numMaps; i++) {
+                    cJSON *jMap = cJSON_GetArrayItem(jMaps, i);
+                    if (jMap != NULL &&
+                        jMap->type == cJSON_Object) {
+                        char *jMapStr = cJSON_Print(jMap);
+                        if (jMapStr != NULL) {
+                            rv = cproxy_on_new_config_json_one(m, new_config_ver, jMapStr) || rv;
+                            free(jMapStr);
+                        }
+                    }
+                }
+            }
+        } else {
+            // Just a single config.
+            //
+            rv = cproxy_on_new_config_json_one(m, new_config_ver, config);
+        }
+
+        cJSON_Delete(c);
+    }
+
+    return rv;
+}
+
+static
+bool cproxy_on_new_config_json_one(proxy_main *m, uint32_t new_config_ver, char *config) {
+    // Handle reconfiguration of a single proxy.
+    //
     bool rv = false;
 
     if (m != NULL &&
