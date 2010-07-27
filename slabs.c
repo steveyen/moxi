@@ -20,6 +20,7 @@
 #include <string.h>
 #include <assert.h>
 #include <pthread.h>
+#include "log.h"
 
 /* powers-of-N allocation structures */
 
@@ -113,7 +114,7 @@ void slabs_init(const size_t limit, const double factor, const bool prealloc) {
             mem_current = mem_base;
             mem_avail = mem_limit;
         } else {
-            fprintf(stderr, "Warning: Failed to allocate requested memory in"
+            moxi_log_write("Warning: Failed to allocate requested memory in"
                     " one large chunk.\nWill allocate in smaller chunks\n");
         }
     }
@@ -129,7 +130,7 @@ void slabs_init(const size_t limit, const double factor, const bool prealloc) {
         slabclass[i].perslab = POWER_BLOCK / slabclass[i].size;
         size *= factor;
         if (settings.verbose > 1) {
-            fprintf(stderr, "slab class %3d: chunk size %6u perslab %5u\n",
+            moxi_log_write("slab class %3d: chunk size %6u perslab %5u\n",
                     i, slabclass[i].size, slabclass[i].perslab);
         }
     }

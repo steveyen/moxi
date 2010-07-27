@@ -11,6 +11,7 @@
 #include "cproxy.h"
 #include "work.h"
 #include "agent.h"
+#include "log.h"
 
 // Integration with libconflate.
 //
@@ -57,7 +58,7 @@ static void agent_logger(void *userdata,
 
     va_list ap;
     va_start(ap, msg);
-    vfprintf(stderr, fmt, ap);
+    vfprintf(fmt, ap);
     va_end(ap);
 }
 
@@ -95,13 +96,13 @@ int cproxy_init_agent(char *cfg_str,
     init_extensions();
 
     if (cfg_str == NULL) {
-        fprintf(stderr, "missing cfg\n");
+        moxi_log_write("missing cfg\n");
         exit(EXIT_FAILURE);
     }
 
     int cfg_len = strlen(cfg_str);
     if (cfg_len <= 0) {
-        fprintf(stderr, "empty cfg\n");
+        moxi_log_write("empty cfg\n");
         exit(EXIT_FAILURE);
     }
 
@@ -167,8 +168,7 @@ int cproxy_init_agent(char *cfg_str,
                     key[0] != '#' &&
                     key[0] != '\0') {
                     if (settings.verbose > 0) {
-                        fprintf(stderr,
-                                "unknown configuration key: %s\n", key);
+                        moxi_log_write("unknown configuration key: %s\n", key);
                     }
                 }
             }
@@ -213,13 +213,13 @@ int cproxy_init_agent(char *cfg_str,
                          (jid != NULL && strlen(jid) > 0 ? jid : "default"));
 
             } else {
-                fprintf(stderr, "conflate dbpath buf alloc\n");
+                moxi_log_write("conflate dbpath buf alloc\n");
                 exit(EXIT_FAILURE);
             }
         }
 
         if (settings.verbose > 1) {
-            fprintf(stderr, "cproxy_init jid: %s host: %s dbpath: %s\n", jid, host, dbpath);
+            moxi_log_write("cproxy_init jid: %s host: %s dbpath: %s\n", jid, host, dbpath);
         }
 
         if (cproxy_init_agent_start(jid, jpw, dbpath, host,
@@ -252,7 +252,7 @@ proxy_main *cproxy_init_agent_start(char *jid,
     assert(dbpath);
 
     if (settings.verbose > 2) {
-        fprintf(stderr, "cproxy_init_agent_start\n");;
+        moxi_log_write("cproxy_init_agent_start\n");;
     }
 
     proxy_main *m = cproxy_gen_proxy_main(behavior, nthreads,
@@ -280,7 +280,7 @@ proxy_main *cproxy_init_agent_start(char *jid,
 
         if (start_conflate(config)) {
             if (settings.verbose > 2) {
-                fprintf(stderr, "cproxy_init done\n");
+                moxi_log_write("cproxy_init done\n");
             }
 
             return m;
@@ -290,7 +290,7 @@ proxy_main *cproxy_init_agent_start(char *jid,
     }
 
     if (settings.verbose > 1) {
-        fprintf(stderr, "cproxy could not start conflate\n");
+        moxi_log_write("cproxy could not start conflate\n");
     }
 
     return NULL;
@@ -309,7 +309,7 @@ void on_conflate_new_config(void *userdata, kvpair_t *config) {
     assert(mthread != NULL);
 
     if (settings.verbose > 2) {
-        fprintf(stderr, "agent_config ocnc on_conflate_new_config\n");
+        moxi_log_write("agent_config ocnc on_conflate_new_config\n");
     }
 
     work_collect completion;
@@ -319,11 +319,11 @@ void on_conflate_new_config(void *userdata, kvpair_t *config) {
     if (copy != NULL) {
         if (!work_send(mthread->work_queue, cproxy_on_new_config, &completion, copy) &&
             settings.verbose > 1) {
-            fprintf(stderr, "work_send failed\n");
+            moxi_log_write("work_send failed\n");
         }
     } else {
         if (settings.verbose > 1) {
-            fprintf(stderr, "agent_config ocnc failed dup_kvpair\n");
+            moxi_log_write("agent_config ocnc failed dup_kvpair\n");
         }
     }
 
@@ -339,7 +339,7 @@ bool cproxy_on_new_config_json(proxy_main *m, uint32_t new_config_ver, char *con
     if (m != NULL &&
         config != NULL) {
         if (settings.verbose > 2) {
-            fprintf(stderr, "conc contents config %s\n", config);
+            moxi_log_write("conc contents config %s\n", config);
         }
 
         // The config should be JSON that should look like...
@@ -357,7 +357,7 @@ bool cproxy_on_new_config_json(proxy_main *m, uint32_t new_config_ver, char *con
         VBUCKET_CONFIG_HANDLE vch = vbucket_config_parse_string(config);
         if (vch) {
             if (settings.verbose > 2) {
-                fprintf(stderr, "conc vbucket_config_parse_string: %d\n", (vch != NULL));
+                moxi_log_write("conc vbucket_config_parse_string: %d\n", (vch != NULL));
             }
 
             proxy_behavior proxyb = m->behavior;
@@ -366,7 +366,7 @@ bool cproxy_on_new_config_json(proxy_main *m, uint32_t new_config_ver, char *con
             int nodes_num = vbucket_config_get_num_servers(vch);
 
             if (settings.verbose > 2) {
-                fprintf(stderr, "conc pool_port: %d nodes_num: %d\n",
+                moxi_log_write("conc pool_port: %d nodes_num: %d\n",
                         pool_port, nodes_num);
             }
 
@@ -414,8 +414,7 @@ bool cproxy_on_new_config_json(proxy_main *m, uint32_t new_config_ver, char *con
                         rv = true;
                     } else {
                         if (settings.verbose > 1) {
-                            fprintf(stderr,
-                                    "ERROR: error receiving host:port for server config %d in %s\n",
+                            moxi_log_write("ERROR: error receiving host:port for server config %d in %s\n",
                                     j, config);
                         }
                     }
@@ -490,7 +489,7 @@ bool cproxy_on_new_config_kvs(proxy_main *m, uint32_t new_config_ver, kvpair_t *
     if (nbindings > 0 &&
         nbindings != npools) {
         if (settings.verbose > 1) {
-            fprintf(stderr, "npools does not match nbindings\n");
+            moxi_log_write("npools does not match nbindings\n");
         }
         return false;
     }
@@ -569,7 +568,7 @@ bool cproxy_on_new_config_kvs(proxy_main *m, uint32_t new_config_ver, kvpair_t *
                             if (config_str != NULL &&
                                 config_str[0] != '\0') {
                                 if (settings.verbose > 2) {
-                                    fprintf(stderr, "conc config: %s\n",
+                                    moxi_log_write("conc config: %s\n",
                                             config_str);
                                 }
 
@@ -583,7 +582,7 @@ bool cproxy_on_new_config_kvs(proxy_main *m, uint32_t new_config_ver, kvpair_t *
                             free(behavior_pool.arr);
                         } else {
                             if (settings.verbose > 1) {
-                                fprintf(stderr, "ERROR: oom on re-config malloc\n");;
+                                moxi_log_write("ERROR: oom on re-config malloc\n");;
                             }
                             return false;
                         }
@@ -594,7 +593,7 @@ bool cproxy_on_new_config_kvs(proxy_main *m, uint32_t new_config_ver, kvpair_t *
                     }
                 } else {
                     if (settings.verbose > 1) {
-                        fprintf(stderr, "ERROR: conc missing pool port\n");
+                        moxi_log_write("ERROR: conc missing pool port\n");
                     }
                     return false;
                 }
@@ -605,7 +604,7 @@ bool cproxy_on_new_config_kvs(proxy_main *m, uint32_t new_config_ver, kvpair_t *
             }
         } else {
             if (settings.verbose > 1) {
-                fprintf(stderr, "ERROR: conc missing pool name\n");
+                moxi_log_write("ERROR: conc missing pool name\n");
             }
             return false;
         }
@@ -641,7 +640,7 @@ void cproxy_on_new_config(void *data0, void *data1) {
     uint32_t new_config_ver = max_config_ver + 1;
 
     if (settings.verbose > 2) {
-        fprintf(stderr, "conc new_config_ver %u\n", new_config_ver);
+        moxi_log_write("conc new_config_ver %u\n", new_config_ver);
     }
 
 #ifdef MOXI_USE_VBUCKET
@@ -721,7 +720,7 @@ void cproxy_on_new_config(void *data0, void *data1) {
     free_kvpair(kvs);
 
     if (settings.verbose > 1) {
-        fprintf(stderr, "ERROR: conc failed config %llu\n",
+        moxi_log_write("ERROR: conc failed config %llu\n",
                 (long long unsigned int) m->stat_config_fails);
     }
     goto out;
@@ -781,15 +780,13 @@ void cproxy_on_new_pool(proxy_main *m,
             int n = cproxy_listen(p);
             if (n > 0) {
                 if (settings.verbose > 2) {
-                    fprintf(stderr,
-                            "cproxy_listen success %u to %s with %d conns\n",
+                    moxi_log_write("cproxy_listen success %u to %s with %d conns\n",
                             p->port, p->config, n);
                 }
                 m->stat_proxy_starts++;
             } else {
                 if (settings.verbose > 1) {
-                    fprintf(stderr,
-                            "ERROR: cproxy_listen failed on %u to %s\n",
+                    moxi_log_write("ERROR: cproxy_listen failed on %u to %s\n",
                             p->port, p->config);
                 }
                 m->stat_proxy_start_fails++;
@@ -797,7 +794,7 @@ void cproxy_on_new_pool(proxy_main *m,
         }
     } else {
         if (settings.verbose > 2) {
-            fprintf(stderr, "conp existing config change %u\n",
+            moxi_log_write("conp existing config change %u\n",
                     p->port);
         }
 
@@ -819,8 +816,7 @@ void cproxy_on_new_pool(proxy_main *m,
         if (settings.verbose > 2) {
             if (p->config && config &&
                 strcmp(p->config, config) != 0) {
-                fprintf(stderr,
-                        "conp config changed from %s to %s\n",
+                moxi_log_write("conp config changed from %s to %s\n",
                         p->config, config);
             }
         }
@@ -860,7 +856,7 @@ void cproxy_on_new_pool(proxy_main *m,
         pthread_mutex_unlock(&p->proxy_lock);
 
         if (settings.verbose > 2) {
-            fprintf(stderr, "conp changed %s, shutdown %s\n",
+            moxi_log_write("conp changed %s, shutdown %s\n",
                     changed ? "true" : "false",
                     shutdown ? "true" : "false");
         }
@@ -979,12 +975,12 @@ static void update_ptd_config(void *data0, void *data1) {
         }
 
         if (settings.verbose > 2) {
-            fprintf(stderr, "update_ptd_config %u, %u to %u\n",
+            moxi_log_write("update_ptd_config %u, %u to %u\n",
                     port, prev, ptd->config_ver);
         }
     } else {
         if (settings.verbose > 2) {
-            fprintf(stderr, "update_ptd_config %u, %u = %u no change\n",
+            moxi_log_write("update_ptd_config %u, %u = %u no change\n",
                     port, prev, ptd->config_ver);
         }
     }
@@ -1007,7 +1003,7 @@ static bool update_str_config(char **curr, char *next, char *descrip) {
 
         if (descrip != NULL &&
             settings.verbose > 2) {
-            fprintf(stderr, "%s\n", descrip);
+            moxi_log_write("%s\n", descrip);
         }
     }
     if (*curr == NULL && next != NULL) {
@@ -1038,7 +1034,7 @@ static bool update_behaviors_config(proxy_behavior **curr,
 
         if (descrip != NULL &&
             settings.verbose > 2) {
-            fprintf(stderr, "%s\n", descrip);
+            moxi_log_write("%s\n", descrip);
         }
     }
     if (*curr == NULL && next != NULL) {
@@ -1114,8 +1110,7 @@ char *parse_kvs_servers(char *prefix,
                      behavior_pool->arr[j].port);
         } else {
             if (settings.verbose > 1) {
-                fprintf(stderr,
-                        "ERROR: missing host:port for svr-%s in %s\n",
+                moxi_log_write("ERROR: missing host:port for svr-%s in %s\n",
                         servers[j], pool_name);
             }
         }

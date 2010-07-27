@@ -263,7 +263,7 @@ static void conn_init(void) {
     freetotal = 200;
     freecurr = 0;
     if ((freeconns = calloc(freetotal, sizeof(conn *))) == NULL) {
-        fprintf(stderr, "Failed to allocate connection structures\n");
+        moxi_log_write("Failed to allocate connection structures\n");
     }
     return;
 }
@@ -349,7 +349,7 @@ conn *conn_new(const int sfd, enum conn_states init_state,
 
     if (NULL == c) {
         if (!(c = (conn *)calloc(1, sizeof(conn)))) {
-            fprintf(stderr, "calloc()\n");
+            moxi_log_write("calloc()\n");
             return NULL;
         }
         MEMCACHED_CONN_CREATE(c);
@@ -379,7 +379,7 @@ conn *conn_new(const int sfd, enum conn_states init_state,
         if (c->rbuf == 0 || c->wbuf == 0 || c->ilist == 0 || c->iov == 0 ||
                 c->msglist == 0 || c->suffixlist == 0) {
             conn_free(c);
-            fprintf(stderr, "malloc()\n");
+            moxi_log_write("malloc()\n");
             return NULL;
         }
 
@@ -402,19 +402,19 @@ conn *conn_new(const int sfd, enum conn_states init_state,
 
     if (settings.verbose > 1) {
         if (init_state == conn_listening) {
-            fprintf(stderr, "<%d server listening (%s)\n", sfd,
+            moxi_log_write("<%d server listening (%s)\n", sfd,
                 prot_text(c->protocol));
         } else if (IS_UDP(transport)) {
-            fprintf(stderr, "<%d server listening (udp)\n", sfd);
+            moxi_log_write("<%d server listening (udp)\n", sfd);
         } else if (IS_NEGOTIATING(c->protocol)) {
-            fprintf(stderr, "<%d new auto-negotiating client connection\n",
+            moxi_log_write("<%d new auto-negotiating client connection\n",
                     sfd);
         } else if (c->protocol == ascii_prot) {
-            fprintf(stderr, "<%d new ascii client connection.\n", sfd);
+            moxi_log_write("<%d new ascii client connection.\n", sfd);
         } else if (c->protocol == binary_prot) {
-            fprintf(stderr, "<%d new binary client connection.\n", sfd);
+            moxi_log_write("<%d new binary client connection.\n", sfd);
         } else {
-            fprintf(stderr, "<%d new %s client connection\n",
+            moxi_log_write("<%d new %s client connection\n",
                     sfd, prot_text(c->protocol));
         }
     }
@@ -445,7 +445,7 @@ conn *conn_new(const int sfd, enum conn_states init_state,
     if (c->funcs == NULL) {
         c->funcs = &conn_funcs_default;
         if (settings.verbose > 1)
-            fprintf(stderr, "<%d initialized conn_funcs to default\n", sfd);
+            moxi_log_write( "<%d initialized conn_funcs to default\n", sfd);
     }
 
     c->cmd_start = NULL;
@@ -550,7 +550,7 @@ static void conn_close(conn *c) {
     event_del(&c->event);
 
     if (settings.verbose > 1)
-        fprintf(stderr, "<%d connection closed.\n", c->sfd);
+        moxi_log_write("<%d connection closed.\n", c->sfd);
 
     MEMCACHED_CONN_RELEASE(c->sfd);
     close(c->sfd);
@@ -661,7 +661,7 @@ void conn_set_state(conn *c, enum conn_states state) {
         }
 
         if (settings.verbose > 2) {
-            fprintf(stderr, "%d: going from %s to %s\n",
+            moxi_log_write("%d: going from %s to %s\n",
                     c->sfd, state_text(c->state),
                     state_text(state));
         }
@@ -807,14 +807,14 @@ void out_string(conn *c, const char *str) {
 
     if (c->noreply) {
         if (settings.verbose > 1)
-            fprintf(stderr, ">%d NOREPLY %s\n", c->sfd, str);
+            moxi_log_write(">%d NOREPLY %s\n", c->sfd, str);
         c->noreply = false;
         conn_set_state(c, conn_new_cmd);
         return;
     }
 
     if (settings.verbose > 1)
-        fprintf(stderr, ">%d %s\n", c->sfd, str);
+        moxi_log_write(">%d %s\n", c->sfd, str);
 
     len = strlen(str);
     if ((len + 2) > c->wsize) {
@@ -955,14 +955,14 @@ static void add_bin_header(conn *c, uint16_t err, uint8_t hdr_len, uint16_t key_
 
     if (settings.verbose > 1) {
         int ii;
-        fprintf(stderr, ">%d Writing bin response:", c->sfd);
+        moxi_log_write(">%d Writing bin response:", c->sfd);
         for (ii = 0; ii < sizeof(header->bytes); ++ii) {
             if (ii % 4 == 0) {
-                fprintf(stderr, "\n>%d  ", c->sfd);
+                moxi_log_write("\n>%d  ", c->sfd);
             }
-            fprintf(stderr, " 0x%02x", header->bytes[ii]);
+            moxi_log_write(" 0x%02x", header->bytes[ii]);
         }
-        fprintf(stderr, "\n");
+        moxi_log_write("\n");
     }
 
     add_iov(c, c->wbuf, sizeof(header->response));
@@ -1000,11 +1000,11 @@ void write_bin_error(conn *c, protocol_binary_response_status err, int swallow) 
     default:
         assert(false);
         errstr = "UNHANDLED ERROR";
-        fprintf(stderr, ">%d UNHANDLED ERROR: %d\n", c->sfd, err);
+        moxi_log_write(">%d UNHANDLED ERROR: %d\n", c->sfd, err);
     }
 
     if (settings.verbose > 0) {
-        fprintf(stderr, ">%d Writing an error: %s\n", c->sfd, errstr);
+        moxi_log_write(">%d Writing an error: %s\n", c->sfd, errstr);
     }
 
     len = strlen(errstr);
@@ -1074,12 +1074,12 @@ static void complete_incr_bin(conn *c) {
 
     if (settings.verbose) {
         int i;
-        fprintf(stderr, "incr ");
+        moxi_log_write("incr ");
 
         for (i = 0; i < nkey; i++) {
-            fprintf(stderr, "%c", key[i]);
+            moxi_log_write("%c", key[i]);
         }
-        fprintf(stderr, " %lld, %llu, %d\n",
+        moxi_log_write(" %lld, %llu, %d\n",
                 (long long)req->message.body.delta,
                 (long long)req->message.body.initial,
                 req->message.body.expiration);
@@ -1231,11 +1231,11 @@ static void process_bin_get(conn *c) {
 
     if (settings.verbose) {
         int ii;
-        fprintf(stderr, "<%d GET ", c->sfd);
+        moxi_log_write("<%d GET ", c->sfd);
         for (ii = 0; ii < nkey; ++ii) {
-            fprintf(stderr, "%c", key[ii]);
+            moxi_log_write("%c", key[ii]);
         }
-        fprintf(stderr, "\n");
+        moxi_log_write("\n");
     }
 
     it = item_get(key, nkey);
@@ -1413,11 +1413,11 @@ static void process_bin_stat(conn *c) {
 
     if (settings.verbose) {
         int ii;
-        fprintf(stderr, "<%d STATS ", c->sfd);
+        moxi_log_write("<%d STATS ", c->sfd);
         for (ii = 0; ii < nkey; ++ii) {
-            fprintf(stderr, "%c", subcommand[ii]);
+            moxi_log_write("%c", subcommand[ii]);
         }
-        fprintf(stderr, "\n");
+        moxi_log_write("\n");
     }
 
     if (nkey == 0) {
@@ -1490,13 +1490,13 @@ void bin_read_key(conn *c, enum bin_substates next_substate, int extra) {
 
         if (nsize != c->rsize) {
             if (settings.verbose) {
-                fprintf(stderr, "%d: Need to grow buffer from %lu to %lu\n",
+                moxi_log_write("%d: Need to grow buffer from %lu to %lu\n",
                         c->sfd, (unsigned long)c->rsize, (unsigned long)nsize);
             }
             char *newm = realloc(c->rbuf, nsize);
             if (newm == NULL) {
                 if (settings.verbose) {
-                    fprintf(stderr, "%d: Failed to grow buffer.. closing connection\n",
+                    moxi_log_write("%d: Failed to grow buffer.. closing connection\n",
                             c->sfd);
                 }
                 conn_set_state(c, conn_closing);
@@ -1512,7 +1512,7 @@ void bin_read_key(conn *c, enum bin_substates next_substate, int extra) {
             memmove(c->rbuf, c->rcurr, c->rbytes);
             c->rcurr = c->rbuf;
             if (settings.verbose) {
-                fprintf(stderr, "%d: Repack input buffer\n", c->sfd);
+                moxi_log_write("%d: Repack input buffer\n", c->sfd);
             }
         }
     }
@@ -1668,7 +1668,7 @@ void dispatch_bin_command(conn *c) {
         /* Just write an error message and disconnect the client */
         write_bin_error(c, PROTOCOL_BINARY_RESPONSE_EINVAL, 0);
         if (settings.verbose) {
-            fprintf(stderr, "Protocol error (opcode %02x), close connection %d\n",
+            moxi_log_write("Protocol error (opcode %02x), close connection %d\n",
                     c->binary_header.request.opcode, c->sfd);
         }
         c->write_and_go = conn_closing;
@@ -1696,20 +1696,20 @@ static void process_bin_update(conn *c) {
     if (settings.verbose) {
         int ii;
         if (c->cmd == PROTOCOL_BINARY_CMD_ADD) {
-            fprintf(stderr, "<%d ADD ", c->sfd);
+            moxi_log_write("<%d ADD ", c->sfd);
         } else if (c->cmd == PROTOCOL_BINARY_CMD_SET) {
-            fprintf(stderr, "<%d SET ", c->sfd);
+            moxi_log_write("<%d SET ", c->sfd);
         } else {
-            fprintf(stderr, "<%d REPLACE ", c->sfd);
+            moxi_log_write("<%d REPLACE ", c->sfd);
         }
         for (ii = 0; ii < nkey; ++ii) {
-            fprintf(stderr, "%c", key[ii]);
+            moxi_log_write("%c", key[ii]);
         }
 
         if (settings.verbose > 1) {
-            fprintf(stderr, " Value len is %d", vlen);
+            moxi_log_write(" Value len is %d", vlen);
         }
-        fprintf(stderr, "\n");
+        moxi_log_write("\n");
     }
 
     if (settings.detail_enabled) {
@@ -1781,7 +1781,7 @@ static void process_bin_append_prepend(conn *c) {
     vlen = c->binary_header.request.bodylen - nkey;
 
     if (settings.verbose > 1) {
-        fprintf(stderr, "Value len is %d\n", vlen);
+        moxi_log_write("Value len is %d\n", vlen);
     }
 
     if (settings.detail_enabled) {
@@ -1856,7 +1856,7 @@ static void process_bin_delete(conn *c) {
     assert(c != NULL);
 
     if (settings.verbose) {
-        fprintf(stderr, "Deleting %s\n", key);
+        moxi_log_write("Deleting %s\n", key);
     }
 
     if (settings.detail_enabled) {
@@ -1911,7 +1911,7 @@ void complete_nread_binary(conn *c) {
         process_bin_flush(c);
         break;
     default:
-        fprintf(stderr, "Not handling substate %d\n", c->substate);
+        moxi_log_write("Not handling substate %d\n", c->substate);
         assert(0);
     }
 }
@@ -1986,7 +1986,7 @@ enum store_item_type do_store_item(item *it, int comm, conn *c) {
             pthread_mutex_unlock(&c->thread->stats.mutex);
 
             if(settings.verbose > 1) {
-                fprintf(stderr, "CAS:  failure: expected %llu, got %llu\n",
+                moxi_log_write("CAS:  failure: expected %llu, got %llu\n",
                         (unsigned long long)ITEM_get_cas(old_it),
                         (unsigned long long)ITEM_get_cas(it));
             }
@@ -2495,7 +2495,7 @@ static inline void process_get_command(conn *c, token_t *tokens, size_t ntokens,
 
 
                 if (settings.verbose > 1)
-                    fprintf(stderr, ">%d sending key %s\n", c->sfd, ITEM_key(it));
+                    moxi_log_write(">%d sending key %s\n", c->sfd, ITEM_key(it));
 
                 /* item_get() has incremented it->refcount for us */
                 stats_get_hits[it->slabs_clsid]++;
@@ -2530,7 +2530,7 @@ static inline void process_get_command(conn *c, token_t *tokens, size_t ntokens,
     }
 
     if (settings.verbose > 1)
-        fprintf(stderr, ">%d END\n", c->sfd);
+        moxi_log_write(">%d END\n", c->sfd);
 
     /*
         If the loop was terminated because of out-of-memory, it is not
@@ -2832,7 +2832,7 @@ void process_command(conn *c, char *command) {
     MEMCACHED_PROCESS_COMMAND_START(c->sfd, c->rcurr, c->rbytes);
 
     if (settings.verbose > 1)
-        fprintf(stderr, "<%d %s\n", c->sfd, command);
+        moxi_log_write("<%d %s\n", c->sfd, command);
 
     /*
      * for commands set/add/replace, we build an item and read the data
@@ -3031,7 +3031,7 @@ int try_read_command(conn *c) {
         }
 
         if (settings.verbose) {
-            fprintf(stderr, "%d: Client using the %s protocol\n", c->sfd,
+            moxi_log_write("%d: Client using the %s protocol\n", c->sfd,
                     prot_text(c->protocol));
         }
     }
@@ -3048,7 +3048,7 @@ int try_read_command(conn *c) {
                 memmove(c->rbuf, c->rcurr, c->rbytes);
                 c->rcurr = c->rbuf;
                 if (settings.verbose) {
-                    fprintf(stderr, "%d: Realign input buffer\n", c->sfd);
+                    moxi_log_write("%d: Realign input buffer\n", c->sfd);
                 }
             }
 #endif
@@ -3058,14 +3058,14 @@ int try_read_command(conn *c) {
             if (settings.verbose > 1) {
                 /* Dump the packet before we convert it to host order */
                 int ii;
-                fprintf(stderr, "<%d Read binary protocol data:", c->sfd);
+                moxi_log_write("<%d Read binary protocol data:", c->sfd);
                 for (ii = 0; ii < sizeof(req->bytes); ++ii) {
                     if (ii % 4 == 0) {
-                        fprintf(stderr, "\n<%d   ", c->sfd);
+                        moxi_log_write("\n<%d   ", c->sfd);
                     }
-                    fprintf(stderr, " 0x%02x", req->bytes[ii]);
+                    moxi_log_write(" 0x%02x", req->bytes[ii]);
                 }
-                fprintf(stderr, "\n");
+                moxi_log_write("\n");
             }
 
             c->binary_header = *req;
@@ -3075,7 +3075,7 @@ int try_read_command(conn *c) {
 
             if (c->binary_header.request.magic != c->funcs->conn_binary_command_magic) {
                 if (settings.verbose) {
-                    fprintf(stderr, "Invalid magic:  %x\n",
+                    moxi_log_write("Invalid magic:  %x\n",
                             c->binary_header.request.magic);
                 }
                 conn_set_state(c, conn_closing);
@@ -3192,7 +3192,7 @@ static enum try_read_result try_read_network(conn *c) {
             char *new_rbuf = realloc(c->rbuf, c->rsize * 2);
             if (!new_rbuf) {
                 if (settings.verbose > 0)
-                    fprintf(stderr, "Couldn't realloc input buffer\n");
+                    moxi_log_write("Couldn't realloc input buffer\n");
                 c->rbytes = 0; /* ignore what we read */
                 out_string(c, "SERVER_ERROR out of memory reading request");
                 c->write_and_go = conn_closing;
@@ -3326,7 +3326,7 @@ static enum transmit_result transmit(conn *c) {
         if (res == -1 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
             if (!update_event(c, EV_WRITE | EV_PERSIST)) {
                 if (settings.verbose > 0)
-                    fprintf(stderr, "Couldn't update event\n");
+                    moxi_log_write("Couldn't update event\n");
                 conn_set_state(c, conn_closing);
                 return TRANSMIT_HARD_ERROR;
             }
@@ -3359,7 +3359,7 @@ void drive_machine(conn *c) {
 
     while (!stop) {
         if (settings.verbose > 2) {
-            fprintf(stderr, "%d: drive_machine %s\n",
+            moxi_log_write("%d: drive_machine %s\n",
                     c->sfd, state_text(c->state));
         }
 
@@ -3372,7 +3372,7 @@ void drive_machine(conn *c) {
                     stop = true;
                 } else if (errno == EMFILE) {
                     if (settings.verbose > 0)
-                        fprintf(stderr, "Too many open connections\n");
+                        moxi_log_write("Too many open connections\n");
                     accept_new_conns(false);
                     stop = true;
                 } else {
@@ -3399,7 +3399,7 @@ void drive_machine(conn *c) {
         case conn_waiting:
             if (!update_event(c, EV_READ | EV_PERSIST)) {
                 if (settings.verbose > 0)
-                    fprintf(stderr, "Couldn't update event\n");
+                    moxi_log_write("Couldn't update event\n");
                 conn_set_state(c, conn_closing);
                 break;
             }
@@ -3455,7 +3455,7 @@ void drive_machine(conn *c) {
                     */
                     if (!update_event(c, EV_WRITE | EV_PERSIST)) {
                         if (settings.verbose > 0)
-                            fprintf(stderr, "Couldn't update event\n");
+                            moxi_log_write("Couldn't update event\n");
                         conn_set_state(c, conn_closing);
                     }
                 }
@@ -3502,7 +3502,7 @@ void drive_machine(conn *c) {
             if (res == -1 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
                 if (!update_event(c, EV_READ | EV_PERSIST)) {
                     if (settings.verbose > 0)
-                        fprintf(stderr, "Couldn't update event\n");
+                        moxi_log_write( "Couldn't update event\n");
                     conn_set_state(c, conn_closing);
                     break;
                 }
@@ -3511,7 +3511,7 @@ void drive_machine(conn *c) {
             }
             /* otherwise we have a real error, on which we close the connection */
             if (settings.verbose > 0) {
-                fprintf(stderr, "Failed to read, and not due to blocking:\n"
+                moxi_log_write("Failed to read, and not due to blocking:\n"
                         "errno: %d %s \n"
                         "rcurr=%lx ritem=%lx rbuf=%lx rlbytes=%d rsize=%d\n",
                         errno, strerror(errno),
@@ -3554,7 +3554,7 @@ void drive_machine(conn *c) {
             if (res == -1 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
                 if (!update_event(c, EV_READ | EV_PERSIST)) {
                     if (settings.verbose > 0)
-                        fprintf(stderr, "Couldn't update event\n");
+                        moxi_log_write("Couldn't update event\n");
                     conn_set_state(c, conn_closing);
                     break;
                 }
@@ -3563,7 +3563,7 @@ void drive_machine(conn *c) {
             }
             /* otherwise we have a real error, on which we close the connection */
             if (settings.verbose > 0)
-                fprintf(stderr, "Failed to read, and not due to blocking\n");
+                moxi_log_write("Failed to read, and not due to blocking\n");
             conn_set_state(c, conn_closing);
             break;
 
@@ -3576,7 +3576,7 @@ void drive_machine(conn *c) {
             if (c->iovused == 0 || (IS_UDP(c->transport) && c->iovused == 1)) {
                 if (add_iov(c, c->wcurr, c->wbytes) != 0) {
                     if (settings.verbose > 0)
-                        fprintf(stderr, "Couldn't build response\n");
+                        moxi_log_write("Couldn't build response\n");
                     conn_set_state(c, conn_closing);
                     break;
                 }
@@ -3587,7 +3587,7 @@ void drive_machine(conn *c) {
         case conn_mwrite:
           if (IS_UDP(c->transport) && c->msgcurr == 0 && build_udp_headers(c) != 0) {
             if (settings.verbose > 0)
-              fprintf(stderr, "Failed to build UDP headers\n");
+              moxi_log_write("Failed to build UDP headers\n");
             conn_set_state(c, conn_closing);
             break;
           }
@@ -3616,7 +3616,7 @@ void drive_machine(conn *c) {
                     conn_set_state(c, c->write_and_go);
                 } else {
                     if (settings.verbose > 0)
-                        fprintf(stderr, "Unexpected state %d\n", c->state);
+                        moxi_log_write("Unexpected state %d\n", c->state);
                     conn_set_state(c, conn_closing);
                 }
                 break;
@@ -3681,7 +3681,7 @@ void event_handler(const int fd, const short which, void *arg) {
     /* sanity */
     if (fd != c->sfd) {
         if (settings.verbose > 0)
-            fprintf(stderr, "Catastrophic: event fd doesn't match conn fd!\n");
+            moxi_log_write("Catastrophic: event fd doesn't match conn fd!\n");
         conn_close(c);
         return;
     }
@@ -3741,7 +3741,7 @@ static void maximize_sndbuf(const int sfd) {
     }
 
     if (settings.verbose > 1)
-        fprintf(stderr, "<%d send buffer was %d, now %d\n", sfd, old_size, last_good);
+        moxi_log_write("<%d send buffer was %d, now %d\n", sfd, old_size, last_good);
 }
 
 /**
@@ -3774,7 +3774,7 @@ int server_socket(int port, enum network_transport transport,
     error= getaddrinfo(settings.inter, port_buf, &hints, &ai);
     if (error != 0) {
         if (error != EAI_SYSTEM)
-          fprintf(stderr, "getaddrinfo(): %s\n", gai_strerror(error));
+          moxi_log_write("getaddrinfo(): %s\n", gai_strerror(error));
         else
           perror("getaddrinfo()");
         return 1;
@@ -3870,7 +3870,7 @@ int server_socket(int port, enum network_transport transport,
                                              EV_READ | EV_PERSIST, 1,
                                              transport,
                                              main_base, NULL, NULL))) {
-                fprintf(stderr, "failed to create listening connection\n");
+                moxi_log_write("failed to create listening connection\n");
                 exit(EXIT_FAILURE);
             }
             listen_conn_add->next = listen_conn;
@@ -3956,7 +3956,7 @@ static int server_socket_unix(const char *path, int access_mask) {
                                  EV_READ | EV_PERSIST, 1,
                                  local_transport, main_base,
                                  NULL, NULL))) {
-        fprintf(stderr, "failed to create listening connection\n");
+        moxi_log_write("failed to create listening connection\n");
         exit(EXIT_FAILURE);
     }
 
@@ -4148,13 +4148,13 @@ static void save_pid(const pid_t pid, const char *pid_file) {
         return;
 
     if ((fp = fopen(pid_file, "w")) == NULL) {
-        fprintf(stderr, "Could not open the pid file %s for writing\n", pid_file);
+        moxi_log_write("Could not open the pid file %s for writing\n", pid_file);
         return;
     }
 
     fprintf(fp,"%ld\n", (long)pid);
     if (fclose(fp) == -1) {
-        fprintf(stderr, "Could not close the pid file %s.\n", pid_file);
+        moxi_log_write("Could not close the pid file %s.\n", pid_file);
         return;
     }
 }
@@ -4164,14 +4164,21 @@ static void remove_pidfile(const char *pid_file) {
       return;
 
   if (unlink(pid_file) != 0) {
-      fprintf(stderr, "Could not remove the pid file %s.\n", pid_file);
+      moxi_log_write("Could not remove the pid file %s.\n", pid_file);
   }
 
 }
 
 static void sig_handler(const int sig) {
-    printf("SIGINT handled.\n");
-    exit(EXIT_SUCCESS);
+    switch (sig) {
+
+        case SIGHUP :
+            log_error_cycle(ml);
+            break;
+        default :
+            printf("SIGINT handled.\n");
+            exit(EXIT_SUCCESS);
+    }
 }
 
 #ifndef HAVE_SIGIGNORE
@@ -4211,16 +4218,16 @@ static int enable_large_pages(void) {
         arg.mha_cmd = MHA_MAPSIZE_BSSBRK;
 
         if (memcntl(0, 0, MC_HAT_ADVISE, (caddr_t)&arg, 0, 0) == -1) {
-            fprintf(stderr, "Failed to set large pages: %s\n",
+            moxi_log_write("Failed to set large pages: %s\n",
                     strerror(errno));
-            fprintf(stderr, "Will use default page size\n");
+            moxi_log_write("Will use default page size\n");
         } else {
             ret = 0;
         }
     } else {
-        fprintf(stderr, "Failed to get supported pagesizes: %s\n",
+        moxi_log_write("Failed to get supported pagesizes: %s\n",
                 strerror(errno));
-        fprintf(stderr, "Will use default page size\n");
+        moxi_log_write("Will use default page size\n");
     }
 
     return ret;
@@ -4496,7 +4503,19 @@ int main (int argc, char **argv) {
     ml->log_level = log_level ? log_level : 5;
 
     log_error_open(ml);
+    /*
+     * logger initialized, from now on we should use moxi_log_write
+     * instead of fprintfs/perror
+     */
     moxi_log_write("mox log %s", "initialized");
+
+    if (ml->log_mode == ERRORLOG_FILE) {
+        /*
+         * install the signal handler for SIGHUP to handle
+         * cycling of the error log file
+         */
+         signal(SIGHUP, sig_handler);
+    }
 
 #endif
 
@@ -4530,7 +4549,7 @@ int main (int argc, char **argv) {
          */
 
         if ((getrlimit(RLIMIT_CORE, &rlim) != 0) || rlim.rlim_cur == 0) {
-            fprintf(stderr, "failed to ensure corefile creation\n");
+            moxi_log_write("failed to ensure corefile creation\n");
             exit(EX_OSERR);
         }
     }
@@ -4541,7 +4560,7 @@ int main (int argc, char **argv) {
      */
 
     if (getrlimit(RLIMIT_NOFILE, &rlim) != 0) {
-        fprintf(stderr, "failed to getrlimit number of files\n");
+        moxi_log_write("failed to getrlimit number of files\n");
         exit(EX_OSERR);
     } else {
         int maxfiles = settings.maxconns;
@@ -4550,7 +4569,7 @@ int main (int argc, char **argv) {
         if (rlim.rlim_max < rlim.rlim_cur)
             rlim.rlim_max = rlim.rlim_cur;
         if (setrlimit(RLIMIT_NOFILE, &rlim) != 0) {
-            fprintf(stderr, "failed to set rlimit for open files. Try running as root or requesting smaller maxconns value.\n");
+            moxi_log_write("failed to set rlimit for open files. Try running as root or requesting smaller maxconns value.\n");
             exit(EX_OSERR);
         }
     }
@@ -4559,15 +4578,15 @@ int main (int argc, char **argv) {
 #ifndef MAIN_CHECK
     if (getuid() == 0 || geteuid() == 0) {
         if (username == 0 || *username == '\0') {
-            fprintf(stderr, "can't run as root without the -u switch\n");
+            moxi_log_write("can't run as root without the -u switch\n");
             exit(EX_USAGE);
         }
         if ((pw = getpwnam(username)) == 0) {
-            fprintf(stderr, "can't find the user %s to switch to\n", username);
+            moxi_log_write("can't find the user %s to switch to\n", username);
             exit(EX_NOUSER);
         }
         if (setgid(pw->pw_gid) < 0 || setuid(pw->pw_uid) < 0) {
-            fprintf(stderr, "failed to assume identity of user %s\n", username);
+            moxi_log_write("failed to assume identity of user %s\n", username);
             exit(EX_OSERR);
         }
     }
@@ -4580,7 +4599,7 @@ int main (int argc, char **argv) {
             perror("Failed to ignore SIGHUP");
         }
         if (daemonize(maxcore, settings.verbose) == -1) {
-            fprintf(stderr, "failed to daemon() in order to daemonize\n");
+            moxi_log_write("failed to daemon() in order to daemonize\n");
             exit(EXIT_FAILURE);
         }
     }
@@ -4590,11 +4609,11 @@ int main (int argc, char **argv) {
 #ifdef HAVE_MLOCKALL
         int res = mlockall(MCL_CURRENT | MCL_FUTURE);
         if (res != 0) {
-            fprintf(stderr, "warning: -k invalid, mlockall() failed: %s\n",
+            moxi_log_write("warning: -k invalid, mlockall() failed: %s\n",
                     strerror(errno));
         }
 #else
-        fprintf(stderr, "warning: -k invalid, mlockall() not supported on this platform.  proceeding without.\n");
+        moxi_log_write("warning: -k invalid, mlockall() not supported on this platform.  proceeding without.\n");
 #endif
     }
 
@@ -4634,7 +4653,8 @@ int main (int argc, char **argv) {
     if (settings.socketpath != NULL) {
         errno = 0;
         if (server_socket_unix(settings.socketpath,settings.access)) {
-            vperror("failed to listen on UNIX socket: %s", settings.socketpath);
+            moxi_log_write("failed to listen on UNIX socket: %s: %s",
+                settings.socketpath, strerror(errno));
             exit(EX_OSERR);
         }
     }
@@ -4654,7 +4674,7 @@ int main (int argc, char **argv) {
 
             portnumber_file = fopen(temp_portnumber_filename, "a");
             if (portnumber_file == NULL) {
-                fprintf(stderr, "Failed to open \"%s\": %s\n",
+                moxi_log_write("Failed to open \"%s\": %s\n",
                         temp_portnumber_filename, strerror(errno));
             }
         }
@@ -4662,7 +4682,8 @@ int main (int argc, char **argv) {
         errno = 0;
         if (settings.port >= 0 && server_socket(settings.port, tcp_transport,
                                                 portnumber_file)) {
-            vperror("failed to listen on TCP port %d", settings.port);
+            moxi_log_write("failed to listen on TCP port %d: %s",
+                settings.port, strerror(errno));
             exit(EX_OSERR);
         }
 
@@ -4679,7 +4700,7 @@ int main (int argc, char **argv) {
         if (settings.udpport >= 0 && server_socket(settings.udpport,
                                                    udp_transport,
                                                    portnumber_file)) {
-            vperror("failed to listen on UDP port %d", settings.udpport);
+            moxi_log_write("failed to listen on UDP port %d: %s", settings.udpport, strerror(errno));
             exit(EX_OSERR);
         }
 
@@ -4715,8 +4736,7 @@ int main (int argc, char **argv) {
         if (i <= 0
             && settings.port == UNSPECIFIED
             && settings.udpport == UNSPECIFIED) {
-            fprintf(stderr,
-                    "error: need proxy configuration.  See usage (-h).\n");
+            moxi_log_write("error: need proxy configuration.  See usage (-h).\n");
             return 1;
         }
 #endif

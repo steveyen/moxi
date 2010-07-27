@@ -13,6 +13,7 @@
 #include "memcached.h"
 #include "cproxy.h"
 #include "work.h"
+#include "log.h"
 
 // Local declarations.
 //
@@ -250,7 +251,7 @@ int cproxy_init(char *cfg_str,
             free(buf);
             return rv;
         } else {
-            fprintf(stderr, "could not read behavior file: %s\n", behavior_str);
+            moxi_log_write("could not read behavior file: %s\n", behavior_str);
             exit(EXIT_FAILURE);
         }
     }
@@ -263,7 +264,7 @@ int cproxy_init(char *cfg_str,
             free(buf);
             return rv;
         } else {
-            fprintf(stderr, "could not read cfg file: %s\n", cfg_str);
+            moxi_log_write("could not read cfg file: %s\n", cfg_str);
             exit(EXIT_FAILURE);
         }
     }
@@ -304,7 +305,7 @@ int cproxy_init(char *cfg_str,
                              behavior,
                              nthreads);
 #else
-    fprintf(stderr, "missing conflate\n");
+    moxi_log_write("missing conflate\n");
     exit(EXIT_FAILURE);
     return 1;
 #endif
@@ -341,12 +342,12 @@ int cproxy_init_string(char *cfg_str,
 
         proxy_port_str = trimstr(strsep(&proxy_sect, "="));
         if (proxy_sect == NULL) {
-            fprintf(stderr, "bad moxi config, missing =\n");
+            moxi_log_write("bad moxi config, missing =\n");
             exit(EXIT_FAILURE);
         }
         proxy_port = atoi(proxy_port_str);
         if (proxy_port <= 0) {
-            fprintf(stderr, "missing proxy port\n");
+            moxi_log_write("missing proxy port\n");
             exit(EXIT_FAILURE);
         }
         proxy_sect = trimstr(proxy_sect);
@@ -374,7 +375,7 @@ int cproxy_init_string(char *cfg_str,
             proxy_main *m = cproxy_gen_proxy_main(behavior, nthreads,
                                                   PROXY_CONF_TYPE_STATIC);
             if (m == NULL) {
-                fprintf(stderr, "could not alloc proxy_main\n");
+                moxi_log_write("could not alloc proxy_main\n");
                 exit(EXIT_FAILURE);
             }
 
@@ -393,24 +394,22 @@ int cproxy_init_string(char *cfg_str,
                 int n = cproxy_listen(p);
                 if (n > 0) {
                     if (settings.verbose > 1) {
-                        fprintf(stderr,
-                                "moxi listening on %d with %d conns\n",
+                        moxi_log_write("moxi listening on %d with %d conns\n",
                                 proxy_port, n);
                     }
                 } else {
-                    fprintf(stderr,
-                            "moxi error -- port %d unavailable?\n",
+                    moxi_log_write("moxi error -- port %d unavailable?\n",
                             proxy_port);
                     exit(EXIT_FAILURE);
                 }
             } else {
-                fprintf(stderr, "could not alloc proxy\n");
+                moxi_log_write("could not alloc proxy\n");
                 exit(EXIT_FAILURE);
             }
 
             free(behavior_pool.arr);
         } else {
-            fprintf(stderr, "could not alloc behaviors\n");
+            moxi_log_write("could not alloc behaviors\n");
             exit(EXIT_FAILURE);
         }
     }
@@ -526,7 +525,7 @@ void cproxy_parse_behavior_key_val(char *key,
                     proxy_downstream_binary_prot;
             } else {
                 if (settings.verbose > 1) {
-                    fprintf(stderr, "unknown behavior prot: %s\n", val);
+                    moxi_log_write("unknown behavior prot: %s\n", val);
                 }
             }
         } else if (wordeq(key, "timeout") ||
@@ -588,7 +587,7 @@ void cproxy_parse_behavior_key_val(char *key,
             behavior->port_listen = strtol(val, NULL, 10);
         } else {
             if (settings.verbose > 1) {
-                fprintf(stderr, "unknown behavior key: %s\n", key);
+                moxi_log_write("unknown behavior key: %s\n", key);
             }
         }
     }
@@ -625,7 +624,7 @@ bool cproxy_equal_behaviors(int x_size, proxy_behavior *x,
     for (int i = 0; i < x_size; i++) {
         if (cproxy_equal_behavior(&x[i], &y[i]) == false) {
             if (settings.verbose > 1) {
-                fprintf(stderr, "behaviors not equal (%d)\n", i);
+                moxi_log_write("behaviors not equal (%d)\n", i);
                 cproxy_dump_behavior(&x[i], "x", 0);
                 cproxy_dump_behavior(&y[i], "y", 0);
             }
@@ -739,7 +738,7 @@ void cproxy_dump_behavior_stderr(const void *dump_opaque,
         prefix = "";
     }
 
-    fprintf(stderr, "%s %s: %s\n",
+    moxi_log_write("%s %s: %s\n",
             prefix, key, val);
 }
 

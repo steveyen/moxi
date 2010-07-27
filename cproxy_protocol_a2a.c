@@ -9,6 +9,7 @@
 #include "memcached.h"
 #include "cproxy.h"
 #include "work.h"
+#include "log.h"
 
 // Internal declarations.
 //
@@ -35,7 +36,7 @@ void cproxy_process_a2a_downstream(conn *c, char *line) {
     assert(IS_PROXY(c->protocol));
 
     if (settings.verbose > 1) {
-        fprintf(stderr, "<%d cproxy_process_a2a_downstream %s\n",
+        moxi_log_write("<%d cproxy_process_a2a_downstream %s\n",
                 c->sfd, line);
     }
 
@@ -78,12 +79,12 @@ void cproxy_process_a2a_downstream(conn *c, char *line) {
                     return; // Success.
                 } else {
                     if (settings.verbose > 1) {
-                        fprintf(stderr, "cproxy could not parse cas\n");
+                        moxi_log_write("cproxy could not parse cas\n");
                     }
                 }
             } else {
                 if (settings.verbose > 1) {
-                    fprintf(stderr, "cproxy could not item_alloc size %u\n",
+                    moxi_log_write("cproxy could not item_alloc size %u\n",
                             vlen + 2);
                 }
             }
@@ -170,8 +171,7 @@ void cproxy_process_a2a_downstream(conn *c, char *line) {
 
             if (!update_event(uc, EV_WRITE | EV_PERSIST)) {
                 if (settings.verbose > 1) {
-                    fprintf(stderr,
-                            "Can't update upstream write event\n");
+                    moxi_log_write("Can't update upstream write event\n");
                 }
 
                 d->ptd->stats.stats.err_oom++;
@@ -191,8 +191,7 @@ void cproxy_process_a2a_downstream_nread(conn *c) {
     assert(c != NULL);
 
     if (settings.verbose > 1) {
-        fprintf(stderr,
-                "<%d cproxy_process_a2a_downstream_nread %d %d\n",
+        moxi_log_write("<%d cproxy_process_a2a_downstream_nread %d %d\n",
                 c->sfd, c->ileft, c->isize);
     }
 
@@ -245,8 +244,7 @@ bool cproxy_forward_a2a_downstream(downstream *d) {
     }
 
     if (settings.verbose > 2) {
-        fprintf(stderr,
-                "%d: cproxy_forward_a2a_downstream connect failed\n",
+        moxi_log_write("%d: cproxy_forward_a2a_downstream connect failed\n",
                 uc->sfd);
     }
 
@@ -345,7 +343,7 @@ bool cproxy_forward_a2a_simple_downstream(downstream *d,
             out_string(c, command);
 
             if (settings.verbose > 1) {
-                fprintf(stderr, "forwarding to %d, noreply %d\n",
+                moxi_log_write("forwarding to %d, noreply %d\n",
                         c->sfd, uc->noreply);
             }
 
@@ -371,7 +369,7 @@ bool cproxy_forward_a2a_simple_downstream(downstream *d,
             }
 
             if (settings.verbose > 1) {
-                fprintf(stderr, "Couldn't update cproxy write event\n");
+                moxi_log_write("Couldn't update cproxy write event\n");
             }
 
             d->ptd->stats.stats.err_oom++;
@@ -435,8 +433,7 @@ bool cproxy_broadcast_a2a_downstream(downstream *d,
                     }
                 } else {
                     if (settings.verbose > 1) {
-                        fprintf(stderr,
-                                "Update cproxy write event failed\n");
+                        moxi_log_write("Update cproxy write event failed\n");
                     }
 
                     d->ptd->stats.stats.err_oom++;
@@ -450,7 +447,7 @@ bool cproxy_broadcast_a2a_downstream(downstream *d,
     }
 
     if (settings.verbose > 1) {
-        fprintf(stderr, "%d: a2a broadcast nwrite %d out of %d\n",
+        moxi_log_write("%d: a2a broadcast nwrite %d out of %d\n",
                 uc->sfd, nwrite, nconns);
     }
 
@@ -583,7 +580,7 @@ bool cproxy_forward_a2a_item_downstream(downstream *d, short cmd,
         }
 
         if (settings.verbose > 1) {
-            fprintf(stderr, "Proxy item write out of memory");
+            moxi_log_write("Proxy item write out of memory");
         }
     }
 

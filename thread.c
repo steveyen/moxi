@@ -10,6 +10,7 @@
 #include <errno.h>
 #include <string.h>
 #include <pthread.h>
+#include "log.h"
 
 #define ITEMS_PER_ALLOC 64
 
@@ -171,7 +172,7 @@ static void create_worker(void *(*func)(void *), void *arg) {
     pthread_attr_init(&attr);
 
     if ((ret = pthread_create(&thread, &attr, func, arg)) != 0) {
-        fprintf(stderr, "Can't create thread: %s\n",
+        moxi_log_write("Can't create thread: %s\n",
                 strerror(ret));
         exit(1);
     }
@@ -194,7 +195,7 @@ static void setup_thread(LIBEVENT_THREAD *me) {
     if (! me->base) {
         me->base = event_init();
         if (! me->base) {
-            fprintf(stderr, "Can't allocate event base\n");
+            moxi_log_write("Can't allocate event base\n");
             exit(1);
         }
     }
@@ -205,7 +206,7 @@ static void setup_thread(LIBEVENT_THREAD *me) {
     event_base_set(me->base, &me->notify_event);
 
     if (event_add(&me->notify_event, 0) == -1) {
-        fprintf(stderr, "Can't monitor libevent notify pipe\n");
+        moxi_log_write("Can't monitor libevent notify pipe\n");
         exit(1);
     }
 
@@ -233,7 +234,7 @@ static void setup_thread(LIBEVENT_THREAD *me) {
     me->suffix_cache = cache_create("suffix", SUFFIX_SIZE, sizeof(char*),
                                     NULL, NULL);
     if (me->suffix_cache == NULL) {
-        fprintf(stderr, "Failed to create suffix cache\n");
+        moxi_log_write("Failed to create suffix cache\n");
         exit(EXIT_FAILURE);
     }
 }
@@ -250,7 +251,7 @@ static void *worker_libevent(void *arg) {
      */
     me->thread_id = pthread_self();
     if (settings.verbose > 1)
-        fprintf(stderr, "worker_libevent thread_id %ld\n", (long)me->thread_id);
+        moxi_log_write("worker_libevent thread_id %ld\n", (long)me->thread_id);
 
     pthread_mutex_lock(&init_lock);
     init_count++;
@@ -273,7 +274,7 @@ static void thread_libevent_process(int fd, short which, void *arg) {
 
     if (read(fd, buf, 1) != 1)
         if (settings.verbose > 0)
-            fprintf(stderr, "Can't read from libevent pipe\n");
+            moxi_log_write("Can't read from libevent pipe\n");
 
     item = cq_pop(me->new_conn_queue);
 
@@ -285,11 +286,11 @@ static void thread_libevent_process(int fd, short which, void *arg) {
                            item->funcs, item->extra);
         if (c == NULL) {
             if (IS_UDP(item->transport)) {
-                fprintf(stderr, "Can't listen for events on UDP socket\n");
+                moxi_log_write("Can't listen for events on UDP socket\n");
                 exit(1);
             } else {
                 if (settings.verbose > 0) {
-                    fprintf(stderr, "Can't listen for events on fd %d\n",
+                    moxi_log_write("Can't listen for events on fd %d\n",
                         item->sfd);
                 }
                 close(item->sfd);

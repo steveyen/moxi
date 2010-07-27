@@ -6,6 +6,9 @@
 #ifndef _LOG_H_
 #define _LOG_H_
 
+#include <errno.h>
+#include <string.h>
+
 /*
  * define the log levels
  */
@@ -43,9 +46,13 @@ int log_error_write(moxi_log *, const char *filename, unsigned int line, const c
 int log_error_cycle(moxi_log *);
 
 #ifndef MAIN_CHECK
+extern moxi_log *ml;
 #define moxi_log_write(...) log_error_write (ml, __FILE__, __LINE__, __VA_ARGS__)
 #else
 #define moxi_log_write(...) fprintf(stderr, __VA_ARGS__)
 #endif
+
+#undef perror
+#define perror(str) log_error_write(ml, __FILE__, __LINE__, str, ": %s", strerror(errno));
 
 #endif

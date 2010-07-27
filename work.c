@@ -10,6 +10,7 @@
 #include <unistd.h>
 #include <event.h>
 #include "work.h"
+#include "log.h"
 
 #undef WORK_DEBUG
 
@@ -54,7 +55,7 @@ bool work_queue_init(work_queue *m, struct event_base *event_base) {
 
         if (event_add(&m->event, 0) == 0) {
 #ifdef WORK_DEBUG
-            fprintf(stderr, "work_queue_init %x %x %x %d %d %u %llu\n",
+            moxi_log_write("work_queue_init %x %x %x %d %d %u %llu\n",
                     (int) pthread_self(),
                     (int) m,
                     (int) m->event_base,
@@ -69,7 +70,7 @@ bool work_queue_init(work_queue *m, struct event_base *event_base) {
     }
 
 #ifdef WORK_DEBUG
-    fprintf(stderr, "work_queue_init error\n");
+    moxi_log_write("work_queue_init error\n");
 #endif
 
     return false;
@@ -114,7 +115,7 @@ bool work_send(work_queue *m,
             m->tot_sends++;
 
 #ifdef WORK_DEBUG
-            fprintf(stderr, "work_send %x %x %x %d %d %d %llu %llu\n",
+            moxi_log_write("work_send %x %x %x %d %d %d %llu %llu\n",
                     (int) pthread_self(),
                     (int) m,
                     (int) m->event_base,
@@ -159,7 +160,7 @@ void work_recv(int fd, short which, void *arg) {
 #ifdef WORK_DEBUG
         // Perhaps libevent called us in incorrect way.
         //
-        fprintf(stderr, "unexpected work_recv read value\n");
+        moxi_log_write("unexpected work_recv read value\n");
 #endif
     }
 
@@ -168,7 +169,7 @@ void work_recv(int fd, short which, void *arg) {
     m->work_tail = NULL;
 
 #ifdef WORK_DEBUG
-    fprintf(stderr, "work_recv %x %x %x %d %d %d %llu %llu %d\n",
+    moxi_log_write("work_recv %x %x %x %d %d %d %llu %llu %d\n",
             (int) pthread_self(),
             (int) m,
             (int) m->event_base,

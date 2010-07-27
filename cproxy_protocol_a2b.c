@@ -11,6 +11,7 @@
 #include "memcached.h"
 #include "cproxy.h"
 #include "work.h"
+#include "log.h"
 
 // Internal declarations.
 //
@@ -246,8 +247,7 @@ int a2b_fill_request(short    cmd,
                 header->request.opaque = htonl(OPAQUE_IGNORE_REPLY);
 
                 if (settings.verbose > 2) {
-                    fprintf(stderr,
-                            "a2b_fill_request OPAQUE_IGNORE_REPLY, cmdq: %x\n",
+                    moxi_log_write("a2b_fill_request OPAQUE_IGNORE_REPLY, cmdq: %x\n",
                             spec->cmdq);
                 }
             } else {
@@ -271,8 +271,7 @@ int a2b_fill_request(short    cmd,
         }
     } else {
         if (settings.verbose > 2) {
-            fprintf(stderr,
-                    "a2b_fill_request unknown cmd: %x\n", cmd);
+            moxi_log_write("a2b_fill_request unknown cmd: %x\n", cmd);
         }
     }
 
@@ -299,7 +298,7 @@ bool a2b_fill_request_token(struct A2BSpec *spec,
     uint64_t delta;
 
     if (settings.verbose > 2) {
-        fprintf(stderr, "a2b_fill_request_token %s\n",
+        moxi_log_write("a2b_fill_request_token %s\n",
                 spec->tokens[cur_token].value);
     }
 
@@ -428,7 +427,7 @@ void cproxy_process_a2b_downstream(conn *c) {
     // - bin_read_set_value means do nread for item data.
     //
     if (settings.verbose > 2) {
-        fprintf(stderr, "<%d cproxy_process_a2b_downstream %x %d %d %u\n",
+        moxi_log_write("<%d cproxy_process_a2b_downstream %x %d %d %u\n",
                 c->sfd, c->cmd, extlen, keylen, bodylen);
     }
 
@@ -503,8 +502,7 @@ void cproxy_process_a2b_downstream_nread(conn *c) {
     uint32_t bodylen = header->response.bodylen;
 
     if (settings.verbose > 2) {
-        fprintf(stderr,
-                "<%d cproxy_process_a2b_downstream_nread %d %d, cmd %x %d %d\n",
+        moxi_log_write("<%d cproxy_process_a2b_downstream_nread %d %d, cmd %x %d %d\n",
                 c->sfd, c->ileft, c->isize, c->cmd, c->substate,
                 header->response.status);
     }
@@ -515,8 +513,7 @@ void cproxy_process_a2b_downstream_nread(conn *c) {
          c->cmd == PROTOCOL_BINARY_CMD_GETK ||
          c->cmd == PROTOCOL_BINARY_CMD_STAT)) {
         if (settings.verbose > 2) {
-            fprintf(stderr,
-                    "<%d cproxy_process_a2b_downstream_nread %d %d %x get/getk/stat\n",
+            moxi_log_write("<%d cproxy_process_a2b_downstream_nread %d %d %x get/getk/stat\n",
                     c->sfd, c->ileft, c->isize, c->cmd);
         }
 
@@ -645,8 +642,7 @@ void a2b_process_downstream_response(conn *c) {
     uint16_t status  = header->response.status;
 
     if (settings.verbose > 2) {
-        fprintf(stderr,
-                "<%d cproxy_process_a2b_downstream_response, cmd: %x, item: %d, status: %d\n",
+        moxi_log_write("<%d cproxy_process_a2b_downstream_response, cmd: %x, item: %d, status: %d\n",
                 c->sfd, c->cmd, (c->item != NULL), status);
     }
 
@@ -676,8 +672,7 @@ void a2b_process_downstream_response(conn *c) {
     //
     if (status == PROTOCOL_BINARY_RESPONSE_NOT_MY_VBUCKET) {
         if (settings.verbose > 2) {
-            fprintf(stderr,
-                    "<%d cproxy_process_a2b_downstream_response not-my-vbucket, "
+            moxi_log_write("<%d cproxy_process_a2b_downstream_response not-my-vbucket, "
                     "cmd: %x %d\n",
                     c->sfd, header->response.opcode, uc != NULL);
         }
@@ -700,8 +695,7 @@ void a2b_process_downstream_response(conn *c) {
             int sindex = downstream_conn_index(d, c);
 
             if (settings.verbose > 2) {
-                fprintf(stderr,
-                        "<%d cproxy_process_a2b_downstream_response not-my-vbucket, "
+                moxi_log_write("<%d cproxy_process_a2b_downstream_response not-my-vbucket, "
                         "cmd: %x not multi-key get, sindex %d, vbucket %d, retries %d\n",
                         c->sfd, header->response.opcode, sindex, vbucket, uc->cmd_retries);
             }
@@ -724,8 +718,7 @@ void a2b_process_downstream_response(conn *c) {
             }
 
             if (settings.verbose > 2) {
-                fprintf(stderr,
-                        "%d: cproxy_process_a2b_downstream_response not-my-vbucket, "
+                moxi_log_write("%d: cproxy_process_a2b_downstream_response not-my-vbucket, "
                         "cmd: %x skipping retry %d >= %d\n",
                         c->sfd, header->response.opcode, uc->cmd_retries,
                         max_retries);
@@ -764,8 +757,7 @@ void a2b_process_downstream_response(conn *c) {
             mcs_key_hash(&d->mst, key_buf, key_len, &vbucket);
 
             if (settings.verbose > 2) {
-                fprintf(stderr,
-                        "<%d cproxy_process_a2b_downstream_response not-my-vbucket, "
+                moxi_log_write("<%d cproxy_process_a2b_downstream_response not-my-vbucket, "
                         "cmd: %x get/getk '%s' %d retry %d, sindex %d, vbucket %d\n",
                         c->sfd, header->response.opcode, key_buf, key_len,
                         d->upstream_retry + 1, sindex, vbucket);
@@ -781,8 +773,7 @@ void a2b_process_downstream_response(conn *c) {
                 multiget_entry *entry = genhash_find(d->multiget, key_buf);
 
                 if (settings.verbose > 2) {
-                    fprintf(stderr,
-                            "<%d cproxy_process_a2b_downstream_response not-my-vbucket, "
+                    moxi_log_write("<%d cproxy_process_a2b_downstream_response not-my-vbucket, "
                             "cmd: %x get/getk '%s' %d retry: %d, entry: %d, vbucket %d "
                             "deleting multiget entry\n",
                             c->sfd, header->response.opcode, key_buf, key_len,
@@ -813,8 +804,7 @@ void a2b_process_downstream_response(conn *c) {
     switch (c->cmd) {
     case PROTOCOL_BINARY_CMD_GETK:
         if (settings.verbose > 2) {
-            fprintf(stderr,
-                    "%d: cproxy_process_a2b_downstream_response GETK "
+            moxi_log_write("%d: cproxy_process_a2b_downstream_response GETK "
                     "noreply: %d\n", c->sfd, c->noreply);
         }
 
@@ -1159,7 +1149,7 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
             assert(out_keylen == 0);
 
             if (settings.verbose > 2) {
-                fprintf(stderr, "a2b broadcast flush_all\n");
+                moxi_log_write("a2b broadcast flush_all\n");
             }
 
             if (out_extlen == 0) {
@@ -1175,7 +1165,7 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
         }
 
         if (settings.verbose > 2) {
-            fprintf(stderr, "a2b broadcast flush_all no size\n");
+            moxi_log_write("a2b broadcast flush_all no size\n");
         }
 
         return false;
@@ -1198,7 +1188,7 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
             assert(uc->noreply == false);
 
             if (settings.verbose > 2) {
-                fprintf(stderr, "a2b broadcast %s\n", command);
+                moxi_log_write("a2b broadcast %s\n", command);
             }
 
             if (strncmp(command + 5, " reset", 6) == 0) {
@@ -1282,7 +1272,7 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
                 }
 
                 if (settings.verbose > 2) {
-                    fprintf(stderr, "forwarding a2b to %d, cmd %x, noreply %d, vbucket %d",
+                    moxi_log_write("forwarding a2b to %d, cmd %x, noreply %d, vbucket %d",
                             c->sfd, header->request.opcode, uc->noreply, vbucket);
 
                     cproxy_dump_header(c->sfd, (char *) header);
@@ -1312,7 +1302,7 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
                     // TODO: Error handling.
                     //
                     if (settings.verbose > 1) {
-                        fprintf(stderr, "ERROR: Couldn't a2b update write event\n");
+                        moxi_log_write("ERROR: Couldn't a2b update write event\n");
                     }
 
                     if (d->upstream_suffix == NULL) {
@@ -1325,7 +1315,7 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
                 // TODO: Error handling.
                 //
                 if (settings.verbose > 1) {
-                    fprintf(stderr, "ERROR: Couldn't a2b fill request: %s (%x)\n",
+                    moxi_log_write("ERROR: Couldn't a2b fill request: %s (%x)\n",
                             command, uc->cmd_curr);
                 }
 
@@ -1381,8 +1371,7 @@ int a2b_multiget_skey(conn *c, char *skey, int skey_len, int vbucket, int key_in
                     memcpy(key_buf, key, key_len);
                     key_buf[key_len] = '\0';
 
-                    fprintf(stderr,
-                            "<%d a2b_multiget_skey '%s' %d %d\n",
+                    moxi_log_write("<%d a2b_multiget_skey '%s' %d %d\n",
                             c->sfd, key_buf, vbucket, key_index);
                 }
             }
@@ -1461,8 +1450,7 @@ bool cproxy_broadcast_a2b_downstream(downstream *d,
                     }
                 } else {
                     if (settings.verbose > 1) {
-                        fprintf(stderr,
-                                "ERROR: Update cproxy write event failed\n");
+                        moxi_log_write("ERROR: Update cproxy write event failed\n");
                     }
 
                     d->ptd->stats.stats.err_oom++;
@@ -1470,8 +1458,7 @@ bool cproxy_broadcast_a2b_downstream(downstream *d,
                 }
             } else {
                 if (settings.verbose > 1) {
-                    fprintf(stderr,
-                            "ERROR: a2b broadcast prep conn failed\n");
+                    moxi_log_write("ERROR: a2b broadcast prep conn failed\n");
                 }
 
                 d->ptd->stats.stats.err_downstream_write_prep++;
@@ -1481,7 +1468,7 @@ bool cproxy_broadcast_a2b_downstream(downstream *d,
     }
 
     if (settings.verbose > 2) {
-        fprintf(stderr, "%d: a2b broadcast nwrite %d out of %d\n",
+        moxi_log_write("%d: a2b broadcast nwrite %d out of %d\n",
                 uc->sfd, nwrite, nconns);
     }
 
@@ -1693,8 +1680,7 @@ void a2b_set_opaque(conn *c, protocol_binary_request_header *header, bool norepl
         header->request.opaque = htonl(OPAQUE_IGNORE_REPLY);
 
         if (settings.verbose > 2) {
-            fprintf(stderr,
-                    "%d: a2b_set_opaque OPAQUE_IGNORE_REPLY, cmdq: %x\n",
+            moxi_log_write("%d: a2b_set_opaque OPAQUE_IGNORE_REPLY, cmdq: %x\n",
                     c->sfd, header->request.opcode);
         }
     }

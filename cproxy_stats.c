@@ -10,6 +10,7 @@
 #include "memcached.h"
 #include "cproxy.h"
 #include "work.h"
+#include "log.h"
 
 // Protocol STATS command handling.
 //
@@ -285,7 +286,7 @@ void protocol_stats_foreach_write(const void *key,
     int nline = strlen(line);
     if (nline > 0) {
         if (settings.verbose > 2) {
-            fprintf(stderr, "%d: cproxy_stats writing: %s\n", uc->sfd, line);
+            moxi_log_write("%d: cproxy_stats writing: %s\n", uc->sfd, line);
         }
 
         if (IS_BINARY(uc->protocol)) {
@@ -319,7 +320,7 @@ void protocol_stats_foreach_write(const void *key,
                         add_iov(uc, ITEM_data(it), it->nbytes);
 
                         if (settings.verbose > 2) {
-                            fprintf(stderr, "%d: cproxy_stats writing binary", uc->sfd);
+                            moxi_log_write("%d: cproxy_stats writing binary", uc->sfd);
                             cproxy_dump_header(uc->sfd, ITEM_data(it));
                         }
 

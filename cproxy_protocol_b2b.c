@@ -11,6 +11,7 @@
 #include "memcached.h"
 #include "cproxy.h"
 #include "work.h"
+#include "log.h"
 
 // Internal declarations.
 //
@@ -42,7 +43,7 @@ bool cproxy_forward_b2b_downstream(downstream *d) {
     conn *uc = d->upstream_conn;
 
     if (settings.verbose > 2) {
-        fprintf(stderr, "%d: cproxy_forward_b2b_downstream %x\n",
+        moxi_log_write("%d: cproxy_forward_b2b_downstream %x\n",
                 uc->sfd, uc->cmd);
     }
 
@@ -89,8 +90,7 @@ bool cproxy_forward_b2b_downstream(downstream *d) {
     }
 
     if (settings.verbose > 2) {
-        fprintf(stderr,
-                "%d: cproxy_forward_b2b_downstream connect failed\n",
+        moxi_log_write("%d: cproxy_forward_b2b_downstream connect failed\n",
                 uc->sfd);
     }
 
@@ -120,8 +120,7 @@ bool b2b_forward_item(conn *uc, downstream *d, item *it) {
         memcpy(buf, key, keylen);
         buf[keylen] = '\0';
 
-        fprintf(stderr,
-                "%d: b2b_forward_item nbytes %u, extlen %d, keylen %d opcode %x key (%s)",
+        moxi_log_write("%d: b2b_forward_item nbytes %u, extlen %d, keylen %d opcode %x key (%s)",
                 uc->sfd, it->nbytes, req->request.extlen, keylen, req->request.opcode, buf);
 
         cproxy_dump_header(uc->sfd, (char *) req);
@@ -147,8 +146,7 @@ bool b2b_forward_item(conn *uc, downstream *d, item *it) {
     }
 
     if (settings.verbose > 2) {
-        fprintf(stderr,
-                "%d: b2b_forward_item failed (%d)\n",
+        moxi_log_write("%d: b2b_forward_item failed (%d)\n",
                 uc->sfd, (c != NULL));
     }
 
@@ -169,8 +167,7 @@ bool b2b_forward_item_vbucket(conn *uc, downstream *d, item *it,
     // TODO: Optimize to self codepath.
     //
     if (settings.verbose > 2) {
-        fprintf(stderr,
-                "%d: b2b_forward_item_vbucket %x to %d, vbucket %d\n",
+        moxi_log_write("%d: b2b_forward_item_vbucket %x to %d, vbucket %d\n",
                 uc->sfd, uc->cmd, c->sfd, vbucket);
     }
 
@@ -192,7 +189,7 @@ bool b2b_forward_item_vbucket(conn *uc, downstream *d, item *it,
 
             if (update_event(c, EV_WRITE | EV_PERSIST)) {
                 if (settings.verbose > 2) {
-                    fprintf(stderr, "%d: b2b_forward %x to %d success\n",
+                    moxi_log_write("%d: b2b_forward %x to %d success\n",
                             uc->sfd, uc->cmd, c->sfd);
                 }
 
@@ -231,7 +228,7 @@ bool cproxy_broadcast_b2b_downstream(downstream *d, conn *uc) {
     }
 
     if (settings.verbose > 2) {
-        fprintf(stderr, "%d: b2b broadcast nwrite %d out of %d\n",
+        moxi_log_write("%d: b2b broadcast nwrite %d out of %d\n",
                 uc->sfd, nwrite, nconns);
     }
 
@@ -260,7 +257,7 @@ bool cproxy_broadcast_b2b_downstream(downstream *d, conn *uc) {
                 d->upstream_suffix_len = it->nbytes;
 
                 if (settings.verbose > 2) {
-                    fprintf(stderr, "%d: b2b broadcast upstream_suffix", uc->sfd);
+                    moxi_log_write("%d: b2b broadcast upstream_suffix", uc->sfd);
                     cproxy_dump_header(uc->sfd, ITEM_data(it));
                 }
 
@@ -306,7 +303,7 @@ void cproxy_process_b2b_downstream(conn *c) {
     uint32_t bodylen = c->binary_header.request.bodylen;
 
     if (settings.verbose > 2) {
-        fprintf(stderr, "<%d cproxy_process_b2b_downstream %x %d %d %u\n",
+        moxi_log_write("<%d cproxy_process_b2b_downstream %x %d %d %u\n",
                 c->sfd, c->cmd, extlen, keylen, bodylen);
     }
 
@@ -373,8 +370,7 @@ void cproxy_process_b2b_downstream_nread(conn *c) {
     int      opcode  = header->response.opcode;
 
     if (settings.verbose > 2) {
-        fprintf(stderr,
-                "<%d cproxy_process_b2b_downstream_nread %x %x %d %d %u %d %x\n",
+        moxi_log_write("<%d cproxy_process_b2b_downstream_nread %x %x %d %d %u %d %x\n",
                 c->sfd, c->cmd, opcode, extlen, keylen, bodylen, c->noreply, status);
     }
 
@@ -437,8 +433,7 @@ void cproxy_process_b2b_downstream_nread(conn *c) {
         if (uc != NULL &&
             status == PROTOCOL_BINARY_RESPONSE_NOT_MY_VBUCKET) {
             if (settings.verbose > 2) {
-                fprintf(stderr,
-                        "<%d cproxy_process_b2b_downstream_nread not-my-vbucket, "
+                moxi_log_write("<%d cproxy_process_b2b_downstream_nread not-my-vbucket, "
                         "cmd: %x %d\n",
                         c->sfd, header->response.opcode, uc->item != NULL);
             }
@@ -452,8 +447,7 @@ void cproxy_process_b2b_downstream_nread(conn *c) {
             int sindex = downstream_conn_index(d, c);
 
             if (settings.verbose > 2) {
-                fprintf(stderr,
-                        "<%d cproxy_process_b2b_downstream_nread not-my-vbucket, "
+                moxi_log_write("<%d cproxy_process_b2b_downstream_nread not-my-vbucket, "
                         "cmd: %x not multi-key get, sindex %d, vbucket %d, retries %d\n",
                         c->sfd, header->response.opcode,
                         sindex, vbucket, uc->cmd_retries);
@@ -476,8 +470,7 @@ void cproxy_process_b2b_downstream_nread(conn *c) {
             }
 
             if (settings.verbose > 2) {
-                fprintf(stderr,
-                        "%d: cproxy_process_b2b_downstream_nread not-my-vbucket, "
+                moxi_log_write("%d: cproxy_process_b2b_downstream_nread not-my-vbucket, "
                         "cmd: %x skipping retry %d >= %d\n",
                         c->sfd, header->response.opcode, uc->cmd_retries,
                         max_retries);
@@ -489,8 +482,7 @@ void cproxy_process_b2b_downstream_nread(conn *c) {
     //
     if (uc != NULL) {
         if (settings.verbose > 2) {
-            fprintf(stderr,
-                    "<%d cproxy_process_b2b_downstream_nread got %u",
+            moxi_log_write("<%d cproxy_process_b2b_downstream_nread got %u",
                     c->sfd, it->nbytes);
 
             cproxy_dump_header(c->sfd, ITEM_data(it));

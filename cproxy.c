@@ -11,6 +11,7 @@
 #include "memcached.h"
 #include "cproxy.h"
 #include "work.h"
+#include "log.h"
 
 // Internal forward declarations.
 //
@@ -95,7 +96,7 @@ proxy *cproxy_create(char    *name,
     assert(nthreads == settings.num_threads);
 
     if (settings.verbose > 1) {
-        fprintf(stderr, "cproxy_create on port %d, config %s\n",
+        moxi_log_write("cproxy_create on port %d, config %s\n",
                 port, config);
     }
 
@@ -226,7 +227,7 @@ int cproxy_listen(proxy *p) {
     assert(is_listen_thread());
 
     if (settings.verbose > 1) {
-        fprintf(stderr, "cproxy_listen on port %d, downstream %s\n",
+        moxi_log_write("cproxy_listen on port %d, downstream %s\n",
                 p->port, p->config);
     }
 
@@ -243,7 +244,7 @@ int cproxy_listen(proxy *p) {
         } else {
             p->listening_failed++;
 
-            fprintf(stderr, "ERROR: could not listen on port %d.\n"
+            moxi_log_write("ERROR: could not listen on port %d.\n"
                             "Please use -Z port_listen=PORT_NUM to specify a different port number.\n", p->port);
             exit(1);
         }
@@ -280,7 +281,7 @@ int cproxy_listen_port(int port,
         while (c != NULL &&
                c != listen_conn_orig) {
             if (settings.verbose > 1) {
-                fprintf(stderr,
+                moxi_log_write(
                         "<%d cproxy listening on port %d\n",
                         c->sfd, port);
             }
@@ -353,7 +354,7 @@ void cproxy_on_close_upstream_conn(conn *c) {
     assert(c != NULL);
 
     if (settings.verbose > 2) {
-        fprintf(stderr, "<%d cproxy_on_close_upstream_conn\n", c->sfd);
+        moxi_log_write("<%d cproxy_on_close_upstream_conn\n", c->sfd);
     }
 
     proxy_td *ptd = c->extra;
@@ -431,7 +432,7 @@ void cproxy_on_close_downstream_conn(conn *c) {
     assert(c->state == conn_closing);
 
     if (settings.verbose > 2) {
-        fprintf(stderr, "<%d cproxy_on_close_downstream_conn\n", c->sfd);
+        moxi_log_write("<%d cproxy_on_close_downstream_conn\n", c->sfd);
     }
 
     downstream *d = c->extra;
@@ -452,7 +453,7 @@ void cproxy_on_close_downstream_conn(conn *c) {
             d->downstream_conns[i] = NULL;
 
             if (settings.verbose > 2) {
-                fprintf(stderr,
+                moxi_log_write(
                         "<%d cproxy_on_close_downstream_conn quit_server\n",
                         c->sfd);
             }
@@ -547,7 +548,7 @@ void cproxy_on_close_downstream_conn(conn *c) {
     //
     if (uc_retry != NULL) {
         if (settings.verbose > 2) {
-            fprintf(stderr, "%d cproxy retrying\n", uc_retry->sfd);
+            moxi_log_write("%d cproxy retrying\n", uc_retry->sfd);
         }
 
         ptd->stats.stats.tot_retry++;
@@ -576,7 +577,7 @@ void cproxy_add_downstream(proxy_td *ptd) {
 
     if (ptd->downstream_num < ptd->downstream_max) {
         if (settings.verbose > 2) {
-            fprintf(stderr, "cproxy_add_downstream %d %d\n",
+            moxi_log_write("cproxy_add_downstream %d %d\n",
                     ptd->downstream_num,
                     ptd->downstream_max);
         }
@@ -669,7 +670,7 @@ bool cproxy_release_downstream(downstream *d, bool force) {
     assert(d->ptd != NULL);
 
     if (settings.verbose > 2) {
-        fprintf(stderr, "release_downstream\n");
+        moxi_log_write("release_downstream\n");
     }
 
     // Always release the timeout_event, even if we're going to retry,
@@ -700,7 +701,7 @@ bool cproxy_release_downstream(downstream *d, bool force) {
 
         if (d->upstream_retries <= max_retries) {
             if (settings.verbose > 2) {
-                fprintf(stderr, "%d: release_downstream, instead retrying %d, %d <= %d\n",
+                moxi_log_write("%d: release_downstream, instead retrying %d, %d <= %d\n",
                         d->upstream_conn->sfd,
                         d->upstream_retry, d->upstream_retries, max_retries);
             }
@@ -714,7 +715,7 @@ bool cproxy_release_downstream(downstream *d, bool force) {
             }
         } else {
             if (settings.verbose > 2) {
-                fprintf(stderr, "%d: release_downstream, skipping retry %d, %d > %d\n",
+                moxi_log_write("%d: release_downstream, skipping retry %d, %d > %d\n",
                         d->upstream_conn->sfd,
                         d->upstream_retry, d->upstream_retries, max_retries);
             }
@@ -749,11 +750,11 @@ bool cproxy_release_downstream(downstream *d, bool force) {
             //
             if (settings.verbose > 2) {
                 if (d->upstream_suffix_len > 0) {
-                    fprintf(stderr, "%d: release_downstream writing suffix binary: %d",
+                    moxi_log_write("%d: release_downstream writing suffix binary: %d",
                             d->upstream_conn->sfd, d->upstream_suffix_len);
                     cproxy_dump_header(d->upstream_conn->sfd, d->upstream_suffix);
                 } else {
-                    fprintf(stderr, "%d: release_downstream writing suffix ascii: %s\n",
+                    moxi_log_write("%d: release_downstream writing suffix ascii: %s\n",
                             d->upstream_conn->sfd, d->upstream_suffix);
                 }
             }
@@ -836,7 +837,7 @@ void cproxy_free_downstream(downstream *d) {
     assert(d->timeout_tv.tv_usec == 0);
 
     if (settings.verbose > 2) {
-        fprintf(stderr, "cproxy_free_downstream\n");
+        moxi_log_write("cproxy_free_downstream\n");
     }
 
     d->ptd->stats.stats.tot_downstream_freed++;
@@ -910,7 +911,7 @@ downstream *cproxy_create_downstream(char *config,
         assert(IS_PROXY(behavior_pool->base.downstream_protocol));
 
         if (settings.verbose > 2) {
-            fprintf(stderr,
+            moxi_log_write(
                     "cproxy_create_downstream: %s, %u, %u\n",
                     config, config_ver,
                     behavior_pool->base.downstream_protocol);
@@ -946,7 +947,7 @@ int init_mcs_st(mcs_st *mst, char *config) {
         return mcs_server_count(mst);
     } else {
         if (settings.verbose > 1) {
-            fprintf(stderr, "mcs_create failed: %s\n",
+            moxi_log_write("mcs_create failed: %s\n",
                     config);
         }
     }
@@ -980,7 +981,7 @@ bool cproxy_check_downstream_config(downstream *d) {
         if (n > 0) {
             if (mcs_stable_update(&d->mst, &next)) {
                 if (settings.verbose > 2) {
-                    fprintf(stderr, "check_downstream_config stable update\n");
+                    moxi_log_write("check_downstream_config stable update\n");
                 }
 
                 free(d->config);
@@ -994,7 +995,7 @@ bool cproxy_check_downstream_config(downstream *d) {
     }
 
     if (settings.verbose > 2) {
-        fprintf(stderr, "check_downstream_config %u\n", rv);
+        moxi_log_write("check_downstream_config %u\n", rv);
     }
 
     return rv;
@@ -1016,7 +1017,7 @@ int cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread) {
     assert(d->behaviors_arr != NULL);
 
     if (settings.verbose > 2) {
-        fprintf(stderr, "cproxy_connect_downstream %d\n", n);
+        moxi_log_write("cproxy_connect_downstream %d\n", n);
     }
 
     for (int i = 0; i < n; i++) {
@@ -1057,7 +1058,7 @@ conn *cproxy_connect_downstream_conn(downstream *d,
     assert(mcs_server_st_fd(msst) == -1);
 
     if (settings.verbose > 2) {
-        fprintf(stderr, "cproxy_connect_downstream_conn %s:%d\n",
+        moxi_log_write("cproxy_connect_downstream_conn %s:%d\n",
                 mcs_server_st_hostname(msst),
                 mcs_server_st_port(msst));
     }
@@ -1127,8 +1128,7 @@ conn *cproxy_find_downstream_conn_ex(downstream *d,
     if (s >= 0 &&
         s < mcs_server_count(&d->mst)) {
         if (settings.verbose > 2) {
-            fprintf(stderr,
-                    "cproxy_find_downstream_conn_ex server_index %d, vbucket %d\n",
+            moxi_log_write("cproxy_find_downstream_conn_ex server_index %d, vbucket %d\n",
                     s, v);
         }
 
@@ -1171,7 +1171,7 @@ bool cproxy_prep_conn_for_write(conn *c) {
         }
 
         if (settings.verbose > 1) {
-            fprintf(stderr,
+            moxi_log_write(
                     "%d: cproxy_prep_conn_for_write failed\n", c->sfd);
         }
     }
@@ -1214,7 +1214,7 @@ void cproxy_assign_downstream(proxy_td *ptd) {
     assert(ptd != NULL);
 
     if (settings.verbose > 2) {
-        fprintf(stderr, "assign_downstream\n");
+        moxi_log_write("assign_downstream\n");
     }
 
     ptd->downstream_assigns++;
@@ -1309,7 +1309,7 @@ void cproxy_assign_downstream(proxy_td *ptd) {
         }
 
         if (settings.verbose > 2) {
-            fprintf(stderr, "%d: assign_downstream, matched to upstream\n",
+            moxi_log_write("%d: assign_downstream, matched to upstream\n",
                     d->upstream_conn->sfd);
         }
 
@@ -1337,7 +1337,7 @@ void cproxy_assign_downstream(proxy_td *ptd) {
     }
 
     if (settings.verbose > 2) {
-        fprintf(stderr, "assign_downstream, done\n");
+        moxi_log_write("assign_downstream, done\n");
     }
 }
 
@@ -1348,7 +1348,7 @@ void propagate_error(downstream *d) {
         conn *uc = d->upstream_conn;
 
         if (settings.verbose > 1) {
-            fprintf(stderr,
+            moxi_log_write(
                     "ERROR: %d could not forward upstream to downstream\n",
                     uc->sfd);
         }
@@ -1367,7 +1367,7 @@ static bool cproxy_forward(downstream *d) {
     assert(d->upstream_conn != NULL);
 
     if (settings.verbose > 2) {
-        fprintf(stderr,
+        moxi_log_write(
                 "%d: cproxy_forward prot %d to prot %d\n",
                 d->upstream_conn->sfd,
                 d->upstream_conn->protocol,
@@ -1460,7 +1460,7 @@ void cproxy_reset_upstream(conn *uc) {
     // commands.
     //
     if (settings.verbose > 2) {
-        fprintf(stderr, "%d: cproxy_reset_upstream with bytes available: %d\n",
+        moxi_log_write("%d: cproxy_reset_upstream with bytes available: %d\n",
                 uc->sfd, uc->rbytes);
     }
 
@@ -1510,7 +1510,7 @@ void cproxy_release_downstream_conn(downstream *d, conn *c) {
     assert(ptd != NULL);
 
     if (settings.verbose > 2) {
-        fprintf(stderr,
+        moxi_log_write(
                 "%d release_downstream_conn, downstream_used %d %d\n",
                 c->sfd, d->downstream_used, d->downstream_used_start);
     }
@@ -1531,7 +1531,7 @@ void cproxy_on_pause_downstream_conn(conn *c) {
     assert(c != NULL);
 
     if (settings.verbose > 2) {
-        fprintf(stderr, "<%d cproxy_on_pause_downstream_conn\n",
+        moxi_log_write("<%d cproxy_on_pause_downstream_conn\n",
                 c->sfd);
     }
 
@@ -1556,7 +1556,7 @@ void cproxy_pause_upstream_for_downstream(proxy_td *ptd, conn *upstream) {
     assert(upstream != NULL);
 
     if (settings.verbose > 2) {
-        fprintf(stderr, "%d: pause_upstream_for_downstream\n",
+        moxi_log_write("%d: pause_upstream_for_downstream\n",
                 upstream->sfd);
     }
 
@@ -1610,7 +1610,7 @@ bool cproxy_start_wait_queue_timeout(proxy_td *ptd, conn *uc) {
     if (ptd->timeout_tv.tv_sec != 0 ||
         ptd->timeout_tv.tv_usec != 0) {
         if (settings.verbose > 2) {
-            fprintf(stderr, "wait_queue_timeout started\n");
+            moxi_log_write("wait_queue_timeout started\n");
         }
 
         evtimer_set(&ptd->timeout_event, wait_queue_timeout, ptd);
@@ -1630,7 +1630,7 @@ void wait_queue_timeout(const int fd,
     assert(ptd != NULL);
 
     if (settings.verbose > 2) {
-        fprintf(stderr, "wait_queue_timeout\n");
+        moxi_log_write("wait_queue_timeout\n");
     }
 
     // This timer callback is invoked when an upstream conn
@@ -1644,7 +1644,7 @@ void wait_queue_timeout(const int fd,
         ptd->timeout_tv.tv_usec = 0;
 
         if (settings.verbose > 2) {
-            fprintf(stderr, "wait_queue_timeout cleared\n");
+            moxi_log_write("wait_queue_timeout cleared\n");
         }
 
         struct timeval wqt = ptd->behavior_pool.base.wait_queue_timeout;
@@ -1669,14 +1669,13 @@ void wait_queue_timeout(const int fd,
             // Check if upstream conn is old and should be removed.
             //
             if (settings.verbose > 2) {
-                fprintf(stderr,
-                        "wait_queue_timeout compare %u to %u cutoff\n",
+                moxi_log_write("wait_queue_timeout compare %u to %u cutoff\n",
                         uc->cmd_start_time, cut_msec);
             }
 
             if (uc->cmd_start_time <= cut_msec) {
                 if (settings.verbose > 1) {
-                    fprintf(stderr, "proxy_td_timeout sending error %d\n",
+                    moxi_log_write("proxy_td_timeout sending error %d\n",
                             uc->sfd);
                 }
 
@@ -1988,7 +1987,7 @@ void downstream_timeout(const int fd,
     assert(d->ptd != NULL);
 
     if (settings.verbose > 2) {
-        fprintf(stderr, "downstream_timeout\n");
+        moxi_log_write("downstream_timeout\n");
     }
 
     // This timer callback is invoked when one or more of
@@ -2037,7 +2036,7 @@ bool cproxy_start_downstream_timeout(downstream *d, conn *c) {
     assert(IS_PROXY(uc->protocol));
 
     if (settings.verbose > 2) {
-        fprintf(stderr, "%d: cproxy_start_downstream_timeout\n", c->sfd);
+        moxi_log_write("%d: cproxy_start_downstream_timeout\n", c->sfd);
     }
 
     evtimer_set(&d->timeout_event, downstream_timeout, d);
@@ -2055,7 +2054,7 @@ bool cproxy_auth_downstream(mcs_server_st *server,
     assert(server);
     assert(behavior);
     if (settings.verbose > 2) {
-      fprintf(stderr, "cproxy_auth_downstream usr: %s pwd: %s\n",
+      moxi_log_write("cproxy_auth_downstream usr: %s pwd: %s\n",
               behavior->usr,behavior->pwd);
     }
 
@@ -2077,7 +2076,7 @@ bool cproxy_auth_downstream(mcs_server_st *server,
         !IS_PROXY(behavior->downstream_protocol) ||
         (usr_len + pwd_len + 50 > sizeof(buf))) {
         if (settings.verbose > 1) {
-            fprintf(stderr, "auth failure args\n");
+            moxi_log_write("auth failure args\n");
         }
 
         return false; // Probably misconfigured.
@@ -2104,7 +2103,7 @@ bool cproxy_auth_downstream(mcs_server_st *server,
         mcs_server_st_io_reset(server);
 
         if (settings.verbose > 1) {
-            fprintf(stderr, "auth failure during write (%d)\n",
+            moxi_log_write("auth failure during write (%d)\n",
                     key_len);
         }
 
@@ -2140,14 +2139,14 @@ bool cproxy_auth_downstream(mcs_server_st *server,
         //
         if (res.response.status == PROTOCOL_BINARY_RESPONSE_SUCCESS) {
             if (settings.verbose > 2) {
-                fprintf(stderr, "auth_downstream success\n");
+                moxi_log_write("auth_downstream success\n");
             }
 
             return true;
         }
 
         if (settings.verbose > 1) {
-            fprintf(stderr, "auth_downstream failure, %s (%x)\n",
+            moxi_log_write("auth_downstream failure, %s (%x)\n",
                     behavior->usr,
                     res.response.status);
         }
@@ -2187,7 +2186,7 @@ bool cproxy_bucket_downstream(mcs_server_st *server,
         mcs_server_st_io_reset(server);
 
         if (settings.verbose > 1) {
-            fprintf(stderr, "bucket failure during write (%d)\n",
+            moxi_log_write("bucket failure during write (%d)\n",
                     bucket_len);
         }
 
@@ -2224,7 +2223,7 @@ bool cproxy_bucket_downstream(mcs_server_st *server,
         //
         if (res.response.status == PROTOCOL_BINARY_RESPONSE_SUCCESS) {
             if (settings.verbose > 2) {
-                fprintf(stderr, "bucket_downstream success, %s\n",
+                moxi_log_write("bucket_downstream success, %s\n",
                         behavior->bucket);
             }
 
@@ -2232,7 +2231,7 @@ bool cproxy_bucket_downstream(mcs_server_st *server,
         }
 
         if (settings.verbose > 1) {
-            fprintf(stderr, "bucket_downstream failure, %s (%x)\n",
+            moxi_log_write("bucket_downstream failure, %s (%x)\n",
                     behavior->bucket,
                     res.response.status);
         }
@@ -2270,7 +2269,7 @@ void cproxy_optimize_to_self(downstream *d, conn *uc,
 
     if (command != NULL &&
         settings.verbose > 2) {
-        fprintf(stderr, "%d: optimize to self: %s\n",
+        moxi_log_write("%d: optimize to self: %s\n",
                 uc->sfd, command);
     }
 

@@ -11,6 +11,7 @@
 #include "cproxy.h"
 #include "work.h"
 #include "agent.h"
+#include "log.h"
 
 // Local declarations.
 //
@@ -53,7 +54,7 @@ static void load_ping_recipe(char **params,
         assert(p);
 
         if (!safe_strtol(p+1, &value)) {
-            fprintf(stderr, "Failed to parse ``%s'' as number\n", p+1);
+            moxi_log_write("Failed to parse ``%s'' as number\n", p+1);
             assert(false);
         }
 
@@ -65,7 +66,7 @@ static void load_ping_recipe(char **params,
             out->iterations = value;
         } else {
             if (settings.verbose > 1) {
-                fprintf(stderr, "Unknown recipe property:  %s\n", params[i]);
+                moxi_log_write("Unknown recipe property:  %s\n", params[i]);
             }
         }
     }
@@ -134,7 +135,7 @@ enum conflate_mgmt_cb_result on_conflate_ping_test(void *userdata,
                  "svr-%s", servers[j]);
 
         if (settings.verbose > 1) {
-            fprintf(stderr, "ping_test %s\n", detail_key);
+            moxi_log_write("ping_test %s\n", detail_key);
         }
 
         proxy_behavior behavior;
@@ -276,7 +277,7 @@ static void ping_server(char *server_name,
 
             for (int i = 0; i < nconns; i++) {
                 if (settings.verbose > 1)
-                    fprintf(stderr, "ping_test connecting %d\n", i);
+                    moxi_log_write("ping_test connecting %d\n", i);
 
                 struct timeval start;
                 gettimeofday(&start, NULL);

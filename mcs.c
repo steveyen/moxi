@@ -10,6 +10,7 @@
 #include <fcntl.h>
 #include <assert.h>
 #include "mcs.h"
+#include "log.h"
 
 #ifdef MOXI_USE_VBUCKET
 
@@ -42,17 +43,17 @@ mcs_st *mcs_create(mcs_st *ptr, const char *config) {
                             *colon = '\0';
                             ptr->servers[j].port = atoi(colon + 1);
                             if (ptr->servers[j].port <= 0) {
-                                fprintf(stderr, "mcs_create failed, could not parse port: %s\n",
+                                moxi_log_write("mcs_create failed, could not parse port: %s\n",
                                         config);
                                 break;
                             }
                         } else {
-                            fprintf(stderr, "mcs_create failed, missing port: %s\n",
+                            moxi_log_write("mcs_create failed, missing port: %s\n",
                                     config);
                             break;
                         }
                     } else {
-                        fprintf(stderr, "mcs_create failed, unknown server: %s\n",
+                        moxi_log_write("mcs_create failed, unknown server: %s\n",
                                 config);
                         break;
                     }
@@ -64,7 +65,7 @@ mcs_st *mcs_create(mcs_st *ptr, const char *config) {
             }
         }
     } else {
-        fprintf(stderr, "mcs_create failed, vbucket_config_parse_string: %s\n",
+        moxi_log_write("mcs_create failed, vbucket_config_parse_string: %s\n",
                 config);
     }
 

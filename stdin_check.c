@@ -4,6 +4,7 @@
 #include <pthread.h>
 
 #include "stdin_check.h"
+#include "log.h"
 
 static void* check_stdin_thread(void* arg)
 {
@@ -13,7 +14,7 @@ static void* check_stdin_thread(void* arg)
         getc(stdin);
     }
 
-    fprintf(stderr, "EOF on stdin.  Exiting\n");
+    moxi_log_write("EOF on stdin.  Exiting\n");
     exit(0);
     /* NOTREACHED */
     return NULL;

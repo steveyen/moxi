@@ -10,6 +10,7 @@
 #include <math.h>
 #include "memcached.h"
 #include "cproxy.h"
+#include "log.h"
 
 static char *item_key(void *it);
 static int item_key_len(void *it);
@@ -196,8 +197,7 @@ void *mcache_get(mcache *m, char *key, int key_len,
                 }
 
                 if (settings.verbose > 1) {
-                    fprintf(stderr,
-                            "mcache hit: %s\n", key);
+                    moxi_log_write("mcache hit: %s\n", key);
                 }
 
                 return it;
@@ -208,8 +208,7 @@ void *mcache_get(mcache *m, char *key, int key_len,
             m->tot_get_expires++;
 
             if (settings.verbose > 1) {
-                fprintf(stderr,
-                        "mcache expire: %s\n", key);
+                moxi_log_write("mcache expire: %s\n", key);
             }
 
             genhash_delete(m->map, key);
@@ -304,8 +303,7 @@ void mcache_set(mcache *m, void *it,
                     m->tot_add_skips++;
 
                     if (settings.verbose > 1) {
-                        fprintf(stderr,
-                                "mcache add-skip: %s\n", key);
+                        moxi_log_write("mcache add-skip: %s\n", key);
                     }
 
                     if (key_buf != NULL) {
@@ -321,8 +319,7 @@ void mcache_set(mcache *m, void *it,
                     m->tot_add_bytes += m->funcs->item_len(it);
 
                     if (settings.verbose > 1) {
-                        fprintf(stderr,
-                                "mcache add: %s\n", key);
+                        moxi_log_write("mcache add: %s\n", key);
                     }
                 }
             } else {

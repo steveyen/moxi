@@ -9,6 +9,7 @@
 #include <assert.h>
 #include "memcached.h"
 #include "cproxy.h"
+#include "log.h"
 
 /* Callback to g_hash_table_foreach that frees the multiget_entry list.
  */
@@ -127,7 +128,7 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
         int cas_emit = (command[3] == 's');
 
         if (settings.verbose > 1) {
-            fprintf(stderr, "%d: forward multiget %s (%d %d)\n",
+            moxi_log_write("%d: forward multiget %s (%d %d)\n",
                     uc_cur->sfd, command, cmd_len, uc_num);
         }
 
@@ -241,8 +242,7 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
                             item_remove(it);
 
                             if (settings.verbose > 1) {
-                                fprintf(stderr,
-                                        "optimize self multiget hit: %s\n",
+                                moxi_log_write("optimize self multiget hit: %s\n",
                                         key);
                             }
                         } else {
@@ -258,8 +258,7 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
                             }
 
                             if (settings.verbose > 1) {
-                                fprintf(stderr,
-                                        "optimize self multiget miss: %s\n",
+                                moxi_log_write("optimize self multiget miss: %s\n",
                                         key);
                             }
                         }
@@ -279,7 +278,7 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
                         d->multiget == NULL) {
                         d->multiget = genhash_init(128, skeyhash_ops);
                         if (settings.verbose > 1) {
-                            fprintf(stderr, "%d: cproxy multiget hash table new\n", uc->sfd);
+                            moxi_log_write("%d: cproxy multiget hash table new\n", uc->sfd);
                         }
                     }
 
@@ -296,8 +295,7 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
                             memcpy(key_buf, key, key_len);
                             key_buf[key_len] = '\0';
 
-                            fprintf(stderr,
-                                    "<%d multiget_ascii_downstream '%s' %d %d %d\n",
+                            moxi_log_write("<%d multiget_ascii_downstream '%s' %d %d %d\n",
                                     c->sfd, key_buf, vbucket, (int) (key - command), key_len);
                         }
 
@@ -345,8 +343,7 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
                             memcpy(buf, key, key_len);
                             buf[key_len] = '\0';
 
-                            fprintf(stderr,
-                                    "%d cproxy multiget dedpue: %s\n",
+                            moxi_log_write("%d cproxy multiget dedpue: %s\n",
                                     uc_cur->sfd, buf);
                         }
                     }
@@ -381,8 +378,7 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
                 }
             } else {
                 if (settings.verbose > 1) {
-                    fprintf(stderr,
-                            "Couldn't update cproxy write event\n");
+                    moxi_log_write("Couldn't update cproxy write event\n");
                 }
 
                 d->ptd->stats.stats.err_oom++;
@@ -392,7 +388,7 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
     }
 
     if (settings.verbose > 1) {
-        fprintf(stderr, "forward multiget nwrite %d out of %d\n",
+        moxi_log_write("forward multiget nwrite %d out of %d\n",
                 nwrite, nconns);
     }
 

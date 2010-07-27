@@ -96,6 +96,8 @@ int log_error_cycle(moxi_log *ml) {
 
         int new_fd;
 
+        log_error_write(ml, __FILE__, __LINE__, "About to cycle log \n");
+
         if (-1 == (new_fd = open(logfile, O_APPEND | O_WRONLY | O_CREAT | O_LARGEFILE, 0644))) {
             /* write to old log */
             log_error_write(ml, __FILE__, __LINE__,
@@ -109,6 +111,7 @@ int log_error_cycle(moxi_log *ml) {
             /* ok, new log is open, close the old one */
             close(ml->fd);
             ml->fd = new_fd;
+            log_error_write(ml, __FILE__, __LINE__, "Log Cycled \n");
         }
     }
 
@@ -192,11 +195,9 @@ int log_error_write(moxi_log *ml, const char *filename, unsigned int line, const
 
     switch(ml->log_mode) {
         case ERRORLOG_FILE:
-            mappend_log(ml, "\n");
             written = write(ml->fd, ml->logbuf, ml->logbuf_used);
             break;
         case ERRORLOG_STDERR:
-            mappend_log(ml, "\n");
             written = write(STDERR_FILENO, ml->logbuf, ml->logbuf_used);
             break;
         case ERRORLOG_SYSLOG:

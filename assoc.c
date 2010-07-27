@@ -24,6 +24,7 @@
 #include <string.h>
 #include <assert.h>
 #include <pthread.h>
+#include "log.h"
 
 static pthread_cond_t maintenance_cond = PTHREAD_COND_INITIALIZER;
 
@@ -61,7 +62,7 @@ static unsigned int expand_bucket = 0;
 void assoc_init(void) {
     primary_hashtable = calloc(hashsize(hashpower), sizeof(void *));
     if (! primary_hashtable) {
-        fprintf(stderr, "Failed to init hashtable.\n");
+        moxi_log_write("Failed to init hashtable.\n");
         exit(EXIT_FAILURE);
     }
 }
@@ -122,7 +123,7 @@ static void assoc_expand(void) {
     primary_hashtable = calloc(hashsize(hashpower + 1), sizeof(void *));
     if (primary_hashtable) {
         if (settings.verbose > 1)
-            fprintf(stderr, "Hash table expansion starting\n");
+            moxi_log_write("Hash table expansion starting\n");
         hashpower++;
         expanding = true;
         expand_bucket = 0;
@@ -214,7 +215,7 @@ static void *assoc_maintenance_thread(void *arg) {
                 expanding = false;
                 free(old_hashtable);
                 if (settings.verbose > 1)
-                    fprintf(stderr, "Hash table expansion done\n");
+                    moxi_log_write("Hash table expansion done\n");
             }
         }
 
@@ -241,7 +242,7 @@ int start_assoc_maintenance_thread() {
     }
     if ((ret = pthread_create(&maintenance_tid, NULL,
                               assoc_maintenance_thread, NULL)) != 0) {
-        fprintf(stderr, "Can't create thread: %s\n", strerror(ret));
+        moxi_log_write("Can't create thread: %s\n", strerror(ret));
         return -1;
     }
     return 0;

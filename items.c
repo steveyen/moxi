@@ -12,6 +12,7 @@
 #include <string.h>
 #include <time.h>
 #include <assert.h>
+#include "log.h"
 
 /* Forward Declarations */
 static void item_link_q(item *it);
@@ -63,7 +64,7 @@ uint64_t get_cas_id(void) {
 /* Enable this for reference-count debugging. */
 #if 0
 # define DEBUG_REFCNT(it,op) \
-                fprintf(stderr, "item %x refcnt(%c) %d %c%c%c\n", \
+                moxi_log_write("item %x refcnt(%c) %d %c%c%c\n", \
                         it, op, it->refcount, \
                         (it->it_flags & ITEM_LINKED) ? 'L' : ' ', \
                         (it->it_flags & ITEM_SLABBED) ? 'S' : ' ')
@@ -506,9 +507,9 @@ item *do_item_get(const char *key, const size_t nkey) {
 
     if (settings.verbose > 2) {
         if (it == NULL) {
-            fprintf(stderr, "> NOT FOUND %s", key);
+            moxi_log_write("> NOT FOUND %s", key);
         } else {
-            fprintf(stderr, "> FOUND KEY %s", ITEM_key(it));
+            moxi_log_write("> FOUND KEY %s", ITEM_key(it));
             was_found++;
         }
     }
@@ -520,7 +521,7 @@ item *do_item_get(const char *key, const size_t nkey) {
     }
 
     if (it == NULL && was_found) {
-        fprintf(stderr, " -nuked by flush");
+        moxi_log_write(" -nuked by flush");
         was_found--;
     }
 
@@ -530,7 +531,7 @@ item *do_item_get(const char *key, const size_t nkey) {
     }
 
     if (it == NULL && was_found) {
-        fprintf(stderr, " -nuked by expire");
+        moxi_log_write(" -nuked by expire");
         was_found--;
     }
 
@@ -540,7 +541,7 @@ item *do_item_get(const char *key, const size_t nkey) {
     }
 
     if (settings.verbose > 2)
-        fprintf(stderr, "\n");
+        moxi_log_write("\n");
 
     return it;
 }

@@ -10,6 +10,7 @@
 #include "memcached.h"
 #include "cproxy.h"
 #include "work.h"
+#include "log.h"
 
 void cproxy_process_upstream_binary(conn *c) {
     assert(c != NULL);
@@ -40,7 +41,7 @@ void cproxy_process_upstream_binary(conn *c) {
     assert(bodylen >= keylen + extlen);
 
     if (settings.verbose > 2) {
-        fprintf(stderr, "<%d cproxy_process_upstream_binary %x %d %d %u\n",
+        moxi_log_write("<%d cproxy_process_upstream_binary %x %d %d %u\n",
                 c->sfd, c->cmd, extlen, keylen, bodylen);
     }
 
@@ -105,8 +106,7 @@ void cproxy_process_upstream_binary_nread(conn *c) {
     uint32_t bodylen = header->request.bodylen;
 
     if (settings.verbose > 2) {
-        fprintf(stderr,
-                "<%d cproxy_process_upstream_binary_nread %x %d %d %u\n",
+        moxi_log_write("<%d cproxy_process_upstream_binary_nread %x %d %d %u\n",
                 c->sfd, c->cmd, extlen, keylen, bodylen);
     }
 
@@ -119,8 +119,7 @@ void cproxy_process_upstream_binary_nread(conn *c) {
 
     if (c->noreply) {
         if (settings.verbose > 2) {
-            fprintf(stderr,
-                    "<%d cproxy_process_upstream_binary_nread "
+            moxi_log_write("<%d cproxy_process_upstream_binary_nread "
                     "corking quiet command %x %d\n",
                     c->sfd, c->cmd, (c->corked != NULL));
         }
@@ -197,8 +196,7 @@ bool cproxy_binary_cork_cmd(conn *c) {
         int ncorked = bin_cmd_append(&c->corked, bc);
 
         if (settings.verbose > 2) {
-            fprintf(stderr,
-                    "%d: cproxy_binary_cork_cmd, ncorked %d %d\n",
+            moxi_log_write("%d: cproxy_binary_cork_cmd, ncorked %d %d\n",
                     c->sfd, ncorked, (c->corked != NULL));
         }
 
@@ -206,8 +204,7 @@ bool cproxy_binary_cork_cmd(conn *c) {
     }
 
     if (settings.verbose > 2) {
-        fprintf(stderr,
-                "%d: cproxy_binary_cork_cmd failed\n",
+        moxi_log_write("%d: cproxy_binary_cork_cmd failed\n",
                 c->sfd);
     }
 
@@ -219,8 +216,7 @@ void cproxy_binary_uncork_cmds(downstream *d, conn *uc) {
     assert(uc != NULL);
 
     if (settings.verbose > 2) {
-        fprintf(stderr,
-                "%d: cproxy_binary_uncork_cmds\n",
+        moxi_log_write("%d: cproxy_binary_uncork_cmds\n",
                 uc->sfd);
     }
 
@@ -248,8 +244,7 @@ void cproxy_binary_uncork_cmds(downstream *d, conn *uc) {
     }
 
     if (settings.verbose > 2) {
-        fprintf(stderr,
-                "%d: cproxy_binary_uncork_cmds, uncorked %d\n",
+        moxi_log_write("%d: cproxy_binary_uncork_cmds, uncorked %d\n",
                 uc->sfd, n);
     }
 }
@@ -282,11 +277,11 @@ void cproxy_dump_header(int prefix, char *bb) {
     if (settings.verbose > 2) {
         for (int ii = 0; ii < sizeof(protocol_binary_request_header); ++ii) {
             if (ii % 4 == 0) {
-                fprintf(stderr, "\n%d   ", prefix);
+                moxi_log_write("\n%d   ", prefix);
             }
-            fprintf(stderr, " 0x%02x", (unsigned char) bb[ii]);
+            moxi_log_write(" 0x%02x", (unsigned char) bb[ii]);
         }
-        fprintf(stderr, "\n");
+        moxi_log_write("\n");
     }
 }
 
@@ -299,8 +294,7 @@ bool cproxy_binary_ignore_reply(conn *c, protocol_binary_response_header *header
         // and go to read the next response message.
         //
         if (settings.verbose > 2) {
-            fprintf(stderr,
-                    "<%d cproxy_process_a2b_downstream_response OPAQUE_IGNORE_REPLY, "
+            moxi_log_write("<%d cproxy_process_a2b_downstream_response OPAQUE_IGNORE_REPLY, "
                     "cmd: %x, status: %x, ignoring reply\n",
                     c->sfd, header->response.opcode, header->response.status);
         }

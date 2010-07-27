@@ -9,6 +9,7 @@
 #include "memcached.h"
 #include "cproxy.h"
 #include "work.h"
+#include "log.h"
 
 // Internal declarations.
 //
@@ -27,7 +28,7 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
     assert(IS_PROXY(c->protocol));
 
     if (settings.verbose > 2) {
-        fprintf(stderr, "<%d cproxy_process_upstream_ascii %s\n",
+        moxi_log_write("<%d cproxy_process_upstream_ascii %s\n",
                 c->sfd, line);
     }
 
@@ -264,8 +265,7 @@ void cproxy_upstream_ascii_item_response(item *it, conn *uc,
     assert(IS_PROXY(uc->protocol));
 
     if (settings.verbose > 2) {
-        fprintf(stderr,
-                "<%d cproxy ascii item response\n",
+        moxi_log_write("<%d cproxy ascii item response\n",
                 uc->sfd);
     }
 
@@ -285,8 +285,7 @@ void cproxy_upstream_ascii_item_response(item *it, conn *uc,
                     add_iov(uc, ITEM_suffix(it),
                             it->nsuffix + it->nbytes) == 0) {
                     if (settings.verbose > 2) {
-                        fprintf(stderr,
-                                "<%d cproxy ascii item response success\n",
+                        moxi_log_write("<%d cproxy ascii item response success\n",
                                 uc->sfd);
                     }
                 }
@@ -306,8 +305,7 @@ void cproxy_upstream_ascii_item_response(item *it, conn *uc,
                         add_iov(uc, suffix, strlen(suffix)) == 0 &&
                         add_iov(uc, ITEM_data(it), it->nbytes) == 0) {
                         if (settings.verbose > 2) {
-                            fprintf(stderr,
-                                    "<%d cproxy ascii item response ok\n",
+                            moxi_log_write("<%d cproxy ascii item response ok\n",
                                     uc->sfd);
                         }
                     }
@@ -316,7 +314,7 @@ void cproxy_upstream_ascii_item_response(item *it, conn *uc,
         }
     } else {
         if (settings.verbose > 1) {
-            fprintf(stderr, "ERROR: unexpected downstream data block");
+            moxi_log_write("ERROR: unexpected downstream data block");
         }
     }
 }
@@ -369,7 +367,7 @@ void cproxy_del_front_cache_key_ascii(downstream *d,
                               key, key_len);
 
                 if (settings.verbose > 2) {
-                    fprintf(stderr, "front_cache del %s\n", key);
+                    moxi_log_write("front_cache del %s\n", key);
                 }
             }
         }
@@ -401,8 +399,7 @@ bool cproxy_optimize_set_ascii(downstream *d, conn *uc,
 
         if (!update_event(uc, EV_WRITE | EV_PERSIST)) {
             if (settings.verbose > 1) {
-                fprintf(stderr,
-                        "ERROR: Can't update upstream write event\n");
+                moxi_log_write("ERROR: Can't update upstream write event\n");
             }
 
             d->ptd->stats.stats.err_oom++;
