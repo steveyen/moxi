@@ -45,11 +45,11 @@ void cproxy_on_new_pool(proxy_main *m,
 
 char **get_key_values(kvpair_t *kvs, char *key);
 
-void proxy_stats_dump_basic(ADD_STAT add_stats, void *c,
+void proxy_stats_dump_basic(ADD_STAT add_stats, conn *c,
                             const char *prefix);
-void proxy_stats_dump_proxy_main(ADD_STAT add_stats, void *c,
+void proxy_stats_dump_proxy_main(ADD_STAT add_stats, conn *c,
                                  struct proxy_stats_cmd_info *pscip);
-void proxy_stats_dump_proxies(ADD_STAT add_stats, void *c,
+void proxy_stats_dump_proxies(ADD_STAT add_stats, conn *c,
                               struct proxy_stats_cmd_info *pscip);
 
 #endif /* AGENT_H */

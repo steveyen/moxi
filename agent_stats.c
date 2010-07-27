@@ -73,20 +73,20 @@ static void map_key_stats_foreach_merge(const void *key,
                                         void *user_data);
 
 static void proxy_stats_dump_behavior(ADD_STAT add_stats,
-                                      void *c,
+                                      conn *c,
                                       const char *prefix,
                                       proxy_behavior *b,
                                       int level);
 static void proxy_stats_dump_frontcache(ADD_STAT add_stats,
-                                        void *c,
+                                        conn *c,
                                         const char *prefix,
                                         proxy *p);
 static void proxy_stats_dump_pstd_stats(ADD_STAT add_stats,
-                                        void *c,
+                                        conn *c,
                                         const char *prefix,
                                         proxy_stats *stats);
 static void proxy_stats_dump_stats_cmd(ADD_STAT add_stats,
-                                       void *c,
+                                       conn *c,
                                        const char *prefix,
                                        proxy_stats_cmd stats_cmd[][STATS_CMD_last]);
 static void map_key_stats_foreach_dump(const void *key,
@@ -419,7 +419,7 @@ void map_key_stats_foreach_merge(const void *key,
     }
 }
 
-static void proxy_stats_dump_behavior(ADD_STAT add_stats, void *c, const char *prefix,
+static void proxy_stats_dump_behavior(ADD_STAT add_stats, conn *c, const char *prefix,
                                       proxy_behavior *b, int level) {
 
     if (level >= 2)
@@ -468,7 +468,7 @@ static void proxy_stats_dump_behavior(ADD_STAT add_stats, void *c, const char *p
         APPEND_PREFIX_STAT("port_listen", "%d", b->port_listen);
 }
 
-static void proxy_stats_dump_frontcache(ADD_STAT add_stats, void *c,
+static void proxy_stats_dump_frontcache(ADD_STAT add_stats, conn *c,
                                         const char *prefix, proxy *p) {
 
     pthread_mutex_lock(p->front_cache.lock);
@@ -502,7 +502,7 @@ static void proxy_stats_dump_frontcache(ADD_STAT add_stats, void *c,
     pthread_mutex_unlock(p->front_cache.lock);
 }
 
-static void proxy_stats_dump_pstd_stats(ADD_STAT add_stats, void *c, const char *prefix,
+static void proxy_stats_dump_pstd_stats(ADD_STAT add_stats, conn *c, const char *prefix,
                                         proxy_stats *stats) {
     assert(stats != NULL);
 
@@ -580,7 +580,7 @@ static void proxy_stats_dump_pstd_stats(ADD_STAT add_stats, void *c, const char 
               "%llu", (long long unsigned int) stats->err_downstream_write_prep);
 }
 
-static void proxy_stats_dump_stats_cmd(ADD_STAT add_stats, void *c, const char *prefix,
+static void proxy_stats_dump_stats_cmd(ADD_STAT add_stats, conn *c, const char *prefix,
                                        proxy_stats_cmd stats_cmd[][STATS_CMD_last]) {
     char keybuf[128];
 
@@ -629,7 +629,7 @@ static void proxy_stats_dump_stats_cmd(ADD_STAT add_stats, void *c, const char *
 struct key_stats_dump_state {
     const char *prefix;
     ADD_STAT add_stats;
-    void *conn;
+    conn *conn;
     struct proxy_stats_cmd_info *pscip;
 };
 
@@ -645,7 +645,7 @@ static void map_key_stats_foreach_dump(const void *key, const void *value,
     assert(strcmp(name, stats->key) == 0);
 
     ADD_STAT add_stats = state->add_stats;
-    void *c = state->conn;
+    conn *c = state->conn;
     char prefix[200+KEY_MAX_LENGTH];
     snprintf(prefix, sizeof(prefix), "%s:%s", state->prefix, name);
 
@@ -654,13 +654,13 @@ static void map_key_stats_foreach_dump(const void *key, const void *value,
     APPEND_PREFIX_STAT("added_at_msec", "%u", stats->added_at);
 }
 
-void proxy_stats_dump_basic(ADD_STAT add_stats, void *c, const char *prefix) {
+void proxy_stats_dump_basic(ADD_STAT add_stats, conn *c, const char *prefix) {
     APPEND_PREFIX_STAT("version", "%s", VERSION);
     APPEND_PREFIX_STAT("nthreads", "%d", settings.num_threads);
     APPEND_PREFIX_STAT("hostname", "%s", cproxy_hostname);
 }
 
-void proxy_stats_dump_proxy_main(ADD_STAT add_stats, void *c,
+void proxy_stats_dump_proxy_main(ADD_STAT add_stats, conn *c,
                                  struct proxy_stats_cmd_info *pscip) {
     if (pscip->do_info) {
         const char *prefix = "proxy_main:";
@@ -690,7 +690,7 @@ void proxy_stats_dump_proxy_main(ADD_STAT add_stats, void *c,
     }
 }
 
-void proxy_stats_dump_proxies(ADD_STAT add_stats, void *c,
+void proxy_stats_dump_proxies(ADD_STAT add_stats, conn *c,
                               struct proxy_stats_cmd_info *pscip) {
     char prefix[200];
 
