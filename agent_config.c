@@ -827,7 +827,7 @@ void cproxy_on_new_pool(proxy_main *m,
     }
 
     if (p == NULL) {
-        p = cproxy_create(name, port,
+        p = cproxy_create(m, name, port,
                           config,
                           config_ver,
                           behavior_pool,

@@ -80,7 +80,8 @@ static bool cproxy_forward(downstream *d);
 
 /* Main function to create a proxy struct.
  */
-proxy *cproxy_create(char    *name,
+proxy *cproxy_create(proxy_main *main,
+                     char    *name,
                      int      port,
                      char    *config,
                      uint32_t config_ver,
@@ -102,6 +103,7 @@ proxy *cproxy_create(char    *name,
 
     proxy *p = (proxy *) calloc(1, sizeof(proxy));
     if (p != NULL) {
+        p->main       = main;
         p->name       = trimstrdup(name);
         p->port       = port;
         p->config     = trimstrdup(config);

@@ -181,6 +181,8 @@ struct proxy_main {
 /* Owned by main listener thread.
  */
 struct proxy {
+    proxy_main *main; // Immutable, points to parent proxy_main.
+
     int   port;   // Immutable.
     char *name;   // Mutable, covered by proxy_lock, for debugging, NULL-able.
     char *config; // Mutable, covered by proxy_lock, mem owned by proxy,
@@ -402,7 +404,8 @@ extern proxy_main *proxy_main_g;
 
 // Functions.
 //
-proxy *cproxy_create(char    *name,
+proxy *cproxy_create(proxy_main *main,
+                     char    *name,
                      int      port,
                      char    *config,
                      uint32_t config_ver,

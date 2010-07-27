@@ -379,7 +379,8 @@ int cproxy_init_string(char *cfg_str,
                 exit(EXIT_FAILURE);
             }
 
-            proxy *p = cproxy_create(proxy_name,
+            proxy *p = cproxy_create(m,
+                                     proxy_name,
                                      proxy_port,
                                      proxy_sect,
                                      0, // config_ver.
