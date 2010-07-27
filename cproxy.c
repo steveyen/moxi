@@ -253,7 +253,8 @@ int cproxy_listen(proxy *p) {
             p->listening_failed++;
 
             moxi_log_write("ERROR: could not listen on port %d.\n"
-                            "Please use -Z port_listen=PORT_NUM to specify a different port number.\n", p->port);
+                           "Please use -Z port_listen=PORT_NUM "
+                           "to specify a different port number.\n", p->port);
             exit(1);
         }
     }
@@ -273,6 +274,40 @@ int cproxy_listen_port(int port,
 
     int   listening = 0;
     conn *listen_conn_orig = listen_conn;
+
+    conn *x = listen_conn_orig;
+    while (x != NULL) {
+        if (x->extra != NULL &&
+            x->funcs == conn_funcs) {
+            struct in_addr in = {0};
+            struct sockaddr_in sin = {0};
+            socklen_t sin_len = sizeof(sin);
+
+            if (getsockname(x->sfd, (struct sockaddr *) &sin, &sin_len) == 0) {
+                in.s_addr = sin.sin_addr.s_addr;
+
+                int x_port = ntohs(sin.sin_port);
+                if (x_port == port) {
+                    listening++;
+                }
+            }
+        }
+
+        x = x->next;
+    }
+
+    if (listening > 0) {
+        // If we're already listening on the required port, then
+        // we don't need to start a new server_socket().  This happens
+        // in the multi-bucket case with binary protocol buckets.
+        // There will be multiple proxy struct's (one per bucket), but
+        // only one proxy struct will actually be pointed at by a
+        // listening conn->extra (usually 11211).
+        //
+        // TODO: Add a refcount to handle shutdown properly?
+        //
+        return listening;
+    }
 
     if (server_socket(port, transport, NULL) == 0) {
         assert(listen_conn != NULL);
