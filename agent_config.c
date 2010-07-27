@@ -303,11 +303,9 @@ proxy_main *cproxy_init_agent_start(char *jid,
     return NULL;
 }
 
-static
-void cproxy_on_new_config(void *data0, void *data1);
-
-static
-bool cproxy_on_new_config_json_one(proxy_main *m, uint32_t new_config_ver, char *config);
+static void cproxy_on_new_config(void *data0, void *data1);
+static bool cproxy_on_new_config_json_one(proxy_main *m, uint32_t new_config_ver,
+                                          char *config, char *name);
 
 void on_conflate_new_config(void *userdata, kvpair_t *config) {
     assert(config != NULL);
@@ -356,9 +354,19 @@ bool cproxy_on_new_config_json(proxy_main *m, uint32_t new_config_ver, char *con
                     cJSON *jMap = cJSON_GetArrayItem(jMaps, i);
                     if (jMap != NULL &&
                         jMap->type == cJSON_Object) {
+                        char *name = "default";
+
+                        cJSON *jName = cJSON_GetObjectItem(jMap, "name");
+                        if (jName != NULL &&
+                            jName->type == cJSON_String &&
+                            jName->valuestring != NULL) {
+                            name = jName->valuestring;
+                        }
+
                         char *jMapStr = cJSON_Print(jMap);
                         if (jMapStr != NULL) {
-                            rv = cproxy_on_new_config_json_one(m, new_config_ver, jMapStr) || rv;
+                            rv = cproxy_on_new_config_json_one(m, new_config_ver,
+                                                               jMapStr, name) || rv;
                             free(jMapStr);
                         }
                     }
@@ -367,7 +375,7 @@ bool cproxy_on_new_config_json(proxy_main *m, uint32_t new_config_ver, char *con
         } else {
             // Just a single config.
             //
-            rv = cproxy_on_new_config_json_one(m, new_config_ver, config);
+            rv = cproxy_on_new_config_json_one(m, new_config_ver, config, "default");
         }
 
         cJSON_Delete(c);
@@ -377,7 +385,11 @@ bool cproxy_on_new_config_json(proxy_main *m, uint32_t new_config_ver, char *con
 }
 
 static
-bool cproxy_on_new_config_json_one(proxy_main *m, uint32_t new_config_ver, char *config) {
+bool cproxy_on_new_config_json_one(proxy_main *m, uint32_t new_config_ver, char *config, char *name) {
+    assert(m != NULL);
+    assert(config != NULL);
+    assert(name != NULL);
+
     // Handle reconfiguration of a single proxy.
     //
     bool rv = false;
@@ -454,7 +466,7 @@ bool cproxy_on_new_config_json_one(proxy_main *m, uint32_t new_config_ver, char 
                     }
 
                     if (j >= nodes_num) {
-                        cproxy_on_new_pool(m, "default", pool_port,
+                        cproxy_on_new_pool(m, name, pool_port,
                                            config, new_config_ver,
                                            &behavior_pool);
                         rv = true;
@@ -594,8 +606,9 @@ bool cproxy_on_new_config_kvs(proxy_main *m, uint32_t new_config_ver, kvpair_t *
                     // Number of servers in this pool.
                     //
                     int s = 0;
-                    while (servers[s])
+                    while (servers[s]) {
                         s++;
+                    }
 
                     if (s > 0) {
                         // Parse server-level behaviors, so we'll have an
