@@ -4015,11 +4015,15 @@ static void usage(int argc, char **argv) {
            "              can be listed, separated by commas.\n"
            "              For example, -z 11211=server1:11211,server2:11211\n");
 #endif
-    printf("\nThe optional [flags] are...\n\n"
-           "-p <num>      TCP port number to listen on (default: 11210)\n"
-           "              to have moxi be a memcached server\n"
-           "-U <num>      UDP port number to listen on (default: 11211, 0 is off)\n"
-           "              to have moxi be a memcached server\n"
+    printf("\nThe optional [flags] are...\n\n");
+    printf("-Z <key=val*> Optional comma-separated key=value proxy behaviors, including:\n");
+    printf("              port_listen=11211,downstream_max=1,downstream_protocol=binary\n");
+    printf("-p <num>      TCP port number (default: 0 (off)) where moxi can\n"
+           "              listen and run as a memcached server.  To specify\n"
+           "              a TCP port number that moxi will listen as a proxy,\n"
+           "              instead, use: -Z port_listen=PORT_NUM\n"
+           "-U <num>      UDP port number (default: 0 (off)) where moxi can\n"
+           "              listen can run as a memcached server\n"
            "-s <file>     UNIX socket path to listen on (disables network support)\n"
            "-a <mask>     access mask for UNIX socket, in octal (default: 0700)\n"
            "-l <ip_addr>  interface to listen on (default: INADDR_ANY, all addresses)\n"
@@ -4066,8 +4070,6 @@ static void usage(int argc, char **argv) {
     printf("-b            Set the backlog queue limit (default: 1024)\n");
     printf("-B            Binding protocol - one of ascii, binary, or auto (default)\n");
     printf("-Y <y|n>      Exit when stdin closes (default: n)\n");
-    printf("-Z <key=val*> Optional comma-separated key=value behaviors, such as...\n");
-    printf("              port_listen=11211,downstream_max=1,downstream_protocol=binary\n");
     return;
 }
 
