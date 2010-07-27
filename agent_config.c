@@ -329,8 +329,8 @@ static void cproxy_init_null_bucket(proxy_main *m) {
         };
 
         if (behavior_pool.arr != NULL) {
-            cproxy_on_new_pool(m, NULL_BUCKET, pool_port,
-                               "", 0, &behavior_pool);
+            cproxy_on_config_pool(m, NULL_BUCKET, pool_port,
+                                  "", 0, &behavior_pool);
         }
     }
 }
@@ -494,9 +494,9 @@ bool cproxy_on_new_config_json_one(proxy_main *m, uint32_t new_config_ver, char 
                     }
 
                     if (j >= nodes_num) {
-                        cproxy_on_new_pool(m, name, pool_port,
-                                           config, new_config_ver,
-                                           &behavior_pool);
+                        cproxy_on_config_pool(m, name, pool_port,
+                                              config, new_config_ver,
+                                              &behavior_pool);
                         rv = true;
                     } else {
                         if (settings.verbose > 1) {
@@ -659,9 +659,9 @@ bool cproxy_on_new_config_kvs(proxy_main *m, uint32_t new_config_ver, kvpair_t *
                                             config_str);
                                 }
 
-                                cproxy_on_new_pool(m, pool_name, pool_port,
-                                                   config_str, new_config_ver,
-                                                   &behavior_pool);
+                                cproxy_on_config_pool(m, pool_name, pool_port,
+                                                      config_str, new_config_ver,
+                                                      &behavior_pool);
 
                                 free(config_str);
                             }
@@ -812,8 +812,8 @@ void close_outdated_proxies(proxy_main *m, uint32_t new_config_ver) {
         // a bucket's proxy struct should be shut down.
         //
         if (down && (strcmp(NULL_BUCKET, name) != 0)) {
-            cproxy_on_new_pool(m, name, port, NULL, new_config_ver,
-                               &empty_pool);
+            cproxy_on_config_pool(m, name, port, NULL, new_config_ver,
+                                  &empty_pool);
         }
 
         if (name != NULL) {
@@ -825,11 +825,11 @@ void close_outdated_proxies(proxy_main *m, uint32_t new_config_ver) {
 /**
  * A name and port uniquely identify a proxy.
  */
-void cproxy_on_new_pool(proxy_main *m,
-                        char *name, int port,
-                        char *config,
-                        uint32_t config_ver,
-                        proxy_behavior_pool *behavior_pool) {
+void cproxy_on_config_pool(proxy_main *m,
+                           char *name, int port,
+                           char *config,
+                           uint32_t config_ver,
+                           proxy_behavior_pool *behavior_pool) {
     assert(m);
     assert(name != NULL);
     assert(port >= 0);
