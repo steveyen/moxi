@@ -767,7 +767,7 @@ void cproxy_on_new_config(void *data0, void *data1) {
     free_kvpair(kvs);
 
     if (settings.verbose > 1) {
-        moxi_log_write(stderr, "ERROR: conc failed config %llu\n",
+        moxi_log_write("ERROR: conc failed config %llu\n",
                        (long long unsigned int) m->stat_config_fails);
     }
     goto out;
@@ -876,8 +876,9 @@ void cproxy_on_config_pool(proxy_main *m,
             int n = cproxy_listen(p);
             if (n > 0) {
                 if (settings.verbose > 2) {
-                    moxi_log_write("cproxy_listen success %u to %s with %d conns\n",
-                            p->port, p->config, n);
+                    moxi_log_write(
+                            "cproxy_listen success %u for %s to %s with %d conns\n",
+                            p->port, p->name, p->config, n);
                 }
                 m->stat_proxy_starts++;
             } else {
@@ -886,6 +887,11 @@ void cproxy_on_config_pool(proxy_main *m,
                             p->port, p->config);
                 }
                 m->stat_proxy_start_fails++;
+            }
+        } else {
+            if (settings.verbose > 2) {
+                moxi_log_write("ERROR: cproxy_create failed on %s, %d, %s\n",
+                               name, port, config);
             }
         }
     } else {

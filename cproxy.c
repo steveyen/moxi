@@ -95,8 +95,8 @@ proxy *cproxy_create(proxy_main *main,
     assert(nthreads == settings.num_threads);
 
     if (settings.verbose > 1) {
-        moxi_log_write("cproxy_create on port %d, config %s\n",
-                port, config);
+        moxi_log_write("cproxy_create on port %d, name %s, config %s\n",
+                       port, name, config);
     }
 
     proxy *p = (proxy *) calloc(1, sizeof(proxy));
@@ -288,6 +288,12 @@ int cproxy_listen_port(int port,
 
                 int x_port = ntohs(sin.sin_port);
                 if (x_port == port) {
+                    if (settings.verbose > 1) {
+                        moxi_log_write(
+                                "<%d cproxy listening reusing listener on port %d\n",
+                                x->sfd, port);
+                    }
+
                     listening++;
                 }
             }
