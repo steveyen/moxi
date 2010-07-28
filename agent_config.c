@@ -46,6 +46,10 @@ static void cproxy_on_new_config(void *data0, void *data1);
 static bool cproxy_on_new_config_json_one(proxy_main *m, uint32_t new_config_ver,
                                           char *config, char *name);
 
+static
+bool cproxy_on_new_config_json_buckets(proxy_main *m, uint32_t new_config_ver,
+                                       cJSON *jBuckets, bool want_default);
+
 static void agent_logger(void *userdata,
                          enum conflate_log_level lvl,
                          const char *msg, ...)
@@ -374,32 +378,17 @@ bool cproxy_on_new_config_json(proxy_main *m, uint32_t new_config_ver, char *con
 
     cJSON *c = cJSON_Parse(config);
     if (c != NULL) {
-        cJSON *jMaps = cJSON_GetObjectItem(c, "vBucketServerMaps");
-        if (jMaps != NULL) {
-            if (jMaps->type == cJSON_Array) {
-                int numMaps = cJSON_GetArraySize(jMaps);
-                for (int i = 0; i < numMaps; i++) {
-                    cJSON *jMap = cJSON_GetArrayItem(jMaps, i);
-                    if (jMap != NULL &&
-                        jMap->type == cJSON_Object) {
-                        char *name = "default";
+        cJSON *jBuckets = cJSON_GetObjectItem(c, "buckets");
+        if (jBuckets != NULL &&
+            jBuckets->type == cJSON_Array) {
+            // Make two passes through jBuckets, favoring any "default"
+            // bucket on the 1st pass, so the default bucket gets
+            // created earlier.
+            //
+            bool rv1 = cproxy_on_new_config_json_buckets(m, new_config_ver, jBuckets, true);
+            bool rv2 = cproxy_on_new_config_json_buckets(m, new_config_ver, jBuckets, false);
 
-                        cJSON *jName = cJSON_GetObjectItem(jMap, "name");
-                        if (jName != NULL &&
-                            jName->type == cJSON_String &&
-                            jName->valuestring != NULL) {
-                            name = jName->valuestring;
-                        }
-
-                        char *jMapStr = cJSON_Print(jMap);
-                        if (jMapStr != NULL) {
-                            rv = cproxy_on_new_config_json_one(m, new_config_ver,
-                                                               jMapStr, name) || rv;
-                            free(jMapStr);
-                        }
-                    }
-                }
-            }
+            rv = rv1 || rv2;
         } else {
             // Just a single config.
             //
@@ -407,6 +396,40 @@ bool cproxy_on_new_config_json(proxy_main *m, uint32_t new_config_ver, char *con
         }
 
         cJSON_Delete(c);
+    }
+
+    return rv;
+}
+
+static
+bool cproxy_on_new_config_json_buckets(proxy_main *m, uint32_t new_config_ver,
+                                       cJSON *jBuckets, bool want_default) {
+    bool rv = false;
+
+    int numBuckets = cJSON_GetArraySize(jBuckets);
+    for (int i = 0; i < numBuckets; i++) {
+        cJSON *jBucket = cJSON_GetArrayItem(jBuckets, i);
+        if (jBucket != NULL &&
+            jBucket->type == cJSON_Object) {
+            char *name = "default";
+
+            cJSON *jName = cJSON_GetObjectItem(jBucket, "name");
+            if (jName != NULL &&
+                jName->type == cJSON_String &&
+                jName->valuestring != NULL) {
+                name = jName->valuestring;
+            }
+
+            bool is_default = (strcmp(name, "default") == 0);
+            if (!(is_default ^ want_default)) { // XOR.
+                char *jBucketStr = cJSON_Print(jBucket);
+                if (jBucketStr != NULL) {
+                    rv = cproxy_on_new_config_json_one(m, new_config_ver,
+                                                       jBucketStr, name) || rv;
+                    free(jBucketStr);
+                }
+            }
+        }
     }
 
     return rv;
