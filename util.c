@@ -178,9 +178,10 @@ void vperror(const char *fmt, ...) {
 // The following are from libmemcached/byteorder.c
 
 /* Byte swap a 64-bit number. */
+#ifndef swap64
 static inline uint64_t swap64(uint64_t in)
 {
-#ifndef BYTEORDER_BIG_ENDIAN
+# ifndef BYTEORDER_BIG_ENDIAN
   /* Little endian, flip the bytes around until someone makes a faster/better
    * way to do this. */
   uint64_t rv= 0;
@@ -191,11 +192,12 @@ static inline uint64_t swap64(uint64_t in)
     in >>= 8;
   }
   return rv;
-#else
+# else
   /* big-endian machines don't need byte swapping */
   return in;
-#endif
+# endif
 }
+#endif
 
 uint64_t ntohll(uint64_t value)
 {
