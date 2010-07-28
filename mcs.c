@@ -57,6 +57,16 @@ mcs_st *mcs_create(mcs_st *ptr, const char *config) {
                                 config);
                         break;
                     }
+
+                    const char *user = vbucket_config_get_user(ptr->vch);
+                    if (user != NULL) {
+                        ptr->servers[j].usr = strdup(user);
+                    }
+
+                    const char *password = vbucket_config_get_password(ptr->vch);
+                    if (password != NULL) {
+                        ptr->servers[j].pwd = strdup(password);
+                    }
                 }
 
                 if (j >= n) {
@@ -76,6 +86,17 @@ mcs_st *mcs_create(mcs_st *ptr, const char *config) {
 
 void mcs_free(mcs_st *ptr) {
     if (ptr->servers) {
+        if (ptr->vch != NULL) {
+            int n = vbucket_config_get_num_servers(ptr->vch);
+            for (int i = 0; i < n; i++) {
+                if (ptr->servers[i].usr != NULL) {
+                    free(ptr->servers[i].usr);
+                }
+                if (ptr->servers[i].pwd != NULL) {
+                    free(ptr->servers[i].pwd);
+                }
+            }
+        }
         free(ptr->servers);
     }
     if (ptr->vch) {
@@ -269,6 +290,14 @@ int mcs_server_st_fd(mcs_server_st *ptr) {
     return ptr->fd;
 }
 
+const char *mcs_server_st_usr(mcs_server_st *ptr) {
+    return ptr->usr;
+}
+
+const char *mcs_server_st_pwd(mcs_server_st *ptr) {
+    return ptr->pwd;
+}
+
 #else // !MOXI_USE_VBUCKET
 
 mcs_st *mcs_create(mcs_st *ptr, const char *config) {
@@ -364,6 +393,14 @@ int mcs_server_st_port(mcs_server_st *ptr) {
 
 int mcs_server_st_fd(mcs_server_st *ptr) {
     return ptr->fd;
+}
+
+const char *mcs_server_st_usr(mcs_server_st *ptr) {
+    return NULL;
+}
+
+const char *mcs_server_st_pwd(mcs_server_st *ptr) {
+    return NULL;
 }
 
 #endif // !MOXI_USE_VBUCKET

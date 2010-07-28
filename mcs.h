@@ -26,6 +26,8 @@ typedef struct {
     char hostname[200];
     int port;
     int fd;
+    char *usr;
+    char *pwd;
 } mcs_server_st;
 
 typedef struct {
@@ -96,5 +98,7 @@ void mcs_server_st_io_reset(mcs_server_st *ptr);
 const char *mcs_server_st_hostname(mcs_server_st *ptr);
 int mcs_server_st_port(mcs_server_st *ptr);
 int mcs_server_st_fd(mcs_server_st *ptr);
+const char *mcs_server_st_usr(mcs_server_st *ptr);
+const char *mcs_server_st_pwd(mcs_server_st *ptr);
 
 #endif // MCS_H
