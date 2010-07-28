@@ -39,6 +39,9 @@ static void agent_logger(void *userdata,
                          enum conflate_log_level lvl,
                          const char *msg, ...)
 {
+// Issues compiling vfprintf(), so turn off this unused code path for now.
+#undef AGENT_LOGGER
+#ifdef AGENT_LOGGER
     char *n = NULL;
     bool v = false;
 
@@ -60,6 +63,7 @@ static void agent_logger(void *userdata,
     va_start(ap, msg);
     vfprintf(fmt, ap);
     va_end(ap);
+#endif
 }
 
 static void init_extensions(void)
