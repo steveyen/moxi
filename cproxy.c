@@ -2113,8 +2113,13 @@ bool cproxy_auth_downstream(mcs_server_st *server,
         return true;
     }
 
-    int usr_len = strlen(behavior->usr);
-    int pwd_len = strlen(behavior->pwd);
+    const char *usr = mcs_server_st_usr(server) != NULL ?
+        mcs_server_st_usr(server) : behavior->usr;
+    const char *pwd = mcs_server_st_pwd(server) != NULL ?
+        mcs_server_st_pwd(server) : behavior->pwd;
+
+    int usr_len = strlen(usr);
+    int pwd_len = strlen(pwd);
     if (usr_len <= 0 &&
         pwd_len <= 0) {
         return true; // When no usr & no pwd.
@@ -2134,8 +2139,8 @@ bool cproxy_auth_downstream(mcs_server_st *server,
     // The key should look like "PLAIN \0usr\0pwd".
     //
     int key_len = snprintf(buf, sizeof(buf), "PLAIN %c%s%c%s",
-                           0, behavior->usr,
-                           0, behavior->pwd);
+                           0, usr,
+                           0, pwd);
     assert(key_len == 8 + usr_len + pwd_len);
 
     protocol_binary_request_header req = { .bytes = {0} };
@@ -2196,8 +2201,7 @@ bool cproxy_auth_downstream(mcs_server_st *server,
 
         if (settings.verbose > 1) {
             moxi_log_write("auth_downstream failure, %s (%x)\n",
-                    behavior->usr,
-                    res.response.status);
+                           usr, res.response.status);
         }
     }
 
