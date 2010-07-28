@@ -4302,7 +4302,7 @@ int main (int argc, char **argv) {
 #ifndef MAIN_CHECK
     struct passwd *pw;
     char *log_file = NULL;
-    int use_syslog = 1;
+    int log_mode = ERRORLOG_SYSLOG;
     int log_level = 0;
 #endif
     struct rlimit rlim;
@@ -4479,8 +4479,13 @@ int main (int argc, char **argv) {
             if (!optarg) {
                 fprintf(stderr, "Log File path not provided, resorting to syslog");
             } else {
-                use_syslog = 0;
-                log_file = strdup(optarg);
+                if (optarg[0] == '\0' ||
+                    strcmp(optarg, "stderr") == 0) {
+                    log_mode = ERRORLOG_STDERR;
+                } else {
+                    log_mode = ERRORLOG_FILE;
+                    log_file = strdup(optarg);
+                }
                 break;
             }
 #endif
@@ -4496,18 +4501,18 @@ int main (int argc, char **argv) {
      * initalize log file
      */
     ml = (struct moxi_log *)calloc(1, sizeof(struct moxi_log));
+    ml->log_mode = log_mode;
     ml->log_file = log_file;
-    ml->use_syslog = use_syslog;
     ml->log_ident = "moxi";
-    ml->log_mode = use_syslog ? ERRORLOG_SYSLOG : 0;
     ml->log_level = log_level ? log_level : 5;
 
     log_error_open(ml);
+
     /*
      * logger initialized, from now on we should use moxi_log_write
      * instead of fprintfs/perror
      */
-    moxi_log_write("mox log %s", "initialized");
+    moxi_log_write("moxi log, mode=%d, file=%s\n", ml->log_mode, ml->log_file);
 
     if (ml->log_mode == ERRORLOG_FILE) {
         /*
@@ -4516,7 +4521,6 @@ int main (int argc, char **argv) {
          */
          signal(SIGHUP, sig_handler);
     }
-
 #endif
 
     if (cproxy_cfg

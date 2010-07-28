@@ -55,26 +55,20 @@ int log_error_open(moxi_log *ml) {
         ml->logbuf_used = 0;
     }
 
-    ml->log_mode = ERRORLOG_STDERR;
-
-    if (ml->log_file) {
+    if (ml->log_mode == ERRORLOG_FILE) {
         const char *logfile = ml->log_file;
 
         if (-1 == (ml->fd = open(logfile, O_APPEND | O_WRONLY | O_CREAT | O_LARGEFILE, 0644))) {
-            fprintf(stderr, "opening errorlog '%s' failed. error : %s, Switching to syslog",
+            fprintf(stderr, "ERROR: opening errorlog '%s' failed. error: %s, Switching to syslog.\n",
                     logfile, strerror(errno));
 
-            ml->use_syslog = 1;
-
-        } else
-            ml->log_mode = ERRORLOG_FILE;
+            ml->log_mode = ERRORLOG_SYSLOG;
+        }
     }
 
-    if (ml->use_syslog) {
+    if (ml->log_mode == ERRORLOG_SYSLOG) {
         openlog(ml->log_ident, LOG_CONS | LOG_PID, LOG_DAEMON);
-        ml->log_mode = ERRORLOG_SYSLOG;
     }
-
 
     return 0;
 }
