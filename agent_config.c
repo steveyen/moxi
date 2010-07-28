@@ -42,13 +42,14 @@ static char *NULL_BUCKET = "[<NULL_BUCKET>]";
 
 static void cproxy_init_null_bucket(proxy_main *m);
 
-static void cproxy_on_new_config(void *data0, void *data1);
-static bool cproxy_on_new_config_json_one(proxy_main *m, uint32_t new_config_ver,
-                                          char *config, char *name);
+static void cproxy_on_config(void *data0, void *data1);
+
+static bool cproxy_on_config_json_one(proxy_main *m, uint32_t new_config_ver,
+                                      char *config, char *name);
 
 static
-bool cproxy_on_new_config_json_buckets(proxy_main *m, uint32_t new_config_ver,
-                                       cJSON *jBuckets, bool want_default);
+bool cproxy_on_config_json_buckets(proxy_main *m, uint32_t new_config_ver,
+                                   cJSON *jBuckets, bool want_default);
 
 static void agent_logger(void *userdata,
                          enum conflate_log_level lvl,
@@ -357,7 +358,7 @@ void on_conflate_new_config(void *userdata, kvpair_t *config) {
 
     kvpair_t *copy = dup_kvpair(config);
     if (copy != NULL) {
-        if (!work_send(mthread->work_queue, cproxy_on_new_config, &completion, copy) &&
+        if (!work_send(mthread->work_queue, cproxy_on_config, &completion, copy) &&
             settings.verbose > 1) {
             moxi_log_write("work_send failed\n");
         }
@@ -373,7 +374,7 @@ void on_conflate_new_config(void *userdata, kvpair_t *config) {
 #ifdef MOXI_USE_VBUCKET
 
 static
-bool cproxy_on_new_config_json(proxy_main *m, uint32_t new_config_ver, char *config) {
+bool cproxy_on_config_json(proxy_main *m, uint32_t new_config_ver, char *config) {
     bool rv = false;
 
     cJSON *c = cJSON_Parse(config);
@@ -385,14 +386,14 @@ bool cproxy_on_new_config_json(proxy_main *m, uint32_t new_config_ver, char *con
             // bucket on the 1st pass, so the default bucket gets
             // created earlier.
             //
-            bool rv1 = cproxy_on_new_config_json_buckets(m, new_config_ver, jBuckets, true);
-            bool rv2 = cproxy_on_new_config_json_buckets(m, new_config_ver, jBuckets, false);
+            bool rv1 = cproxy_on_config_json_buckets(m, new_config_ver, jBuckets, true);
+            bool rv2 = cproxy_on_config_json_buckets(m, new_config_ver, jBuckets, false);
 
             rv = rv1 || rv2;
         } else {
             // Just a single config.
             //
-            rv = cproxy_on_new_config_json_one(m, new_config_ver, config, "default");
+            rv = cproxy_on_config_json_one(m, new_config_ver, config, "default");
         }
 
         cJSON_Delete(c);
@@ -402,7 +403,7 @@ bool cproxy_on_new_config_json(proxy_main *m, uint32_t new_config_ver, char *con
 }
 
 static
-bool cproxy_on_new_config_json_buckets(proxy_main *m, uint32_t new_config_ver,
+bool cproxy_on_config_json_buckets(proxy_main *m, uint32_t new_config_ver,
                                        cJSON *jBuckets, bool want_default) {
     bool rv = false;
 
@@ -424,7 +425,7 @@ bool cproxy_on_new_config_json_buckets(proxy_main *m, uint32_t new_config_ver,
             if (!(is_default ^ want_default)) { // XOR.
                 char *jBucketStr = cJSON_Print(jBucket);
                 if (jBucketStr != NULL) {
-                    rv = cproxy_on_new_config_json_one(m, new_config_ver,
+                    rv = cproxy_on_config_json_one(m, new_config_ver,
                                                        jBucketStr, name) || rv;
                     free(jBucketStr);
                 }
@@ -436,7 +437,8 @@ bool cproxy_on_new_config_json_buckets(proxy_main *m, uint32_t new_config_ver,
 }
 
 static
-bool cproxy_on_new_config_json_one(proxy_main *m, uint32_t new_config_ver, char *config, char *name) {
+bool cproxy_on_config_json_one(proxy_main *m, uint32_t new_config_ver,
+                               char *config, char *name) {
     assert(m != NULL);
     assert(config != NULL);
     assert(name != NULL);
@@ -545,7 +547,7 @@ bool cproxy_on_new_config_json_one(proxy_main *m, uint32_t new_config_ver, char 
 #else // !MOXI_USE_VBUCKET
 
 static
-bool cproxy_on_new_config_kvs(proxy_main *m, uint32_t new_config_ver, kvpair_t *kvs) {
+bool cproxy_on_config_kvs(proxy_main *m, uint32_t new_config_ver, kvpair_t *kvs) {
     // The kvs key-multivalues look roughly like...
     //
     //  pool-customer1-a
@@ -726,7 +728,7 @@ bool cproxy_on_new_config_kvs(proxy_main *m, uint32_t new_config_ver, kvpair_t *
 #endif // !MOXI_USE_VBUCKET
 
 static
-void cproxy_on_new_config(void *data0, void *data1) {
+void cproxy_on_config(void *data0, void *data1) {
     work_collect *completion = data0;
     proxy_main *m = completion->data;
     assert(m);
@@ -759,7 +761,7 @@ void cproxy_on_new_config(void *data0, void *data1) {
         contents[0] != NULL) {
         char *config = trimstrdup(contents[0]);
         if (config != NULL) {
-            cproxy_on_new_config_json(m, new_config_ver, config);
+            cproxy_on_config_json(m, new_config_ver, config);
 
             free(config);
         } else {
@@ -767,7 +769,7 @@ void cproxy_on_new_config(void *data0, void *data1) {
         }
     }
 #else // !MOXI_USE_VBUCKET
-    if (cproxy_on_new_config_kvs(m, new_config_ver, kvs) == false) {
+    if (cproxy_on_config_kvs(m, new_config_ver, kvs) == false) {
         goto fail;
     }
 #endif // !MOXI_USE_VBUCKET
