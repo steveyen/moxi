@@ -148,7 +148,8 @@ static
 #else
 #undef collect_memcached_stats_for_proxy
 #endif
-void collect_memcached_stats_for_proxy(struct main_stats_collect_info *msci, const char *proxy_name, int proxy_port) {
+void collect_memcached_stats_for_proxy(struct main_stats_collect_info *msci,
+                                       const char *proxy_name, int proxy_port) {
 #ifndef MOXI_USE_VBUCKET
     memcached_st mst;
 
@@ -292,7 +293,8 @@ enum conflate_mgmt_cb_result on_conflate_get_stats(void *userdata,
         int i;
 
         for (i = 1; i < m->nthreads; i++) {
-            struct stats_gathering_pair *pair = calloc(1, sizeof(struct stats_gathering_pair));
+            struct stats_gathering_pair *pair =
+                calloc(1, sizeof(struct stats_gathering_pair));
             if (!pair)
                 break;
             // Each thread gets its own collection hashmap, which
@@ -301,7 +303,10 @@ enum conflate_mgmt_cb_result on_conflate_get_stats(void *userdata,
             //
             if (!(pair->map_pstd = genhash_init(128, strhash_ops)))
                 break;
-            // key stats hashmap has same keys and genhash<string, struct key_stats *> as values
+
+            // Key stats hashmap has same keys and
+            // genhash<string, struct key_stats *> as values.
+            //
             if (!(pair->map_key_stats = genhash_init(128, strhash_ops)))
                 break;
             work_collect_init(&ca[i], -1, pair);
@@ -338,19 +343,23 @@ enum conflate_mgmt_cb_result on_conflate_get_stats(void *userdata,
 
                         genhash_t *map_key_stats = pair->map_key_stats;
                         if (map_key_stats != NULL) {
-                            genhash_iter(map_key_stats, map_key_stats_foreach_merge,
+                            genhash_iter(map_key_stats,
+                                         map_key_stats_foreach_merge,
                                          end_map_key_stats);
                         }
                     }
 
                     genhash_iter(end_pstd, map_pstd_foreach_emit, &msci);
-                    genhash_iter(end_map_key_stats, map_key_stats_foreach_emit, &msci);
+                    genhash_iter(end_map_key_stats,
+                                 map_key_stats_foreach_emit, &msci);
                 }
             }
         }
 
         for (i = 0; i < msci.nproxy; i++) {
-            collect_memcached_stats_for_proxy(&msci, msci.proxies[i].name, msci.proxies[i].port);
+            collect_memcached_stats_for_proxy(&msci,
+                                              msci.proxies[i].name,
+                                              msci.proxies[i].port);
             free(msci.proxies[i].name);
         }
         free(msci.proxies);
@@ -419,7 +428,8 @@ void map_key_stats_foreach_merge(const void *key,
     }
 }
 
-static void proxy_stats_dump_behavior(ADD_STAT add_stats, conn *c, const char *prefix,
+static void proxy_stats_dump_behavior(ADD_STAT add_stats,
+                                      conn *c, const char *prefix,
                                       proxy_behavior *b, int level) {
     if (level >= 2)
         APPEND_PREFIX_STAT("cycle", "%u", b->cycle);
@@ -502,7 +512,8 @@ static void proxy_stats_dump_frontcache(ADD_STAT add_stats, conn *c,
     pthread_mutex_unlock(p->front_cache.lock);
 }
 
-static void proxy_stats_dump_pstd_stats(ADD_STAT add_stats, conn *c, const char *prefix,
+static void proxy_stats_dump_pstd_stats(ADD_STAT add_stats,
+                                        conn *c, const char *prefix,
                                         proxy_stats *stats) {
     assert(stats != NULL);
 
@@ -580,7 +591,8 @@ static void proxy_stats_dump_pstd_stats(ADD_STAT add_stats, conn *c, const char 
               "%llu", (long long unsigned int) stats->err_downstream_write_prep);
 }
 
-static void proxy_stats_dump_stats_cmd(ADD_STAT add_stats, conn *c, const char *prefix,
+static void proxy_stats_dump_stats_cmd(ADD_STAT add_stats, conn *c,
+                                       const char *prefix,
                                        proxy_stats_cmd stats_cmd[][STATS_CMD_last]) {
     char keybuf[128];
 
@@ -639,7 +651,8 @@ static void map_key_stats_foreach_dump(const void *key, const void *value,
     assert(name != NULL);
     struct key_stats *stats = (struct key_stats *)value;
     assert(stats != NULL);
-    struct key_stats_dump_state *state = (struct key_stats_dump_state *)user_data;
+    struct key_stats_dump_state *state =
+        (struct key_stats_dump_state *)user_data;
     assert(state != NULL);
 
     assert(strcmp(name, stats->key) == 0);
@@ -757,8 +770,10 @@ void proxy_stats_dump_proxies(ADD_STAT add_stats, conn *c,
             proxy_stats_dump_behavior(add_stats, c, prefix, &p->behavior_pool.base, 1);
 
             for (int i = 0; i < p->behavior_pool.num; i++) {
-                snprintf(prefix, sizeof(prefix), "%u:%s:behavior-%u:", p->port, p->name, i);
-                proxy_stats_dump_behavior(add_stats, c, prefix, &p->behavior_pool.arr[i], 0);
+                snprintf(prefix, sizeof(prefix), "%u:%s:behavior-%u:",
+                         p->port, p->name, i);
+                proxy_stats_dump_behavior(add_stats, c, prefix,
+                                          &p->behavior_pool.arr[i], 0);
             }
         }
 
@@ -773,7 +788,8 @@ void proxy_stats_dump_proxies(ADD_STAT add_stats, conn *c,
         pthread_mutex_unlock(&p->proxy_lock);
 
         if (pscip->do_frontcache) {
-            snprintf(prefix, sizeof(prefix), "%u:%s:frontcache:", p->port, p->name);
+            snprintf(prefix, sizeof(prefix), "%u:%s:frontcache:",
+                     p->port, p->name);
             proxy_stats_dump_frontcache(add_stats, c, prefix, p);
         }
 
@@ -788,9 +804,11 @@ void proxy_stats_dump_proxies(ADD_STAT add_stats, conn *c,
                 }
                 pthread_mutex_unlock(&p->proxy_lock);
 
-                snprintf(prefix, sizeof(prefix), "%u:%s:pstd_stats:", p->port, p->name);
+                snprintf(prefix, sizeof(prefix), "%u:%s:pstd_stats:",
+                         p->port, p->name);
                 proxy_stats_dump_pstd_stats(add_stats, c, prefix, &pstd->stats);
-                snprintf(prefix, sizeof(prefix), "%u:%s:pstd_stats_cmd:", p->port, p->name);
+                snprintf(prefix, sizeof(prefix), "%u:%s:pstd_stats_cmd:",
+                         p->port, p->name);
                 proxy_stats_dump_stats_cmd(add_stats, c, prefix, pstd->stats_cmd);
 
                 free(pstd);
@@ -811,7 +829,8 @@ void proxy_stats_dump_proxies(ADD_STAT add_stats, conn *c,
                 }
                 pthread_mutex_unlock(&p->proxy_lock);
 
-                snprintf(prefix, sizeof(prefix), "%u:%s:key_stats:", p->port, p->name);
+                snprintf(prefix, sizeof(prefix), "%u:%s:key_stats:",
+                         p->port, p->name);
                 struct key_stats_dump_state state = { .prefix = prefix,
                                                       .add_stats = add_stats,
                                                       .conn      = c,
@@ -969,7 +988,8 @@ static void main_stats_collect(void *data0, void *data1) {
     }
 
     {
-        struct main_stats_proxy_info *infos = calloc(nproxy, sizeof(struct main_stats_proxy_info));
+        struct main_stats_proxy_info *infos =
+            calloc(nproxy, sizeof(struct main_stats_proxy_info));
         proxy *p = m->proxy_head;
         for (int i = 0; i < nproxy; i++, p = p->next) {
             if (p == NULL)
@@ -1396,11 +1416,13 @@ static void map_key_stats_foreach_emit_inner(const void *_key,
     char buf[200+KEY_MAX_LENGTH];
 
     snprintf(buf, sizeof(buf), "%s:keys_stats:%s:", state->name, key);
-    emit_proxy_stats_cmd(state->emit->result, buf, "%s_%s_%s", stats->stats_cmd);
+    emit_proxy_stats_cmd(state->emit->result, buf, "%s_%s_%s",
+                         stats->stats_cmd);
 
     {
         char buf_val[32];
-        snprintf(buf, sizeof(buf), "%s:keys_stats:%s:added_at_msec", state->name, key);
+        snprintf(buf, sizeof(buf), "%s:keys_stats:%s:added_at_msec",
+                 state->name, key);
         snprintf(buf_val, sizeof(buf_val), "%u", stats->added_at);
         conflate_add_field(state->emit->result, buf, buf_val);
     }
