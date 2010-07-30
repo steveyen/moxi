@@ -244,6 +244,7 @@ mcs_return mcs_server_st_do(mcs_server_st *ptr,
             return MEMCACHED_SUCCESS;
         }
     }
+
     return MEMCACHED_FAILURE;
 }
 
@@ -259,18 +260,29 @@ ssize_t mcs_server_st_io_write(mcs_server_st *ptr,
 mcs_return mcs_server_st_read(mcs_server_st *ptr,
                               void *dta,
                               size_t size) {
+    // We use a blocking read, but reset back to non-blocking
+    // or the original state when we're done.
+    //
+    int flags = fcntl(ptr->fd, F_GETFL, 0);
+    if (flags < 0 ||
+        fcntl(ptr->fd, F_SETFL, flags & (~O_NONBLOCK)) < 0) {
+        return MEMCACHED_FAILURE;
+    }
+
     char *data = dta;
     size_t done = 0;
 
     while (done < size) {
         size_t n = read(ptr->fd, data + done, size - done);
-        if (n <= 0) {
+        if (n == -1) {
+            fcntl(ptr->fd, F_SETFL, flags);
             return MEMCACHED_FAILURE;
         }
 
         done += (size_t) n;
     }
 
+    fcntl(ptr->fd, F_SETFL, flags);
     return MEMCACHED_SUCCESS;
 }
 

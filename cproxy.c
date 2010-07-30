@@ -1397,9 +1397,8 @@ void propagate_error(downstream *d) {
         conn *uc = d->upstream_conn;
 
         if (settings.verbose > 1) {
-            moxi_log_write(
-                    "ERROR: %d could not forward upstream to downstream\n",
-                    uc->sfd);
+            moxi_log_write("%d: could not forward upstream to downstream\n",
+                           uc->sfd);
         }
 
         upstream_error(uc);
@@ -2102,10 +2101,6 @@ bool cproxy_auth_downstream(mcs_server_st *server,
                             proxy_behavior *behavior) {
     assert(server);
     assert(behavior);
-    if (settings.verbose > 2) {
-      moxi_log_write("cproxy_auth_downstream usr: %s pwd: %s\n",
-              behavior->usr,behavior->pwd);
-    }
 
     char buf[3000];
 
@@ -2125,6 +2120,11 @@ bool cproxy_auth_downstream(mcs_server_st *server,
         return true; // When no usr & no pwd.
     }
 
+    if (settings.verbose > 2) {
+        moxi_log_write("cproxy_auth_downstream usr: %s pwd: (%d)\n",
+                       usr, pwd_len);
+    }
+
     if (usr_len <= 0 ||
         pwd_len <= 0 ||
         !IS_PROXY(behavior->downstream_protocol) ||
@@ -2136,35 +2136,40 @@ bool cproxy_auth_downstream(mcs_server_st *server,
         return false; // Probably misconfigured.
     }
 
-    // The key should look like "PLAIN \0usr\0pwd".
+    // The key should look like "PLAIN", or the sasl mech string.
+    // The data should look like "\0usr\0pwd".  So, the body buf
+    // should look like "PLAIN\0usr\0pwd".
     //
-    int key_len = snprintf(buf, sizeof(buf), "PLAIN %c%s%c%s",
+    // TODO: Allow binary passwords.
+    //
+    int buf_len = snprintf(buf, sizeof(buf), "PLAIN%c%s%c%s",
                            0, usr,
                            0, pwd);
-    assert(key_len == 8 + usr_len + pwd_len);
+    assert(buf_len == 7 + usr_len + pwd_len);
 
     protocol_binary_request_header req = { .bytes = {0} };
 
     req.request.magic    = PROTOCOL_BINARY_REQ;
     req.request.opcode   = PROTOCOL_BINARY_CMD_SASL_AUTH;
-    req.request.keylen   = htons((uint16_t) key_len);
+    req.request.keylen   = htons((uint16_t) 5); // 5 == strlen("PLAIN").
     req.request.datatype = PROTOCOL_BINARY_RAW_BYTES;
-    req.request.bodylen  = htonl(key_len);
+    req.request.bodylen  = htonl(buf_len);
 
     if (mcs_server_st_do(server, (const char *) req.bytes,
                          sizeof(req.bytes), 0) != MEMCACHED_SUCCESS ||
-        mcs_server_st_io_write(server, buf, key_len, 1) == -1) {
+        mcs_server_st_io_write(server, buf, buf_len, 1) == -1) {
         mcs_server_st_io_reset(server);
 
         if (settings.verbose > 1) {
-            moxi_log_write("auth failure during write (%d)\n",
-                    key_len);
+            moxi_log_write("auth failure during write for %s (%d)\n",
+                           usr, buf_len);
         }
 
         return false;
     }
 
     protocol_binary_response_header res = { .bytes = {0} };
+
     if (mcs_server_st_read(server, &res.bytes,
                            sizeof(res.bytes)) == MEMCACHED_SUCCESS &&
         res.response.magic == PROTOCOL_BINARY_RES) {
@@ -2180,6 +2185,11 @@ bool cproxy_auth_downstream(mcs_server_st *server,
             if (mcs_server_st_read(server,
                                    buf,
                                    amt) != MEMCACHED_SUCCESS) {
+                if (settings.verbose > 1) {
+                    moxi_log_write("auth could not read response body (%d)\n",
+                                   usr, amt);
+                }
+
                 return false;
             }
 
@@ -2193,15 +2203,20 @@ bool cproxy_auth_downstream(mcs_server_st *server,
         //
         if (res.response.status == PROTOCOL_BINARY_RESPONSE_SUCCESS) {
             if (settings.verbose > 2) {
-                moxi_log_write("auth_downstream success\n");
+                moxi_log_write("auth_downstream success for %s\n", usr);
             }
 
             return true;
         }
 
         if (settings.verbose > 1) {
-            moxi_log_write("auth_downstream failure, %s (%x)\n",
+            moxi_log_write("auth_downstream failure for %s (%x)\n",
                            usr, res.response.status);
+        }
+    } else {
+        if (settings.verbose > 1) {
+            moxi_log_write("auth_downstream response error for %s\n",
+                           usr);
         }
     }
 

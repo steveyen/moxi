@@ -30,12 +30,9 @@ def some_json()
 {
   "hashAlgorithm": "CRC",
   "numReplicas": 0,
-  "serverList": ["localhost:11311"],
+  "serverList": ["127.0.0.1:11311"],
   "vBucketMap":
     [
-      [0],
-      [0],
-      [0],
       [0]
     ]
 }
