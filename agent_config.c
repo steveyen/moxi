@@ -448,7 +448,8 @@ bool cproxy_on_config_json_one(proxy_main *m, uint32_t new_config_ver,
     bool rv = false;
 
     if (m != NULL &&
-        config != NULL) {
+        config != NULL &&
+        strlen(config) > 0) {
         if (settings.verbose > 2) {
             moxi_log_write("conc contents config %s\n", config);
         }
@@ -526,7 +527,7 @@ bool cproxy_on_config_json_one(proxy_main *m, uint32_t new_config_ver,
                     } else {
                         if (settings.verbose > 1) {
                             moxi_log_write("ERROR: error receiving host:port for server config %d in %s\n",
-                                    j, config);
+                                           j, config);
                         }
                     }
 
@@ -538,6 +539,10 @@ bool cproxy_on_config_json_one(proxy_main *m, uint32_t new_config_ver,
         } else {
             moxi_log_write("ERROR: bad JSON configuration: %s\n", config);
             exit(EXIT_FAILURE);
+        }
+    } else {
+        if (settings.verbose > 1) {
+            moxi_log_write("ERROR: skipping empty config\n");
         }
     }
 
