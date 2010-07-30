@@ -458,6 +458,8 @@ AC_PATH_PROG([XSLTPROC], [xsltproc], "no")
 AM_CONDITIONAL([BUILD_SPECIFICATIONS],
                [test "x$enable_docs" != "xno" -a "x$XML2RFC" != "xno" -a "x$XSLTPROC" != "xno"])
 
+AC_CHECK_HEADERS_ONCE([netinet/in.h])
+
 dnl Let the compiler be a bit more picky. Please note that you cannot
 dnl specify these flags to the compiler before AC_CHECK_FUNCS, because
 dnl the test program will generate a compilation warning and hence fail
