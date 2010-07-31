@@ -36,22 +36,6 @@ class TestProxyBinary(moxi_mock_server.ProxyClientBase):
     def __init__(self, x):
         moxi_mock_server.ProxyClientBase.__init__(self, x)
 
-    # -------------------------------------------------
-
-    def packReq(self, cmd, reserved=0, key='', val='', opaque=0, extraHeader='', cas=0):
-        dtype=0
-        msg=struct.pack(REQ_PKT_FMT, REQ_MAGIC_BYTE,
-            cmd, len(key), len(extraHeader), dtype, reserved,
-                len(key) + len(extraHeader) + len(val), opaque, cas)
-        return msg + extraHeader + key + val
-
-    def packRes(self, cmd, status=0, key='', val='', opaque=0, extraHeader='', cas=0):
-        dtype=0
-        msg=struct.pack(REQ_PKT_FMT, RES_MAGIC_BYTE,
-            cmd, len(key), len(extraHeader), dtype, status,
-                len(key) + len(extraHeader) + len(val), opaque, cas)
-        return msg + extraHeader + key + val
-
     def testBasicVersion(self):
         """Test version command does not reach mock server"""
         self.client_connect()

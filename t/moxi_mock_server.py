@@ -6,6 +6,7 @@ import unittest
 import threading
 import time
 import re
+import struct
 
 from memcacheConstants import REQ_MAGIC_BYTE, RES_MAGIC_BYTE
 from memcacheConstants import REQ_PKT_FMT, RES_PKT_FMT, MIN_RECV_PACKET
@@ -264,4 +265,18 @@ class ProxyClientBase(unittest.TestCase):
             if i % 4 == 3 and i > 0:
                 r = r + '\n'
         return r
+
+    def packReq(self, cmd, reserved=0, key='', val='', opaque=0, extraHeader='', cas=0):
+        dtype=0
+        msg=struct.pack(REQ_PKT_FMT, REQ_MAGIC_BYTE,
+            cmd, len(key), len(extraHeader), dtype, reserved,
+                len(key) + len(extraHeader) + len(val), opaque, cas)
+        return msg + extraHeader + key + val
+
+    def packRes(self, cmd, status=0, key='', val='', opaque=0, extraHeader='', cas=0):
+        dtype=0
+        msg=struct.pack(REQ_PKT_FMT, RES_MAGIC_BYTE,
+            cmd, len(key), len(extraHeader), dtype, status,
+                len(key) + len(extraHeader) + len(val), opaque, cas)
+        return msg + extraHeader + key + val
 

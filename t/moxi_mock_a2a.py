@@ -29,8 +29,6 @@ class TestProxyAscii(moxi_mock_server.ProxyClientBase):
     def __init__(self, x):
         moxi_mock_server.ProxyClientBase.__init__(self, x)
 
-    # -------------------------------------------------
-
     def testBasicVersion(self):
         """Test version command does not reach mock server"""
         self.client_connect()
