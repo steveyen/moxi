@@ -31,7 +31,7 @@
 # define O_LARGEFILE 0
 #endif
 
-#define  MAX_LOGBUF_LEN 4096
+#define MAX_LOGBUF_LEN 4096
 
 /**
  * open the errorlog
@@ -42,16 +42,13 @@
  * - logfile
  *
  * if the open failed, report to the user and die
- *
  */
-
-
 int log_error_open(moxi_log *ml) {
     assert(ml);
 
     if (!ml->logbuf) {
-        ml->logbuf = (char *) malloc(MAX_LOGBUF_LEN);
-        bzero(ml->logbuf, MAX_LOGBUF_LEN);
+        ml->logbuf = (char *) malloc(MAX_LOGBUF_LEN + 1);
+        bzero(ml->logbuf, MAX_LOGBUF_LEN + 1);
         ml->logbuf_used = 0;
     }
 
@@ -78,9 +75,7 @@ int log_error_open(moxi_log *ml) {
  *
  * if the open failed, report to the user and die
  * if no filename is given, use syslog instead
- *
  */
-
 int log_error_cycle(moxi_log *ml) {
     /* only cycle if we are not in syslog-mode */
 
@@ -95,12 +90,12 @@ int log_error_cycle(moxi_log *ml) {
         if (-1 == (new_fd = open(logfile, O_APPEND | O_WRONLY | O_CREAT | O_LARGEFILE, 0644))) {
             /* write to old log */
             log_error_write(ml, __FILE__, __LINE__,
-                    "cycling errorlog '%s' failed : %s. failing back to syslog()", logfile, strerror(errno));
+                            "cycling errorlog '%s' failed: %s. failing back to syslog()",
+                            logfile, strerror(errno));
 
             close(ml->fd);
             ml->fd = -1;
             ml->log_mode = ERRORLOG_SYSLOG;
-
         } else {
             /* ok, new log is open, close the old one */
             close(ml->fd);
@@ -129,20 +124,20 @@ int log_error_close(moxi_log *ml) {
     return 0;
 }
 
-#define mappend_log(ml,str)                                     \
+#define mappend_log(ml, str)                                    \
     if (ml->logbuf_used < MAX_LOGBUF_LEN) {                     \
-        memcpy(ml->logbuf + ml->logbuf_used, str, strlen(str)); \
-        ml->logbuf_used += strlen(str);                         \
+        int str_len = strlen(str);                              \
+        memcpy(ml->logbuf + ml->logbuf_used, str, str_len + 1); \
+        ml->logbuf_used += str_len;                             \
     }                                                           \
 
 #define mappend_log_int(ml, num)                                \
     if (ml->logbuf_used < MAX_LOGBUF_LEN) {                     \
-        char buf[32] = {0};                                     \
-        snprintf(buf, 32, "%d", num);                           \
-        memcpy(ml->logbuf + ml->logbuf_used, buf, strlen(buf)); \
-        ml->logbuf_used += strlen(buf);                         \
+        char buf[32];                                           \
+        int buf_len = snprintf(buf, sizeof(buf), "%d", num);    \
+        memcpy(ml->logbuf + ml->logbuf_used, buf, buf_len + 1); \
+        ml->logbuf_used += buf_len;                             \
     }
-
 
 int log_error_write(moxi_log *ml, const char *filename, unsigned int line, const char *fmt, ...) {
     va_list ap;
@@ -181,11 +176,15 @@ int log_error_write(moxi_log *ml, const char *filename, unsigned int line, const
     mappend_log_int(ml, line);
     mappend_log(ml, ") ");
 
-
     va_start(ap, fmt);
     ml->logbuf_used +=
         vsnprintf((ml->logbuf + ml->logbuf_used), (MAX_LOGBUF_LEN - ml->logbuf_used - 1), fmt, ap);
     va_end(ap);
+
+    ml->logbuf[MAX_LOGBUF_LEN] = '\0';
+    if (ml->logbuf_used > MAX_LOGBUF_LEN) {
+        ml->logbuf_used = MAX_LOGBUF_LEN;
+    }
 
     switch(ml->log_mode) {
         case ERRORLOG_FILE:
