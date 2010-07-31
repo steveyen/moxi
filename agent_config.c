@@ -491,6 +491,18 @@ bool cproxy_on_config_json_one(proxy_main *m, uint32_t new_config_ver,
                 };
 
                 if (behavior_pool.arr != NULL) {
+                    const char *usr = vbucket_config_get_user(vch);
+                    if (usr != NULL) {
+                        strncpy(behavior_pool.base.usr, usr,
+                                sizeof(behavior_pool.base.usr));
+
+                        const char *pwd = vbucket_config_get_password(vch);
+                        if (pwd != NULL) {
+                            strncpy(behavior_pool.base.pwd,
+                                    pwd, sizeof(behavior_pool.base.pwd));
+                        }
+                    }
+
                     int j = 0;
                     for (; j < nodes_num; j++) {
                         // Inherit default behavior.
