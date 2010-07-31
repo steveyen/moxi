@@ -954,15 +954,8 @@ static void add_bin_header(conn *c, uint16_t err, uint8_t hdr_len, uint16_t key_
     header->response.cas = mc_swap64(c->cas);
 
     if (settings.verbose > 1) {
-        int ii;
-        moxi_log_write(">%d Writing bin response:", c->sfd);
-        for (ii = 0; ii < sizeof(header->bytes); ++ii) {
-            if (ii % 4 == 0) {
-                moxi_log_write("\n>%d  ", c->sfd);
-            }
-            moxi_log_write(" 0x%02x", header->bytes[ii]);
-        }
-        moxi_log_write("\n");
+        moxi_log_write(">%d Writing bin response:\n", c->sfd);
+        cproxy_dump_header(c->sfd, (char *) header->bytes);
     }
 
     add_iov(c, c->wbuf, sizeof(header->response));
@@ -3057,15 +3050,8 @@ int try_read_command(conn *c) {
 
             if (settings.verbose > 1) {
                 /* Dump the packet before we convert it to host order */
-                int ii;
-                moxi_log_write("<%d Read binary protocol data:", c->sfd);
-                for (ii = 0; ii < sizeof(req->bytes); ++ii) {
-                    if (ii % 4 == 0) {
-                        moxi_log_write("\n<%d   ", c->sfd);
-                    }
-                    moxi_log_write(" 0x%02x", req->bytes[ii]);
-                }
-                moxi_log_write("\n");
+                moxi_log_write("<%d Read binary protocol data:\n", c->sfd);
+                cproxy_dump_header(c->sfd, (char *) req->bytes);
             }
 
             c->binary_header = *req;

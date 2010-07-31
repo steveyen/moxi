@@ -275,13 +275,28 @@ void cproxy_process_downstream_binary_nread(conn *c) {
 
 void cproxy_dump_header(int prefix, char *bb) {
     if (settings.verbose > 2) {
+        char buf[200];
+
+        int prefix_len = snprintf(buf, sizeof(buf), "%d   ", prefix);
+        int start = prefix_len;
+
         for (int ii = 0; ii < sizeof(protocol_binary_request_header); ++ii) {
-            if (ii % 4 == 0) {
-                moxi_log_write("\n%d   ", prefix);
+            if (ii > 0 && ii % 4 == 0) {
+                buf[start] = '\n';
+                buf[start + 1] = '\0';
+                moxi_log_write(buf);
+
+                start = prefix_len;
             }
-            moxi_log_write(" 0x%02x", (unsigned char) bb[ii]);
+
+            start += snprintf(buf + start, sizeof(buf) - start,
+                              " 0x%02x", (unsigned char) bb[ii]);
         }
-        moxi_log_write("\n");
+
+        buf[start] = '\n';
+        buf[start + 1] = '\0';
+
+        moxi_log_write(buf);
     }
 }
 

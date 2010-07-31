@@ -1272,8 +1272,8 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
                 }
 
                 if (settings.verbose > 2) {
-                    moxi_log_write("forwarding a2b to %d, cmd %x, noreply %d, vbucket %d",
-                            c->sfd, header->request.opcode, uc->noreply, vbucket);
+                    moxi_log_write("forwarding a2b to %d, cmd %x, noreply %d, vbucket %d\n",
+                                   c->sfd, header->request.opcode, uc->noreply, vbucket);
 
                     cproxy_dump_header(c->sfd, (char *) header);
                 }

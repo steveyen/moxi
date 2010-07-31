@@ -799,12 +799,13 @@ bool cproxy_release_downstream(downstream *d, bool force) {
             //
             if (settings.verbose > 2) {
                 if (d->upstream_suffix_len > 0) {
-                    moxi_log_write("%d: release_downstream writing suffix binary: %d",
-                            d->upstream_conn->sfd, d->upstream_suffix_len);
+                    moxi_log_write("%d: release_downstream writing suffix binary: %d\n",
+                                   d->upstream_conn->sfd, d->upstream_suffix_len);
+
                     cproxy_dump_header(d->upstream_conn->sfd, d->upstream_suffix);
                 } else {
                     moxi_log_write("%d: release_downstream writing suffix ascii: %s\n",
-                            d->upstream_conn->sfd, d->upstream_suffix);
+                                   d->upstream_conn->sfd, d->upstream_suffix);
                 }
             }
 

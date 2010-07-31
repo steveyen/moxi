@@ -120,8 +120,8 @@ bool b2b_forward_item(conn *uc, downstream *d, item *it) {
         memcpy(buf, key, keylen);
         buf[keylen] = '\0';
 
-        moxi_log_write("%d: b2b_forward_item nbytes %u, extlen %d, keylen %d opcode %x key (%s)",
-                uc->sfd, it->nbytes, req->request.extlen, keylen, req->request.opcode, buf);
+        moxi_log_write("%d: b2b_forward_item nbytes %u, extlen %d, keylen %d opcode %x key (%s)\n",
+                       uc->sfd, it->nbytes, req->request.extlen, keylen, req->request.opcode, buf);
 
         cproxy_dump_header(uc->sfd, (char *) req);
     }
@@ -482,8 +482,8 @@ void cproxy_process_b2b_downstream_nread(conn *c) {
     //
     if (uc != NULL) {
         if (settings.verbose > 2) {
-            moxi_log_write("<%d cproxy_process_b2b_downstream_nread got %u",
-                    c->sfd, it->nbytes);
+            moxi_log_write("<%d cproxy_process_b2b_downstream_nread got %u\n",
+                           c->sfd, it->nbytes);
 
             cproxy_dump_header(c->sfd, ITEM_data(it));
         }
