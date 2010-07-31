@@ -746,6 +746,8 @@ void cproxy_on_config(void *data0, void *data1) {
 
     uint32_t max_config_ver = 0;
 
+    pthread_mutex_lock(&m->proxy_main_lock);
+
     for (proxy *p = m->proxy_head; p != NULL; p = p->next) {
         pthread_mutex_lock(&p->proxy_lock);
         if (max_config_ver < p->config_ver) {
@@ -753,6 +755,8 @@ void cproxy_on_config(void *data0, void *data1) {
         }
         pthread_mutex_unlock(&p->proxy_lock);
     }
+
+    pthread_mutex_unlock(&m->proxy_main_lock);
 
     uint32_t new_config_ver = max_config_ver + 1;
 
@@ -817,6 +821,8 @@ void close_outdated_proxies(proxy_main *m, uint32_t new_config_ver) {
     empty_pool.num  = 0;
     empty_pool.arr  = NULL;
 
+    pthread_mutex_lock(&m->proxy_main_lock);
+
     for (proxy *p = m->proxy_head; p != NULL; p = p->next) {
         bool  down = false;
         int   port = 0;
@@ -836,7 +842,14 @@ void close_outdated_proxies(proxy_main *m, uint32_t new_config_ver) {
 
         pthread_mutex_unlock(&p->proxy_lock);
 
-        // Next, check that we're not shutting down the NULL_BUCKET.
+        pthread_mutex_unlock(&m->proxy_main_lock);
+
+        // Note, we don't want to own the proxy_main_lock here
+        // because cproxy_on_config_pool() may scatter/gather
+        // calls against the worker threads, and the worked threads
+        // should not deadlock if they need the proxy_main_lock.
+        //
+        // Also, check that we're not shutting down the NULL_BUCKET.
         //
         // Otherwise, passing in a NULL config string signals that
         // a bucket's proxy struct should be shut down.
@@ -849,7 +862,11 @@ void close_outdated_proxies(proxy_main *m, uint32_t new_config_ver) {
         if (name != NULL) {
             free(name);
         }
+
+        pthread_mutex_lock(&m->proxy_main_lock);
     }
+
+    pthread_mutex_unlock(&m->proxy_main_lock);
 }
 
 /**
@@ -870,6 +887,8 @@ void cproxy_on_config_pool(proxy_main *m,
     //
     bool found = false;
 
+    pthread_mutex_lock(&m->proxy_main_lock);
+
     proxy *p = m->proxy_head;
     while (p != NULL && !found) {
         pthread_mutex_lock(&p->proxy_lock);
@@ -888,6 +907,8 @@ void cproxy_on_config_pool(proxy_main *m,
 
         p = p->next;
     }
+
+    pthread_mutex_unlock(&m->proxy_main_lock);
 
     if (p == NULL) {
         p = cproxy_create(m, name, port,

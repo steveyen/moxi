@@ -158,15 +158,16 @@ typedef enum {
 struct proxy_main {
     proxy_behavior behavior; // Default, main listener modifiable only.
 
-    enum_proxy_conf_type conf_type; // proxy configuration type
+    enum_proxy_conf_type conf_type; // Immutable proxy configuration type.
 
-    // Any thread that changes proxy list must
+    // Any thread that accesses the proxy list must
     // first acquire the proxy_main_lock.
     //
     pthread_mutex_t proxy_main_lock;
 
-    // Start of proxy list.  Only the main listener thread
-    // should access or modify this field.
+    // Start of proxy list.  Covered by proxy_main_lock.
+    // Only the main listener thread may modify the proxy list.
+    // Other threads may read-only traverse the proxy list.
     //
     proxy *proxy_head;
 

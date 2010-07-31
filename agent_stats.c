@@ -766,8 +766,10 @@ void proxy_stats_dump_proxies(ADD_STAT add_stats, conn *c,
         }
 
         if (pscip->do_behaviors) {
-            snprintf(prefix, sizeof(prefix), "%u:%s:behavior:", p->port, p->name);
-            proxy_stats_dump_behavior(add_stats, c, prefix, &p->behavior_pool.base, 1);
+            snprintf(prefix, sizeof(prefix), "%u:%s:behavior:",
+                     p->port, p->name);
+            proxy_stats_dump_behavior(add_stats, c, prefix,
+                                      &p->behavior_pool.base, 1);
 
             for (int i = 0; i < p->behavior_pool.num; i++) {
                 snprintf(prefix, sizeof(prefix), "%u:%s:behavior-%u:",
@@ -809,7 +811,8 @@ void proxy_stats_dump_proxies(ADD_STAT add_stats, conn *c,
                 proxy_stats_dump_pstd_stats(add_stats, c, prefix, &pstd->stats);
                 snprintf(prefix, sizeof(prefix), "%u:%s:pstd_stats_cmd:",
                          p->port, p->name);
-                proxy_stats_dump_stats_cmd(add_stats, c, prefix, pstd->stats_cmd);
+                proxy_stats_dump_stats_cmd(add_stats, c, prefix,
+                                           pstd->stats_cmd);
 
                 free(pstd);
             }
@@ -870,6 +873,8 @@ static void main_stats_collect(void *data0, void *data1) {
 
     char bufk[200];
     char bufv[4000];
+
+    pthread_mutex_lock(&m->proxy_main_lock);
 
     for (proxy *p = m->proxy_head; p != NULL; p = p->next) {
         nproxy++;
@@ -965,6 +970,8 @@ static void main_stats_collect(void *data0, void *data1) {
         }
     }
 
+    pthread_mutex_unlock(&m->proxy_main_lock);
+
     // Starting at 1 because 0 is the main listen thread.
     //
     for (int i = 1; i < m->nthreads; i++) {
@@ -977,6 +984,8 @@ static void main_stats_collect(void *data0, void *data1) {
             assert(t);
             assert(t->work_queue);
 
+            pthread_mutex_lock(&m->proxy_main_lock);
+
             for (proxy *p = m->proxy_head; p != NULL; p = p->next) {
                 proxy_td *ptd = &p->thread_data[i];
                 if (ptd != NULL &&
@@ -984,21 +993,29 @@ static void main_stats_collect(void *data0, void *data1) {
                     sent++;
                 }
             }
+
+            pthread_mutex_unlock(&m->proxy_main_lock);
         }
     }
 
     {
         struct main_stats_proxy_info *infos =
             calloc(nproxy, sizeof(struct main_stats_proxy_info));
+
+        pthread_mutex_lock(&m->proxy_main_lock);
+
         proxy *p = m->proxy_head;
         for (int i = 0; i < nproxy; i++, p = p->next) {
             if (p == NULL)
                 break;
+
             pthread_mutex_lock(&p->proxy_lock);
             infos[i].name = p->name != NULL ? strdup(p->name) : NULL;
             infos[i].port = p->port;
             pthread_mutex_unlock(&p->proxy_lock);
         }
+
+        pthread_mutex_unlock(&m->proxy_main_lock);
 
         msci->proxies = infos;
         msci->nproxy = nproxy;
@@ -1520,6 +1537,8 @@ static void main_stats_reset(void *data0, void *data1) {
     int sent   = 0;
     int nproxy = 0;
 
+    pthread_mutex_lock(&m->proxy_main_lock);
+
     for (proxy *p = m->proxy_head; p != NULL; p = p->next) {
         nproxy++;
 
@@ -1530,6 +1549,8 @@ static void main_stats_reset(void *data0, void *data1) {
 
         mcache_reset_stats(&p->front_cache);
     }
+
+    pthread_mutex_unlock(&m->proxy_main_lock);
 
     // Starting at 1 because 0 is the main listen thread.
     //
@@ -1543,6 +1564,8 @@ static void main_stats_reset(void *data0, void *data1) {
             assert(t);
             assert(t->work_queue);
 
+            pthread_mutex_lock(&m->proxy_main_lock);
+
             for (proxy *p = m->proxy_head; p != NULL; p = p->next) {
                 proxy_td *ptd = &p->thread_data[i];
                 if (ptd != NULL &&
@@ -1550,6 +1573,8 @@ static void main_stats_reset(void *data0, void *data1) {
                     sent++;
                 }
             }
+
+            pthread_mutex_unlock(&m->proxy_main_lock);
         }
     }
 
