@@ -16,6 +16,8 @@ import memcacheConstants
 
 import moxi_mock_server
 
+# Tests using moxi with expicit auth credentials on the cmd-line.
+#
 # Before you run moxi_mock_auth.py, start a moxi like...
 #
 #   ./moxi-debug -z url=http://127.0.0.1:4567/pools/default/buckets/default \
