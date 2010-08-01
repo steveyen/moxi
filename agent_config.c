@@ -494,12 +494,14 @@ bool cproxy_on_config_json_one(proxy_main *m, uint32_t new_config_ver,
                     const char *usr = vbucket_config_get_user(vch);
                     if (usr != NULL) {
                         strncpy(behavior_pool.base.usr, usr,
-                                sizeof(behavior_pool.base.usr));
+                                sizeof(behavior_pool.base.usr) - 1);
+                        behavior_pool.base.usr[sizeof(behavior_pool.base.usr) - 1] = '\0';
 
                         const char *pwd = vbucket_config_get_password(vch);
                         if (pwd != NULL) {
                             strncpy(behavior_pool.base.pwd,
-                                    pwd, sizeof(behavior_pool.base.pwd));
+                                    pwd, sizeof(behavior_pool.base.pwd) - 1);
+                            behavior_pool.base.pwd[sizeof(behavior_pool.base.pwd) - 1] = '\0';
                         }
                     }
 
@@ -516,6 +518,8 @@ bool cproxy_on_config_json_one(proxy_main *m, uint32_t new_config_ver,
                             strncpy(behavior_pool.arr[j].host,
                                     hostport,
                                     sizeof(behavior_pool.arr[j].host) - 1);
+                            behavior_pool.arr[j].host[sizeof(behavior_pool.arr[j].host) - 1] = '\0';
+
                             char *colon = strchr(behavior_pool.arr[j].host, ':');
                             if (colon != NULL) {
                                 *colon = '\0';
