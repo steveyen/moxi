@@ -981,6 +981,9 @@ void write_bin_error(conn *c, protocol_binary_response_status err, int swallow) 
     case PROTOCOL_BINARY_RESPONSE_NOT_STORED:
         errstr = "Not stored.";
         break;
+    case PROTOCOL_BINARY_RESPONSE_AUTH_ERROR:
+        errstr = "Auth failure";
+        break;
     default:
         assert(false);
         errstr = "UNHANDLED ERROR";

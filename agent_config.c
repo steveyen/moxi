@@ -403,7 +403,7 @@ bool cproxy_on_config_json(proxy_main *m, uint32_t new_config_ver, char *config)
 
 static
 bool cproxy_on_config_json_buckets(proxy_main *m, uint32_t new_config_ver,
-                                       cJSON *jBuckets, bool want_default) {
+                                   cJSON *jBuckets, bool want_default) {
     bool rv = false;
 
     int numBuckets = cJSON_GetArraySize(jBuckets);
@@ -455,7 +455,7 @@ bool cproxy_on_config_json_one(proxy_main *m, uint32_t new_config_ver,
 
         // The config should be JSON that should look like...
         //
-        // {"name":"default",
+        // {"name":"default",                // The bucket name.
         //  "nodes":[{"hostname":"10.17.1.46","status":"healthy",
         //            "version":"0.3.0_114_g31859fe","os":"i386-apple-darwin9.8.0",
         //            "ports":{"proxy":11213,"direct":11212}}],
@@ -463,7 +463,11 @@ bool cproxy_on_config_json_one(proxy_main *m, uint32_t new_config_ver,
         //  "controllers":{"ejectNode":{"uri":"/controller/ejectNode"},
         //  "testWorkload":{"uri":"/pools/default/controller/testWorkload"}},
         //  "stats":{"uri":"/pools/default/stats"},
-        //  "vBucketServerMap":{...more json here...}}
+        //  "vBucketServerMap":{
+        //     "hashAlgorithm": "CRC",
+        //     "user":"optionalSASLUsr",     // Optional.
+        //     "password":"optionalSASLPwd", // Optional.
+        //     ...more json here...}}
         //
         VBUCKET_CONFIG_HANDLE vch = vbucket_config_parse_string(config);
         if (vch) {
