@@ -275,7 +275,7 @@ class ProxyClientBase(unittest.TestCase):
 
     def packRes(self, cmd, status=0, key='', val='', opaque=0, extraHeader='', cas=0):
         dtype=0
-        msg=struct.pack(REQ_PKT_FMT, RES_MAGIC_BYTE,
+        msg=struct.pack(RES_PKT_FMT, RES_MAGIC_BYTE,
             cmd, len(key), len(extraHeader), dtype, status,
                 len(key) + len(extraHeader) + len(val), opaque, cas)
         return msg + extraHeader + key + val

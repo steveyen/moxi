@@ -11,6 +11,14 @@
 #include "work.h"
 #include "log.h"
 
+static void cproxy_sasl_plain_auth(conn *c, char *req_bytes);
+
+static proxy *cproxy_find_proxy_by_plain_auth(proxy_main *m,
+                                              const char *usr,
+                                              int usrlen,
+                                              const char *pwd,
+                                              int pwdlen);
+
 void cproxy_process_upstream_binary(conn *c) {
     assert(c != NULL);
     assert(c->cmd >= 0);
@@ -79,6 +87,13 @@ void cproxy_process_upstream_binary(conn *c) {
             // Since we have no body bytes, we can go immediately to
             // the nread completed processing step.
             //
+            if (c->binary_header.request.opcode == PROTOCOL_BINARY_CMD_SASL_LIST_MECHS) {
+                // TODO: One day handle more than just PLAIN sasl auth.
+                //
+                write_bin_response(c, "PLAIN", 0, 0, strlen("PLAIN"));
+                return;
+            }
+
             cproxy_pause_upstream_for_downstream(ptd, c);
         }
     } else {
@@ -115,6 +130,19 @@ void cproxy_process_upstream_binary_nread(conn *c) {
 
     proxy_td *ptd = c->extra;
     assert(ptd != NULL);
+
+    if (header->request.opcode == PROTOCOL_BINARY_CMD_SASL_AUTH) {
+        item *it = c->item;
+        assert(it);
+
+        cproxy_sasl_plain_auth(c, (char *) ITEM_data(it));
+        return;
+    }
+
+    if (header->request.opcode == PROTOCOL_BINARY_CMD_SASL_STEP) {
+        write_bin_error(c, PROTOCOL_BINARY_RESPONSE_AUTH_ERROR, 0);
+        return;
+    }
 
     if (c->noreply) {
         if (settings.verbose > 2) {
@@ -323,4 +351,128 @@ bool cproxy_binary_ignore_reply(conn *c, protocol_binary_response_header *header
     }
 
     return false;
+}
+
+static void cproxy_sasl_plain_auth(conn *c, char *req_bytes) {
+    proxy_td *ptd = c->extra;
+    assert(ptd != NULL);
+    assert(ptd->proxy != NULL);
+    assert(ptd->proxy->main != NULL);
+
+    // Authenticate an upstream connection.
+    //
+    protocol_binary_request_header *req =
+        (protocol_binary_request_header *) req_bytes;
+
+    char *key     = ((char *) req) + sizeof(*req) + req->request.extlen;
+    int   keylen  = ntohs(req->request.keylen);
+    int   bodylen = ntohl(req->request.bodylen);
+
+    // The key is the sasl mech.
+    //
+    if (keylen != 5 ||
+        memcmp(key, "PLAIN", 5) != 0) { // 5 == strlen("PLAIN").
+        write_bin_error(c, PROTOCOL_BINARY_RESPONSE_AUTH_ERROR, 0);
+        return;
+    }
+
+    char     *clientin    = key + keylen;
+    unsigned  clientinlen = bodylen - keylen - req->request.extlen;
+
+    // The clientin string looks like "[authzid]\0username\0password".
+    //
+    while (clientinlen > 0 && clientin[0] != '\0') {
+        // Skip authzid.
+        //
+        clientin++;
+        clientinlen--;
+    }
+
+    if (clientinlen > 2 && clientinlen < 128 && clientin[0] == '\0') {
+        const char *username = clientin + 1;
+        char        password[256];
+
+        int uslen = strlen(username);
+        int pwlen = clientinlen - 2 - uslen;
+
+        // Note that we don't allow auth'ing with an empty password.
+        // So, once you're sasl auth'ed, you can't sasl auth again
+        // back to some empty password proxy/bucket, such as to the
+        // default bucket.
+        //
+        if (pwlen > 0 && pwlen < sizeof(password)) {
+            memcpy(password, clientin + 2 + uslen, pwlen);
+            password[pwlen] = '\0';
+
+            proxy *p = cproxy_find_proxy_by_plain_auth(ptd->proxy->main,
+                                                       username, uslen,
+                                                       password, pwlen);
+            if (p != NULL) {
+                proxy_td *ptd_target = cproxy_find_thread_data(p, pthread_self());
+                if (ptd_target != NULL) {
+                    c->extra = ptd_target;
+
+                    write_bin_response(c, "Authenticated", 0, 0,
+                                       strlen("Authenticated"));
+
+                    if (settings.verbose > 2) {
+                        moxi_log_write("<%d sasl authenticated for %s\n",
+                                       c->sfd, username);
+                    }
+
+                    return;
+                } else {
+                    if (settings.verbose > 2) {
+                        moxi_log_write("<%d sasl auth failed on ptd for %s\n",
+                                       c->sfd, username);
+                    }
+                }
+            } else {
+                if (settings.verbose > 2) {
+                    moxi_log_write("<%d sasl auth failed for %s (%d)\n",
+                                   c->sfd, username, pwlen);
+                }
+            }
+        } else {
+            if (settings.verbose > 2) {
+                moxi_log_write("<%d sasl auth failed for %s with empty password\n",
+                               c->sfd, username);
+            }
+        }
+    } else {
+        if (settings.verbose > 2) {
+            moxi_log_write("<%d sasl auth failed with malformed PLAIN data\n",
+                           c->sfd);
+        }
+    }
+
+    // TODO: If authentication failed, we should consider
+    // reassigning the connection to the NULL_BUCKET.
+    //
+    write_bin_error(c, PROTOCOL_BINARY_RESPONSE_AUTH_ERROR, 0);
+}
+
+// Find an appropriate proxy struct or NULL.
+//
+static proxy *cproxy_find_proxy_by_plain_auth(proxy_main *m,
+                                              const char *usr,
+                                              int usrlen,
+                                              const char *pwd,
+                                              int pwdlen) {
+    proxy *found = NULL;
+
+    pthread_mutex_lock(&m->proxy_main_lock);
+
+    for (proxy *p = m->proxy_head; p != NULL && found == NULL; p = p->next) {
+        pthread_mutex_lock(&p->proxy_lock);
+        if (strncmp(p->behavior_pool.base.usr, usr, usrlen) == 0 &&
+            strncmp(p->behavior_pool.base.pwd, pwd, pwdlen) == 0) {
+            found = p;
+        }
+        pthread_mutex_unlock(&p->proxy_lock);
+    }
+
+    pthread_mutex_unlock(&m->proxy_main_lock);
+
+    return found;
 }
