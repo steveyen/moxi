@@ -534,7 +534,9 @@ void set_noreply_maybe(conn *c, token_t *tokens, size_t ntokens);
 
 const char *state_text(enum conn_states state);
 
+#ifndef WIN32
 extern int daemonize(int nochdir, int noclose);
+#endif
 
 int server_socket(const int port,
                   enum network_transport transport,

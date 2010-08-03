@@ -250,8 +250,10 @@ static void *worker_libevent(void *arg) {
      * all threads have finished initializing.
      */
     me->thread_id = pthread_self();
+#ifndef WIN32
     if (settings.verbose > 1)
         moxi_log_write("worker_libevent thread_id %ld\n", (long)me->thread_id);
+#endif
 
     pthread_mutex_lock(&init_lock);
     init_count++;
@@ -359,17 +361,28 @@ void dispatch_conn_new_to_thread(int tid, int sfd, enum conn_states init_state,
     }
 }
 
+static bool compare_pthread_t(pthread_t a, pthread_t b) {
+#ifdef WIN32
+    return a.p == b.p && a.x == b.x;
+#else
+    return a == b;
+#endif
+}
+
+
 /*
  * Returns true if this is the thread that listens for new TCP connections.
  */
 int is_listen_thread() {
-    return pthread_self() == threads[0].thread_id;
+    return compare_pthread_t(pthread_self(), threads[0].thread_id);
 }
 
 int thread_index(pthread_t thread_id) {
-    for (int i = 0; i < settings.num_threads; i++)
-        if (threads[i].thread_id == thread_id)
+    for (int i = 0; i < settings.num_threads; i++) {
+        if (compare_pthread_t(threads[i].thread_id, thread_id)) {
             return i;
+        }
+    }
     return -1;
 }
 
@@ -647,6 +660,13 @@ void slab_stats_aggregate(struct thread_stats *stats, struct slab_stats *out) {
  */
 void thread_init(int nthreads, struct event_base *main_base) {
     int         i;
+#ifdef WIN32
+    struct sockaddr_in serv_addr;
+    int sockfd;
+
+    if ((sockfd = createLocalListSock(&serv_addr)) < 0)
+        exit(1);
+#endif
 
     pthread_mutex_init(&cache_lock, NULL);
     pthread_mutex_init(&stats_lock, NULL);
@@ -668,15 +688,29 @@ void thread_init(int nthreads, struct event_base *main_base) {
 
     for (i = 0; i < nthreads; i++) {
         int fds[2];
+
+#ifdef WIN32
+        if (createLocalSocketPair(sockfd,fds,&serv_addr) == -1) {
+            fprintf(stderr, "Can't create notify pipe: %s", strerror(errno));
+            exit(1);
+        }
+#else
         if (pipe(fds)) {
             perror("Can't create notify pipe");
             exit(1);
         }
+#endif
 
         threads[i].notify_receive_fd = fds[0];
         threads[i].notify_send_fd = fds[1];
 
         setup_thread(&threads[i]);
+#ifdef WIN32
+        if (i == (nthreads - 1)) {
+            shutdown(sockfd, 2);
+        }
+#endif
+
     }
 
     /* Create threads after we've done all the libevent setup. */

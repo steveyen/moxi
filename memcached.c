@@ -4285,7 +4285,7 @@ int main (int argc, char **argv) {
 #ifndef MAIN_CHECK
     struct passwd *pw;
     char *log_file = NULL;
-    int log_mode = ERRORLOG_SYSLOG;
+    int log_mode = DEFAULT_ERRORLOG;
     int log_level = 0;
 #endif
 #ifndef WIN32
@@ -4299,6 +4299,9 @@ int main (int argc, char **argv) {
 
     /* handle SIGINT */
     signal(SIGINT, sig_handler);
+
+    initialize_sockets();
+
 
     /* init settings */
     settings_init();

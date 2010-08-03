@@ -43,16 +43,31 @@ bool work_queue_init(work_queue *m, struct event_base *event_base) {
     assert(m->event_base != NULL);
 
     int fds[2] = {0};
+#ifdef WIN32
+    struct sockaddr_in serv_addr;
+    int sockfd;
 
-    if (pipe(fds) == 0) {
-        m->recv_fd = fds[0];
-        m->send_fd = fds[1];
+    if ((sockfd = createLocalListSock(&serv_addr)) < 0 ||
+        createLocalSocketPair(sockfd,fds,&serv_addr) == -1)
+    {
+        fprintf(stderr, "Can't create notify pipe: %s", strerror(errno));
+        return false;
+    }
+#else
+    if (pipe(fds)) {
+        perror("Can't create notify pipe");
+        return false;
+    }
+#endif
 
-        event_set(&m->event, m->recv_fd,
-                  EV_READ | EV_PERSIST, work_recv, m);
-        event_base_set(m->event_base, &m->event);
+    m->recv_fd = fds[0];
+    m->send_fd = fds[1];
 
-        if (event_add(&m->event, 0) == 0) {
+    event_set(&m->event, m->recv_fd,
+              EV_READ | EV_PERSIST, work_recv, m);
+    event_base_set(m->event_base, &m->event);
+
+    if (event_add(&m->event, 0) == 0) {
 #ifdef WORK_DEBUG
             moxi_log_write("work_queue_init %x %x %x %d %d %u %llu\n",
                     (int) pthread_self(),
@@ -64,8 +79,7 @@ bool work_queue_init(work_queue *m, struct event_base *event_base) {
                     m->tot_sends);
 #endif
 
-            return true;
-        }
+        return true;
     }
 
 #ifdef WORK_DEBUG
