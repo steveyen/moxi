@@ -4009,9 +4009,11 @@ static void usage(int argc, char **argv) {
     printf("-a <mask>     access mask for UNIX socket, in octal (default: 0700)\n"
            "-l <ip_addr>  interface to listen on (default: INADDR_ANY, all addresses)\n"
            "-d            run as a daemon\n"
-           "-r            maximize core file limit\n"
-           "-u <username> assume identity of <username> (only when run as root)\n"
-           "-m <num>      max memory to use for items in megabytes (default: 64 MB)\n"
+           "-r            maximize core file limit\n");
+#ifdef HAVE_GETPWNAM
+    printf("-u <username> assume identity of <username> (only when run as root)\n");
+#endif
+    printf("-m <num>      max memory to use for items in megabytes (default: 64 MB)\n"
            "-M            return error on memory exhausted (rather than removing items)\n"
            "-c <num>      max simultaneous connections (default: 1024)\n"
            "-k            lock down all paged memory.  Note that there is a\n"
@@ -4326,7 +4328,9 @@ int main (int argc, char **argv) {
           "v"   /* verbose */
           "d"   /* daemon mode */
           "l:"  /* interface to listen on */
+#ifdef HAVE_GETPWNAM
           "u:"  /* user identity to run as */
+#endif
           "P:"  /* save PID in file */
           "f:"  /* factor? */
           "n:"  /* minimum space allocated for key+value+flags */
@@ -4571,6 +4575,7 @@ int main (int argc, char **argv) {
 #endif
     /* lose root privileges if we have them */
 #ifndef MAIN_CHECK
+#ifdef HAVE_GETPWNAM
     if (getuid() == 0 || geteuid() == 0) {
         if (username == 0 || *username == '\0') {
             moxi_log_write("can't run as root without the -u switch\n");
@@ -4585,6 +4590,7 @@ int main (int argc, char **argv) {
             exit(EX_OSERR);
         }
     }
+#endif
 #endif
 
     /* daemonize if requested */
