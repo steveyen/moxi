@@ -3879,6 +3879,7 @@ static int new_socket_unix(void) {
     return sfd;
 }
 
+#ifdef HAVE_SYS_UN_H
 static int server_socket_unix(const char *path, int access_mask) {
     int sfd;
     struct linger ling = {0, 0};
@@ -3939,6 +3940,7 @@ static int server_socket_unix(const char *path, int access_mask) {
 
     return 0;
 }
+#endif
 
 /*
  * We keep the current time of day in a global variable that's updated by a
@@ -4000,9 +4002,11 @@ static void usage(int argc, char **argv) {
            "              a TCP port number that moxi will listen as a proxy,\n"
            "              instead, use: -Z port_listen=PORT_NUM\n"
            "-U <num>      UDP port number (default: 0 (off)) where moxi can\n"
-           "              listen can run as a memcached server\n"
-           "-s <file>     UNIX socket path to listen on (disables network support)\n"
-           "-a <mask>     access mask for UNIX socket, in octal (default: 0700)\n"
+           "              listen can run as a memcached server\n");
+#ifdef HAVE_SYS_UN_H
+    printf("-s <file>     UNIX socket path to listen on (disables network support)\n");
+#endif
+    printf("-a <mask>     access mask for UNIX socket, in octal (default: 0700)\n"
            "-l <ip_addr>  interface to listen on (default: INADDR_ANY, all addresses)\n"
            "-d            run as a daemon\n"
            "-r            maximize core file limit\n"
@@ -4304,7 +4308,9 @@ int main (int argc, char **argv) {
     while (-1 != (c = getopt(argc, argv,
           "a:"  /* access mask for unix socket */
           "p:"  /* TCP port number to listen on */
+#ifdef HAVE_SYS_UN_H
           "s:"  /* unix socket path to listen on */
+#endif
           "U:"  /* UDP port number to listen on */
           "m:"  /* max memory to use for items in megabytes */
           "M"   /* return error on memory exhausted */
@@ -4632,6 +4638,7 @@ int main (int argc, char **argv) {
     /* initialise clock event */
     clock_handler(0, 0, 0);
 
+#ifdef HAVE_SYS_UN_H
     /* create unix mode sockets after dropping privileges */
     if (settings.socketpath != NULL) {
         errno = 0;
@@ -4641,6 +4648,7 @@ int main (int argc, char **argv) {
             exit(EX_OSERR);
         }
     }
+#endif
 
     /* create the listening socket, bind it, and init */
     if (settings.socketpath == NULL) {
