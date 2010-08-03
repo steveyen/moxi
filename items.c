@@ -1,11 +1,5 @@
 /* -*- Mode: C; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
 #include "memcached.h"
-#include <sys/stat.h>
-#include <sys/socket.h>
-#include <sys/signal.h>
-#include <sys/resource.h>
-#include <fcntl.h>
-#include <netinet/in.h>
 #include <errno.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -69,7 +63,7 @@ uint64_t get_cas_id(void) {
                         (it->it_flags & ITEM_LINKED) ? 'L' : ' ', \
                         (it->it_flags & ITEM_SLABBED) ? 'S' : ' ')
 #else
-# define DEBUG_REFCNT(it,op) while(0)
+# define DEBUG_REFCNT(it,op) do {} while(0)
 #endif
 
 /**

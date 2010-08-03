@@ -1,12 +1,11 @@
 AUTOMAKE_OPTIONS = foreign
+ACLOCAL_AMFLAGS = -I m4 --force
 
 bin_PROGRAMS = moxi
-noinst_PROGRAMS = moxi-debug sizes testapp timedrun
-
-## INCLUDES is apparently not previously set, if you set it
-##  change this
-INCLUDES = $(CONFLATE_CFLAGS)
-LIBS += $(CONFLATE_LIBS)
+noinst_PROGRAMS =
+if BUILD_TESTAPPS
+noinst_PROGRAMS += sizes testapp timedrun
+endif
 
 BUILT_SOURCES =
 
@@ -18,7 +17,7 @@ moxi_SOURCES = memcached.c memcached.h \
                     slabs.c slabs.h \
                     items.c items.h \
                     assoc.c assoc.h \
-                    thread.c daemon.c \
+                    thread.c \
                     stats.c stats.h \
                     util.c util.h \
                     trace.h cache.h \
@@ -41,10 +40,14 @@ moxi_SOURCES = memcached.c memcached.h \
                     log.c log.h \
                     cJSON.c cJSON.h
 
+if BUILD_DAEMON
+moxi_SOURCES += daemon.c
+endif
+
 timedrun_SOURCES = timedrun.c
 
 TESTS = check_util check_moxi check_work
-if BUILD_WITH_CONFLATE
+if HAVE_LIBCONFLATE
 TESTS += check_moxi_agent
 endif
 
@@ -52,7 +55,7 @@ check_PROGRAMS = check_util \
                  check_moxi \
                  check_work
 
-if BUILD_WITH_CONFLATE
+if HAVE_LIBCONFLATE
 check_PROGRAMS += check_moxi_agent
 endif
 
@@ -68,7 +71,7 @@ moxi_SOURCES += cache.c
 testapp_SOURCES += cache.c
 endif
 
-if BUILD_WITH_CONFLATE
+if HAVE_LIBCONFLATE
 moxi_SOURCES += agent.h agent_config.c agent_ping.c agent_stats.c
 endif
 
@@ -76,52 +79,28 @@ if BUILD_SOLARIS_PRIVS
 moxi_SOURCES += solaris_priv.c
 endif
 
-moxi_debug_SOURCES = $(moxi_SOURCES)
-moxi_debug_CPPFLAGS = -DCONFLATE_DB_PATH=\"$(CONFLATE_DB_PATH)\"
-moxi_CPPFLAGS = -DNDEBUG $(moxi_debug_CPPFLAGS)
-moxi_debug_LDADD = @PROFILER_LDFLAGS@
-moxi_debug_CFLAGS = @PROFILER_FLAGS@
-
+moxi_CPPFLAGS = -DNDEBUG -DCONFLATE_DB_PATH=\"$(CONFLATE_DB_PATH)\"
 moxi_LDADD =
+moxi_LDFLAGS = $(LTLIBEVENT) $(LTLIBCONFLATE) $(LTLIBHASHKIT)
 moxi_DEPENDENCIES =
-moxi_debug_DEPENDENCIES =
+
+if MOXI_USE_VBUCKET
+moxi_LDFLAGS += $(LTLIBVBUCKET)
+else
+moxi_LDFLAGS += $(LTLIBMEMCACHED)
+endif
 
 CLEANFILES=
-
-if BUILD_DTRACE
-BUILT_SOURCES += memcached_dtrace.h
-CLEANFILES += memcached_dtrace.h
-endif
-
-if DTRACE_INSTRUMENT_OBJ
-moxi_LDADD += memcached_dtrace.o
-moxi_DEPENDENCIES += memcached_dtrace.o
-moxi_debug_LDADD += memcached_debug_dtrace.o
-moxi_debug_DEPENDENCIES += memcached_debug_dtrace.o
-CLEANFILES += memcached_dtrace.o memcached_debug_dtrace.o
-endif
-
-memcached_dtrace.h: memcached_dtrace.d
-	${DTRACE} -h -s memcached_dtrace.d
-	sed -e 's,void \*,const void \*,g' memcached_dtrace.h | \
-            sed -e 's,char \*,const char \*,g' | tr '\t' ' ' > mmc_dtrace.tmp
-	mv mmc_dtrace.tmp memcached_dtrace.h
-
-memcached_dtrace.o: $(moxi_OBJECTS)
-	$(DTRACE) $(DTRACEFLAGS) -G -o memcached_dtrace.o -s ${srcdir}/memcached_dtrace.d $(moxi_OBJECTS)
-
-memcached_debug_dtrace.o: $(moxi_debug_OBJECTS)
-	$(DTRACE) $(DTRACEFLAGS) -G -o memcached_debug_dtrace.o -s ${srcdir}/memcached_dtrace.d $(moxi_debug_OBJECTS)
 
 SUBDIRS = doc $(MAYBE_LIBCONFLATE)
 DIST_SUBDIRS = doc $(MAYBE_LIBCONFLATE)
 DIST_DIRS = scripts
-EXTRA_DIST = doc scripts TODO t memcached_dtrace.d m4/version.m4 protocol_binary.h patches debian
+EXTRA_DIST = doc scripts TODO t m4/version.m4 protocol_binary.h patches debian
 
 MOSTLYCLEANFILES = *.gcov *.gcno *.gcda *.tcov
 
-memcached-debug: moxi-debug
-	cp moxi-debug memcached-debug
+memcached-debug: moxi
+	cp moxi memcached-debug
 
 test: memcached-debug sizes testapp
 	$(srcdir)/sizes
@@ -164,22 +143,22 @@ dist-hook:
 install-data-hook:
 	$(mkdir_p) $(DESTDIR)$(CONFLATE_DB_PATH)
 
-check_work_SOURCES = check_work.c $(moxi_debug_SOURCES)
-check_work_CFLAGS = @CHECK_CFLAGS@ $(moxi_debug_CPPFLAGS) -DMAIN_CHECK
-check_work_LDADD = @CHECK_LIBS@ $(moxi_debug_LDADD)
+check_work_SOURCES = check_work.c $(moxi_SOURCES)
+check_work_CFLAGS = @CHECK_CFLAGS@ $(moxi_CPPFLAGS) -DMAIN_CHECK
+check_work_LDADD = @CHECK_LIBS@ $(moxi_LDADD)
 
-check_moxi_SOURCES = check_moxi.c $(moxi_debug_SOURCES)
-check_moxi_CFLAGS = @CHECK_CFLAGS@ $(moxi_debug_CPPFLAGS) -DMAIN_CHECK
-check_moxi_LDADD = @CHECK_LIBS@ $(moxi_debug_LDADD)
+check_moxi_SOURCES = check_moxi.c $(moxi_SOURCES)
+check_moxi_CFLAGS = @CHECK_CFLAGS@ $(moxi_CPPFLAGS) -DMAIN_CHECK
+check_moxi_LDADD = @CHECK_LIBS@ $(moxi_LDADD)
 
-if BUILD_WITH_CONFLATE
-check_moxi_agent_SOURCES = check_moxi_agent.c redirects.c $(moxi_debug_SOURCES)
-check_moxi_agent_CFLAGS = @CHECK_CFLAGS@ $(moxi_debug_CPPFLAGS) -DMAIN_CHECK -DREDIRECTS_FOR_MOCKS
-check_moxi_agent_LDADD = @CHECK_LIBS@ $(moxi_debug_LDADD)
+if HAVE_LIBCONFLATE
+check_moxi_agent_SOURCES = check_moxi_agent.c redirects.c $(moxi_SOURCES)
+check_moxi_agent_CFLAGS = @CHECK_CFLAGS@ $(moxi_CPPFLAGS) -DMAIN_CHECK -DREDIRECTS_FOR_MOCKS
+check_moxi_agent_LDADD = @CHECK_LIBS@ $(moxi_LDADD)
 endif
 
 check-syntax:
-	$(COMPILE) $(moxi_debug_CPPFLAGS) -o /dev/null -S ${CHK_SOURCES}
+	$(COMPILE) $(moxi_CPPFLAGS) -o /dev/null -S ${CHK_SOURCES}
 
 fc_rpm_inner:
 	-rm $(rpmtop)/SRPMS/moxi-$(VERSION)*.rpm

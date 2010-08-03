@@ -1,6 +1,7 @@
 /* -*- Mode: C; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
 #ifndef CACHE_H
 #define CACHE_H
+#include "config.h"
 #include <pthread.h>
 
 #ifdef HAVE_UMEM_H

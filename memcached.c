@@ -15,11 +15,7 @@
  */
 #include "memcached.h"
 #include <sys/stat.h>
-#include <sys/socket.h>
-#include <sys/un.h>
 #include <signal.h>
-#include <sys/resource.h>
-#include <sys/uio.h>
 #include <ctype.h>
 #include <stdarg.h>
 
@@ -32,11 +28,7 @@
 #ifndef __need_IOV_MAX
 #define __need_IOV_MAX
 #endif
-#include <pwd.h>
-#include <sys/mman.h>
 #include <fcntl.h>
-#include <netinet/tcp.h>
-#include <arpa/inet.h>
 #include <errno.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -44,7 +36,6 @@
 #include <time.h>
 #include <assert.h>
 #include <limits.h>
-#include <sysexits.h>
 #include <stddef.h>
 
 #include "cproxy.h"

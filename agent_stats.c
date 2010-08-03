@@ -1,16 +1,15 @@
 /* -*- Mode: C; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
-
+#include "config.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
-#include <sysexits.h>
 #include <pthread.h>
 #include <assert.h>
 #include <math.h>
+#include <libconflate/conflate.h>
 #include "memcached.h"
-#include "conflate.h"
 #include "cproxy.h"
 #include "work.h"
 #include "agent.h"

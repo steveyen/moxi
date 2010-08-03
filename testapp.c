@@ -1,5 +1,6 @@
 /* -*- Mode: C; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
 #undef NDEBUG
+#include "config.h"
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netdb.h>
@@ -448,32 +449,6 @@ static enum test_return test_vperror(void) {
 static enum test_return test_issue_72(void) {
     // SKIP: moxi doesn't handle MEMCACHED_PORT_FILENAME now.
     return TEST_SKIP;
-
-    in_port_t port;
-    pid_t pid = start_server(&port, false);
-    int sock = connect_server("127.0.0.1", port);
-    assert(sock != -1);
-
-    char data[sizeof(protocol_binary_request_set) + 2048] = { 0 };
-    protocol_binary_request_set *request = (protocol_binary_request_set*)data;
-    request->message.header.request.magic = PROTOCOL_BINARY_REQ;
-    request->message.header.request.opcode = PROTOCOL_BINARY_CMD_SET;
-    uint16_t keylen = 2048;
-    request->message.header.request.keylen = htons(keylen);
-    request->message.header.request.extlen = 8;
-    request->message.header.request.bodylen = htonl(keylen + 8);
-
-    assert(write(sock, data, 2000) == 2000);
-    usleep(250);
-    assert(write(sock, data, sizeof(data) - 2000) == sizeof(data) - 2000);
-
-    protocol_binary_response_set response;
-    assert(read(sock, &response, sizeof(response)) == sizeof(response));
-    assert(response.message.header.response.magic == PROTOCOL_BINARY_RES);
-    assert(response.message.header.response.status == PROTOCOL_BINARY_RESPONSE_SUCCESS);
-    close(sock);
-    assert(kill(pid, SIGTERM) == 0);
-    return TEST_PASS;
 }
 
 typedef enum test_return (*TEST_FUNC)(void);

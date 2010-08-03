@@ -11,11 +11,8 @@
 
 #include <stdio.h>
 #include <sys/types.h>
-#include <sys/socket.h>
 #include <sys/time.h>
-#include <netinet/in.h>
 #include <event.h>
-#include <netdb.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <pthread.h>
@@ -620,7 +617,7 @@ void process_stat_settings(ADD_STAT add_stats, void *c, const char *prefix);
 
 enum store_item_type store_item(item *item, int comm, conn *c);
 
-#if HAVE_DROP_PRIVILEGES
+#ifdef HAVE_DROP_PRIVILEGES
 extern void drop_privileges(void);
 #else
 #define drop_privileges()

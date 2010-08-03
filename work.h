@@ -4,7 +4,6 @@
 #define WORK_H
 
 #include <sys/types.h>
-#include <sys/socket.h>
 #include <sys/time.h>
 #include <stdbool.h>
 #include <stdint.h>

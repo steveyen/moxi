@@ -3,7 +3,7 @@
 #ifndef AGENT_H
 #define AGENT_H
 
-#include <conflate.h>
+#include <libconflate/conflate.h>
 #ifdef REDIRECTS_FOR_MOCKS
 #include "redirects.h"
 #endif

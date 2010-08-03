@@ -4,13 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/socket.h>
 #include <unistd.h>
-#include <netdb.h>
-#include <netinet/tcp.h>
-#if HAVE_NETINET_IN_H
-# include <netinet/in.h>
-#endif /* BSD */
 #include <fcntl.h>
 #include <assert.h>
 #include "mcs.h"

@@ -5,7 +5,7 @@
  */
 /* -*- Mode: C; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
 
-
+#include "config.h"
 #include <sys/types.h>
 
 #include <errno.h>
@@ -15,11 +15,9 @@
 #include <unistd.h>
 #include <string.h>
 #include <stdlib.h>
-#include <sys/socket.h>
 
 #include <stdarg.h>
 #include <stdio.h>
-#include <syslog.h>
 #include <assert.h>
 
 #include "log.h"
@@ -47,8 +45,7 @@ int log_error_open(moxi_log *ml) {
     assert(ml);
 
     if (!ml->logbuf) {
-        ml->logbuf = (char *) malloc(MAX_LOGBUF_LEN + 1);
-        bzero(ml->logbuf, MAX_LOGBUF_LEN + 1);
+        ml->logbuf = calloc(1, MAX_LOGBUF_LEN + 1);
         ml->logbuf_used = 0;
     }
 
@@ -56,16 +53,24 @@ int log_error_open(moxi_log *ml) {
         const char *logfile = ml->log_file;
 
         if (-1 == (ml->fd = open(logfile, O_APPEND | O_WRONLY | O_CREAT | O_LARGEFILE, 0644))) {
+#ifdef HAVE_SYSLOG_H
             fprintf(stderr, "ERROR: opening errorlog '%s' failed. error: %s, Switching to syslog.\n",
                     logfile, strerror(errno));
 
             ml->log_mode = ERRORLOG_SYSLOG;
+#else
+            fprintf(stderr, "ERROR: opening errorlog '%s' failed. error: %s, Switching to stderr.\n",
+                    logfile, strerror(errno));
+            ml->log_mode = ERRORLOG_STDERR;
+#endif
         }
     }
 
+#ifdef HAVE_SYSLOG_H
     if (ml->log_mode == ERRORLOG_SYSLOG) {
         openlog(ml->log_ident, LOG_CONS | LOG_PID, LOG_DAEMON);
     }
+#endif
 
     return 0;
 }
@@ -88,14 +93,23 @@ int log_error_cycle(moxi_log *ml) {
         log_error_write(ml, __FILE__, __LINE__, "About to cycle log \n");
 
         if (-1 == (new_fd = open(logfile, O_APPEND | O_WRONLY | O_CREAT | O_LARGEFILE, 0644))) {
+#ifdef HAVE_SYSLOG_H
             /* write to old log */
             log_error_write(ml, __FILE__, __LINE__,
                             "cycling errorlog '%s' failed: %s. failing back to syslog()",
                             logfile, strerror(errno));
 
+            ml->log_mode = ERRORLOG_SYSLOG;
+#else
+            log_error_write(ml, __FILE__, __LINE__,
+                            "cycling errorlog '%s' failed: %s. failing back to stderr",
+                            logfile, strerror(errno));
+
+            ml->log_mode = ERRORLOG_STDERR;
+#endif
             close(ml->fd);
             ml->fd = -1;
-            ml->log_mode = ERRORLOG_SYSLOG;
+
         } else {
             /* ok, new log is open, close the old one */
             close(ml->fd);
@@ -112,11 +126,11 @@ int log_error_close(moxi_log *ml) {
         case ERRORLOG_FILE:
             close(ml->fd);
             break;
-        case ERRORLOG_SYSLOG:
 #ifdef HAVE_SYSLOG_H
+        case ERRORLOG_SYSLOG:
             closelog();
-#endif
             break;
+#endif
         case ERRORLOG_STDERR:
             break;
     }
@@ -154,7 +168,7 @@ int log_error_write(moxi_log *ml, const char *filename, unsigned int line, const
                 ml->cur_ts = time(NULL);
 
             if (ml->cur_ts != ml->last_generated_debug_ts) {
-                bzero(ts_debug_str, 255);
+                memset(ts_debug_str, 0, sizeof(ts_debug_str));
                 strftime(ts_debug_str, 254, "%Y-%m-%d %H:%M:%S", localtime(&(ml->cur_ts)));
                 ml->last_generated_debug_ts = ml->cur_ts;
             }
@@ -164,11 +178,13 @@ int log_error_write(moxi_log *ml, const char *filename, unsigned int line, const
             /*mappend_log(zl, ts_debug_str)*/
             mappend_log(ml, ": (");
             break;
+#ifdef HAVE_SYSLOG_H
         case ERRORLOG_SYSLOG:
-            bzero(ml->logbuf, MAX_LOGBUF_LEN);
+            memset(ml->logbuf, 0,  MAX_LOGBUF_LEN);
             /* syslog is generating its own timestamps */
             mappend_log(ml, "(");
             break;
+#endif
     }
 
     mappend_log(ml, filename);
@@ -193,9 +209,11 @@ int log_error_write(moxi_log *ml, const char *filename, unsigned int line, const
         case ERRORLOG_STDERR:
             written = write(STDERR_FILENO, ml->logbuf, ml->logbuf_used);
             break;
+#ifdef HAVE_SYSLOG_H
         case ERRORLOG_SYSLOG:
             syslog(LOG_ERR, "%s", ml->logbuf);
             break;
+#endif
     }
 
     return 0;

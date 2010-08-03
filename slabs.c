@@ -8,12 +8,6 @@
  * memcached protocol.
  */
 #include "memcached.h"
-#include <sys/stat.h>
-#include <sys/socket.h>
-#include <sys/signal.h>
-#include <sys/resource.h>
-#include <fcntl.h>
-#include <netinet/in.h>
 #include <errno.h>
 #include <stdlib.h>
 #include <stdio.h>
