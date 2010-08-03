@@ -109,6 +109,25 @@ fi
 
 AC_C_SOCKLEN_T
 
+AC_DEFUN([AC_C_SIGPIPE],
+[AC_CACHE_CHECK(for SIGPIPE, ac_cv_c_sigpipe,
+[
+  AC_TRY_COMPILE([
+    #include <signal.h>
+  ],[
+    void (*disp)(int);
+    signal(SIGPIPE, disp);
+  ],[
+    ac_cv_c_sigpipe=yes
+  ],[
+    ac_cv_c_sigpipe=no
+  ])
+])
+AS_IF(test $ac_cv_c_sigpipe = yes,
+  AC_DEFINE(HAVE_SIGPIPE, int, [define to 1 if you have SIGPIPE]))
+])
+AC_C_SIGPIPE
+
 dnl Check if we're a little-endian or a big-endian system, needed by hash code
 AC_DEFUN([AC_C_ENDIAN],
 [AC_CACHE_CHECK(for endianness, ac_cv_c_endian,

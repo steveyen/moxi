@@ -4619,6 +4619,7 @@ int main (int argc, char **argv) {
     conn_init();
     slabs_init(settings.maxbytes, settings.factor, preallocate);
 
+#ifdef HAVE_SIGPIPE
     /*
      * ignore SIGPIPE signals; we can use errno == EPIPE if we
      * need that information
@@ -4627,6 +4628,8 @@ int main (int argc, char **argv) {
         perror("failed to ignore SIGPIPE; sigaction");
         exit(EX_OSERR);
     }
+#endif
+
     /* start up worker threads if MT mode */
     thread_init(settings.num_threads, main_base);
     /* save the PID in if we're a daemon, do this after thread_init due to
