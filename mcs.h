@@ -45,21 +45,6 @@ typedef struct {
 
 #include <libmemcached/memcached.h>
 
-// From libmemcached.
-//
-memcached_return memcached_connect(memcached_server_st *ptr);
-memcached_return memcached_safe_read(memcached_server_st *ptr,
-                                     void *dta,
-                                     size_t size);
-ssize_t memcached_io_write(memcached_server_st *ptr,
-                           const void *buffer,
-                           size_t length, char with_flush);
-void memcached_io_reset(memcached_server_st *ptr);
-memcached_return memcached_do(memcached_server_st *ptr,
-                              const void *command,
-                              size_t command_length,
-                              uint8_t with_flush);
-
 #define mcs_return    memcached_return
 #define mcs_st        memcached_st
 #define mcs_server_st memcached_server_st

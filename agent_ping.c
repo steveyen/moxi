@@ -281,7 +281,8 @@ static void ping_server(char *server_name,
                 struct timeval start;
                 gettimeofday(&start, NULL);
 
-                memcached_return rc = memcached_connect(&mst.servers[i]);
+                mcs_server_st *st = mcs_server_index((void*)&mst, i);
+                mcs_return rc = mcs_server_st_connect(st);
                 if (rc == MEMCACHED_SUCCESS) {
                     struct timeval tv_conn;
                     gettimeofday(&tv_conn, NULL);

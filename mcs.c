@@ -310,6 +310,24 @@ const char *mcs_server_st_pwd(mcs_server_st *ptr) {
 
 #else // !MOXI_USE_VBUCKET
 
+// The following is abuse of private internals from libmemcached!!!!
+// Using these symbols doesn't work if you try to link with a shared
+// version of libmemcached, so you need an archive
+// It should be fixed ASAP
+extern void* memcached_server_instance_fetch(memcached_st *ptr,
+                                             uint32_t server_key);
+extern void memcached_quit_server(memcached_server_st *ptr, bool io_death);
+extern memcached_return_t memcached_connect(void* ptr);
+extern memcached_return_t memcached_do(void *ptr, const void *command,
+                                       size_t command_length,
+                                       bool with_flush);
+extern ssize_t memcached_io_write(void *ptr, const void *buffer,
+                                  size_t length, bool with_flush);
+extern memcached_return_t memcached_safe_read(void *ptr, void *dta,
+                                              size_t size);
+extern void memcached_io_reset(void *ptr);
+// END libmemcached hack
+
 mcs_st *mcs_create(mcs_st *ptr, const char *config) {
     ptr = memcached_create(ptr);
     if (ptr != NULL) {
@@ -342,7 +360,7 @@ uint32_t mcs_server_count(mcs_st *ptr) {
 }
 
 mcs_server_st *mcs_server_index(mcs_st *ptr, int i) {
-    return &ptr->servers[i];
+    return memcached_server_instance_fetch(ptr, i);
 }
 
 bool mcs_stable_update(mcs_st *curr_version, mcs_st *next_version) {
