@@ -4288,7 +4288,9 @@ int main (int argc, char **argv) {
     int log_mode = ERRORLOG_SYSLOG;
     int log_level = 0;
 #endif
+#ifndef WIN32
     struct rlimit rlim;
+#endif
     /* listening sockets */
     static int *l_socket = NULL;
 
@@ -4517,6 +4519,7 @@ int main (int argc, char **argv) {
         settings.port = MEMCACHED_DEFAULT_LISTEN_PORT;
     }
 
+#ifdef HAVE_GETRLIMIT
     if (maxcore != 0) {
         struct rlimit rlim_new;
         /*
@@ -4562,7 +4565,7 @@ int main (int argc, char **argv) {
             exit(EX_OSERR);
         }
     }
-
+#endif
     /* lose root privileges if we have them */
 #ifndef MAIN_CHECK
     if (getuid() == 0 || geteuid() == 0) {

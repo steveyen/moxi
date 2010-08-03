@@ -207,6 +207,8 @@ AS_IF(test "x$ac_cv_header_winsock2_h" = "xyes",
        AM_CXXFLAGS="$AM_CXXFLAGS $NO_WERROR"
       ])
 
+AC_CHECK_FUNCS_ONCE(getrlimit)
+
 AM_CONDITIONAL([BUILD_TESTAPPS], [test "x$ac_cv_header_winsock2_h" = "xno"])
 AM_CONDITIONAL([BUILD_DAEMON], [test "x$ac_cv_header_winsock2_h" = "xno"])
 
