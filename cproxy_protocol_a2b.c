@@ -131,7 +131,7 @@ struct A2BSpec a2b_specs[] = {
       .size = sizeof(protocol_binary_request_stats),
       .broadcast = true
     },
-    { 0 } // NULL sentinel.
+    { .line = 0 } // NULL sentinel.
 };
 
 // These are immutable after init.
@@ -285,6 +285,7 @@ bool a2b_fill_request_token(struct A2BSpec *spec,
                             uint8_t **out_key,
                             uint16_t *out_keylen,
                             uint8_t  *out_extlen) {
+    (void)cmd_ntokens;
     assert(header);
     assert(spec);
     assert(spec->tokens);
@@ -635,8 +636,8 @@ void a2b_process_downstream_response(conn *c) {
     protocol_binary_response_header *header =
         (protocol_binary_response_header *) &c->binary_header;
 
-    int      extlen  = header->response.extlen;
-    int      keylen  = header->response.keylen;
+    uint32_t extlen  = header->response.extlen;
+    uint32_t keylen  = header->response.keylen;
     uint32_t bodylen = header->response.bodylen;
     uint16_t status  = header->response.status;
 
@@ -1337,14 +1338,17 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
 }
 
 int a2b_multiget_start(conn *c, char *cmd, int cmd_len) {
+    (void)c;
+    (void)cmd;
+    (void)cmd_len;
     return 0; // No-op.
 }
 
 /* An skey is a space prefixed key string.
  */
-int a2b_multiget_skey(conn *c, char *skey, int skey_len, int vbucket, int key_index) {
+int a2b_multiget_skey(conn *c, char *skey, int skey_length, int vbucket, int key_index) {
     char *key     = skey + 1;
-    int   key_len = skey_len - 1;
+    int   key_len = skey_length - 1;
 
     item *it = item_alloc("b", 1, 0, 0, sizeof(protocol_binary_request_get));
     if (it != NULL) {

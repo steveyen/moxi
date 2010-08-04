@@ -82,32 +82,32 @@ static void cq_init(CQ *cq) {
  * Returns the item, or NULL if no item is available
  */
 static CQ_ITEM *cq_pop(CQ *cq) {
-    CQ_ITEM *item;
+    CQ_ITEM *cq_item;
 
     pthread_mutex_lock(&cq->lock);
-    item = cq->head;
-    if (NULL != item) {
-        cq->head = item->next;
+    cq_item = cq->head;
+    if (NULL != cq_item) {
+        cq->head = cq_item->next;
         if (NULL == cq->head)
             cq->tail = NULL;
     }
     pthread_mutex_unlock(&cq->lock);
 
-    return item;
+    return cq_item;
 }
 
 /*
  * Adds an item to a connection queue.
  */
-static void cq_push(CQ *cq, CQ_ITEM *item) {
-    item->next = NULL;
+static void cq_push(CQ *cq, CQ_ITEM *cq_item) {
+    cq_item->next = NULL;
 
     pthread_mutex_lock(&cq->lock);
     if (NULL == cq->tail)
-        cq->head = item;
+        cq->head = cq_item;
     else
-        cq->tail->next = item;
-    cq->tail = item;
+        cq->tail->next = cq_item;
+    cq->tail = cq_item;
     pthread_cond_signal(&cq->cond);
     pthread_mutex_unlock(&cq->lock);
 }
@@ -116,20 +116,20 @@ static void cq_push(CQ *cq, CQ_ITEM *item) {
  * Returns a fresh connection queue item.
  */
 static CQ_ITEM *cqi_new(void) {
-    CQ_ITEM *item = NULL;
+    CQ_ITEM *cq_item = NULL;
     pthread_mutex_lock(&cqi_freelist_lock);
     if (cqi_freelist) {
-        item = cqi_freelist;
-        cqi_freelist = item->next;
+        cq_item = cqi_freelist;
+        cqi_freelist = cq_item->next;
     }
     pthread_mutex_unlock(&cqi_freelist_lock);
 
-    if (NULL == item) {
+    if (NULL == cq_item) {
         int i;
 
         /* Allocate a bunch of items at once to reduce fragmentation */
-        item = malloc(sizeof(CQ_ITEM) * ITEMS_PER_ALLOC);
-        if (NULL == item)
+        cq_item = malloc(sizeof(CQ_ITEM) * ITEMS_PER_ALLOC);
+        if (NULL == cq_item)
             return NULL;
 
         /*
@@ -138,25 +138,25 @@ static CQ_ITEM *cqi_new(void) {
          * the freelist.
          */
         for (i = 2; i < ITEMS_PER_ALLOC; i++)
-            item[i - 1].next = &item[i];
+            cq_item[i - 1].next = &cq_item[i];
 
         pthread_mutex_lock(&cqi_freelist_lock);
-        item[ITEMS_PER_ALLOC - 1].next = cqi_freelist;
-        cqi_freelist = &item[1];
+        cq_item[ITEMS_PER_ALLOC - 1].next = cqi_freelist;
+        cqi_freelist = &cq_item[1];
         pthread_mutex_unlock(&cqi_freelist_lock);
     }
 
-    return item;
+    return cq_item;
 }
 
 
 /*
  * Frees a connection queue item (adds it to the freelist.)
  */
-static void cqi_free(CQ_ITEM *item) {
+static void cqi_free(CQ_ITEM *cq_item) {
     pthread_mutex_lock(&cqi_freelist_lock);
-    item->next = cqi_freelist;
-    cqi_freelist = item;
+    cq_item->next = cqi_freelist;
+    cqi_freelist = cq_item;
     pthread_mutex_unlock(&cqi_freelist_lock);
 }
 
@@ -271,37 +271,39 @@ static void *worker_libevent(void *arg) {
  */
 static void thread_libevent_process(int fd, short which, void *arg) {
     LIBEVENT_THREAD *me = arg;
-    CQ_ITEM *item;
+    CQ_ITEM *cq_item;
     char buf[1];
+
+    (void)which;
 
     if (read(fd, buf, 1) != 1)
         if (settings.verbose > 0)
             moxi_log_write("Can't read from libevent pipe\n");
 
-    item = cq_pop(me->new_conn_queue);
+    cq_item = cq_pop(me->new_conn_queue);
 
-    if (NULL != item) {
-        conn *c = conn_new(item->sfd, item->init_state, item->event_flags,
-                           item->read_buffer_size,
-                           item->transport,
+    if (NULL != cq_item) {
+        conn *c = conn_new(cq_item->sfd, cq_item->init_state, cq_item->event_flags,
+                           cq_item->read_buffer_size,
+                           cq_item->transport,
                            me->base,
-                           item->funcs, item->extra);
+                           cq_item->funcs, cq_item->extra);
         if (c == NULL) {
-            if (IS_UDP(item->transport)) {
+            if (IS_UDP(cq_item->transport)) {
                 moxi_log_write("Can't listen for events on UDP socket\n");
                 exit(1);
             } else {
                 if (settings.verbose > 0) {
                     moxi_log_write("Can't listen for events on fd %d\n",
-                        item->sfd);
+                        cq_item->sfd);
                 }
-                close(item->sfd);
+                close(cq_item->sfd);
             }
         } else {
-            c->protocol = item->protocol;
+            c->protocol = cq_item->protocol;
             c->thread = me;
         }
-        cqi_free(item);
+        cqi_free(cq_item);
     }
 }
 
@@ -342,18 +344,18 @@ void dispatch_conn_new_to_thread(int tid, int sfd, enum conn_states init_state,
 
     LIBEVENT_THREAD *thread = threads + tid;
 
-    CQ_ITEM *item = cqi_new();
+    CQ_ITEM *cq_item = cqi_new();
 
-    item->sfd = sfd;
-    item->init_state = init_state;
-    item->event_flags = event_flags;
-    item->read_buffer_size = read_buffer_size;
-    item->protocol = prot;
-    item->transport = transport;
-    item->funcs = funcs;
-    item->extra = extra;
+    cq_item->sfd = sfd;
+    cq_item->init_state = init_state;
+    cq_item->event_flags = event_flags;
+    cq_item->read_buffer_size = read_buffer_size;
+    cq_item->protocol = prot;
+    cq_item->transport = transport;
+    cq_item->funcs = funcs;
+    cq_item->extra = extra;
 
-    cq_push(thread->new_conn_queue, item);
+    cq_push(thread->new_conn_queue, cq_item);
 
     MEMCACHED_CONN_DISPATCH(sfd, thread->thread_id);
     if (write(thread->notify_send_fd, "", 1) != 1) {
@@ -423,11 +425,11 @@ item *item_get(const char *key, const size_t nkey) {
 /*
  * Links an item into the LRU and hashtable.
  */
-int item_link(item *item) {
+int item_link(item *cq_item) {
     int ret;
 
     pthread_mutex_lock(&cache_lock);
-    ret = do_item_link(item);
+    ret = do_item_link(cq_item);
     pthread_mutex_unlock(&cache_lock);
     return ret;
 }
@@ -436,13 +438,13 @@ int item_link(item *item) {
  * Decrements the reference count on an item and adds it to the freelist if
  * needed.
  */
-void item_remove(item *item) {
+void item_remove(item *cq_item) {
 #ifdef MOXI_ITEM_MALLOC
     // Skip past the lock, since we're using malloc.
-    do_item_remove(item);
+    do_item_remove(cq_item);
 #else
     pthread_mutex_lock(&cache_lock);
-    do_item_remove(item);
+    do_item_remove(cq_item);
     pthread_mutex_unlock(&cache_lock);
 #endif
 }
@@ -459,30 +461,30 @@ int item_replace(item *old_it, item *new_it) {
 /*
  * Unlinks an item from the LRU and hashtable.
  */
-void item_unlink(item *item) {
+void item_unlink(item *cq_item) {
     pthread_mutex_lock(&cache_lock);
-    do_item_unlink(item);
+    do_item_unlink(cq_item);
     pthread_mutex_unlock(&cache_lock);
 }
 
 /*
  * Moves an item to the back of the LRU queue.
  */
-void item_update(item *item) {
+void item_update(item *cq_item) {
     pthread_mutex_lock(&cache_lock);
-    do_item_update(item);
+    do_item_update(cq_item);
     pthread_mutex_unlock(&cache_lock);
 }
 
 /*
  * Does arithmetic on a numeric item value.
  */
-enum delta_result_type add_delta(conn *c, item *item, int incr,
+enum delta_result_type add_delta(conn *c, item *cq_item, int incr,
                                  const int64_t delta, char *buf) {
     enum delta_result_type ret;
 
     pthread_mutex_lock(&cache_lock);
-    ret = do_add_delta(c, item, incr, delta, buf);
+    ret = do_add_delta(c, cq_item, incr, delta, buf);
     pthread_mutex_unlock(&cache_lock);
     return ret;
 }
@@ -490,11 +492,11 @@ enum delta_result_type add_delta(conn *c, item *item, int incr,
 /*
  * Stores an item in the cache (high level, obeys set/add/replace semantics)
  */
-enum store_item_type store_item(item *item, int comm, conn* c) {
+enum store_item_type store_item(item *cq_item, int comm, conn* c) {
     enum store_item_type ret;
 
     pthread_mutex_lock(&cache_lock);
-    ret = do_store_item(item, comm, c);
+    ret = do_store_item(cq_item, comm, c);
     pthread_mutex_unlock(&cache_lock);
     return ret;
 }
@@ -511,11 +513,11 @@ void item_flush_expired() {
 /*
  * Dumps part of the cache
  */
-char *item_cachedump(unsigned int slabs_clsid, unsigned int limit, unsigned int *bytes) {
+char *item_cachedump(unsigned int clsid, unsigned int limit, unsigned int *bytes) {
     char *ret;
 
     pthread_mutex_lock(&cache_lock);
-    ret = do_item_cachedump(slabs_clsid, limit, bytes);
+    ret = do_item_cachedump(clsid, limit, bytes);
     pthread_mutex_unlock(&cache_lock);
     return ret;
 }
@@ -578,51 +580,51 @@ void threadlocal_stats_reset(void) {
     }
 }
 
-void threadlocal_stats_aggregate(struct thread_stats *stats) {
+void threadlocal_stats_aggregate(struct thread_stats *thread_stats) {
     int ii, sid;
     /* The struct contains a mutex, so I should probably not memset it.. */
-    stats->get_cmds = 0;
-    stats->get_misses = 0;
-    stats->delete_misses = 0;
-    stats->incr_misses = 0;
-    stats->decr_misses = 0;
-    stats->cas_misses = 0;
-    stats->bytes_written = 0;
-    stats->bytes_read = 0;
-    stats->flush_cmds = 0;
-    stats->conn_yields = 0;
+    thread_stats->get_cmds = 0;
+    thread_stats->get_misses = 0;
+    thread_stats->delete_misses = 0;
+    thread_stats->incr_misses = 0;
+    thread_stats->decr_misses = 0;
+    thread_stats->cas_misses = 0;
+    thread_stats->bytes_written = 0;
+    thread_stats->bytes_read = 0;
+    thread_stats->flush_cmds = 0;
+    thread_stats->conn_yields = 0;
 
-    memset(stats->slab_stats, 0,
+    memset(thread_stats->slab_stats, 0,
            sizeof(struct slab_stats) * MAX_NUMBER_OF_SLAB_CLASSES);
 
     for (ii = 0; ii < settings.num_threads; ++ii) {
         pthread_mutex_lock(&threads[ii].stats.mutex);
 
-        stats->get_cmds += threads[ii].stats.get_cmds;
-        stats->get_misses += threads[ii].stats.get_misses;
-        stats->delete_misses += threads[ii].stats.delete_misses;
-        stats->decr_misses += threads[ii].stats.decr_misses;
-        stats->incr_misses += threads[ii].stats.incr_misses;
-        stats->cas_misses += threads[ii].stats.cas_misses;
-        stats->bytes_read += threads[ii].stats.bytes_read;
-        stats->bytes_written += threads[ii].stats.bytes_written;
-        stats->flush_cmds += threads[ii].stats.flush_cmds;
-        stats->conn_yields += threads[ii].stats.conn_yields;
+        thread_stats->get_cmds += threads[ii].stats.get_cmds;
+        thread_stats->get_misses += threads[ii].stats.get_misses;
+        thread_stats->delete_misses += threads[ii].stats.delete_misses;
+        thread_stats->decr_misses += threads[ii].stats.decr_misses;
+        thread_stats->incr_misses += threads[ii].stats.incr_misses;
+        thread_stats->cas_misses += threads[ii].stats.cas_misses;
+        thread_stats->bytes_read += threads[ii].stats.bytes_read;
+        thread_stats->bytes_written += threads[ii].stats.bytes_written;
+        thread_stats->flush_cmds += threads[ii].stats.flush_cmds;
+        thread_stats->conn_yields += threads[ii].stats.conn_yields;
 
         for (sid = 0; sid < MAX_NUMBER_OF_SLAB_CLASSES; sid++) {
-            stats->slab_stats[sid].set_cmds +=
+            thread_stats->slab_stats[sid].set_cmds +=
                 threads[ii].stats.slab_stats[sid].set_cmds;
-            stats->slab_stats[sid].get_hits +=
+            thread_stats->slab_stats[sid].get_hits +=
                 threads[ii].stats.slab_stats[sid].get_hits;
-            stats->slab_stats[sid].delete_hits +=
+            thread_stats->slab_stats[sid].delete_hits +=
                 threads[ii].stats.slab_stats[sid].delete_hits;
-            stats->slab_stats[sid].decr_hits +=
+            thread_stats->slab_stats[sid].decr_hits +=
                 threads[ii].stats.slab_stats[sid].decr_hits;
-            stats->slab_stats[sid].incr_hits +=
+            thread_stats->slab_stats[sid].incr_hits +=
                 threads[ii].stats.slab_stats[sid].incr_hits;
-            stats->slab_stats[sid].cas_hits +=
+            thread_stats->slab_stats[sid].cas_hits +=
                 threads[ii].stats.slab_stats[sid].cas_hits;
-            stats->slab_stats[sid].cas_badval +=
+            thread_stats->slab_stats[sid].cas_badval +=
                 threads[ii].stats.slab_stats[sid].cas_badval;
         }
 
@@ -630,7 +632,7 @@ void threadlocal_stats_aggregate(struct thread_stats *stats) {
     }
 }
 
-void slab_stats_aggregate(struct thread_stats *stats, struct slab_stats *out) {
+void slab_stats_aggregate(struct thread_stats *thread_stats, struct slab_stats *out) {
     int sid;
 
     out->set_cmds = 0;
@@ -642,13 +644,13 @@ void slab_stats_aggregate(struct thread_stats *stats, struct slab_stats *out) {
     out->cas_badval = 0;
 
     for (sid = 0; sid < MAX_NUMBER_OF_SLAB_CLASSES; sid++) {
-        out->set_cmds += stats->slab_stats[sid].set_cmds;
-        out->get_hits += stats->slab_stats[sid].get_hits;
-        out->delete_hits += stats->slab_stats[sid].delete_hits;
-        out->decr_hits += stats->slab_stats[sid].decr_hits;
-        out->incr_hits += stats->slab_stats[sid].incr_hits;
-        out->cas_hits += stats->slab_stats[sid].cas_hits;
-        out->cas_badval += stats->slab_stats[sid].cas_badval;
+        out->set_cmds += thread_stats->slab_stats[sid].set_cmds;
+        out->get_hits += thread_stats->slab_stats[sid].get_hits;
+        out->delete_hits += thread_stats->slab_stats[sid].delete_hits;
+        out->decr_hits += thread_stats->slab_stats[sid].decr_hits;
+        out->incr_hits += thread_stats->slab_stats[sid].incr_hits;
+        out->cas_hits += thread_stats->slab_stats[sid].cas_hits;
+        out->cas_badval += thread_stats->slab_stats[sid].cas_badval;
     }
 }
 

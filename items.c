@@ -264,6 +264,7 @@ bool item_size_ok(const size_t nkey, const int flags, const int nbytes) {
 }
 
 static void item_link_q(item *it) { /* item is the new head */
+    (void)it;
 #ifndef MOXI_ITEM_MALLOC
     item **head, **tail;
     /* always true, warns: assert(it->slabs_clsid <= LARGEST_ID); */
@@ -284,6 +285,7 @@ static void item_link_q(item *it) { /* item is the new head */
 }
 
 static void item_unlink_q(item *it) {
+    (void)it;
 #ifndef MOXI_ITEM_MALLOC
     item **head, **tail;
     /* always true, warns: assert(it->slabs_clsid <= LARGEST_ID); */
@@ -390,7 +392,7 @@ int do_item_replace(item *it, item *new_it) {
 }
 
 /*@null@*/
-char *do_item_cachedump(const unsigned int slabs_clsid, const unsigned int limit, unsigned int *bytes) {
+char *do_item_cachedump(const unsigned int clsid, const unsigned int limit, unsigned int *bytes) {
     unsigned int memlimit = 2 * 1024 * 1024;   /* 2MB max response size */
     char *buffer;
     unsigned int bufcurr;
@@ -400,8 +402,8 @@ char *do_item_cachedump(const unsigned int slabs_clsid, const unsigned int limit
     char key_temp[KEY_MAX_LENGTH + 1];
     char temp[512];
 
-    if (slabs_clsid > LARGEST_ID) return NULL;
-    it = heads[slabs_clsid];
+    if (clsid > LARGEST_ID) return NULL;
+    it = heads[clsid];
 
     buffer = malloc((size_t)memlimit);
     if (buffer == 0) return NULL;

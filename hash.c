@@ -16,11 +16,11 @@
  * whether it's big or little-endian. ENDIAN_LITTLE and ENDIAN_BIG
  * are set in the configure script.
  */
-#if ENDIAN_BIG == 1
+#ifdef ENDIAN_BIG
 # define HASH_LITTLE_ENDIAN 0
 # define HASH_BIG_ENDIAN 1
 #else
-# if ENDIAN_LITTLE == 1
+# ifdef ENDIAN_LITTLE
 #  define HASH_LITTLE_ENDIAN 1
 #  define HASH_BIG_ENDIAN 0
 # else

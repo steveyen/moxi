@@ -151,6 +151,8 @@ bool work_send(work_queue *m,
  *  there is work for the receiving thread to handle.
  */
 void work_recv(int fd, short which, void *arg) {
+    (void)which;
+
     work_queue *m = arg;
     assert(m != NULL);
     assert(m->recv_fd == fd);

@@ -15,6 +15,7 @@
 void multiget_foreach_free(const void *key,
                            const void *value,
                            void *user_data) {
+    (void)key;
     downstream *d = user_data;
     assert(d);
 
@@ -52,6 +53,7 @@ void multiget_foreach_free(const void *key,
 void multiget_remove_upstream(const void *key,
                               const void *value,
                               void *user_data) {
+    (void)key;
     multiget_entry *entry = (multiget_entry *) value;
     assert(entry != NULL);
 

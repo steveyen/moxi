@@ -307,7 +307,7 @@ void cproxy_dump_header(int prefix, char *bb) {
         int prefix_len = snprintf(buf, sizeof(buf), "%d   ", prefix);
         int start = prefix_len;
 
-        for (int ii = 0; ii < sizeof(protocol_binary_request_header); ++ii) {
+        for (size_t ii = 0; ii < sizeof(protocol_binary_request_header); ++ii) {
             if (ii > 0 && ii % 4 == 0) {
                 buf[start] = '\n';
                 buf[start + 1] = '\0';

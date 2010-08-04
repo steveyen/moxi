@@ -43,17 +43,13 @@ static void cproxy_init_null_bucket(proxy_main *m);
 
 static void cproxy_on_config(void *data0, void *data1);
 
-static bool cproxy_on_config_json_one(proxy_main *m, uint32_t new_config_ver,
-                                      char *config, char *name);
-
-static
-bool cproxy_on_config_json_buckets(proxy_main *m, uint32_t new_config_ver,
-                                   cJSON *jBuckets, bool want_default);
-
 static void agent_logger(void *userdata,
                          enum conflate_log_level lvl,
                          const char *msg, ...)
 {
+    (void)userdata;
+    (void)lvl;
+    (void)msg;
 // Issues compiling vfprintf(), so turn off this unused code path for now.
 #undef AGENT_LOGGER
 #ifdef AGENT_LOGGER
@@ -371,6 +367,12 @@ void on_conflate_new_config(void *userdata, kvpair_t *config) {
 }
 
 #ifdef MOXI_USE_VBUCKET
+
+static bool cproxy_on_config_json_one(proxy_main *m, uint32_t new_config_ver,
+                                      char *config, char *name);
+
+static bool cproxy_on_config_json_buckets(proxy_main *m, uint32_t new_config_ver,
+                                          cJSON *jBuckets, bool want_default);
 
 static
 bool cproxy_on_config_json(proxy_main *m, uint32_t new_config_ver, char *config) {
@@ -971,7 +973,7 @@ void cproxy_on_config_pool(proxy_main *m,
         }
 
         bool changed  = false;
-        bool shutdown = false;
+        bool shutdown_flag = false;
 
         pthread_mutex_lock(&m->proxy_main_lock);
 
@@ -1018,7 +1020,7 @@ void cproxy_on_config_pool(proxy_main *m,
             m->stat_proxy_existings++;
         } else {
             m->stat_proxy_shutdowns++;
-            shutdown = true;
+            shutdown_flag = true;
         }
 
         assert(config_ver != p->config_ver);
@@ -1030,12 +1032,12 @@ void cproxy_on_config_pool(proxy_main *m,
         if (settings.verbose > 2) {
             moxi_log_write("conp changed %s, shutdown %s\n",
                     changed ? "true" : "false",
-                    shutdown ? "true" : "false");
+                    shutdown_flag ? "true" : "false");
         }
 
         // Restart the front_cache, if necessary.
         //
-        if (shutdown == false) {
+        if (shutdown_flag == false) {
             if (behavior_pool->base.front_cache_max > 0 &&
                 behavior_pool->base.front_cache_lifespan > 0) {
                 mcache_start(&p->front_cache,
@@ -1060,7 +1062,7 @@ void cproxy_on_config_pool(proxy_main *m,
 
         // Send update across worker threads, avoiding locks.
         //
-        work_collect wc = {0};
+        work_collect wc = {.count = 0};
         work_collect_init(&wc, m->nthreads - 1, NULL);
 
         for (int i = 1; i < m->nthreads; i++) {

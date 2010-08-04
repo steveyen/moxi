@@ -183,6 +183,7 @@ static volatile int do_run_maintenance_thread = 1;
 int hash_bulk_move = DEFAULT_HASH_BULK_MOVE;
 
 static void *assoc_maintenance_thread(void *arg) {
+    (void)arg;
 
     while (do_run_maintenance_thread) {
         int ii = 0;

@@ -154,6 +154,7 @@ bool b2b_forward_item(conn *uc, downstream *d, item *it) {
 
 bool b2b_forward_item_vbucket(conn *uc, downstream *d, item *it,
                               conn *c, bool self, int vbucket) {
+    (void)self;
     assert(d != NULL);
     assert(d->ptd != NULL);
     assert(uc != NULL);

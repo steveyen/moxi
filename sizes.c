@@ -7,7 +7,7 @@ static void display(const char *name, size_t size) {
     printf("%s\t%d\n", name, (int)size);
 }
 
-int main(int argc, char **argv) {
+int main(void) {
 
     display("Slab Stats", sizeof(struct slab_stats));
     display("Thread stats",

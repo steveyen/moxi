@@ -77,7 +77,11 @@ enum conflate_mgmt_cb_result on_conflate_ping_test(void *userdata,
                                                    bool direct,
                                                    kvpair_t *form,
                                                    conflate_form_result *r)
-                           {
+{
+    (void)userdata;
+    (void)handle;
+    (void)cmd;
+    (void)direct;
     assert(userdata);
 
     // The form key-multivalues looks roughly like...
@@ -304,7 +308,7 @@ static void ping_server(char *server_name,
 
             if (connected) {
                 for (int j = 0; recipes[j].name; j++) {
-                    struct moxi_stats recipe_stats = { 0.0 };
+                    struct moxi_stats recipe_stats = { .min = 0.0 };
                     int failures = 0;
 
                     perform_ping_test(recipes[j], &mst,

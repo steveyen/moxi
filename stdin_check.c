@@ -9,6 +9,7 @@
 
 static void* check_stdin_thread(void* arg)
 {
+    (void)arg;
     pthread_detach(pthread_self());
 
     while (!feof(stdin)) {

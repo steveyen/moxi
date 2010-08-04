@@ -41,7 +41,7 @@ typedef struct {
 static slabclass_t slabclass[MAX_NUMBER_OF_SLAB_CLASSES];
 static size_t mem_limit = 0;
 static size_t mem_malloced = 0;
-static int power_largest;
+static size_t power_largest;
 
 static void *mem_base = NULL;
 static void *mem_current = NULL;
@@ -77,7 +77,7 @@ static void slabs_preallocate (const unsigned int maxslabs);
  */
 
 unsigned int slabs_clsid(const size_t size) {
-    int res = POWER_SMALLEST;
+    size_t res = POWER_SMALLEST;
 
     if (size == 0)
         return 0;
@@ -331,7 +331,8 @@ bool get_stats(const char *stat_type, int nkey, ADD_STAT add_stats, void *c) {
 
 /*@null@*/
 static void do_slabs_stats(ADD_STAT add_stats, void *c) {
-    int i, total;
+    size_t i;
+    int total;
     /* Get the per-thread stats which contain some interesting aggregates */
     struct thread_stats thread_stats;
     threadlocal_stats_aggregate(&thread_stats);

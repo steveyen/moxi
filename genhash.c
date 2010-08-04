@@ -72,7 +72,7 @@ void
 genhash_free(genhash_t* h)
 {
     if(h != NULL) {
-        int i=0;
+        size_t i=0;
         for(i=0; i<h->size; i++) {
             free_bucket(h, h->buckets[i]);
         }
@@ -243,7 +243,7 @@ void
 genhash_iter(genhash_t* h,
              void (*iterfunc)(const void* key, const void* val, void *arg), void *arg)
 {
-    int i=0;
+    size_t i=0;
     struct genhash_entry_t *p=NULL;
     assert(h != NULL);
 
@@ -257,7 +257,7 @@ genhash_iter(genhash_t* h,
 int
 genhash_clear(genhash_t *h)
 {
-    int i = 0, rv = 0;
+    size_t i = 0;
     assert(h != NULL);
 
     for(i = 0; i < h->size; i++) {
@@ -271,12 +271,14 @@ genhash_clear(genhash_t *h)
         }
     }
 
-    return rv;
+    return 0;
 }
 
 static void
 count_entries(const void *key, const void *val, void *arg)
 {
+    (void)key;
+    (void)val;
     int *count=(int *)arg;
     (*count)++;
 }

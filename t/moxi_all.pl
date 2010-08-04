@@ -5,6 +5,8 @@
 #
 my $exe = "./moxi";
 
+use Carp qw(croak);
+
 croak("moxi binary doesn't exist.  Haven't run 'make' ?\n") unless -e $exe;
 croak("moxi binary not executable\n") unless -x _;
 

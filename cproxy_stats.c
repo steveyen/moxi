@@ -221,6 +221,7 @@ bool protocol_stats_merge_name_val(genhash_t *merger,
 bool protocol_stats_merge_sum(char *v1, int v1len,
                               char *v2, int v2len,
                               char *out, int outlen) {
+    (void)outlen;
     int dot = count_dot_pair(v1, v1len, v2, v2len);
     if (dot > 0) {
         float v1f = strtof(v1, NULL);
@@ -244,6 +245,7 @@ bool protocol_stats_merge_sum(char *v1, int v1len,
 bool protocol_stats_merge_smallest(char *v1, int v1len,
                                    char *v2, int v2len,
                                    char *out, int outlen) {
+    (void)outlen;
     int dot = count_dot_pair(v1, v1len, v2, v2len);
     if (dot > 0) {
         float v1f = strtof(v1, NULL);
@@ -269,6 +271,8 @@ bool protocol_stats_merge_smallest(char *v1, int v1len,
 void protocol_stats_foreach_free(const void *key,
                                  const void *value,
                                  void *user_data) {
+    (void)key;
+    (void)user_data;
     assert(value != NULL);
     free((void*)value);
 }
@@ -276,6 +280,7 @@ void protocol_stats_foreach_free(const void *key,
 void protocol_stats_foreach_write(const void *key,
                                   const void *value,
                                   void *user_data) {
+    (void)key;
     char *line = (char *) value;
     assert(line != NULL);
 
@@ -493,6 +498,7 @@ static int key_stats_key_len(void *it) {
 }
 
 static int key_stats_len(void *it) {
+    (void)it;
     return sizeof(key_stats);
 }
 

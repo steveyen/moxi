@@ -265,10 +265,10 @@ int cproxy_listen_port(int port,
                        enum protocol protocol,
                        enum network_transport transport,
                        void       *conn_extra,
-                       conn_funcs *conn_funcs) {
+                       conn_funcs *funcs) {
     assert(port > 0);
     assert(conn_extra);
-    assert(conn_funcs);
+    assert(funcs);
     assert(is_listen_thread());
 
     int   listening = 0;
@@ -277,15 +277,15 @@ int cproxy_listen_port(int port,
     conn *x = listen_conn_orig;
     while (x != NULL) {
         if (x->extra != NULL &&
-            x->funcs == conn_funcs) {
+            x->funcs == funcs) {
             struct in_addr in = {0};
-            struct sockaddr_in sin = {0};
-            socklen_t sin_len = sizeof(sin);
+            struct sockaddr_in s_in = {.sin_family = 0};
+            socklen_t sin_len = sizeof(s_in);
 
-            if (getsockname(x->sfd, (struct sockaddr *) &sin, &sin_len) == 0) {
-                in.s_addr = sin.sin_addr.s_addr;
+            if (getsockname(x->sfd, (struct sockaddr *) &s_in, &sin_len) == 0) {
+                in.s_addr = s_in.sin_addr.s_addr;
 
-                int x_port = ntohs(sin.sin_port);
+                int x_port = ntohs(s_in.sin_port);
                 if (x_port == port) {
                     if (settings.verbose > 1) {
                         moxi_log_write(
@@ -341,7 +341,7 @@ int cproxy_listen_port(int port,
             //       such as if we handle graceful shutdown one day.
             //
             c->extra = conn_extra;
-            c->funcs = conn_funcs;
+            c->funcs = funcs;
             c->protocol = protocol;
             c = c->next;
         }
@@ -453,14 +453,14 @@ void cproxy_on_close_upstream_conn(conn *c) {
             int n = mcs_server_count(&d->mst);
 
             for (int i = 0; i < n; i++) {
-                conn *c = d->downstream_conns[i];
-                if (c != NULL &&
-                    c->state == conn_mwrite) {
-                    c->msgcurr = 0;
-                    c->msgused = 0;
-                    c->iovused = 0;
+                conn *downstream_conn = d->downstream_conns[i];
+                if (downstream_conn != NULL &&
+                    downstream_conn->state == conn_mwrite) {
+                    downstream_conn->msgcurr = 0;
+                    downstream_conn->msgused = 0;
+                    downstream_conn->iovused = 0;
 
-                    cproxy_close_conn(c);
+                    cproxy_close_conn(downstream_conn);
                 }
             }
         }
@@ -1175,7 +1175,7 @@ conn *cproxy_find_downstream_conn_ex(downstream *d,
     int v = -1;
     int s = cproxy_server_index(d, key, key_length, &v);
     if (s >= 0 &&
-        s < mcs_server_count(&d->mst)) {
+        s < (int)mcs_server_count(&d->mst)) {
         if (settings.verbose > 2) {
             moxi_log_write("cproxy_find_downstream_conn_ex server_index %d, vbucket %d\n",
                     s, v);
@@ -1674,6 +1674,8 @@ bool cproxy_start_wait_queue_timeout(proxy_td *ptd, conn *uc) {
 void wait_queue_timeout(const int fd,
                         const short which,
                         void *arg) {
+    (void)fd;
+    (void)which;
     proxy_td *ptd = arg;
     assert(ptd != NULL);
 
@@ -1984,6 +1986,9 @@ downstream *downstream_list_remove(downstream *head, downstream *d) {
  * save on network hops.
  */
 bool is_compatible_request(conn *existing, conn *candidate) {
+    (void)existing;
+    (void)candidate;
+
     // The not-my-vbucket error handling requires us to not
     // squash ascii multi-GET requests, due to reusing the
     // multiget-deduplication machinery during retries and
@@ -2030,6 +2035,9 @@ bool is_compatible_request(conn *existing, conn *candidate) {
 void downstream_timeout(const int fd,
                         const short which,
                         void *arg) {
+    (void)fd;
+    (void)which;
+
     downstream *d = arg;
     assert(d != NULL);
     assert(d->ptd != NULL);
@@ -2128,7 +2136,7 @@ bool cproxy_auth_downstream(mcs_server_st *server,
     if (usr_len <= 0 ||
         pwd_len <= 0 ||
         !IS_PROXY(behavior->downstream_protocol) ||
-        (usr_len + pwd_len + 50 > sizeof(buf))) {
+        (usr_len + pwd_len + 50 > (int)sizeof(buf))) {
         if (settings.verbose > 1) {
             moxi_log_write("auth failure args\n");
         }
@@ -2181,7 +2189,7 @@ bool cproxy_auth_downstream(mcs_server_st *server,
         //
         int len = res.response.bodylen;
         while (len > 0) {
-            int amt = (len > sizeof(buf) ? sizeof(buf) : len);
+            int amt = (len > (int)sizeof(buf) ? (int)sizeof(buf) : len);
             if (mcs_server_st_read(server,
                                    buf,
                                    amt) != MEMCACHED_SUCCESS) {
@@ -2275,7 +2283,7 @@ bool cproxy_bucket_downstream(mcs_server_st *server,
 
         int len = res.response.bodylen;
         while (len > 0) {
-            int amt = (len > sizeof(buf) ? sizeof(buf) : len);
+            int amt = (len > (int)sizeof(buf) ? (int)sizeof(buf) : len);
             if (mcs_server_st_read(server,
                                    buf,
                                    amt) != MEMCACHED_SUCCESS) {

@@ -44,6 +44,11 @@ struct moxi_stats {
  */
 void compute_stats(struct moxi_stats *out, double *vals, int num_vals);
 
+/* should be fixed in libconflate instead */
+#ifdef __gcc_attribute__
+#undef __gcc_attribute__
+#endif
+
 #ifdef __GCC
 # define __gcc_attribute__ __attribute__
 #else

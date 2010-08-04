@@ -388,8 +388,10 @@ int a2a_multiget_start(conn *c, char *cmd, int cmd_len) {
 
 /* An skey is a space prefixed key string.
  */
-int a2a_multiget_skey(conn *c, char *skey, int skey_len, int vbucket, int key_index) {
-    return add_iov(c, skey, skey_len);
+int a2a_multiget_skey(conn *c, char *skey, int skey_length, int vbucket, int key_index) {
+    (void)vbucket;
+    (void)key_index;
+    return add_iov(c, skey, skey_length);
 }
 
 int a2a_multiget_end(conn *c) {

@@ -316,7 +316,7 @@ const char *mcs_server_st_pwd(mcs_server_st *ptr) {
 // It should be fixed ASAP
 extern void* memcached_server_instance_fetch(memcached_st *ptr,
                                              uint32_t server_key);
-extern void memcached_quit_server(memcached_server_st *ptr, bool io_death);
+/* extern void memcached_quit_server(memcached_server_st *ptr, bool io_death); */
 extern memcached_return_t memcached_connect(void* ptr);
 extern memcached_return_t memcached_do(void *ptr, const void *command,
                                        size_t command_length,
@@ -364,6 +364,8 @@ mcs_server_st *mcs_server_index(mcs_st *ptr, int i) {
 }
 
 bool mcs_stable_update(mcs_st *curr_version, mcs_st *next_version) {
+    (void)curr_version;
+    (void)next_version;
     return false;
 }
 
@@ -376,6 +378,9 @@ uint32_t mcs_key_hash(mcs_st *ptr, const char *key, size_t key_length, int *vbuc
 }
 
 void mcs_server_invalid_vbucket(mcs_st *ptr, int server_index, int vbucket) {
+    (void)ptr;
+    (void)server_index;
+    (void)vbucket;
     // NO-OP for libmemcached.
 }
 
@@ -424,10 +429,12 @@ int mcs_server_st_fd(mcs_server_st *ptr) {
 }
 
 const char *mcs_server_st_usr(mcs_server_st *ptr) {
+    (void)ptr;
     return NULL;
 }
 
 const char *mcs_server_st_pwd(mcs_server_st *ptr) {
+    (void)ptr;
     return NULL;
 }
 

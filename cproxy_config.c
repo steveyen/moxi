@@ -113,6 +113,7 @@ static void *noop_dup(const void *v)
 }
 
 void noop_free(void *v) {
+    (void)v;
     /* Nothing */
 }
 
@@ -756,6 +757,7 @@ void cproxy_dump_behavior_stderr(const void *dump_opaque,
                                  const char *prefix,
                                  const char *key,
                                  const char *val) {
+    (void)dump_opaque;
     assert(key);
     assert(val);
 
@@ -780,6 +782,9 @@ void msec_set_current_time(void) {
 }
 
 void msec_clock_handler(const int fd, const short which, void *arg) {
+    (void)fd;
+    (void)which;
+    (void)arg;
     // Subsecond resolution timer.
     //
     struct timeval t = { .tv_sec = 0,

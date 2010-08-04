@@ -207,6 +207,10 @@ enum conflate_mgmt_cb_result on_conflate_get_stats(void *userdata,
                                                    kvpair_t *form,
                                                    conflate_form_result *r)
 {
+    (void)handle;
+    (void)cmd;
+    (void)direct;
+
     assert(STATS_CMD_last      == sizeof(cmd_names) / sizeof(char *));
     assert(STATS_CMD_TYPE_last == sizeof(cmd_type_names) / sizeof(char *));
 
@@ -231,7 +235,9 @@ enum conflate_mgmt_cb_result on_conflate_get_stats(void *userdata,
         .do_settings = (do_all || strcmp(type, "settings") == 0),
         .do_stats    = (do_all || strcmp(type, "stats") == 0),
         .do_zeros    = (type != NULL &&
-                        strcmp(type, "all") == 0) // Only when explicit "all".
+                        strcmp(type, "all") == 0), // Only when explicit "all".
+        /* .nproxy   = 0, */
+        .proxies = 0
     };
 
     char buf[800];
@@ -404,6 +410,7 @@ void map_pstd_foreach_merge(const void *key,
 void map_key_stats_foreach_free(const void *key,
                                 const void *value,
                                 void *user_data) {
+    (void)user_data;
     assert(key);
     assert(value);
 
@@ -419,10 +426,10 @@ void map_key_stats_foreach_merge(const void *key,
                                  void *user_data) {
     genhash_t *end_map_key_stats = user_data;
     if (key != NULL) {
-        genhash_t *key_stats = (genhash_t *) value;
+        genhash_t *key_stats_hash = (genhash_t *) value;
         genhash_t *end_key_stats = genhash_find(end_map_key_stats, key);
-        if (key_stats != NULL && end_key_stats != NULL) {
-            add_processed_key_stats(key_stats, end_key_stats);
+        if (key_stats_hash != NULL && end_key_stats != NULL) {
+            add_processed_key_stats(key_stats_hash, end_key_stats);
         }
     }
 }
@@ -513,81 +520,81 @@ static void proxy_stats_dump_frontcache(ADD_STAT add_stats, conn *c,
 
 static void proxy_stats_dump_pstd_stats(ADD_STAT add_stats,
                                         conn *c, const char *prefix,
-                                        proxy_stats *stats) {
-    assert(stats != NULL);
+                                        proxy_stats *pstats) {
+    assert(pstats != NULL);
 
     APPEND_PREFIX_STAT("num_upstream",
-              "%llu", (long long unsigned int) stats->num_upstream);
+              "%llu", (long long unsigned int) pstats->num_upstream);
     APPEND_PREFIX_STAT("tot_upstream",
-              "%llu", (long long unsigned int) stats->tot_upstream);
+              "%llu", (long long unsigned int) pstats->tot_upstream);
     APPEND_PREFIX_STAT("num_downstream_conn",
-              "%llu", (long long unsigned int) stats->num_downstream_conn);
+              "%llu", (long long unsigned int) pstats->num_downstream_conn);
     APPEND_PREFIX_STAT("tot_downstream_conn",
-              "%llu", (long long unsigned int) stats->tot_downstream_conn);
+              "%llu", (long long unsigned int) pstats->tot_downstream_conn);
     APPEND_PREFIX_STAT("tot_downstream_released",
-              "%llu", (long long unsigned int) stats->tot_downstream_released);
+              "%llu", (long long unsigned int) pstats->tot_downstream_released);
     APPEND_PREFIX_STAT("tot_downstream_reserved",
-              "%llu", (long long unsigned int) stats->tot_downstream_reserved);
+              "%llu", (long long unsigned int) pstats->tot_downstream_reserved);
     APPEND_PREFIX_STAT("tot_downstream_freed",
-              "%llu", (long long unsigned int) stats->tot_downstream_freed);
+              "%llu", (long long unsigned int) pstats->tot_downstream_freed);
     APPEND_PREFIX_STAT("tot_downstream_quit_server",
-              "%llu", (long long unsigned int) stats->tot_downstream_quit_server);
+              "%llu", (long long unsigned int) pstats->tot_downstream_quit_server);
     APPEND_PREFIX_STAT("tot_downstream_max_reached",
-              "%llu", (long long unsigned int) stats->tot_downstream_max_reached);
+              "%llu", (long long unsigned int) pstats->tot_downstream_max_reached);
     APPEND_PREFIX_STAT("tot_downstream_create_failed",
-              "%llu", (long long unsigned int) stats->tot_downstream_create_failed);
+              "%llu", (long long unsigned int) pstats->tot_downstream_create_failed);
     APPEND_PREFIX_STAT("tot_downstream_connect",
-              "%llu", (long long unsigned int) stats->tot_downstream_connect);
+              "%llu", (long long unsigned int) pstats->tot_downstream_connect);
     APPEND_PREFIX_STAT("tot_downstream_connect_failed",
-              "%llu", (long long unsigned int) stats->tot_downstream_connect_failed);
+              "%llu", (long long unsigned int) pstats->tot_downstream_connect_failed);
     APPEND_PREFIX_STAT("tot_downstream_auth",
-              "%llu", (long long unsigned int) stats->tot_downstream_auth);
+              "%llu", (long long unsigned int) pstats->tot_downstream_auth);
     APPEND_PREFIX_STAT("tot_downstream_auth_failed",
-              "%llu", (long long unsigned int) stats->tot_downstream_auth_failed);
+              "%llu", (long long unsigned int) pstats->tot_downstream_auth_failed);
     APPEND_PREFIX_STAT("tot_downstream_bucket",
-              "%llu", (long long unsigned int) stats->tot_downstream_bucket);
+              "%llu", (long long unsigned int) pstats->tot_downstream_bucket);
     APPEND_PREFIX_STAT("tot_downstream_bucket_failed",
-              "%llu", (long long unsigned int) stats->tot_downstream_bucket_failed);
+              "%llu", (long long unsigned int) pstats->tot_downstream_bucket_failed);
     APPEND_PREFIX_STAT("tot_downstream_propagate_failed",
-              "%llu", (long long unsigned int) stats->tot_downstream_propagate_failed);
+              "%llu", (long long unsigned int) pstats->tot_downstream_propagate_failed);
     APPEND_PREFIX_STAT("tot_downstream_close_on_upstream_close",
-              "%llu", (long long unsigned int) stats->tot_downstream_close_on_upstream_close);
+              "%llu", (long long unsigned int) pstats->tot_downstream_close_on_upstream_close);
     APPEND_PREFIX_STAT("tot_downstream_timeout",
-              "%llu", (long long unsigned int) stats->tot_downstream_timeout);
+              "%llu", (long long unsigned int) pstats->tot_downstream_timeout);
     APPEND_PREFIX_STAT("tot_wait_queue_timeout",
-              "%llu", (long long unsigned int) stats->tot_wait_queue_timeout);
+              "%llu", (long long unsigned int) pstats->tot_wait_queue_timeout);
     APPEND_PREFIX_STAT("tot_assign_downstream",
-              "%llu", (long long unsigned int) stats->tot_assign_downstream);
+              "%llu", (long long unsigned int) pstats->tot_assign_downstream);
     APPEND_PREFIX_STAT("tot_assign_upstream",
-              "%llu", (long long unsigned int) stats->tot_assign_upstream);
+              "%llu", (long long unsigned int) pstats->tot_assign_upstream);
     APPEND_PREFIX_STAT("tot_assign_recursion",
-              "%llu", (long long unsigned int) stats->tot_assign_recursion);
+              "%llu", (long long unsigned int) pstats->tot_assign_recursion);
     APPEND_PREFIX_STAT("tot_reset_upstream_avail",
-              "%llu", (long long unsigned int) stats->tot_reset_upstream_avail);
+              "%llu", (long long unsigned int) pstats->tot_reset_upstream_avail);
     APPEND_PREFIX_STAT("tot_multiget_keys",
-              "%llu", (long long unsigned int) stats->tot_multiget_keys);
+              "%llu", (long long unsigned int) pstats->tot_multiget_keys);
     APPEND_PREFIX_STAT("tot_multiget_keys_dedupe",
-              "%llu", (long long unsigned int) stats->tot_multiget_keys_dedupe);
+              "%llu", (long long unsigned int) pstats->tot_multiget_keys_dedupe);
     APPEND_PREFIX_STAT("tot_multiget_bytes_dedupe",
-              "%llu", (long long unsigned int) stats->tot_multiget_bytes_dedupe);
+              "%llu", (long long unsigned int) pstats->tot_multiget_bytes_dedupe);
     APPEND_PREFIX_STAT("tot_optimize_sets",
-              "%llu", (long long unsigned int) stats->tot_optimize_sets);
+              "%llu", (long long unsigned int) pstats->tot_optimize_sets);
     APPEND_PREFIX_STAT("tot_optimize_self",
-              "%llu", (long long unsigned int) stats->tot_optimize_self);
+              "%llu", (long long unsigned int) pstats->tot_optimize_self);
     APPEND_PREFIX_STAT("tot_retry",
-              "%llu", (long long unsigned int) stats->tot_retry);
+              "%llu", (long long unsigned int) pstats->tot_retry);
     APPEND_PREFIX_STAT("tot_retry_vbucket",
-              "%llu", (long long unsigned int) stats->tot_retry_vbucket);
+              "%llu", (long long unsigned int) pstats->tot_retry_vbucket);
     APPEND_PREFIX_STAT("tot_upstream_paused",
-              "%llu", (long long unsigned int) stats->tot_upstream_paused);
+              "%llu", (long long unsigned int) pstats->tot_upstream_paused);
     APPEND_PREFIX_STAT("tot_upstream_unpaused",
-              "%llu", (long long unsigned int) stats->tot_upstream_unpaused);
+              "%llu", (long long unsigned int) pstats->tot_upstream_unpaused);
     APPEND_PREFIX_STAT("err_oom",
-              "%llu", (long long unsigned int) stats->err_oom);
+              "%llu", (long long unsigned int) pstats->err_oom);
     APPEND_PREFIX_STAT("err_upstream_write_prep",
-              "%llu", (long long unsigned int) stats->err_upstream_write_prep);
+              "%llu", (long long unsigned int) pstats->err_upstream_write_prep);
     APPEND_PREFIX_STAT("err_downstream_write_prep",
-              "%llu", (long long unsigned int) stats->err_downstream_write_prep);
+              "%llu", (long long unsigned int) pstats->err_downstream_write_prep);
 }
 
 static void proxy_stats_dump_stats_cmd(ADD_STAT add_stats, conn *c,
@@ -648,22 +655,22 @@ static void map_key_stats_foreach_dump(const void *key, const void *value,
                                        void *user_data) {
     const char *name = (const char *)key;
     assert(name != NULL);
-    struct key_stats *stats = (struct key_stats *)value;
-    assert(stats != NULL);
+    struct key_stats *kstats = (struct key_stats *)value;
+    assert(kstats != NULL);
     struct key_stats_dump_state *state =
         (struct key_stats_dump_state *)user_data;
     assert(state != NULL);
 
-    assert(strcmp(name, stats->key) == 0);
+    assert(strcmp(name, kstats->key) == 0);
 
     ADD_STAT add_stats = state->add_stats;
     conn *c = state->conn;
     char prefix[200+KEY_MAX_LENGTH];
     snprintf(prefix, sizeof(prefix), "%s:%s", state->prefix, name);
 
-    proxy_stats_dump_stats_cmd(add_stats, c, prefix, stats->stats_cmd);
+    proxy_stats_dump_stats_cmd(add_stats, c, prefix, kstats->stats_cmd);
 
-    APPEND_PREFIX_STAT("added_at_msec", "%u", stats->added_at);
+    APPEND_PREFIX_STAT("added_at_msec", "%u", kstats->added_at);
 }
 
 void proxy_stats_dump_basic(ADD_STAT add_stats, conn *c, const char *prefix) {
@@ -799,9 +806,9 @@ void proxy_stats_dump_proxies(ADD_STAT add_stats, conn *c,
             if (pstd != NULL) {
                 pthread_mutex_lock(&p->proxy_lock);
                 for (int i = 1; i < pm->nthreads; i++) {
-                    proxy_td *ptd = &p->thread_data[i];
-                    if (ptd != NULL)
-                        add_proxy_stats_td(pstd, &ptd->stats);
+                    proxy_td *thread_ptd = &p->thread_data[i];
+                    if (thread_ptd != NULL)
+                        add_proxy_stats_td(pstd, &thread_ptd->stats);
                 }
                 pthread_mutex_unlock(&p->proxy_lock);
 
@@ -824,9 +831,9 @@ void proxy_stats_dump_proxies(ADD_STAT add_stats, conn *c,
             if (key_stats_map != NULL) {
                 pthread_mutex_lock(&p->proxy_lock);
                 for (int i = 1; i < pm->nthreads; i++) {
-                     proxy_td *ptd = &p->thread_data[i];
+                     proxy_td *thread_ptd = &p->thread_data[i];
                      if (ptd != NULL) {
-                         add_raw_key_stats(key_stats_map, &ptd->key_stats);
+                         add_raw_key_stats(key_stats_map, &thread_ptd->key_stats);
                      }
                 }
                 pthread_mutex_unlock(&p->proxy_lock);
@@ -1202,24 +1209,24 @@ static void add_stats_cmd_with_rescale(proxy_stats_cmd *agg,
 
 static void add_key_stats_inner(const void *data, void *userdata) {
     genhash_t *key_stats_map = userdata;
-    const struct key_stats *stats = data;
-    struct key_stats *dest_stats = genhash_find(key_stats_map, stats->key);
+    const struct key_stats *kstats = data;
+    struct key_stats *dest_stats = genhash_find(key_stats_map, kstats->key);
 
     if (dest_stats == NULL) {
         dest_stats = calloc(1, sizeof(struct key_stats));
         if (dest_stats != NULL)
-            *dest_stats = *stats;
-        genhash_update(key_stats_map, strdup(stats->key), dest_stats);
+            *dest_stats = *kstats;
+        genhash_update(key_stats_map, strdup(kstats->key), dest_stats);
         return;
     }
 
-    uint32_t current_time = msec_current_time;
+    uint32_t current_time_msec = msec_current_time;
     float rescale_factor_dest = 1.0, rescale_factor_src = 1.0;
-    if (dest_stats->added_at < stats->added_at) {
-        rescale_factor_src = (float)(current_time - dest_stats->added_at)/(current_time - stats->added_at);
+    if (dest_stats->added_at < kstats->added_at) {
+        rescale_factor_src = (float)(current_time_msec - dest_stats->added_at)/(current_time_msec - kstats->added_at);
     } else {
-        rescale_factor_dest = (float)(current_time - stats->added_at)/(current_time - dest_stats->added_at);
-        dest_stats->added_at = stats->added_at;
+        rescale_factor_dest = (float)(current_time_msec - kstats->added_at)/(current_time_msec - dest_stats->added_at);
+        dest_stats->added_at = kstats->added_at;
     }
 
     assert(rescale_factor_dest >= 1.0);
@@ -1228,7 +1235,7 @@ static void add_key_stats_inner(const void *data, void *userdata) {
     for (int j = 0; j < STATS_CMD_TYPE_last; j++) {
         for (int k = 0; k < STATS_CMD_last; k++) {
             add_stats_cmd_with_rescale(&(dest_stats->stats_cmd[j][k]),
-                                       &(stats->stats_cmd[j][k]),
+                                       &(kstats->stats_cmd[j][k]),
                                        rescale_factor_dest,
                                        rescale_factor_src);
         }
@@ -1236,14 +1243,15 @@ static void add_key_stats_inner(const void *data, void *userdata) {
 }
 
 static void add_raw_key_stats(genhash_t *key_stats_map,
-                              mcache *key_stats) {
+                              mcache *kstats) {
     assert(key_stats_map);
-    assert(key_stats);
+    assert(kstats);
 
-    mcache_foreach(key_stats, add_key_stats_inner, key_stats_map);
+    mcache_foreach(kstats, add_key_stats_inner, key_stats_map);
 }
 
 static void add_processed_key_stats_inner(const void *key, const void* val, void *arg) {
+    (void)key;
     add_key_stats_inner(val, arg);
 }
 
@@ -1258,6 +1266,7 @@ static void add_processed_key_stats(genhash_t *dest_map,
 void genhash_free_entry(const void *key,
                         const void *value,
                         void *user_data) {
+    (void)user_data;
     assert(key != NULL);
     free((void*)key);
 
@@ -1425,21 +1434,21 @@ static void map_key_stats_foreach_emit_inner(const void *_key,
                                               void *user_data) {
     struct key_stats_emit_state *state = user_data;
     const char *key = _key;
-    struct key_stats *stats = (struct key_stats *) value;
+    struct key_stats *kstats = (struct key_stats *) value;
 
-    assert(strcmp(key, stats->key) == 0);
+    assert(strcmp(key, kstats->key) == 0);
 
     char buf[200+KEY_MAX_LENGTH];
 
     snprintf(buf, sizeof(buf), "%s:keys_stats:%s:", state->name, key);
     emit_proxy_stats_cmd(state->emit->result, buf, "%s_%s_%s",
-                         stats->stats_cmd);
+                         kstats->stats_cmd);
 
     {
         char buf_val[32];
         snprintf(buf, sizeof(buf), "%s:keys_stats:%s:added_at_msec",
                  state->name, key);
-        snprintf(buf_val, sizeof(buf_val), "%u", stats->added_at);
+        snprintf(buf_val, sizeof(buf_val), "%u", kstats->added_at);
         conflate_add_field(state->emit->result, buf, buf_val);
     }
 }
@@ -1477,6 +1486,12 @@ enum conflate_mgmt_cb_result on_conflate_reset_stats(void *userdata,
                                                      bool direct,
                                                      kvpair_t *form,
                                                      conflate_form_result *r) {
+    (void)handle;
+    (void)cmd;
+    (void)direct;
+    (void)form;
+    (void)r;
+
     proxy_main *m = userdata;
     assert(m);
     assert(m->nthreads > 1);
@@ -1623,6 +1638,9 @@ static void add_stat_prefix(const void *dump_opaque,
 static void add_stat_prefix_ase(const char *key, const uint16_t klen,
                                 const char *val, const uint32_t vlen,
                                 const void *cookie) {
+    (void)klen;
+    (void)vlen;
+
     const struct main_stats_collect_info *ase = cookie;
     assert(ase);
 

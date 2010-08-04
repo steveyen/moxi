@@ -792,7 +792,7 @@ static int build_udp_headers(conn *c) {
 
 
 void out_string(conn *c, const char *str) {
-    size_t len;
+    int len;
 
     assert(c != NULL);
 
@@ -1060,7 +1060,7 @@ static void complete_incr_bin(conn *c) {
     nkey = c->binary_header.request.keylen;
 
     if (settings.verbose) {
-        int i;
+        size_t i;
         moxi_log_write("incr ");
 
         for (i = 0; i < nkey; i++) {
@@ -1217,7 +1217,7 @@ static void process_bin_get(conn *c) {
     size_t nkey = c->binary_header.request.keylen;
 
     if (settings.verbose) {
-        int ii;
+        size_t ii;
         moxi_log_write("<%d GET ", c->sfd);
         for (ii = 0; ii < nkey; ++ii) {
             moxi_log_write("%c", key[ii]);
@@ -1294,12 +1294,14 @@ static void append_bin_stats(const char *key, const uint16_t klen,
     char *buf = c->stats.buffer + c->stats.offset;
     uint32_t bodylen = klen + vlen;
     protocol_binary_response_header header = {
-        .response.magic = (uint8_t)PROTOCOL_BINARY_RES,
-        .response.opcode = PROTOCOL_BINARY_CMD_STAT,
-        .response.keylen = (uint16_t)htons(klen),
-        .response.datatype = (uint8_t)PROTOCOL_BINARY_RAW_BYTES,
-        .response.bodylen = htonl(bodylen),
-        .response.opaque = c->opaque
+        .response = {
+            .magic = (uint8_t)PROTOCOL_BINARY_RES,
+            .opcode = PROTOCOL_BINARY_CMD_STAT,
+            .keylen = (uint16_t)htons(klen),
+            .datatype = (uint8_t)PROTOCOL_BINARY_RAW_BYTES,
+            .bodylen = htonl(bodylen),
+            .opaque = c->opaque
+        }
     };
 
     memcpy(buf, header.bytes, sizeof(header.response));
@@ -1399,7 +1401,7 @@ static void process_bin_stat(conn *c) {
     size_t nkey = c->binary_header.request.keylen;
 
     if (settings.verbose) {
-        int ii;
+        size_t ii;
         moxi_log_write("<%d STATS ", c->sfd);
         for (ii = 0; ii < nkey; ++ii) {
             moxi_log_write("%c", subcommand[ii]);
@@ -1468,8 +1470,8 @@ void bin_read_key(conn *c, enum bin_substates next_substate, int extra) {
     /* Ok... do we have room for the extras and the key in the input buffer? */
     ptrdiff_t offset = c->rcurr + sizeof(protocol_binary_request_header) - c->rbuf;
     if (c->rlbytes > c->rsize - offset) {
-        size_t nsize = c->rsize;
-        size_t size = c->rlbytes + sizeof(protocol_binary_request_header);
+        int nsize = c->rsize;
+        int size = c->rlbytes + sizeof(protocol_binary_request_header);
 
         while (size > nsize) {
             nsize *= 2;
@@ -1557,8 +1559,8 @@ void process_bin_noreply(conn *c) {
 void dispatch_bin_command(conn *c) {
     int protocol_error = 0;
 
-    int extlen = c->binary_header.request.extlen;
-    int keylen = c->binary_header.request.keylen;
+    uint32_t extlen = c->binary_header.request.extlen;
+    uint32_t keylen = c->binary_header.request.keylen;
     uint32_t bodylen = c->binary_header.request.bodylen;
 
     MEMCACHED_PROCESS_COMMAND_START(c->sfd, c->rcurr, c->rbytes);
@@ -2197,8 +2199,8 @@ inline static void process_stats_detail(conn *c, const char *command) {
     }
     else if (strcmp(command, "dump") == 0) {
         int len;
-        char *stats = stats_prefix_dump(&len);
-        write_and_free(c, stats, len);
+        char *stats_dump = stats_prefix_dump(&len);
+        write_and_free(c, stats_dump, len);
     }
     else {
         out_string(c, "CLIENT_ERROR usage: stats detail on|off|dump");
@@ -2693,12 +2695,12 @@ static void process_arithmetic_command(conn *c, token_t *tokens, const size_t nt
 enum delta_result_type do_add_delta(conn *c, item *it, const bool incr,
                                     const int64_t delta, char *buf) {
     char *ptr;
-    uint64_t value;
+    int64_t value;
     int res;
 
     ptr = ITEM_data(it);
 
-    if (!safe_strtoull(ptr, &value)) {
+    if (!safe_strtoull(ptr, (uint64_t *)&value)) {
         return NON_NUMERIC;
     }
 
@@ -3025,7 +3027,7 @@ int try_read_command(conn *c) {
 
     if (IS_BINARY(c->protocol)) {
         /* Do we have the complete packet header? */
-        if (c->rbytes < sizeof(c->binary_header)) {
+        if (c->rbytes < (int)sizeof(c->binary_header)) {
             /* need more data! */
             return 0;
         } else {
@@ -3289,7 +3291,7 @@ static enum transmit_result transmit(conn *c) {
 
             /* We've written some of the data. Remove the completed
                iovec entries from the list of pending writes. */
-            while (m->msg_iovlen > 0 && res >= m->msg_iov->iov_len) {
+            while (m->msg_iovlen > 0 && res >= (ssize_t)(m->msg_iov->iov_len)) {
                 res -= m->msg_iov->iov_len;
                 m->msg_iovlen--;
                 m->msg_iov++;
@@ -3968,6 +3970,10 @@ static void clock_handler(const int fd, const short which, void *arg) {
     struct timeval t = {.tv_sec = 1, .tv_usec = 0};
     static bool initialized = false;
 
+    (void)fd;
+    (void)which;
+    (void)arg;
+
     if (initialized) {
         /* only delete the event if it's actually there. */
         evtimer_del(&clockevent);
@@ -3982,7 +3988,7 @@ static void clock_handler(const int fd, const short which, void *arg) {
     set_current_time();
 }
 
-static void usage(int argc, char **argv) {
+static void usage(char **argv) {
     printf(PACKAGE " " VERSION "\n");
     printf("\n");
 #ifdef MOXI_USE_VBUCKET
@@ -4374,7 +4380,7 @@ int main (int argc, char **argv) {
             settings.maxconns = atoi(optarg);
             break;
         case 'h':
-            usage(argc, argv);
+            usage(argv);
             exit(EXIT_SUCCESS);
         case 'i':
             usage_license();
@@ -4566,7 +4572,7 @@ int main (int argc, char **argv) {
         exit(EX_OSERR);
     } else {
         int maxfiles = settings.maxconns;
-        if (rlim.rlim_cur < maxfiles)
+        if ((int)rlim.rlim_cur < maxfiles)
             rlim.rlim_cur = maxfiles;
         if (rlim.rlim_max < rlim.rlim_cur)
             rlim.rlim_max = rlim.rlim_cur;

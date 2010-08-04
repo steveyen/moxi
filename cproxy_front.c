@@ -163,6 +163,7 @@ void mcache_stop(mcache *m) {
 
 void *mcache_get(mcache *m, char *key, int key_len,
                  uint32_t curr_time) {
+    (void)key_len;
     assert(key);
 
     if (m == NULL) {
@@ -246,7 +247,7 @@ void mcache_set(mcache *m, void *it,
         // Evict some items if necessary.
         //
         for (int i = 0; m->lru_tail != NULL && i < 20; i++) {
-            if (genhash_size(m->map) < m->max) {
+            if ((uint32_t)genhash_size(m->map) < m->max) {
                 break;
             }
 
@@ -268,7 +269,7 @@ void mcache_set(mcache *m, void *it,
             m->tot_evictions++;
         }
 
-        if (genhash_size(m->map) < m->max) {
+        if ((uint32_t)genhash_size(m->map) < m->max) {
             char *key     = m->funcs->item_key(it);
             int   key_len = m->funcs->item_key_len(it);
             char *key_buf = NULL;
@@ -335,6 +336,8 @@ void mcache_set(mcache *m, void *it,
 }
 
 void mcache_delete(mcache *m, char *key, int key_len) {
+    (void)key_len;
+    (void)key;
     assert(key);
     assert(key_len > 0);
     assert(key[key_len] == '\0' ||
@@ -441,6 +444,7 @@ struct mcache_foreach_data {
 
 static
 void mcache_foreach_trampoline(const void *key, const void *value, void *_data) {
+    (void)key;
     struct mcache_foreach_data *data = _data;
     data->f(value, data->userdata);
 }

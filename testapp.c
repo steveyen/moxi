@@ -39,6 +39,10 @@ static enum test_return cache_create_test(void)
 const uint64_t constructor_pattern = 0xdeadcafebabebeef;
 
 static int cache_constructor(void *buffer, void *notused1, int notused2) {
+    (void)buffer;
+    (void)notused1;
+    (void)notused2;
+
     uint64_t *ptr = buffer;
     *ptr = constructor_pattern;
     return 0;
@@ -57,6 +61,9 @@ static enum test_return cache_constructor_test(void)
 }
 
 static int cache_fail_constructor(void *buffer, void *notused1, int notused2) {
+    (void)buffer;
+    (void)notused1;
+    (void)notused2;
     return 1;
 }
 
@@ -78,6 +85,7 @@ static enum test_return cache_fail_constructor_test(void)
 static void *destruct_data = 0;
 
 static void cache_destructor(void *buffer, void *notused) {
+    (void)notused;
     destruct_data = buffer;
 }
 
@@ -246,11 +254,11 @@ static enum test_return test_safe_strtol(void) {
  *
  * @param port_out where to store the TCP port number the server is
  *                 listening on
- * @param daemon set to true if you want to run the memcached server
+ * @param is_daemon set to true if you want to run the memcached server
  *               as a daemon process
  * @return the pid of the memcached server
  */
-static pid_t start_server(in_port_t *port_out, bool daemon) {
+static pid_t start_server(in_port_t *port_out, bool is_daemon) {
     char environment[80];
     snprintf(environment, sizeof(environment),
              "MEMCACHED_PORT_FILENAME=/tmp/ports.%lu", (long)getpid());
@@ -274,7 +282,7 @@ static pid_t start_server(in_port_t *port_out, bool daemon) {
         putenv("MALLOC_DEBUG=WATCH");
 #endif
 
-        if (!daemon) {
+        if (!is_daemon) {
             argv[arg++] = "./timedrun";
             argv[arg++] = "15";
         }
@@ -288,7 +296,7 @@ static pid_t start_server(in_port_t *port_out, bool daemon) {
             argv[arg++] = "-u";
             argv[arg++] = "root";
         }
-        if (daemon) {
+        if (is_daemon) {
             argv[arg++] = "-d";
             argv[arg++] = "-P";
             argv[arg++] = pid_file;
@@ -322,7 +330,7 @@ static pid_t start_server(in_port_t *port_out, bool daemon) {
     fclose(fp);
     assert(remove(filename) == 0);
 
-    if (daemon) {
+    if (is_daemon) {
         /* loop and wait for the pid file.. There is a potential race
          * condition that the server just created the file but isn't
          * finished writing the content, but I'll take the chance....
@@ -358,48 +366,52 @@ static enum test_return test_issue_44(void) {
     return TEST_PASS;
 }
 
-static struct addrinfo *lookuphost(const char *hostname, in_port_t port)
-{
-    struct addrinfo *ai = 0;
-    struct addrinfo hints = { .ai_family = AF_UNSPEC,
-                              .ai_protocol = IPPROTO_TCP,
-                              .ai_socktype = SOCK_STREAM };
-    char service[NI_MAXSERV];
-    int error;
+/* 
+ * static struct addrinfo *lookuphost(const char *hostname, in_port_t port)
+ * {
+ *     struct addrinfo *ai = 0;
+ *     struct addrinfo hints = { .ai_family = AF_UNSPEC,
+ *                               .ai_protocol = IPPROTO_TCP,
+ *                               .ai_socktype = SOCK_STREAM };
+ *     char service[NI_MAXSERV];
+ *     int error;
+ * 
+ *     (void)snprintf(service, NI_MAXSERV, "%d", port);
+ *     if ((error = getaddrinfo(hostname, service, &hints, &ai)) != 0) {
+ *        if (error != EAI_SYSTEM) {
+ *           fprintf(stderr, "getaddrinfo(): %s\n", gai_strerror(error));
+ *        } else {
+ *           perror("getaddrinfo()");
+ *        }
+ *     }
+ * 
+ *     return ai;
+ * }
+ */
 
-    (void)snprintf(service, NI_MAXSERV, "%d", port);
-    if ((error = getaddrinfo(hostname, service, &hints, &ai)) != 0) {
-       if (error != EAI_SYSTEM) {
-          fprintf(stderr, "getaddrinfo(): %s\n", gai_strerror(error));
-       } else {
-          perror("getaddrinfo()");
-       }
-    }
-
-    return ai;
-}
-
-static int connect_server(const char *hostname, in_port_t port)
-{
-    struct addrinfo *ai = lookuphost(hostname, port);
-    int sock = -1;
-    if (ai != NULL) {
-       if ((sock = socket(ai->ai_family, ai->ai_socktype,
-                          ai->ai_protocol)) != -1) {
-          if (connect(sock, ai->ai_addr, ai->ai_addrlen) == -1) {
-             fprintf(stderr, "Failed to connect socket: %s\n",
-                     strerror(errno));
-             close(sock);
-             sock = -1;
-          }
-       } else {
-          fprintf(stderr, "Failed to create socket: %s\n", strerror(errno));
-       }
-
-       freeaddrinfo(ai);
-    }
-    return sock;
-}
+/* 
+ * static int connect_server(const char *hostname, in_port_t port)
+ * {
+ *     struct addrinfo *ai = lookuphost(hostname, port);
+ *     int sock = -1;
+ *     if (ai != NULL) {
+ *        if ((sock = socket(ai->ai_family, ai->ai_socktype,
+ *                           ai->ai_protocol)) != -1) {
+ *           if (connect(sock, ai->ai_addr, ai->ai_addrlen) == -1) {
+ *              fprintf(stderr, "Failed to connect socket: %s\n",
+ *                      strerror(errno));
+ *              close(sock);
+ *              sock = -1;
+ *           }
+ *        } else {
+ *           fprintf(stderr, "Failed to create socket: %s\n", strerror(errno));
+ *        }
+ * 
+ *        freeaddrinfo(ai);
+ *     }
+ *     return sock;
+ * }
+ */
 
 static enum test_return test_vperror(void) {
     int rv = 0;
@@ -474,7 +486,7 @@ struct testcase testcases[] = {
     { NULL, NULL }
 };
 
-int main(int argc, char **argv)
+int main(void)
 {
     int exitcode = 0;
     int ii = 0, num_cases = 0;

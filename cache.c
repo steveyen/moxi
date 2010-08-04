@@ -19,6 +19,7 @@ const int initial_pool_size = 64;
 cache_t* cache_create(const char *name, size_t bufsize, size_t align,
                       cache_constructor_t* constructor,
                       cache_destructor_t* destructor) {
+    (void)align;
     cache_t* ret = calloc(1, sizeof(cache_t));
     char* nm = strdup(name);
     void** ptr = calloc(initial_pool_size, bufsize);
