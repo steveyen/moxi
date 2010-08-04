@@ -42,7 +42,7 @@ sub new_memcached_proxy {
     }
     my $childpid = fork();
 
-    my $exe = "$builddir/moxi-debug";
+    my $exe = "$builddir/moxi";
     croak("moxi binary doesn't exist.  Haven't run 'make' ?\n") unless -e $exe;
     croak("moxi binary not executable\n") unless -x _;
 
@@ -83,7 +83,7 @@ sub new_memcached_proxy {
 }
 
 sub supports_udp {
-    my $output = `$builddir/moxi-debug -h`;
+    my $output = `$builddir/moxi -h`;
     return 0 if $output =~ /^memcached 1\.1\./;
     return 1;
 }

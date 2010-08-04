@@ -20,7 +20,7 @@ import moxi_mock_server
 #
 # Before you run moxi_mock_auth.py, start a moxi like...
 #
-#   ./moxi-debug -z url=http://127.0.0.1:4567/pools/default/buckets/default \
+#   ./moxi -z url=http://127.0.0.1:4567/pools/default/buckets/default \
 #                -p 0 -U 0 -vvv -t 1 -O stderr \
 #                -Z usr=TheUser,pwd=ThePassword,port_listen=11333,downstream_max=1,downstream_protocol=binary
 #

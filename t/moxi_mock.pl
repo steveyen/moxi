@@ -16,12 +16,12 @@ my $test_name           = $ARGV[2] || '';
 
 print "moxi_mock.pl: " . $upstream_protocol . " " . $downstream_protocol . " " . $test_name + "\n";
 
-my $exe = "./moxi-debug";
+my $exe = "./moxi";
 
 croak("moxi binary doesn't exist.  Haven't run 'make' ?\n") unless -e $exe;
 croak("moxi binary not executable\n") unless -x _;
 
-# Fork moxi-debug for moxi-specific testing.
+# Fork moxi for moxi-specific testing.
 #
 my $childargs =
       " -z ./t/moxi_mock.cfg".

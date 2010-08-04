@@ -18,12 +18,12 @@ import moxi_mock_server
 
 # Before you run moxi_mock_a2b.py, start a moxi like...
 #
-#   ./moxi-debug -z 11333=localhost:11311 -p 0 -U 0 -vvv -t 1
+#   ./moxi -z 11333=localhost:11311 -p 0 -U 0 -vvv -t 1
 #                -Z downstream_max=1
 #
 # Or, if you're using the vbucket-aware moxi...
 #
-#   ./moxi-debug -z ./t/moxi_mock.cfg -p 0 -U 0 -vvv -t 1
+#   ./moxi -z ./t/moxi_mock.cfg -p 0 -U 0 -vvv -t 1
 #                -Z downstream_max=1,downstream_protocol=binary
 #
 # Then...

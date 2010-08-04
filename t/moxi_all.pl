@@ -3,7 +3,7 @@
 # Run this main test driver program from the project's
 # top directory, which has t as a subdirectory.
 #
-my $exe = "./moxi-debug";
+my $exe = "./moxi";
 
 croak("moxi binary doesn't exist.  Haven't run 'make' ?\n") unless -e $exe;
 croak("moxi binary not executable\n") unless -x _;
