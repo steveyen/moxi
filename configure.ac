@@ -234,10 +234,11 @@ AM_CONDITIONAL([BUILD_SPECIFICATIONS],
 
 AC_CHECK_HEADERS_ONCE(sys/socket.h netdb.h arpa/inet.h pwd.h sys/mman.h netinet/tcp.h sysexits.h sys/uio.h sys/resource.h sys/un.h netinet/in.h winsock2.h syslog.h)
 AS_IF(test "x$ac_cv_header_winsock2_h" = "xyes",
-      [AM_LDFLAGS="$AM_LDFLAGS -lws2_32"
-       AM_CFLAGS="$AM_CFLAGS $NO_WERROR"
-       AM_CXXFLAGS="$AM_CXXFLAGS $NO_WERROR"
-      ])
+      [AM_LDFLAGS="$AM_LDFLAGS -lws2_32" ])
+
+# moxi generates warnings on all platforms, so disable warning == error
+AM_CFLAGS="$AM_CFLAGS $NO_WERROR"
+AM_CXXFLAGS="$AM_CXXFLAGS $NO_WERROR"
 
 AC_CHECK_FUNCS_ONCE(getrlimit getpwnam)
 
