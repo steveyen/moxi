@@ -16,7 +16,7 @@ AC_DEFUN([PANDORA_USE_PIPE],[
 
   AS_IF([test "$GCC" = "yes"],[
     AC_CACHE_CHECK([for working -pipe], [pandora_cv_use_pipe], [
-      AC_RUN_IFELSE([AC_LANG_SOURCE([[
+      AC_LINK_IFELSE([AC_LANG_SOURCE([[
 #include <stdio.h>
 
 int main(int argc, char** argv)
