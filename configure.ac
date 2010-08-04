@@ -247,11 +247,8 @@ AM_CONDITIONAL([BUILD_DAEMON], [test "x$ac_cv_header_winsock2_h" = "xno"])
 
 AC_ARG_VAR([CONFLATE_DB_PATH], [Directory for libconflate config database (default $prefix/var/lib/]AC_PACKAGE_NAME[)])
 
-if test "x$BUILD_WITH_CONFLATE" = "xyes"; then
-  if test "x$CONFLATE_DB_PATH" = x; then
-    CONFLATE_DB_PATH="$localstatedir/lib/$PACKAGE"
-  fi
-fi
+AS_IF(test "x$CONFLATE_DB_PATH" = "x",
+      CONFLATE_DB_PATH="$localstatedir/lib/$PACKAGE")
 
 LIBS="$LIBS -lm"
 
