@@ -7,8 +7,7 @@ AM_CONFIG_HEADER([config.h])
 AC_CONFIG_MACRO_DIR([m4])
 AC_DISABLE_STATIC
 
-PANDORA_CANONICAL_TARGET(less-warnings, warnings-always-on, require-cxx,
-                         force-gcc42)
+PANDORA_CANONICAL_TARGET(less-warnings, warnings-always-on, force-gcc42)
 
 AC_PROG_CC_C99
 AC_PROG_INSTALL
