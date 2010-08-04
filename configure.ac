@@ -151,7 +151,16 @@ if test $ac_cv_c_endian = little; then
 fi
 ])
 
-AC_C_ENDIAN
+if test $host == $build; then
+  AC_C_ENDIAN
+else
+  AS_CASE([$host_cpu],
+    [i?86], [AC_MSG_RESULT([guessed machine as little endian])
+             AC_DEFINE(ENDIAN_LITTLE, 1, [machine is littleendian])],
+    [amd64], [AC_MSG_RESULT([guessed machine as little endian])
+              AC_DEFINE(ENDIAN_LITTLE, 1, [machine is littleendian])],
+    [AC_ERROR([don't know endian of this machine])])
+fi
 
 AC_CHECK_FUNCS(mlockall)
 AC_CHECK_FUNCS(getpagesizes)
@@ -182,7 +191,12 @@ if test $ac_cv_c_alignment = need; then
 fi
 ])
 
-AC_C_ALIGNMENT
+if test $host == $build; then
+  AC_C_ALIGNMENT
+else
+  AC_MSG_RESULT([guessed machine not requiring alignment])
+  dnl  AC_DEFINE(NEED_ALIGN, 1, [Machine need alignment])
+fi
 
 dnl Check for the requirements for running moxi with less privileges
 dnl than the default privilege set. On Solaris we need setppriv and priv.h
