@@ -279,6 +279,24 @@ int cproxy_init(char *cfg_str,
     behavior_default_g.downstream_protocol = proxy_downstream_binary_prot;
 #endif
 
+    char *env_usr = getenv("MOXI_SASL_PLAIN_USR");
+    if (env_usr != NULL) {
+        strncpy(behavior_default_g.usr, env_usr, sizeof(behavior_default_g.usr) - 1);
+        behavior_default_g.usr[sizeof(behavior_default_g.usr) - 1] = '\0';
+
+        moxi_log_write("env: MOXI_SASL_PLAIN_USR (%d)\n",
+                       strlen(behavior_default_g.usr));
+    }
+
+    char *env_pwd = getenv("MOXI_SASL_PLAIN_PWD");
+    if (env_pwd != NULL) {
+        strncpy(behavior_default_g.pwd, env_pwd, sizeof(behavior_default_g.pwd) - 1);
+        behavior_default_g.pwd[sizeof(behavior_default_g.pwd) - 1] = '\0';
+
+        moxi_log_write("env: MOXI_SASL_PLAIN_PWD (%d)\n",
+                       strlen(behavior_default_g.pwd));
+    }
+
     proxy_behavior behavior =
         cproxy_parse_behavior(behavior_str,
                               behavior_default_g);
