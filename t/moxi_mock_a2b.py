@@ -206,13 +206,13 @@ class TestProxyBinary(moxi_mock_server.ProxyClientBase):
                        self.packReq(memcacheConstants.CMD_GETKQ, key='someVal1', opaque=13) +
                        self.packReq(memcacheConstants.CMD_NOOP))
         self.mock_send(self.packRes(memcacheConstants.CMD_GETKQ, key='someVal0', opaque=4,
-                                    extraHeader=struct.pack(memcacheConstants.GET_RES_FMT, 0),
+                                    extraHeader=struct.pack(memcacheConstants.GET_RES_FMT, 110),
                                     val='0123456789'))
         self.mock_send(self.packRes(memcacheConstants.CMD_GETKQ, key='someVal1', opaque=13,
-                                    extraHeader=struct.pack(memcacheConstants.GET_RES_FMT, 0),
+                                    extraHeader=struct.pack(memcacheConstants.GET_RES_FMT, 220),
                                     val='0123456789'))
         self.mock_send(self.packRes(memcacheConstants.CMD_NOOP))
-        self.client_recv('VALUE someVal0 0 10\r\n0123456789\r\nVALUE someVal1 0 10\r\n0123456789\r\nEND\r\n')
+        self.client_recv('VALUE someVal0 110 10\r\n0123456789\r\nVALUE someVal1 220 10\r\n0123456789\r\nEND\r\n')
 
     def testMultiGetValueAllReversedHit(self):
         self.client_connect()
@@ -221,13 +221,13 @@ class TestProxyBinary(moxi_mock_server.ProxyClientBase):
                        self.packReq(memcacheConstants.CMD_GETKQ, key='someVal1', opaque=13) +
                        self.packReq(memcacheConstants.CMD_NOOP))
         self.mock_send(self.packRes(memcacheConstants.CMD_GETKQ, key='someVal1', opaque=13,
-                                    extraHeader=struct.pack(memcacheConstants.GET_RES_FMT, 0),
+                                    extraHeader=struct.pack(memcacheConstants.GET_RES_FMT, 3210),
                                     val='0123456789'))
         self.mock_send(self.packRes(memcacheConstants.CMD_GETKQ, key='someVal0', opaque=4,
-                                    extraHeader=struct.pack(memcacheConstants.GET_RES_FMT, 0),
+                                    extraHeader=struct.pack(memcacheConstants.GET_RES_FMT, 5430),
                                     val='0123456789'))
         self.mock_send(self.packRes(memcacheConstants.CMD_NOOP))
-        self.client_recv('VALUE someVal1 0 10\r\n0123456789\r\nVALUE someVal0 0 10\r\n0123456789\r\nEND\r\n')
+        self.client_recv('VALUE someVal1 3210 10\r\n0123456789\r\nVALUE someVal0 5430 10\r\n0123456789\r\nEND\r\n')
 
     def testGetEmptyValue(self):
         """Test the proxy handles empty VALUE response"""

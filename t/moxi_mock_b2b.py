@@ -18,12 +18,12 @@ import moxi_mock_server
 
 # Before you run moxi_mock_b2b.py, start a moxi like...
 #
-#   ./moxi -z 11333=localhost:11311 -p 0 -U 0 -vvv -t 1
+#   ./moxi -z 11333=localhost:11311 -p 0 -U 0 -vvv -t 1 -O stderr
 #                -Z downstream_max=1
 #
 # Or, if you're using the vbucket-aware moxi...
 #
-#   ./moxi -z ./t/moxi_mock.cfg -p 0 -U 0 -vvv -t 1
+#   ./moxi -z ./t/moxi_mock.cfg -p 0 -U 0 -vvv -t 1 -O stderr
 #                -Z downstream_max=1,downstream_protocol=binary
 #
 # Then...
@@ -205,11 +205,11 @@ class TestProxyBinary(moxi_mock_server.ProxyClientBase):
         self.client_send(r)
         self.mock_recv(r)
         self.mock_send(self.packRes(memcacheConstants.CMD_GETKQ, key='someVal0', opaque=4,
-                                    extraHeader=struct.pack(memcacheConstants.GET_RES_FMT, 0),
+                                    extraHeader=struct.pack(memcacheConstants.GET_RES_FMT, 567),
                                     val='0123456789'))
         self.mock_send(self.packRes(memcacheConstants.CMD_NOOP))
         self.client_recv(self.packRes(memcacheConstants.CMD_GETKQ, key='someVal0', opaque=4,
-                                    extraHeader=struct.pack(memcacheConstants.GET_RES_FMT, 0),
+                                    extraHeader=struct.pack(memcacheConstants.GET_RES_FMT, 567),
                                     val='0123456789') +
                          self.packRes(memcacheConstants.CMD_NOOP))
 
