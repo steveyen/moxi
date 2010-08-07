@@ -251,10 +251,15 @@ int cproxy_listen(proxy *p) {
         } else {
             p->listening_failed++;
 
-            moxi_log_write("ERROR: could not listen on port %d.\n"
+            moxi_log_write("ERROR: could not listen on port %d. "
                            "Please use -Z port_listen=PORT_NUM "
                            "to specify a different port number.\n", p->port);
-            exit(1);
+            if (ml->log_mode != ERRORLOG_STDERR) {
+                fprintf(stderr, "ERROR: could not listen on port %d. "
+                        "Please use -Z port_listen=PORT_NUM "
+                        "to specify a different port number.\n", p->port);
+            }
+            exit(EXIT_FAILURE);
         }
     }
 

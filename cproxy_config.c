@@ -252,7 +252,10 @@ int cproxy_init(char *cfg_str,
             free(buf);
             return rv;
         } else {
-            moxi_log_write("could not read behavior file: %s\n", behavior_str);
+            moxi_log_write("ERROR: could not read behavior file: %s\n", behavior_str);
+            if (ml->log_mode != ERRORLOG_STDERR) {
+                fprintf(stderr, "ERROR: could not read behavior file: %s\n", behavior_str);
+            }
             exit(EXIT_FAILURE);
         }
     }
@@ -265,7 +268,10 @@ int cproxy_init(char *cfg_str,
             free(buf);
             return rv;
         } else {
-            moxi_log_write("could not read cfg file: %s\n", cfg_str);
+            moxi_log_write("ERROR: could not read cfg file: %s\n", cfg_str);
+            if (ml->log_mode != ERRORLOG_STDERR) {
+                fprintf(stderr, "ERROR: could not read cfg file: %s\n", cfg_str);
+            }
             exit(EXIT_FAILURE);
         }
     }

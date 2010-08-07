@@ -3852,7 +3852,7 @@ int server_socket(int port, enum network_transport transport,
                                              EV_READ | EV_PERSIST, 1,
                                              transport,
                                              main_base, NULL, NULL))) {
-                moxi_log_write("failed to create listening connection\n");
+                moxi_log_write("ERROR: failed to create listening connection\n");
                 exit(EXIT_FAILURE);
             }
             listen_conn_add->next = listen_conn;
@@ -4588,6 +4588,9 @@ int main (int argc, char **argv) {
     if (getuid() == 0 || geteuid() == 0) {
         if (username == 0 || *username == '\0') {
             moxi_log_write("can't run as root without the -u switch\n");
+            if (ml->log_mode != ERRORLOG_STDERR) {
+                fprintf(stderr, "can't run as root without the -u switch\n");
+            }
             exit(EX_USAGE);
         }
         if ((pw = getpwnam(username)) == 0) {
@@ -4698,7 +4701,11 @@ int main (int argc, char **argv) {
         if (settings.port >= 0 && server_socket(settings.port, tcp_transport,
                                                 portnumber_file)) {
             moxi_log_write("failed to listen on TCP port %d: %s",
-                settings.port, strerror(errno));
+                           settings.port, strerror(errno));
+            if (ml->log_mode != ERRORLOG_STDERR) {
+                fprintf(stderr, "failed to listen on TCP port %d: %s",
+                        settings.port, strerror(errno));
+            }
             exit(EX_OSERR);
         }
 
@@ -4715,7 +4722,12 @@ int main (int argc, char **argv) {
         if (settings.udpport >= 0 && server_socket(settings.udpport,
                                                    udp_transport,
                                                    portnumber_file)) {
-            moxi_log_write("failed to listen on UDP port %d: %s", settings.udpport, strerror(errno));
+            moxi_log_write("failed to listen on UDP port %d: %s",
+                           settings.udpport, strerror(errno));
+            if (ml->log_mode != ERRORLOG_STDERR) {
+                fprintf(stderr, "failed to listen on UDP port %d: %s",
+                        settings.udpport, strerror(errno));
+            }
             exit(EX_OSERR);
         }
 
@@ -4751,8 +4763,11 @@ int main (int argc, char **argv) {
         if (i <= 0
             && settings.port == UNSPECIFIED
             && settings.udpport == UNSPECIFIED) {
-            moxi_log_write("error: need proxy configuration.  See usage (-h).\n");
-            return 1;
+            moxi_log_write("ERROR: need proxy configuration. See usage (-h).\n");
+            if (ml->log_mode != ERRORLOG_STDERR) {
+                fprintf(stderr, "ERROR: need proxy configuration. See usage (-h).\n");
+            }
+            exit(EXIT_FAILURE);
         }
 #endif
     }

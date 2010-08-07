@@ -111,13 +111,19 @@ int cproxy_init_agent(char *cfg_str,
     init_extensions();
 
     if (cfg_str == NULL) {
-        moxi_log_write("missing cfg\n");
+        moxi_log_write("ERROR: missing cfg\n");
+        if (ml->log_mode != ERRORLOG_STDERR) {
+            fprintf(stderr, "ERROR: missing cfg\n");
+        }
         exit(EXIT_FAILURE);
     }
 
     int cfg_len = strlen(cfg_str);
     if (cfg_len <= 0) {
-        moxi_log_write("empty cfg\n");
+        moxi_log_write("ERROR: empty cfg\n");
+        if (ml->log_mode != ERRORLOG_STDERR) {
+            fprintf(stderr, "ERROR: empty cfg\n");
+        }
         exit(EXIT_FAILURE);
     }
 
@@ -228,7 +234,7 @@ int cproxy_init_agent(char *cfg_str,
                          (jid != NULL && strlen(jid) > 0 ? jid : "default"));
 
             } else {
-                moxi_log_write("conflate dbpath buf alloc\n");
+                moxi_log_write("ERROR: conflate dbpath buf alloc\n");
                 exit(EXIT_FAILURE);
             }
         }
@@ -559,6 +565,9 @@ bool cproxy_on_config_json_one(proxy_main *m, uint32_t new_config_ver,
             vbucket_config_destroy(vch);
         } else {
             moxi_log_write("ERROR: bad JSON configuration: %s\n", config);
+            if (ml->log_mode != ERRORLOG_STDERR) {
+                fprintf(stderr, "ERROR: bad JSON configuration: %s\n", config);
+            }
             exit(EXIT_FAILURE);
         }
     } else {
