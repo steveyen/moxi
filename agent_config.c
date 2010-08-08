@@ -568,7 +568,10 @@ bool cproxy_on_config_json_one(proxy_main *m, uint32_t new_config_ver,
             if (ml->log_mode != ERRORLOG_STDERR) {
                 fprintf(stderr, "ERROR: bad JSON configuration: %s\n", config);
             }
-            exit(EXIT_FAILURE);
+
+            // Bug 1961 - don't exit() as we might be in a multitenant use case.
+            //
+            // exit(EXIT_FAILURE);
         }
     } else {
         if (settings.verbose > 1) {
