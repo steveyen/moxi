@@ -1498,23 +1498,29 @@ void cproxy_reset_upstream(conn *uc) {
         return; // Return either way.
     }
 
-    // TODO: Subtle potential bug, where we may have already
-    // read incoming bytes into the uc's buffer, so that
-    // libevent never sees any EV_READ events, leaving the
-    // uc seemingly stuck, never hitting drive_machine() loop.
-    //
-    // This depends on what libevent does here.
-    //
-    // May need to use the work_queue to call drive_machine() on the uc?
-    //
-    // TODO: Whoever wrote this code probably didn't understand
-    // conn->rbytes at the time, so this codepath is hit (but is
-    // harmless).  This happens, for example, during ascii noreply
-    // commands.
+    // We may have already read incoming bytes into the uc's buffer,
+    // so the issue is that libevent may never see (or expect) any
+    // EV_READ events (and hence, won't fire event callbacks) for the
+    // upstream connection.  This can leave the uc seemingly stuck,
+    // never hitting drive_machine() loop.
     //
     if (settings.verbose > 2) {
         moxi_log_write("%d: cproxy_reset_upstream with bytes available: %d\n",
-                uc->sfd, uc->rbytes);
+                       uc->sfd, uc->rbytes);
+    }
+
+    // So, we copy the drive_machine()/conn_new_cmd handling to
+    // schedule uc into drive_machine() execution, where the uc
+    // conn is likely to be writable.  We need to do this
+    // because we're currently on the drive_machine() execution
+    // loop for the downstream connection, not for the uc.
+    //
+    if (!update_event(uc, EV_WRITE | EV_PERSIST)) {
+        if (settings.verbose > 0) {
+            moxi_log_write("Couldn't update event\n");
+        }
+
+        conn_set_state(uc, conn_closing);
     }
 
     ptd->stats.stats.tot_reset_upstream_avail++;

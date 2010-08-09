@@ -3436,8 +3436,10 @@ void drive_machine(conn *c) {
                        because that should be possible ;-)
                     */
                     if (!update_event(c, EV_WRITE | EV_PERSIST)) {
-                        if (settings.verbose > 0)
+                        if (settings.verbose > 0) {
                             moxi_log_write("Couldn't update event\n");
+                        }
+
                         conn_set_state(c, conn_closing);
                     }
                 }
