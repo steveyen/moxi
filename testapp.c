@@ -366,7 +366,7 @@ static enum test_return test_issue_44(void) {
     return TEST_PASS;
 }
 
-/* 
+/*
  * static struct addrinfo *lookuphost(const char *hostname, in_port_t port)
  * {
  *     struct addrinfo *ai = 0;
@@ -375,7 +375,7 @@ static enum test_return test_issue_44(void) {
  *                               .ai_socktype = SOCK_STREAM };
  *     char service[NI_MAXSERV];
  *     int error;
- * 
+ *
  *     (void)snprintf(service, NI_MAXSERV, "%d", port);
  *     if ((error = getaddrinfo(hostname, service, &hints, &ai)) != 0) {
  *        if (error != EAI_SYSTEM) {
@@ -384,12 +384,12 @@ static enum test_return test_issue_44(void) {
  *           perror("getaddrinfo()");
  *        }
  *     }
- * 
+ *
  *     return ai;
  * }
  */
 
-/* 
+/*
  * static int connect_server(const char *hostname, in_port_t port)
  * {
  *     struct addrinfo *ai = lookuphost(hostname, port);
@@ -406,7 +406,7 @@ static enum test_return test_issue_44(void) {
  *        } else {
  *           fprintf(stderr, "Failed to create socket: %s\n", strerror(errno));
  *        }
- * 
+ *
  *        freeaddrinfo(ai);
  *     }
  *     return sock;
