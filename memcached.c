@@ -106,6 +106,7 @@ static enum transmit_result transmit(conn *c);
 conn_funcs conn_funcs_default = {
     .conn_init                   = NULL,
     .conn_close                  = NULL,
+    .conn_connect                = NULL,
     .conn_process_ascii_command  = process_command,
     .conn_process_binary_command = dispatch_bin_command,
     .conn_complete_nread_ascii   = complete_nread_ascii,
@@ -632,7 +633,8 @@ const char *state_text(enum conn_states state) {
                                        "conn_swallow",
                                        "conn_closing",
                                        "conn_mwrite",
-                                       "conn_pause"};
+                                       "conn_pause",
+                                       "conn_connecting" };
     return statenames[state];
 }
 
@@ -3384,6 +3386,15 @@ void drive_machine(conn *c) {
                               tcp_transport,
                               c->funcs, c->extra);
             stop = true;
+            break;
+
+        case conn_connecting:
+            if (c->funcs->conn_connect != NULL) {
+                c->funcs->conn_connect(c);
+            } else {
+                conn_set_state(c, conn_closing);
+                update_event(c, 0);
+            }
             break;
 
         case conn_waiting:

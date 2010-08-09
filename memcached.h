@@ -156,6 +156,7 @@ enum conn_states {
     conn_closing,    /**< closing this connection */
     conn_mwrite,     /**< writing out many items sequentially */
     conn_pause,      /**< waiting for asynchronous event */
+    conn_connecting, /**< the socket is in connecting state*/
     conn_max_state   /**< Max state value (used for assertion) */
 };
 
@@ -372,6 +373,7 @@ struct conn_funcs {
     /* Function pointers so that drive_machine loop is reusable. */
     void (*conn_init)(conn *c);
     void (*conn_close)(conn *c);
+    void (*conn_connect)(conn *c);
     void (*conn_process_ascii_command)(conn *c, char *command);
     void (*conn_process_binary_command)(conn *c);
     void (*conn_complete_nread_ascii)(conn *c);
