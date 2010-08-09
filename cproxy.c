@@ -2363,6 +2363,10 @@ bool cproxy_bucket_downstream(mcs_server_st *server,
     return false;
 }
 
+int cproxy_max_retries(downstream *d) {
+    return mcs_server_count(&d->mst) * 2;
+}
+
 int downstream_conn_index(downstream *d, conn *c) {
     assert(d);
 
@@ -2417,8 +2421,60 @@ void cproxy_upstream_state_change(conn *c, enum conn_states next_state) {
     }
 }
 
-int cproxy_max_retries(downstream *d) {
-    return mcs_server_count(&d->mst) * 2;
+void cproxy_on_connect_downstream_conn(conn *c) {
+    assert(c != NULL);
+    assert(c->host_ident);
+
+    if (settings.verbose > 2) {
+        moxi_log_write("%d: cproxy_on_connect_downstream_conn for %s",
+                       c->sfd, c->host_ident);
+    }
+
+    if (c->which == EV_TIMEOUT) {
+        if (settings.verbose) {
+            moxi_log_write("%d: connection timed out: %s",
+                           c->sfd, c->host_ident);
+        }
+        goto cleanup;
+    }
+
+    int       error = -1;
+    socklen_t errsz = sizeof(error);
+
+    /* Check if the connection completed */
+    if (getsockopt(c->sfd, SOL_SOCKET, SO_ERROR, (void *) &error,
+                   &errsz) == -1) {
+        goto cleanup;
+    }
+
+    if (error) {
+        if (settings.verbose) {
+            moxi_log_write("%d: connect failed: %s, %s",
+                           c->sfd, c->host_ident, strerror(error));
+        }
+        goto cleanup;
+    }
+
+    /* We are connected to the server now */
+    if (settings.verbose > 2) {
+        moxi_log_write("%d: connected to: %s\n", c->sfd, c->host_ident);
+    }
+
+    d->connect_time = 0;
+    d->error_count = 0;
+
+    conn_set_state(c, conn_pause);
+
+    release_downstream_conn(c);
+    return;
+
+cleanup:
+    d->thread->ptd.tot_downstream_connect_failed++;
+    d->stats.conn_failures++;
+    d->error_count++;
+
+    conn_set_state(c, conn_closing);
+    update_event(c, 0);
 }
 
 void downstream_reserved_time_sample(proxy_stats_td *pstd, uint64_t duration) {

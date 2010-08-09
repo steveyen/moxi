@@ -444,6 +444,7 @@ conn *conn_new(const int sfd, enum conn_states init_state,
     c->cmd_start_time = 0;
     c->cmd_retries = 0;
     c->corked = NULL;
+    c->host_ident = NULL;
 
     c->extra = extra;
 
@@ -518,6 +519,8 @@ void conn_free(conn *c) {
             free(c->suffixlist);
         if (c->iov)
             free(c->iov);
+        if (c->host_ident)
+            free(c->host_ident);
 
         while (c->corked != NULL) {
             bin_cmd *bc = c->corked;

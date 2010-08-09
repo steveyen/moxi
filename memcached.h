@@ -482,6 +482,8 @@ struct conn {
     int       cmd_retries;
 
     bin_cmd *corked;
+
+    char *host_ident;
 };
 
 extern conn *listen_conn;
