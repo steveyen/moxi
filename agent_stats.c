@@ -186,6 +186,10 @@ void collect_memcached_stats_for_proxy(struct main_stats_collect_info *msci,
 
 out_free:
     memcached_free(&mst);
+#else // !MOXI_USE_VBUCKET
+    (void) msci;
+    (void) proxy_name;
+    (void) proxy_port;
 #endif // !MOXI_USE_VBUCKET
 }
 

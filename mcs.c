@@ -153,6 +153,8 @@ void mcs_server_invalid_vbucket(mcs_st *ptr, int server_index, int vbucket) {
 }
 
 void mcs_server_st_quit(mcs_server_st *ptr, uint8_t io_death) {
+    (void) io_death;
+
     // TODO: Should send QUIT cmd.
     //
     if (ptr->fd != -1) {
@@ -238,7 +240,7 @@ mcs_return mcs_server_st_do(mcs_server_st *ptr,
                             uint8_t with_flush) {
     if (mcs_server_st_connect(ptr) == MEMCACHED_SUCCESS) {
         ssize_t n = mcs_server_st_io_write(ptr, command, command_length, with_flush);
-        if (n == command_length) {
+        if (n == (ssize_t) command_length) {
             return MEMCACHED_SUCCESS;
         }
     }
@@ -250,6 +252,8 @@ ssize_t mcs_server_st_io_write(mcs_server_st *ptr,
                                const void *buffer,
                                size_t length,
                                char with_flush) {
+    (void) with_flush;
+
     assert(ptr->fd != -1);
 
     return write(ptr->fd, buffer, length);
@@ -271,7 +275,7 @@ mcs_return mcs_server_st_read(mcs_server_st *ptr,
     size_t done = 0;
 
     while (done < size) {
-        size_t n = read(ptr->fd, data + done, size - done);
+        ssize_t n = read(ptr->fd, data + done, size - done);
         if (n == -1) {
             fcntl(ptr->fd, F_SETFL, flags);
             return MEMCACHED_FAILURE;
@@ -285,6 +289,8 @@ mcs_return mcs_server_st_read(mcs_server_st *ptr,
 }
 
 void mcs_server_st_io_reset(mcs_server_st *ptr) {
+    (void) ptr;
+
     // TODO: memcached_io_reset(ptr);
 }
 

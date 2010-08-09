@@ -400,7 +400,7 @@ static void cproxy_sasl_plain_auth(conn *c, char *req_bytes) {
         // back to some empty password proxy/bucket, such as to the
         // default bucket.
         //
-        if (pwlen > 0 && pwlen < sizeof(password)) {
+        if (pwlen > 0 && pwlen < (int) sizeof(password)) {
             memcpy(password, clientin + 2 + uslen, pwlen);
             password[pwlen] = '\0';
 

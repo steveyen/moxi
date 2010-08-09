@@ -331,14 +331,14 @@ bool get_stats(const char *stat_type, int nkey, ADD_STAT add_stats, void *c) {
 
 /*@null@*/
 static void do_slabs_stats(ADD_STAT add_stats, void *c) {
-    size_t i;
+    int i;
     int total;
     /* Get the per-thread stats which contain some interesting aggregates */
     struct thread_stats thread_stats;
     threadlocal_stats_aggregate(&thread_stats);
 
     total = 0;
-    for(i = POWER_SMALLEST; i <= power_largest; i++) {
+    for (i = POWER_SMALLEST; i <= (int) power_largest; i++) {
         slabclass_t *p = &slabclass[i];
         if (p->slabs != 0) {
             uint32_t perslab, slabs;

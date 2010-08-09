@@ -338,6 +338,11 @@ static void ping_server(char *server_name,
 
         memcached_free(&mst);
     }
+#else // !MOXI_USE_VBUCKET
+    (void) server_name;
+    (void) recipes;
+    (void) behavior;
+    (void) r;
 #endif // !MOXI_USE_VBUCKET
 }
 
