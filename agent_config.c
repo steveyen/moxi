@@ -150,8 +150,8 @@ int cproxy_init_agent(char *cfg_str,
     int rv = 0;
 
     while (next != NULL) {
-        char *jid    = NULL;
-        char *jpw    = NULL;
+        char *jid    = behavior.usr;
+        char *jpw    = behavior.pwd;
         char *jpwmem = NULL;
         char *dbpath = NULL;
         char *host   = NULL;
