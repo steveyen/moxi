@@ -139,20 +139,24 @@ int log_error_close(moxi_log *mlog) {
     return 0;
 }
 
-#define mappend_log(mlog, str)                                      \
-    if (mlog->logbuf_used < MAX_LOGBUF_LEN) {                       \
-        int str_len = strlen(str);                                  \
-        memcpy(mlog->logbuf + mlog->logbuf_used, str, str_len + 1); \
-        mlog->logbuf_used += str_len;                               \
-    }
+static inline
+void mappend_log(moxi_log *mlog, const char *str) {
+    int str_len = strlen(str);
+    if (mlog->logbuf_used + str_len >= MAX_LOGBUF_LEN)
+        str_len = MAX_LOGBUF_LEN - 1 - mlog->logbuf_used;
+    if (str_len <= 0)
+        return;
+    memcpy(mlog->logbuf + mlog->logbuf_used, str, str_len);
+    mlog->logbuf_used += str_len;
+    assert(mlog->logbuf_used < MAX_LOGBUF_LEN);
+}
 
-#define mappend_log_int(mlog, num)                                  \
-    if (mlog->logbuf_used < MAX_LOGBUF_LEN) {                       \
-        char buf[32];                                               \
-        int buf_len = snprintf(buf, sizeof(buf), "%d", num);        \
-        memcpy(mlog->logbuf + mlog->logbuf_used, buf, buf_len + 1); \
-        mlog->logbuf_used += buf_len;                               \
-    }
+static inline
+void mappend_log_int(moxi_log *mlog, int num) {
+    char buf[32];
+    snprintf(buf, sizeof(buf), "%d", num);
+    mappend_log(mlog, buf);
+}
 
 int log_error_write(moxi_log *mlog, const char *filename, unsigned int line, const char *fmt, ...) {
     va_list ap;
@@ -194,18 +198,28 @@ int log_error_write(moxi_log *mlog, const char *filename, unsigned int line, con
     mappend_log_int(mlog, line);
     mappend_log(mlog, ") ");
 
+    assert(mlog->logbuf_used < MAX_LOGBUF_LEN);
+
     va_start(ap, fmt);
     mlog->logbuf_used +=
         vsnprintf((mlog->logbuf + mlog->logbuf_used), (MAX_LOGBUF_LEN - mlog->logbuf_used - 1), fmt, ap);
     va_end(ap);
 
+    /* vsprintf returns total string length, so no buffer overflow is
+     * possible, but we can shoot logbuf_used past MAX_LOGBUF_LEN */
     if (mlog->logbuf_used >= MAX_LOGBUF_LEN) {
-        mlog->logbuf_used = MAX_LOGBUF_LEN - 1;
+        mlog->logbuf_used = MAX_LOGBUF_LEN-1;
+    }
+
+    if (mlog->logbuf_used >= MAX_LOGBUF_LEN-1) {
+        mlog->logbuf_used--;    /* make space for \n */
     }
     if (mlog->logbuf_used > 1) {
-        mlog->logbuf[mlog->logbuf_used - 1] = '\n';
+        mlog->logbuf[mlog->logbuf_used++] = '\n';
     }
+    assert(mlog->logbuf_used < MAX_LOGBUF_LEN);
     mlog->logbuf[mlog->logbuf_used] = '\0';
+    assert(mlog->logbuf_used < MAX_LOGBUF_LEN);
 
     switch(mlog->log_mode) {
         case ERRORLOG_FILE:
