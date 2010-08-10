@@ -138,6 +138,16 @@ int cproxy_init_agent(char *cfg_str,
         if (buff != NULL) {
             if (strncmp(cfg_str, "http://", 7) == 0) {
                 snprintf(buff, cfg_len + 50, "url=%s", cfg_str);
+
+                // Allow the user to specify multiple comma-separated URL's,
+                // which we auto-translate right now to the '|' separators
+                // that the rest of the code expects.
+                //
+                for (char *x = buff; *x; x++) {
+                    if (*x == ',') {
+                        *x = '|';
+                    }
+                }
             } else {
                 snprintf(buff, cfg_len + 50, "apikey=%s", cfg_str);
             }
