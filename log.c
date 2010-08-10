@@ -139,19 +139,19 @@ int log_error_close(moxi_log *mlog) {
     return 0;
 }
 
-#define mappend_log(mlog, str)                                    \
-    if (mlog->logbuf_used < MAX_LOGBUF_LEN) {                     \
-        int str_len = strlen(str);                              \
+#define mappend_log(mlog, str)                                      \
+    if (mlog->logbuf_used < MAX_LOGBUF_LEN) {                       \
+        int str_len = strlen(str);                                  \
         memcpy(mlog->logbuf + mlog->logbuf_used, str, str_len + 1); \
-        mlog->logbuf_used += str_len;                             \
-    }                                                           \
+        mlog->logbuf_used += str_len;                               \
+    }
 
-#define mappend_log_int(mlog, num)                                \
-    if (mlog->logbuf_used < MAX_LOGBUF_LEN) {                     \
-        char buf[32];                                           \
-        int buf_len = snprintf(buf, sizeof(buf), "%d", num);    \
+#define mappend_log_int(mlog, num)                                  \
+    if (mlog->logbuf_used < MAX_LOGBUF_LEN) {                       \
+        char buf[32];                                               \
+        int buf_len = snprintf(buf, sizeof(buf), "%d", num);        \
         memcpy(mlog->logbuf + mlog->logbuf_used, buf, buf_len + 1); \
-        mlog->logbuf_used += buf_len;                             \
+        mlog->logbuf_used += buf_len;                               \
     }
 
 int log_error_write(moxi_log *mlog, const char *filename, unsigned int line, const char *fmt, ...) {
@@ -165,8 +165,9 @@ int log_error_write(moxi_log *mlog, const char *filename, unsigned int line, con
         case ERRORLOG_FILE:
         case ERRORLOG_STDERR:
             /* cache the generated timestamp */
-            if (!mlog->cur_ts)
+            if (!mlog->cur_ts) {
                 mlog->cur_ts = time(NULL);
+            }
 
             if (mlog->cur_ts != mlog->last_generated_debug_ts) {
                 memset(ts_debug_str, 0, sizeof(ts_debug_str));
@@ -198,10 +199,13 @@ int log_error_write(moxi_log *mlog, const char *filename, unsigned int line, con
         vsnprintf((mlog->logbuf + mlog->logbuf_used), (MAX_LOGBUF_LEN - mlog->logbuf_used - 1), fmt, ap);
     va_end(ap);
 
-    mlog->logbuf[MAX_LOGBUF_LEN] = '\0';
-    if (mlog->logbuf_used > MAX_LOGBUF_LEN) {
-        mlog->logbuf_used = MAX_LOGBUF_LEN;
+    if (mlog->logbuf_used >= MAX_LOGBUF_LEN) {
+        mlog->logbuf_used = MAX_LOGBUF_LEN - 1;
     }
+    if (mlog->logbuf_used > 1) {
+        mlog->logbuf[mlog->logbuf_used - 1] = '\n';
+    }
+    mlog->logbuf[mlog->logbuf_used] = '\0';
 
     switch(mlog->log_mode) {
         case ERRORLOG_FILE:
