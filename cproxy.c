@@ -2145,7 +2145,6 @@ bool cproxy_auth_downstream(mcs_server_st *server,
     }
 
     if (usr_len <= 0 ||
-        pwd_len <= 0 ||
         !IS_PROXY(behavior->downstream_protocol) ||
         (usr_len + pwd_len + 50 > (int)sizeof(buf))) {
         if (settings.verbose > 1) {
