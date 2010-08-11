@@ -208,18 +208,15 @@ int log_error_write(moxi_log *mlog, const char *filename, unsigned int line, con
     /* vsprintf returns total string length, so no buffer overflow is
      * possible, but we can shoot logbuf_used past MAX_LOGBUF_LEN */
     if (mlog->logbuf_used >= MAX_LOGBUF_LEN) {
-        mlog->logbuf_used = MAX_LOGBUF_LEN-1;
+        mlog->logbuf_used = MAX_LOGBUF_LEN - 1;
     }
 
-    if (mlog->logbuf_used >= MAX_LOGBUF_LEN-1) {
-        mlog->logbuf_used--;    /* make space for \n */
-    }
     if (mlog->logbuf_used > 1) {
-        mlog->logbuf[mlog->logbuf_used++] = '\n';
+        mlog->logbuf[mlog->logbuf_used - 1] = '\n';
     }
+
     assert(mlog->logbuf_used < MAX_LOGBUF_LEN);
     mlog->logbuf[mlog->logbuf_used] = '\0';
-    assert(mlog->logbuf_used < MAX_LOGBUF_LEN);
 
     switch(mlog->log_mode) {
         case ERRORLOG_FILE:
