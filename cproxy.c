@@ -782,8 +782,8 @@ bool cproxy_release_downstream(downstream *d, bool force) {
         if (d->upstream_retries <= max_retries) {
             if (settings.verbose > 2) {
                 moxi_log_write("%d: release_downstream, instead retrying %d, %d <= %d\n",
-                        d->upstream_conn->sfd,
-                        d->upstream_retry, d->upstream_retries, max_retries);
+                               d->upstream_conn->sfd,
+                               d->upstream_retry, d->upstream_retries, max_retries);
             }
 
             if (cproxy_forward(d) == true) {
@@ -796,8 +796,8 @@ bool cproxy_release_downstream(downstream *d, bool force) {
         } else {
             if (settings.verbose > 2) {
                 moxi_log_write("%d: release_downstream, skipping retry %d, %d > %d\n",
-                        d->upstream_conn->sfd,
-                        d->upstream_retry, d->upstream_retries, max_retries);
+                               d->upstream_conn->sfd,
+                               d->upstream_retry, d->upstream_retries, max_retries);
             }
         }
     }
@@ -1101,6 +1101,14 @@ bool cproxy_check_downstream_config(downstream *d) {
     return rv;
 }
 
+// Returns -1 if the connections aren't fully assigned and ready.
+// In that case, the downstream was enqueued by this function to wait
+// for downstream connections to be assigned (and to not be in
+// the conn_connecting state).
+//
+// Also, in the -1 result case, the d->upstream_conn should remain in
+// conn_pause state.
+//
 int cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread) {
     assert(d != NULL);
     assert(d->ptd != NULL);
@@ -1124,6 +1132,14 @@ int cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread) {
         assert(IS_PROXY(d->behaviors_arr[i].downstream_protocol));
 
         // Connect to a main downstream server, if not already.
+        //
+        // TODO: Should call zstored_acquire_connection() here,
+        // and return -1 if the downstream conns aren't ready,
+        // and the downstream struct d is enqueued.
+        //
+        // TODO: Need to hash by key on single-key requests to
+        // figure out what server we want, and handle broadcast
+        // downstream conn assignment correctly.
         //
         if (d->downstream_conns[i] == NULL) {
             d->downstream_conns[i] =

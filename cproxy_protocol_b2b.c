@@ -55,7 +55,12 @@ bool cproxy_forward_b2b_downstream(downstream *d) {
     assert(IS_BINARY(uc->protocol));
     assert(IS_PROXY(uc->protocol));
 
-    if (cproxy_connect_downstream(d, uc->thread) > 0) {
+    int nc = cproxy_connect_downstream(d, uc->thread);
+    if (nc == -1) {
+        return true;
+    }
+
+    if (nc > 0) {
         assert(d->downstream_conns != NULL);
 
         if (d->usec_start == 0 &&
