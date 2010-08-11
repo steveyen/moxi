@@ -289,9 +289,7 @@ proxy_main *cproxy_init_agent_start(char *jid,
     proxy_main *m = cproxy_gen_proxy_main(behavior, nthreads,
                                           PROXY_CONF_TYPE_DYNAMIC);
     if (m != NULL) {
-        if (behavior.default_bucket_name[0] == '\0') {
-            cproxy_init_null_bucket(m);
-        }
+        cproxy_init_null_bucket(m);
 
         conflate_config_t config;
 

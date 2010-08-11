@@ -430,6 +430,12 @@ void      cproxy_on_close_upstream_conn(conn *c);
 void      cproxy_on_close_downstream_conn(conn *c);
 void      cproxy_on_pause_downstream_conn(conn *c);
 
+proxy *cproxy_find_proxy_by_auth(proxy_main *m,
+                                 const char *usr,
+                                 int usrlen,
+                                 const char *pwd,
+                                 int pwdlen);
+
 void cproxy_upstream_state_change(conn *c, enum conn_states next_state);
 
 void cproxy_add_downstream(proxy_td *ptd);

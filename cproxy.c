@@ -88,7 +88,6 @@ proxy *cproxy_create(proxy_main *main,
     assert(port > 0);
     assert(config != NULL);
     assert(behavior_pool);
-    assert(behavior_pool->num > 0);
     assert(behavior_pool->arr != NULL);
     assert(nthreads > 1); // Main thread + at least one worker.
     assert(nthreads == settings.num_threads);
@@ -387,6 +386,21 @@ void cproxy_init_upstream_conn(conn *c) {
 
     proxy_td *ptd = cproxy_find_thread_data(p, pthread_self());
     assert(ptd != NULL);
+
+    char *default_name = ptd->behavior_pool.base.default_bucket_name;
+    if (default_name[0] != '\0') {
+        proxy *default_proxy =
+            cproxy_find_proxy_by_auth(p->main,
+                                      default_name, strlen(default_name),
+                                      "", 0);
+        if (default_proxy != NULL) {
+            proxy_td *default_ptd =
+                cproxy_find_thread_data(default_proxy, pthread_self());
+            if (default_ptd != NULL) {
+                ptd = default_ptd;
+            }
+        }
+    }
 
     ptd->stats.stats.num_upstream++;
     ptd->stats.stats.tot_upstream++;
@@ -949,7 +963,7 @@ downstream *cproxy_create_downstream(char *config,
                                      proxy_behavior_pool *behavior_pool) {
     assert(config != NULL);
     assert(behavior_pool != NULL);
-    assert(behavior_pool->num > 0);
+    assert(behavior_pool->num >= 0);
     assert(behavior_pool->arr != NULL);
 
     downstream *d = (downstream *) calloc(1, sizeof(downstream));
@@ -2380,4 +2394,34 @@ void cproxy_upstream_state_change(conn *c, enum conn_states next_state) {
             ptd->stats.stats.tot_upstream_paused++;
         }
     }
+}
+
+// Find an appropriate proxy struct or NULL.
+//
+proxy *cproxy_find_proxy_by_auth(proxy_main *m,
+                                 const char *usr,
+                                 int usrlen,
+                                 const char *pwd,
+                                 int pwdlen) {
+    proxy *found = NULL;
+
+    pthread_mutex_lock(&m->proxy_main_lock);
+
+    for (proxy *p = m->proxy_head; p != NULL && found == NULL; p = p->next) {
+        pthread_mutex_lock(&p->proxy_lock);
+        // The strlen checks are required so that usrlen or pwdlen of
+        // zero doesn't automaticaly turn into matches.
+        //
+        if (strlen(p->behavior_pool.base.usr) == (size_t) usrlen &&
+            strlen(p->behavior_pool.base.pwd) == (size_t) pwdlen &&
+            strncmp(p->behavior_pool.base.usr, usr, usrlen) == 0 &&
+            strncmp(p->behavior_pool.base.pwd, pwd, pwdlen) == 0) {
+            found = p;
+        }
+        pthread_mutex_unlock(&p->proxy_lock);
+    }
+
+    pthread_mutex_unlock(&m->proxy_main_lock);
+
+    return found;
 }

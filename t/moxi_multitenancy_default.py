@@ -42,22 +42,56 @@ class TestMultitenancyWithDefaultBucket(moxi_mock_server.ProxyClientBase):
         """Test basic serial get commands"""
         self.client_connect()
 
+        user = "default"
+        password = ""
+
+        auth_req = self.packReq(memcacheConstants.CMD_SASL_AUTH,
+                                key="PLAIN",
+                                val="\0" + user + "\0" + password);
+        auth_res = self.packRes(memcacheConstants.CMD_SASL_AUTH,
+                                val="Authenticated")
+
+        get_req = self.packReq(memcacheConstants.CMD_GETK, key='keyNotThere0');
+        get_res = self.packRes(memcacheConstants.CMD_GETK,
+                               status=memcacheConstants.ERR_NOT_FOUND,
+                               key='keyNotThere0')
+
+        # First time, we should see a SASL plain auth.
         self.client_send("get keyNotThere0\r\n")
-        self.mock_recv(self.packReq(memcacheConstants.CMD_GETK, key='keyNotThere0'))
-        self.mock_send(self.packRes(memcacheConstants.CMD_GETK,
-                                    status=memcacheConstants.ERR_NOT_FOUND,
-                                    key='keyNotThere0'))
+        self.mock_recv(auth_req)
+        self.mock_send(auth_res)
+        self.mock_recv(get_req)
+        self.mock_send(get_res)
         self.client_recv("END\r\n")
 
-    def testDefaultBucketSet(self):
+    def testDefaultBucketBinary(self):
+        """Test basic serial get commands binary"""
         self.client_connect()
-        self.doTestSimpleSet()
+        self.exerciseGoodAuth("default", "", explicit_auth=False)
 
-    def doTestSimpleSet(self, flg=1234, exp=0, val='9876'):
-        """Test simple set against mock server"""
+    def testDefaultBucketSetBinary(self):
+        """Test simple set against mock server binary"""
+        self.client_connect()
+
+        flg = 1234
+        exp = 0
+        val = '9876'
+
         self.client_send(self.packReq(memcacheConstants.CMD_SET, key='simpleSet',
                                       extraHeader=struct.pack(memcacheConstants.SET_PKT_FMT, flg, exp),
                                       val=val))
+
+        user = "default"
+        password = ""
+
+        auth_req = self.packReq(memcacheConstants.CMD_SASL_AUTH,
+                                key="PLAIN",
+                                val="\0" + user + "\0" + password);
+        auth_res = self.packRes(memcacheConstants.CMD_SASL_AUTH,
+                                val="Authenticated")
+
+        self.mock_recv(auth_req)
+        self.mock_send(auth_res)
         self.mock_recv(self.packReq(memcacheConstants.CMD_SET, key='simpleSet',
                                     extraHeader=struct.pack(memcacheConstants.SET_PKT_FMT, flg, exp),
                                     val=val))
@@ -68,6 +102,11 @@ class TestMultitenancyWithDefaultBucket(moxi_mock_server.ProxyClientBase):
         """Test seeing a first AUTH B2B"""
         self.client_connect()
         self.exerciseGoodAuth("userGood0", "passwordGood0")
+
+    def testGoodDefaultAuth(self):
+        """Test seeing a first AUTH B2B"""
+        self.client_connect()
+        self.exerciseGoodAuth("default", "")
 
     def testBadAuth(self):
         """Test seeing a bad AUTH B2B"""
@@ -85,15 +124,16 @@ class TestMultitenancyWithDefaultBucket(moxi_mock_server.ProxyClientBase):
 
         self.exerciseGoodAuth("userGood0", "passwordGood0")
 
-    def exerciseGoodAuth(self, user, password):
+    def exerciseGoodAuth(self, user, password, explicit_auth=True):
         auth_req = self.packReq(memcacheConstants.CMD_SASL_AUTH,
                                 key="PLAIN",
                                 val="\0" + user + "\0" + password);
         auth_res = self.packRes(memcacheConstants.CMD_SASL_AUTH,
                                 val="Authenticated")
 
-        self.client_send(auth_req)
-        self.client_recv(auth_res)
+        if explicit_auth:
+            self.client_send(auth_req)
+            self.client_recv(auth_res)
 
         get_req = self.packReq(memcacheConstants.CMD_GETK, key='keyNotThere0');
         get_res = self.packRes(memcacheConstants.CMD_GETK,
