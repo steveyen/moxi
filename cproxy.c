@@ -6,11 +6,16 @@
 #include <errno.h>
 #include <pthread.h>
 #include <assert.h>
+#include <fcntl.h>
 #include <math.h>
 #include "memcached.h"
 #include "cproxy.h"
 #include "work.h"
 #include "log.h"
+
+#define MEMCACHED_DEFAULT_TIMEOUT 1000
+#define DOWNSTREAM_RETRY_INTERVAL 30000
+#define MAX_DOWNSTREAM_CONNECTION_ERRORS 10
 
 // Internal forward declarations.
 //
@@ -34,6 +39,21 @@ void downstream_reserved_time_sample(proxy_stats_td *ptds, uint64_t duration);
 void downstream_connect_time_sample(proxy_stats_td *ptds, uint64_t duration);
 
 int init_mcs_st(mcs_st *mst, char *config);
+
+int network_connect(struct addrinfo *use,
+                    int *status_out,
+                    int *errno_out);
+
+void cproxy_on_connect_downstream_conn(conn *c);
+
+conn *zstored_acquire_downstream_conn(downstream *d,
+                                      LIBEVENT_THREAD *thread,
+                                      mcs_server_st *msst,
+                                      proxy_behavior *behavior);
+
+void zstored_release_downstream_conn(conn *dc, bool closing);
+
+static bool set_hostinfo(char *host, bool is_tcp, struct addrinfo **ai_out);
 
 // Function tables.
 //
@@ -2421,6 +2441,8 @@ void cproxy_upstream_state_change(conn *c, enum conn_states next_state) {
     }
 }
 
+// -------------------------------------------------
+
 void cproxy_on_connect_downstream_conn(conn *c) {
     assert(c != NULL);
     assert(c->host_ident);
@@ -2460,18 +2482,18 @@ void cproxy_on_connect_downstream_conn(conn *c) {
         moxi_log_write("%d: connected to: %s\n", c->sfd, c->host_ident);
     }
 
-    d->connect_time = 0;
-    d->error_count = 0;
+    // TODO: d->connect_time = 0;
+    // TODO: d->error_count = 0;
 
     conn_set_state(c, conn_pause);
 
-    release_downstream_conn(c);
+    zstored_release_downstream_conn(c, false);
     return;
 
 cleanup:
-    d->thread->ptd.tot_downstream_connect_failed++;
-    d->stats.conn_failures++;
-    d->error_count++;
+    // TODO: d->thread->ptd.tot_downstream_connect_failed++;
+    // TODO: d->stats.conn_failures++;
+    // TODO: d->error_count++;
 
     conn_set_state(c, conn_closing);
     update_event(c, 0);
@@ -2499,7 +2521,6 @@ void downstream_connect_time_sample(proxy_stats_td *pstd, uint64_t duration) {
     }
 }
 
-
 // A histogram for tracking timings, such as for usec request timings.
 //
 HTGRAM_HANDLE cproxy_create_timing_histogram(void) {
@@ -2509,4 +2530,347 @@ HTGRAM_HANDLE cproxy_create_timing_histogram(void) {
     HTGRAM_HANDLE h0 = htgram_mk(0, 100, 1.0, 20, h1);
 
     return h0;
+}
+
+static bool set_socket_options(int fd) {
+    /* jsh: todo
+    if (fd type == MEMCACHED_CONNECTION_UDP)
+       return true;
+    */
+
+    /*
+#ifdef HAVE_SNDTIMEO
+    if (ptr->root->snd_timeout) {
+        int error;
+        struct timeval waittime;
+
+        waittime.tv_sec = 0;
+        waittime.tv_usec = ptr->root->snd_timeout;
+
+        error = setsockopt(ptr->fd, SOL_SOCKET, SO_SNDTIMEO,
+                           &waittime, (socklen_t)sizeof(struct timeval));
+        WATCHPOINT_ASSERT(error == 0);
+    }
+#endif
+
+#ifdef HAVE_RCVTIMEO
+    if (ptr->root->rcv_timeout) {
+        int error;
+        struct timeval waittime;
+
+        waittime.tv_sec = 0;
+        waittime.tv_usec = ptr->root->rcv_timeout;
+
+        error= setsockopt(ptr->fd, SOL_SOCKET, SO_RCVTIMEO,
+                          &waittime, (socklen_t)sizeof(struct timeval));
+        WATCHPOINT_ASSERT(error == 0);
+    }
+#endif
+*/
+  {
+    int error;
+    struct linger linger;
+
+    linger.l_onoff = 1;
+    linger.l_linger = MEMCACHED_DEFAULT_TIMEOUT;
+    error = setsockopt(fd, SOL_SOCKET, SO_LINGER,
+                       &linger, (socklen_t)sizeof(struct linger));
+  }
+
+  {
+    int flag = 1;
+    int error;
+
+    error = setsockopt(fd, IPPROTO_TCP, TCP_NODELAY,
+                       &flag, (socklen_t)sizeof(int));
+  }
+
+  /*
+  if (ptr->root->send_size) {
+    int error;
+
+    error= setsockopt(ptr->fd, SOL_SOCKET, SO_SNDBUF,
+                      &ptr->root->send_size, (socklen_t)sizeof(int));
+    WATCHPOINT_ASSERT(error == 0);
+  }
+
+  if (ptr->root->recv_size) {
+    int error;
+
+    error= setsockopt(ptr->fd, SOL_SOCKET, SO_RCVBUF,
+                      &ptr->root->recv_size, (socklen_t)sizeof(int));
+    WATCHPOINT_ASSERT(error == 0);
+  }
+  */
+
+  /* For the moment, not getting a nonblocking mode will not be fatal */
+  {
+    int flags;
+
+    flags = fcntl(fd, F_GETFL, 0);
+    if (flags != -1) {
+        (void) fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+    }
+  }
+
+  return true;
+}
+
+static bool set_hostinfo(char *host, bool is_tcp, struct addrinfo **ai_out) {
+    struct addrinfo *ai;
+    struct addrinfo hints;
+
+    char str_host[NI_MAXHOST];
+    char *str_port;
+    char *tmp = host;
+
+    while (*tmp && *tmp != ':') {
+        tmp++;
+    }
+
+    str_port = *tmp ? tmp + 1: "11211";
+
+    int host_len = tmp - host;
+    if (host_len >= NI_MAXHOST) {
+        host_len = NI_MAXHOST - 1;
+    }
+
+    strncpy(str_host, host, host_len);
+    str_host[host_len] = '\0';
+
+    memset(&hints, 0, sizeof(hints));
+
+    // hints.ai_family= AF_INET;
+
+    if (is_tcp) {
+        hints.ai_socktype = SOCK_STREAM;
+        hints.ai_protocol = IPPROTO_TCP;
+    } else {
+        hints.ai_protocol = IPPROTO_UDP;
+        hints.ai_socktype = SOCK_DGRAM;
+    }
+
+    int e = getaddrinfo(str_host, str_port, &hints, &ai);
+    if (e != 0) {
+        return false;
+    }
+
+    *ai_out = ai;
+
+#ifdef TODO_FIGURE_OUT_WHERE_TO_FREEADDRINFO_LATER
+    if (ds->address_info) {
+        freeaddrinfo(ds->address_info);
+        ds->address_info = NULL;
+    }
+#endif
+
+    return true;
+}
+
+int network_connect(struct addrinfo *use,
+                    int *status_out,
+                    int *errno_out) {
+    *status_out = -1;
+
+    int fd = -1;
+
+    /* Create the socket */
+    while (use != NULL) {
+        /* Memcache server does not support IPV6 in udp mode,
+           so skip if not ipv4 */
+        // if (ptr->type == MEMCACHED_CONNECTION_UDP && use->ai_family != AF_INET)
+        if (use->ai_family == AF_INET) {
+            fd = socket(use->ai_family,
+                        use->ai_socktype,
+                        use->ai_protocol);
+            if (fd == -1) {
+                return fd;
+            }
+
+            (void) set_socket_options(fd);
+
+            if (connect(fd, use->ai_addr, use->ai_addrlen) != -1) {
+                return fd;
+            }
+
+            if (errno_out != NULL) {
+                *errno_out = errno;
+            }
+            if (errno == EINPROGRESS) {
+                *status_out = 1;
+            } else if (errno == EISCONN) { /* we are connected */
+                *status_out = 0;
+            } else {
+                *status_out = -1;
+                (void) close(fd);
+                fd = -1;
+            }
+
+            return fd;
+        }
+
+        use = use->ai_next;
+    }
+
+    return fd;
+}
+
+conn *zstored_acquire_downstream_conn(downstream *d,
+                                      LIBEVENT_THREAD *thread,
+                                      mcs_server_st *msst,
+                                      proxy_behavior *behavior) {
+    assert(d);
+    assert(d->ptd);
+    assert(d->ptd->downstream_released != d); // Should not be in free list.
+    assert(thread);
+    assert(thread->base);
+    assert(msst);
+    assert(behavior);
+    assert(mcs_server_st_hostname(msst) != NULL);
+    assert(mcs_server_st_port(msst) > 0);
+    assert(mcs_server_st_fd(msst) == -1);
+
+#ifdef TODO_FIGURE_OUT_WHERE_THESE_FIELDS_WILL_LIVE
+    int status = -1;
+
+    if (d->error_count > MAX_DOWNSTREAM_CONNECTION_ERRORS) {
+        if (msec_current_time - d->connect_time < DOWNSTREAM_RETRY_INTERVAL) {
+            return NULL;
+        } else {
+            d->error_count = 0;
+        }
+    }
+
+    int fd = network_connect(d, &status);
+    if (fd >= 0 && status >= 0) {
+        if (status > 0) {
+            d->connect_time = msec_current_time;
+        } else {
+            d->connect_time = 0;
+            d->error_count = 0;
+        }
+        conn *c = conn_new(fd, status == 0? conn_pause: conn_connecting,
+                           status == 0? 0: EV_WRITE,
+                           DATA_BUFFER_SIZE,
+                           tcp_transport,
+                           d->thread->base,
+                           &cproxy_downstream_funcs, d,
+                           &settings.connect_timeout);
+        if (c != NULL) {
+            c->protocol = d->protocol;
+            c->thread = d->thread;
+            return c;
+        }
+    } else {
+       d->thread->ptd.tot_downstream_connect_failed++;
+       d->stats.conn_failures++;
+    }
+
+    if (settings.verbose > 2) {
+        moxi_log_write("connection to %s, status: %s", d->host_ident,
+                       fd == -1 ? "FAILED" : (status == 0 ? "SUCCESS" : "CONNECTING"));
+    }
+#endif
+
+    return NULL;
+}
+
+// new fn by jsh
+void zstored_release_downstream_conn(conn *dc, bool closing) {
+    assert(dc != NULL);
+    assert(dc->host_ident != NULL);
+
+    if (settings.verbose > 2) {
+        moxi_log_write("%d: release_downstream_conn (%d)", dc->sfd, closing);
+    }
+
+#ifdef TOOD_FIGURE_OUT_IF_WE_STILL_HAVE_DC_PEER
+    // Delink upstream conn.
+    //
+    conn *uc = dc->peer;
+    if (uc != NULL) {
+        if (dc->upstream_suffix != NULL) {
+            // Do a last write on the upstream.  For example,
+            // the upstream_suffix might be "END\r\n" or other
+            // way to mark the end of a scatter-gather or
+            // multiline response.
+            //
+            if (settings.verbose > 2)
+                log_error_write(zl, __FILE__, __LINE__, "s", ">> doing last write");
+            if (add_iov(uc,
+                        dc->upstream_suffix,
+                        strlen(dc->upstream_suffix)) == 0 &&
+                update_event(uc, EV_WRITE | EV_PERSIST)) {
+                conn_set_state(uc, conn_mwrite);
+            } else {
+                cproxy_close_conn(uc);
+            }
+        }
+        uc->peer = NULL;
+    }
+
+    dc->peer = NULL;
+    dc->upstream_suffix = NULL; // No free(), expecting a static string.
+#endif
+
+    downstream *d = dc->extra;
+    if (d == NULL) {
+        return;
+    }
+
+    dc->extra = NULL;
+
+#ifdef TODO_FIGURE_OUT_HOW_TO_WAKE_UP_WAITING_DOWNSTREAM
+    if (!closing) {
+        conn *waiting_uc = NULL; // TODO.
+        if (waiting_uc != NULL) {
+            // assign_downstream_conn_to_downstream(dc, waiting_uc);
+        }
+
+        if (dc->next == NULL && d->downstream_conns != dc) {
+            // Add this connection back to the list of ds connections
+            // log_error_write(zl, __FILE__, __LINE__,stderr, "<< **** >> assigning to ds\n");
+            dc->next = d->downstream_conns;
+            d->downstream_conns = dc;
+            cproxy_assign_downstream(d);
+        } else {
+            // We should not end up here
+            // best thing to do is close the connection
+            if (settings.verbose) {
+				char tmp_buf[256] = {0};
+                snprintf(tmp_buf, 256, "<< ERROR >> next: %lx, downstream_conns: %lx, dc: %lx\n",
+                (unsigned long int)dc->next,
+                (unsigned long int)d->downstream_conns, (unsigned long int)dc);
+				log_error_write(zl, __FILE__, __LINE__, "s", tmp_buf);
+			}
+            cproxy_close_conn(dc);
+        }
+    } else {
+        dc->extra = NULL;
+        d->stats.active_conns--;
+
+        // this connection may be part of the
+        // downstream connections linked list. remove it
+        conn *p = d->downstream_conns;
+        if (p == dc) {
+            d->downstream_conns = dc->next;
+        } else if (p != NULL) {
+            while (p->next != NULL) {
+                if (p->next == dc) {
+                    p->next = dc->next;
+                    break;
+                }
+                p = p->next;
+            }
+        }
+
+        // let us also clear the cached address info structure
+        if (d->address_info) {
+            freeaddrinfo(d->address_info);
+            d->address_info = NULL;
+        }
+
+        cproxy_assign_downstream(d);
+    }
+#endif
 }
