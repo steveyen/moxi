@@ -18,6 +18,7 @@
 #include <pthread.h>
 
 #include "work.h"
+#include "genhash.h"
 
 #include "protocol_binary.h"
 #include "cache.h"
@@ -361,6 +362,7 @@ typedef struct {
     struct conn_queue *new_conn_queue; /* queue of new connections to handle */
     cache_t *suffix_cache;      /* suffix cache */
     work_queue *work_queue;
+    genhash_t *conn_hash;       /* per thread connection hash, keyed by host_ident */
 } LIBEVENT_THREAD;
 
 /**

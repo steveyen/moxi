@@ -14,6 +14,8 @@
 
 #define ITEMS_PER_ALLOC 64
 
+extern struct hash_ops skeyhash_ops;
+
 /* An item in the connection queue. */
 typedef struct conn_queue_item CQ_ITEM;
 struct conn_queue_item {
@@ -235,6 +237,12 @@ static void setup_thread(LIBEVENT_THREAD *me) {
                                     NULL, NULL);
     if (me->suffix_cache == NULL) {
         moxi_log_write("Failed to create suffix cache\n");
+        exit(EXIT_FAILURE);
+    }
+
+    me->conn_hash = genhash_init(512, skeyhash_ops);
+    if (me->conn_hash == NULL) {
+        moxi_log_write("Failed to create connection hash\n");
         exit(EXIT_FAILURE);
     }
 }

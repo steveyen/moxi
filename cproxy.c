@@ -53,6 +53,9 @@ conn *zstored_acquire_downstream_conn(downstream *d,
 
 void zstored_release_downstream_conn(conn *dc, bool closing);
 
+conn *cproxy_downstream_conn_for_host_ident(char *host_ident, LIBEVENT_THREAD *thread,
+                                            enum protocol host_protocol);
+
 static bool set_hostinfo(char *host, bool is_tcp, struct addrinfo **ai_out);
 
 // Function tables.
@@ -2890,3 +2893,36 @@ void zstored_release_downstream_conn(conn *dc, bool closing) {
     }
 #endif
 }
+
+conn *cproxy_downstream_conn_for_host_ident(char *host_ident, LIBEVENT_THREAD *thread,
+                                            enum protocol host_protocol) {
+    genhash_t *conn_hash = thread->conn_hash;
+
+    conn *dc = (conn *) genhash_find(conn_hash, host_ident);
+    if (dc == NULL) {
+#ifdef TODO_NEED_TO_ADD_DC_TO_POOL_MAYBE
+        dc = cproxy_create_downstream_conn(host_ident, thread, host_protocol);
+        if (dc != NULL) {
+            genhash_store(conn_hash, dc->host_ident, dc);
+
+            // Add this downstream conn to the thread local
+            // downstream list.
+            // take STATS_LOCK here since we traverse this from cproxy_stats
+            STATS_LOCK();
+            proxy_td *ptd = &thread->ptd;
+            d->next = NULL;
+            if (ptd->downstream_tail != NULL) {
+                ptd->downstream_tail->next = dc;
+            }
+            ptd->downstream_tail = dc;
+            if (ptd->downstream_head == NULL) {
+                ptd->downstream_head = dc;
+            }
+            STATS_UNLOCK();
+        }
+#endif
+    }
+
+    return dc;
+}
+
