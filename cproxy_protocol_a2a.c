@@ -264,7 +264,7 @@ bool cproxy_forward_a2a_simple_downstream(downstream *d,
     assert(command != NULL);
     assert(uc != NULL);
     assert(uc->item == NULL);
-    assert(uc->cmd_curr != -1);
+    assert(uc->cmd_curr != (protocol_binary_command) -1);
     assert(d->multiget == NULL);
     assert(d->merger == NULL);
 
