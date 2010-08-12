@@ -45,7 +45,7 @@ void cproxy_process_upstream_binary(conn *c) {
     int      keylen  = c->binary_header.request.keylen;
     uint32_t bodylen = c->binary_header.request.bodylen;
 
-    assert(bodylen >= keylen + extlen);
+    assert(bodylen >= (uint32_t) keylen + extlen);
 
     if (settings.verbose > 2) {
         moxi_log_write("<%d cproxy_process_upstream_binary %x %d %d %u\n",

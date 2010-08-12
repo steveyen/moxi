@@ -307,7 +307,7 @@ void cproxy_process_b2b_downstream(conn *c) {
                 c->sfd, c->cmd, extlen, keylen, bodylen);
     }
 
-    assert(bodylen >= keylen + extlen);
+    assert(bodylen >= (uint32_t) keylen + extlen);
 
     process_bin_noreply(c); // Map quiet c->cmd values into non-quiet.
 

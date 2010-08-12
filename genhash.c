@@ -27,7 +27,7 @@ estimate_table_size(int est)
     magn=(int)log((double)est)/log(2);
     magn--;
     magn = (magn < 0) ? 0 : magn;
-    assert(magn < (sizeof(prime_size_table) / sizeof(int)));
+    assert(magn < (int) (sizeof(prime_size_table) / sizeof(int)));
     rv=prime_size_table[magn];
     return rv;
 }
@@ -90,7 +90,7 @@ genhash_store(genhash_t *h, const void* k, const void* v)
 
     n=h->ops.hashfunc(k) % h->size;
     assert(n >= 0);
-    assert(n < h->size);
+    assert(n < (int) h->size);
 
     p=calloc(1, sizeof(struct genhash_entry_t));
     assert(p);
@@ -111,7 +111,7 @@ genhash_find_entry(genhash_t *h, const void* k)
     assert(h != NULL);
     n=h->ops.hashfunc(k) % h->size;
     assert(n >= 0);
-    assert(n < h->size);
+    assert(n < (int) h->size);
 
     p=h->buckets[n];
     for(p=h->buckets[n]; p && !h->ops.hasheq(k, p->key); p=p->next);
@@ -202,7 +202,7 @@ genhash_delete(genhash_t* h, const void* k)
     assert(h != NULL);
     n=h->ops.hashfunc(k) % h->size;
     assert(n >= 0);
-    assert(n < h->size);
+    assert(n < (int) h->size);
 
     if(h->buckets[n] != NULL) {
         /* Special case the first one */
@@ -310,7 +310,7 @@ genhash_iter_key(genhash_t* h, const void* key,
     assert(h != NULL);
     n=h->ops.hashfunc(key) % h->size;
     assert(n >= 0);
-    assert(n < h->size);
+    assert(n < (int) h->size);
 
     for(p=h->buckets[n]; p!=NULL; p=p->next) {
         if(h->ops.hasheq(key, p->key)) {

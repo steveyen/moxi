@@ -643,7 +643,7 @@ const char *state_text(enum conn_states state) {
  */
 void conn_set_state(conn *c, enum conn_states state) {
     assert(c != NULL);
-    assert(state >= conn_listening && state < conn_max_state);
+    assert(state < conn_max_state);
 
     if (state != c->state) {
         if (c->funcs != NULL &&
@@ -1050,7 +1050,7 @@ static void complete_incr_bin(conn *c) {
     protocol_binary_request_incr* req = binary_get_request(c);
 
     assert(c != NULL);
-    assert(c->wsize >= sizeof(*rsp));
+    assert(c->wsize >= (int) sizeof(*rsp));
 
     /* fix byteorder in the request */
     req->message.body.delta = mc_swap64(req->message.body.delta);

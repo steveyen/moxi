@@ -414,8 +414,9 @@ void cproxy_on_close_upstream_conn(conn *c) {
     assert(ptd != NULL);
     c->extra = NULL;
 
-    ptd->stats.stats.num_upstream--;
-    assert(ptd->stats.stats.num_upstream >= 0);
+    if (ptd->stats.stats.num_upstream > 0) {
+        ptd->stats.stats.num_upstream--;
+    }
 
     // Delink from any reserved downstream.
     //
@@ -524,8 +525,9 @@ void cproxy_on_close_downstream_conn(conn *c) {
     proxy_td *ptd = d->ptd;
     assert(ptd);
 
-    ptd->stats.stats.num_downstream_conn--;
-    assert(ptd->stats.stats.num_downstream_conn >= 0);
+    if (ptd->stats.stats.num_downstream_conn > 0) {
+        ptd->stats.stats.num_downstream_conn--;
+    }
 
     conn *uc_retry = NULL;
 

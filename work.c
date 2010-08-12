@@ -212,7 +212,6 @@ void work_recv(int fd, short which, void *arg) {
 
         m->tot_recvs += num_items;
         m->num_items -= num_items;
-        assert(m->num_items >= 0);
 
         pthread_mutex_unlock(&m->work_lock);
     }

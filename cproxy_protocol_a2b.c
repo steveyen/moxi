@@ -240,7 +240,7 @@ int a2b_fill_request(short    cmd,
             header->request.magic = PROTOCOL_BINARY_REQ;
 
             if (noreply) {
-                assert(spec->cmd != -1);
+                assert(spec->cmd != (protocol_binary_command) -1);
 
                 header->request.opcode = spec->cmdq;
                 header->request.opaque = htonl(OPAQUE_IGNORE_REPLY);
@@ -409,7 +409,7 @@ void cproxy_process_a2b_downstream(conn *c) {
     int      keylen  = header->response.keylen;
     uint32_t bodylen = header->response.bodylen;
 
-    assert(bodylen >= keylen + extlen);
+    assert(bodylen >= (uint32_t) keylen + extlen);
 
     // Our approach is to read everything we can before
     // getting into big switch/case statements for the
@@ -1089,7 +1089,7 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
     assert(command != NULL);
     assert(uc != NULL);
     assert(uc->item == NULL);
-    assert(uc->cmd_curr != -1);
+    assert(uc->cmd_curr != (protocol_binary_command) -1);
     assert(d->merger == NULL);
 
     // Handles multi-key get and gets.
@@ -1414,7 +1414,7 @@ bool cproxy_broadcast_a2b_downstream(downstream *d,
     assert(d->downstream_used_start == 0);
     assert(d->downstream_used == 0);
     assert(req != NULL);
-    assert(req_size >= sizeof(req));
+    assert(req_size >= (int) sizeof(req));
     assert(req->request.bodylen == 0);
     assert(uc != NULL);
     assert(uc->next == NULL);
