@@ -1514,7 +1514,7 @@ void bin_read_key(conn *c, enum bin_substates next_substate, int extra) {
 void process_bin_noreply(conn *c) {
     assert(c);
     c->noreply = true;
-    switch (c->cmd) {
+    switch (c->binary_header.request.opcode) {
     case PROTOCOL_BINARY_CMD_SETQ:
         c->cmd = PROTOCOL_BINARY_CMD_SET;
         break;
