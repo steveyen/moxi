@@ -19,7 +19,7 @@
 static char *readfile(char *path);
 
 volatile uint32_t  msec_current_time = 0;
-int                msec_cycle = 200;
+int                msec_cycle = 0;
 struct event       msec_clockevent;
 struct event_base *msec_clockevent_base = NULL;
 
@@ -787,6 +787,11 @@ void msec_clock_handler(const int fd, const short which, void *arg) {
     (void)fd;
     (void)which;
     (void)arg;
+
+    if (msec_cycle <= 0) {
+        return;
+    }
+
     // Subsecond resolution timer.
     //
     struct timeval t = { .tv_sec = 0,
