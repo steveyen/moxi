@@ -87,8 +87,9 @@ struct iovec {
 
 #ifdef HAVE_SYSLOG_H
 #include <syslog.h>
-#define DEFAULT_ERRORLOG ERRORLOG_SYSLOG
-#else
+#endif
+
+#ifndef DEFAULT_ERRORLOG
 #define DEFAULT_ERRORLOG ERRORLOG_STDERR
 #endif
 
