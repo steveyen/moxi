@@ -3994,76 +3994,77 @@ static void usage(char **argv) {
     printf(PACKAGE " " VERSION "\n");
     printf("\n");
 #ifdef MOXI_USE_VBUCKET
-    printf("  %s [flags] http://host:port/some/vBucketMapJson\n", argv[0]);
+    printf("Usage:\n");
+    printf("  %s [FLAGS] URL1[,URL2[,URLn]]\n", argv[0]);
     printf("    or\n");
-    printf("  %s [flags] -z ./path/to/configFile\n", argv[0]);
+    printf("  %s [FLAGS] -z ./path/to/configFile\n", argv[0]);
+    printf("\nThe URL's provide REST/JSON vbucket-server-map(s)\nfor dynamic cluster configuration.\n");
+    printf("\nExample URL:\n");
+    printf("  %s http://127.0.0.1:8080/pools/default/bucketsStreaming/default\n", argv[0]);
 #else
-    printf("  %s [flags] -z <port=<mc_host:mc_port(,*)>\n\n", argv[0]);
+    printf("  %s [FLAGS] -z <port=<mc_host:mc_port(,*)>\n\n", argv[0]);
     printf("              moxi listens on the given port and forwards to\n"
            "              downstream memcached servers running at\n"
            "              mc_host:mc_port.  More than one mc_host:mc_port\n"
            "              can be listed, separated by commas.\n"
            "              For example, -z 11211=server1:11211,server2:11211\n");
 #endif
-    printf("\nThe optional [flags] are...\n\n");
-    printf("-Z <key=val*> Optional comma-separated key=value proxy behaviors, including:\n");
+    printf("\nThe optional FLAGS are...\n\n");
+    printf("-Z <key=val*> optional comma-separated key=value proxy behaviors, including:\n");
     printf("              port_listen=11211,downstream_max=1,downstream_protocol=binary\n");
-    printf("-p <num>      TCP port number (default: 0 (off)) where moxi can\n"
-           "              listen and run as a memcached server.  To specify\n"
-           "              a TCP port number that moxi will listen as a proxy,\n"
-           "              instead, use: -Z port_listen=PORT_NUM\n"
-           "-U <num>      UDP port number (default: 0 (off)) where moxi can\n"
-           "              listen can run as a memcached server\n");
-#ifdef HAVE_SYS_UN_H
-    printf("-s <file>     UNIX socket path to listen on (disables network support)\n");
-#endif
-    printf("-a <mask>     access mask for UNIX socket, in octal (default: 0700)\n"
-           "-l <ip_addr>  interface to listen on (default: INADDR_ANY, all addresses)\n"
+    printf("-l <ip_addr>  interface to listen on (default: INADDR_ANY, all addresses)\n"
            "-d            run as a daemon\n"
            "-r            maximize core file limit\n");
 #ifdef HAVE_GETPWNAM
     printf("-u <username> assume identity of <username> (only when run as root)\n");
 #endif
-    printf("-m <num>      max memory to use for items in megabytes (default: 64 MB)\n"
-           "-M            return error on memory exhausted (rather than removing items)\n"
-           "-c <num>      max simultaneous connections (default: 1024)\n"
-           "-k            lock down all paged memory.  Note that there is a\n"
-           "              limit on how much memory you may lock.  Trying to\n"
-           "              allocate more than that would fail, so be sure you\n"
-           "              set the limit correctly for the user you started\n"
-           "              the daemon with (not for -u <username> user;\n"
-           "              under sh this is done with 'ulimit -S -l NUM_KB').\n"
+    printf("-c <num>      max simultaneous connections (default: 1024)\n"
            "-v            verbose (print errors/warnings while in event loop)\n"
            "-vv           very verbose (also print client commands/reponses)\n"
            "-vvv          extremely verbose (also print internal state transitions)\n"
            "-h            print this help and exit\n"
            "-i            print memcached and libevent license\n"
-           "-P <file>     save PID in <file>, only used with -d option\n"
-           "-f <factor>   chunk size growth factor (default: 1.25)\n"
-           "-n <bytes>    minimum space allocated for key+value+flags (default: 48)\n"
-
+           "-a <mask>     access mask for UNIX socket, in octal (default: 0700)\n"
+           "-P <file>     save PID in <file>, only used with -d option\n");
+    printf("-t <num>      number of threads to use (default: 4)\n");
+    printf("-R            maximum number of requests per event, limits the number of\n"
+           "              requests process for a given connection to prevent \n"
+           "              starvation (default: 20)\n");
+    printf("-b            set the backlog queue limit (default: 1024)\n");
+    printf("-B            binding protocol - one of ascii, binary, or auto (default)\n");
+    printf("-Y <y|n>      exit when stdin closes (default: n)\n");
+#ifdef HAVE_SYS_UN_H
+    printf("-s <file>     UNIX socket path to listen on (disables network support)\n");
+#endif
+    printf("-p <num>      (deprecated) TCP port number (default: 0 (off)) where moxi can\n"
+           "              listen and run as a memcached server.  To specify\n"
+           "              a TCP port number that moxi will listen as a proxy,\n"
+           "              instead, use: -Z port_listen=PORT_NUM\n"
+           "-U <num>      (deprecated) UDP port number (default: 0 (off)) where moxi can\n"
+           "              listen can run as a memcached server\n"
+           "-k            (deprecated) lock down all paged memory.  Note that there is a\n"
+           "              limit on how much memory you may lock.  Trying to\n"
+           "              allocate more than that would fail, so be sure you\n"
+           "              set the limit correctly for the user you started\n"
+           "              the daemon with (not for -u <username> user;\n"
+           "              under sh this is done with 'ulimit -S -l NUM_KB').\n"
+           "-m <num>      (deprecated) max memory for items in megabytes (default: 64 MB)\n"
+           "-M            (deprecated) return error on memory exhausted\n"
+           "-f <factor>   (deprecated) chunk size growth factor (default: 1.25)\n"
+           "-n <bytes>    (deprecated) minimum allocated for key+value+flags (default: 48)\n"
 #if defined(HAVE_GETPAGESIZES) && defined(HAVE_MEMCNTL)
-           "-L            Try to use large memory pages (if available). Increasing\n"
+           "-L            (deprecated) try to use large memory pages (if available). Increasing\n"
            "              the memory page size could reduce the number of TLB misses\n"
            "              and improve the performance. In order to get large pages\n"
            "              from the OS, memcached will allocate the total item-cache\n"
            "              in one large chunk.\n"
 #endif
-           );
-
-    printf("-D <char>     Use <char> as the delimiter between key prefixes and IDs.\n"
+           "-D <char>     (deprecated) use <char> as delimiter for key prefixes and IDs.\n"
            "              This is used for per-prefix stats reporting. The default is\n"
            "              \":\" (colon). If this option is specified, stats collection\n"
            "              is turned on automatically; if not, then it may be turned on\n"
-           "              by sending the \"stats detail on\" command to the server.\n");
-    printf("-t <num>      number of threads to use (default: 4)\n");
-    printf("-R            Maximum number of requests per event, limits the number of\n"
-           "              requests process for a given connection to prevent \n"
-           "              starvation (default: 20)\n");
-    printf("-C            Disable use of CAS\n");
-    printf("-b            Set the backlog queue limit (default: 1024)\n");
-    printf("-B            Binding protocol - one of ascii, binary, or auto (default)\n");
-    printf("-Y <y|n>      Exit when stdin closes (default: n)\n");
+           "              by sending the \"stats detail on\" command to the server.\n"
+           "-C            (deprecated) disable use of CAS\n");
     return;
 }
 
