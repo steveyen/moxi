@@ -801,6 +801,8 @@ bool cproxy_release_downstream(downstream *d, bool force) {
     // Delink upstream conns.
     //
     while (d->upstream_conn != NULL) {
+        conn *to_drive = d->upstream_conn;
+
         if (d->merger != NULL) {
             // TODO: Allow merger callback to be func pointer.
             //
@@ -841,18 +843,22 @@ bool cproxy_release_downstream(downstream *d, bool force) {
 
             if (add_iov(d->upstream_conn,
                         d->upstream_suffix,
-                        suffix_len) == 0 &&
-                update_event(d->upstream_conn, EV_WRITE | EV_PERSIST)) {
+                        suffix_len) == 0) {
                 conn_set_state(d->upstream_conn, conn_mwrite);
             } else {
                 d->ptd->stats.stats.err_oom++;
                 cproxy_close_conn(d->upstream_conn);
+                to_drive = NULL;
             }
         }
 
         conn *curr = d->upstream_conn;
         d->upstream_conn = d->upstream_conn->next;
         curr->next = NULL;
+
+        if (to_drive != NULL) {
+            drive_machine(to_drive);
+        }
     }
 
     // Free extra hash tables.

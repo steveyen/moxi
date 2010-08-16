@@ -711,8 +711,6 @@ void a2b_process_downstream_response(conn *c) {
 
             conn_set_state(c, conn_pause);
 
-            cproxy_update_event_write(d, uc);
-
             return;
         }
 
@@ -734,6 +732,7 @@ void a2b_process_downstream_response(conn *c) {
             //       or keep looking for more responses?
             //
             assert(false);
+
             return;
         }
 
@@ -808,8 +807,6 @@ void a2b_process_downstream_response(conn *c) {
             }
 
             cproxy_del_front_cache_key_ascii(d, uc->cmd_start);
-
-            cproxy_update_event_write(d, uc);
         }
         break;
 
@@ -835,8 +832,6 @@ void a2b_process_downstream_response(conn *c) {
             }
 
             cproxy_del_front_cache_key_ascii(d, uc->cmd_start);
-
-            cproxy_update_event_write(d, uc);
         }
         break;
 
@@ -863,6 +858,7 @@ void a2b_process_downstream_response(conn *c) {
                 } else {
                     d->ptd->stats.stats.err_oom++;
                     cproxy_close_conn(uc);
+                    return;
                 }
                 break;
             }
@@ -882,8 +878,6 @@ void a2b_process_downstream_response(conn *c) {
             }
 
             cproxy_del_front_cache_key_ascii(d, uc->cmd_start);
-
-            cproxy_update_event_write(d, uc);
         }
         break;
 
@@ -1166,36 +1160,24 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
                 conn_set_state(c, conn_mwrite);
                 c->write_and_go = conn_new_cmd;
 
-                if (update_event(c, EV_WRITE | EV_PERSIST)) {
-                    d->downstream_used_start = 1;
-                    d->downstream_used       = 1;
+                d->downstream_used_start = 1;
+                d->downstream_used       = 1;
 
-                    if (cproxy_dettach_if_noreply(d, uc) == false) {
-                        cproxy_start_downstream_timeout(d, c);
-                    } else {
-                        c->write_and_go = conn_pause;
-
-                        if (key != NULL &&
-                            key_len > 0) {
-                            mcache_delete(&d->ptd->proxy->front_cache,
-                                          key, key_len);
-                        }
-                    }
-
-                    return true;
+                if (cproxy_dettach_if_noreply(d, uc) == false) {
+                    cproxy_start_downstream_timeout(d, c);
                 } else {
-                    // TODO: Error handling.
-                    //
-                    if (settings.verbose > 1) {
-                        moxi_log_write("ERROR: Couldn't a2b update write event\n");
-                    }
+                    c->write_and_go = conn_pause;
 
-                    if (d->upstream_suffix == NULL) {
-                        d->upstream_suffix = "SERVER_ERROR a2b event oom\r\n";
-                        d->upstream_suffix_len = 0;
-                        d->upstream_retry = 0;
+                    if (key != NULL &&
+                        key_len > 0) {
+                        mcache_delete(&d->ptd->proxy->front_cache,
+                                      key, key_len);
                     }
                 }
+
+                drive_machine(c);
+
+                return true;
             } else {
                 // TODO: Error handling.
                 //

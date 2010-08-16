@@ -504,8 +504,6 @@ void cproxy_process_b2b_downstream_nread(conn *c) {
                 // conn through the conn_pause countdown codepath.
                 //
                 if (c->noreply == false) {
-                    cproxy_update_event_write(d, uc);
-
                     conn_set_state(uc, conn_mwrite);
                 }
 
