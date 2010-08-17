@@ -479,6 +479,8 @@ int downstream_conn_index(downstream *d, conn *c);
 
 void cproxy_dump_header(int prefix, char *bb);
 
+int cproxy_max_retries(downstream *d);
+
 // ---------------------------------------------------------------
 
 void cproxy_process_upstream_ascii(conn *c, char *line);

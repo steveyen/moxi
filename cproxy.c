@@ -752,7 +752,7 @@ bool cproxy_release_downstream(downstream *d, bool force) {
         //
         // TODO: Add a stat for retrying.
         //
-        int max_retries = mcs_server_count(&d->mst) * 2;
+        int max_retries = cproxy_max_retries(d);
 
         if (d->upstream_retries <= max_retries) {
             if (settings.verbose > 2) {
@@ -2381,3 +2381,8 @@ void cproxy_upstream_state_change(conn *c, enum conn_states next_state) {
         }
     }
 }
+
+int cproxy_max_retries(downstream *d) {
+    return mcs_server_count(&d->mst) * 2;
+}
+

@@ -1607,7 +1607,7 @@ bool a2b_not_my_vbucket(conn *uc, conn *c,
         // As long as the upstream is still open and we haven't
         // retried too many times already.
         //
-        int max_retries = (mcs_server_count(&d->mst) * 2);
+        int max_retries = cproxy_max_retries(d);
 
         if (uc->cmd_retries < max_retries) {
             uc->cmd_retries++;
