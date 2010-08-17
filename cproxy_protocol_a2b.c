@@ -165,6 +165,9 @@ int a2b_multiget_end(conn *c);
 
 void a2b_set_opaque(conn *c, protocol_binary_request_header *header, bool noreply);
 
+bool a2b_not_my_vbucket(conn *uc, conn *c,
+                        protocol_binary_response_header *header);
+
 void cproxy_init_a2b() {
     memset(&req_noop, 0, sizeof(req_noop));
 
@@ -671,132 +674,9 @@ void a2b_process_downstream_response(conn *c) {
     // Handle not-my-vbucket error response.
     //
     if (status == PROTOCOL_BINARY_RESPONSE_NOT_MY_VBUCKET) {
-        if (settings.verbose > 2) {
-            moxi_log_write("<%d cproxy_process_a2b_downstream_response not-my-vbucket, "
-                    "cmd: %x %d\n",
-                    c->sfd, header->response.opcode, uc != NULL);
-        }
-
         assert(it == NULL);
 
-        if (c->cmd != PROTOCOL_BINARY_CMD_GETK ||
-            c->noreply == false) {
-            // For non-multi-key GET commands, enqueue a retry after
-            // informing the vbucket map.  This includes single-key GET's.
-            //
-            if (uc == NULL) {
-                // If the client went away, though, don't retry.
-                //
-                conn_set_state(c, conn_pause);
-                return;
-            }
-
-            int vbucket = ntohl(header->response.opaque);
-            int sindex = downstream_conn_index(d, c);
-
-            if (settings.verbose > 2) {
-                moxi_log_write("<%d cproxy_process_a2b_downstream_response not-my-vbucket, "
-                        "cmd: %x not multi-key get, sindex %d, vbucket %d, retries %d\n",
-                        c->sfd, header->response.opcode, sindex, vbucket, uc->cmd_retries);
-            }
-
-            mcs_server_invalid_vbucket(&d->mst, sindex, vbucket);
-
-            // As long as the upstream is still open and we haven't
-            // retried too many times already.
-            //
-            int max_retries = (mcs_server_count(&d->mst) * 2);
-
-            if (uc->cmd_retries < max_retries) {
-                uc->cmd_retries++;
-
-                d->upstream_retry++;
-                d->ptd->stats.stats.tot_retry_vbucket++;
-
-                conn_set_state(c, conn_pause);
-                return;
-            }
-
-            if (settings.verbose > 2) {
-                moxi_log_write("%d: cproxy_process_a2b_downstream_response not-my-vbucket, "
-                        "cmd: %x skipping retry %d >= %d\n",
-                        c->sfd, header->response.opcode, uc->cmd_retries,
-                        max_retries);
-            }
-        } else {
-            // Handle ascii multi-GET commands by awaiting all NOOP's from
-            // downstream servers, eating the NOOP's, and retrying with
-            // the same multiget de-duplication map, which might be partially
-            // filled in already.
-            //
-            if (uc == NULL) {
-                // If the client went away, though, don't retry,
-                // but keep looking for that NOOP.
-                //
-                conn_set_state(c, conn_new_cmd);
-                return;
-            }
-
-            assert(uc->cmd_start != NULL);
-            assert(header->response.opaque != 0);
-
-            int   key_index = ntohl(header->response.opaque);
-            char *key       = uc->cmd_start + key_index;
-            int   key_len   = skey_len(key);
-
-            // The key is not NULL or space terminated.
-            //
-            char key_buf[KEY_MAX_LENGTH + 10];
-            assert(key_len <= KEY_MAX_LENGTH);
-            memcpy(key_buf, key, key_len);
-            key_buf[key_len] = '\0';
-
-            int vbucket = -1;
-            int sindex = downstream_conn_index(d, c);
-
-            mcs_key_hash(&d->mst, key_buf, key_len, &vbucket);
-
-            if (settings.verbose > 2) {
-                moxi_log_write("<%d cproxy_process_a2b_downstream_response not-my-vbucket, "
-                        "cmd: %x get/getk '%s' %d retry %d, sindex %d, vbucket %d\n",
-                        c->sfd, header->response.opcode, key_buf, key_len,
-                        d->upstream_retry + 1, sindex, vbucket);
-            }
-
-            mcs_server_invalid_vbucket(&d->mst, sindex, vbucket);
-
-            // Update the de-duplication map, removing the key, so that
-            // we'll reattempt another request for the key during the
-            // retry.
-            //
-            if (d->multiget != NULL) {
-                multiget_entry *entry = genhash_find(d->multiget, key_buf);
-
-                if (settings.verbose > 2) {
-                    moxi_log_write("<%d cproxy_process_a2b_downstream_response not-my-vbucket, "
-                            "cmd: %x get/getk '%s' %d retry: %d, entry: %d, vbucket %d "
-                            "deleting multiget entry\n",
-                            c->sfd, header->response.opcode, key_buf, key_len,
-                            d->upstream_retry + 1, entry != NULL, vbucket);
-                }
-
-                genhash_delete(d->multiget, key_buf);
-
-                while (entry != NULL) {
-                    multiget_entry *curr = entry;
-                    entry = entry->next;
-                    free(curr);
-                }
-            }
-
-            // Signal that we need to retry, where this counter is
-            // later checked after all NOOP's from downstreams are
-            // received.
-            //
-            d->upstream_retry++;
-            d->ptd->stats.stats.tot_retry_vbucket++;
-
-            conn_set_state(c, conn_new_cmd);
+        if (a2b_not_my_vbucket(uc, c, header)) {
             return;
         }
     }
@@ -1686,5 +1566,141 @@ void a2b_set_opaque(conn *c, protocol_binary_request_header *header, bool norepl
             moxi_log_write("%d: a2b_set_opaque OPAQUE_IGNORE_REPLY, cmdq: %x\n",
                     c->sfd, header->request.opcode);
         }
+    }
+}
+
+bool a2b_not_my_vbucket(conn *uc, conn *c,
+                        protocol_binary_response_header *header) {
+    downstream *d = c->extra;
+    assert(d != NULL);
+    assert(d->ptd != NULL);
+
+    if (settings.verbose > 2) {
+        moxi_log_write("<%d a2b_not_my_vbucket, "
+                       "cmd: %x %d\n",
+                       c->sfd, header->response.opcode, uc != NULL);
+    }
+
+    if (c->cmd != PROTOCOL_BINARY_CMD_GETK ||
+        c->noreply == false) {
+        // For non-multi-key GET commands, enqueue a retry after
+        // informing the vbucket map.  This includes single-key GET's.
+        //
+        if (uc == NULL) {
+            // If the client went away, though, don't retry.
+            //
+            conn_set_state(c, conn_pause);
+            return true;
+        }
+
+        int vbucket = ntohl(header->response.opaque);
+        int sindex = downstream_conn_index(d, c);
+
+        if (settings.verbose > 2) {
+            moxi_log_write("<%d a2b_not_my_vbucket, "
+                           "cmd: %x not multi-key get, sindex %d, vbucket %d, retries %d\n",
+                           c->sfd, header->response.opcode, sindex, vbucket, uc->cmd_retries);
+        }
+
+        mcs_server_invalid_vbucket(&d->mst, sindex, vbucket);
+
+        // As long as the upstream is still open and we haven't
+        // retried too many times already.
+        //
+        int max_retries = (mcs_server_count(&d->mst) * 2);
+
+        if (uc->cmd_retries < max_retries) {
+            uc->cmd_retries++;
+
+            d->upstream_retry++;
+            d->ptd->stats.stats.tot_retry_vbucket++;
+
+            conn_set_state(c, conn_pause);
+            return true;
+        }
+
+        if (settings.verbose > 2) {
+            moxi_log_write("%d: a2b_not_my_vbucket, "
+                           "cmd: %x skipping retry %d >= %d\n",
+                           c->sfd, header->response.opcode, uc->cmd_retries,
+                           max_retries);
+        }
+
+        return false;
+    } else {
+        // Handle ascii multi-GET commands by awaiting all NOOP's from
+        // downstream servers, eating the NOOP's, and retrying with
+        // the same multiget de-duplication map, which might be partially
+        // filled in already.
+        //
+        if (uc == NULL) {
+            // If the client went away, though, don't retry,
+            // but keep looking for that NOOP.
+            //
+            conn_set_state(c, conn_new_cmd);
+            return true;
+        }
+
+        assert(uc->cmd_start != NULL);
+        assert(header->response.opaque != 0);
+
+        int   key_index = ntohl(header->response.opaque);
+        char *key       = uc->cmd_start + key_index;
+        int   key_len   = skey_len(key);
+
+        // The key is not NULL or space terminated.
+        //
+        char key_buf[KEY_MAX_LENGTH + 10];
+        assert(key_len <= KEY_MAX_LENGTH);
+        memcpy(key_buf, key, key_len);
+        key_buf[key_len] = '\0';
+
+        int vbucket = -1;
+        int sindex = downstream_conn_index(d, c);
+
+        mcs_key_hash(&d->mst, key_buf, key_len, &vbucket);
+
+        if (settings.verbose > 2) {
+            moxi_log_write("<%d a2b_not_my_vbucket, "
+                           "cmd: %x get/getk '%s' %d retry %d, sindex %d, vbucket %d\n",
+                           c->sfd, header->response.opcode, key_buf, key_len,
+                           d->upstream_retry + 1, sindex, vbucket);
+        }
+
+        mcs_server_invalid_vbucket(&d->mst, sindex, vbucket);
+
+        // Update the de-duplication map, removing the key, so that
+        // we'll reattempt another request for the key during the
+        // retry.
+        //
+        if (d->multiget != NULL) {
+            multiget_entry *entry = genhash_find(d->multiget, key_buf);
+
+            if (settings.verbose > 2) {
+                moxi_log_write("<%d a2b_not_my_vbucket, "
+                               "cmd: %x get/getk '%s' %d retry: %d, entry: %d, vbucket %d "
+                               "deleting multiget entry\n",
+                               c->sfd, header->response.opcode, key_buf, key_len,
+                               d->upstream_retry + 1, entry != NULL, vbucket);
+            }
+
+            genhash_delete(d->multiget, key_buf);
+
+            while (entry != NULL) {
+                multiget_entry *curr = entry;
+                entry = entry->next;
+                free(curr);
+            }
+        }
+
+        // Signal that we need to retry, where this counter is
+        // later checked after all NOOP's from downstreams are
+        // received.
+        //
+        d->upstream_retry++;
+        d->ptd->stats.stats.tot_retry_vbucket++;
+
+        conn_set_state(c, conn_new_cmd);
+        return true;
     }
 }
