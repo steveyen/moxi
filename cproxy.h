@@ -264,6 +264,7 @@ struct proxy_stats {
     uint64_t tot_reset_upstream_avail;
     uint64_t tot_retry;
     uint64_t tot_retry_time;
+    uint64_t max_retry_time;
     uint64_t tot_retry_vbucket;
     uint64_t tot_upstream_paused;
     uint64_t tot_upstream_unpaused;

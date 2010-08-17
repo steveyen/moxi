@@ -416,6 +416,7 @@ void cproxy_reset_stats(proxy_stats *ps) {
     ps->tot_reset_upstream_avail = 0;
     ps->tot_retry = 0;
     ps->tot_retry_time = 0;
+    ps->max_retry_time = 0;
     ps->tot_retry_vbucket = 0;
     ps->tot_upstream_paused = 0;
     ps->tot_upstream_unpaused = 0;

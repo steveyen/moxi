@@ -594,6 +594,8 @@ static void proxy_stats_dump_pstd_stats(ADD_STAT add_stats,
               "%llu", (long long unsigned int) pstats->tot_retry);
     APPEND_PREFIX_STAT("tot_retry_time",
               "%llu", (long long unsigned int) pstats->tot_retry_time);
+    APPEND_PREFIX_STAT("max_retry_time",
+              "%llu", (long long unsigned int) pstats->max_retry_time);
     APPEND_PREFIX_STAT("tot_retry_vbucket",
               "%llu", (long long unsigned int) pstats->tot_retry_vbucket);
     APPEND_PREFIX_STAT("tot_upstream_paused",
@@ -1185,6 +1187,11 @@ static void add_proxy_stats(proxy_stats *agg, proxy_stats *x) {
     agg->tot_optimize_self        += x->tot_optimize_self;
     agg->tot_retry                += x->tot_retry;
     agg->tot_retry_time           += x->tot_retry_time;
+
+    if (agg->max_retry_time < x->max_retry_time) {
+        agg->max_retry_time = x->max_retry_time;
+    }
+
     agg->tot_retry_vbucket        += x->tot_retry_vbucket;
     agg->tot_upstream_paused      += x->tot_upstream_paused;
     agg->tot_upstream_unpaused    += x->tot_upstream_unpaused;
@@ -1431,6 +1438,8 @@ void map_pstd_foreach_emit(const void *k,
               pstd->stats.tot_retry);
     more_stat("tot_retry_time",
               pstd->stats.tot_retry_time);
+    more_stat("max_retry_time",
+              pstd->stats.max_retry_time);
     more_stat("tot_retry_vbucket",
               pstd->stats.tot_retry_vbucket);
     more_stat("tot_upstream_paused",

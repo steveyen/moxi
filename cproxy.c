@@ -789,6 +789,10 @@ bool cproxy_release_downstream(downstream *d, bool force) {
 
         if (d->upstream_retries > 0) {
             d->ptd->stats.stats.tot_retry_time += ux;
+
+            if (d->ptd->stats.stats.max_retry_time < ux) {
+                d->ptd->stats.stats.max_retry_time = ux;
+            }
         }
     }
 
