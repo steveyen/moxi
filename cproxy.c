@@ -696,6 +696,7 @@ downstream *cproxy_reserve_downstream(proxy_td *ptd) {
         d->upstream_suffix_len = 0;
         d->upstream_retry = 0;
         d->upstream_retries = 0;
+        d->usec_start = 0;
         d->downstream_used = 0;
         d->downstream_used_start = 0;
         d->merger = NULL;
@@ -777,6 +778,16 @@ bool cproxy_release_downstream(downstream *d, bool force) {
         }
     }
 
+    if (d->usec_start > 0) {
+        uint64_t ux = usec_now() - d->usec_start;
+
+        d->ptd->stats.stats.tot_downstream_reserved_time += ux;
+
+        if (d->upstream_retries > 0) {
+            d->ptd->stats.stats.tot_retry_time += ux;
+        }
+    }
+
     d->ptd->stats.stats.tot_downstream_released++;
 
     // Delink upstream conns.
@@ -855,6 +866,7 @@ bool cproxy_release_downstream(downstream *d, bool force) {
     d->upstream_suffix_len = 0;
     d->upstream_retry = 0;
     d->upstream_retries = 0;
+    d->usec_start = 0;
     d->downstream_used = 0;
     d->downstream_used_start = 0;
     d->multiget = NULL;

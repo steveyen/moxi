@@ -773,6 +773,12 @@ void cproxy_dump_behavior_stderr(const void *dump_opaque,
 
 // ---------------------------------------
 
+uint64_t usec_now(void) {
+    struct timeval timer;
+    gettimeofday(&timer, NULL);
+    return ((timer.tv_sec - process_started) * 1000000) + timer.tv_usec;
+}
+
 /* Time-sensitive callers can call it by hand with this,
  * outside the normal subsecond timer
  */

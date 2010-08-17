@@ -25,6 +25,8 @@ int cproxy_init(char *cfg_str,
 //
 extern volatile uint32_t msec_current_time;
 
+uint64_t usec_now(void);
+
 extern char cproxy_hostname[300]; // Immutable after init.
 
 // -------------------------------
@@ -239,6 +241,7 @@ struct proxy_stats {
     uint64_t tot_downstream_conn;
     uint64_t tot_downstream_released;
     uint64_t tot_downstream_reserved;
+    uint64_t tot_downstream_reserved_time;
     uint64_t tot_downstream_freed;
     uint64_t tot_downstream_quit_server;
     uint64_t tot_downstream_max_reached;
@@ -258,6 +261,7 @@ struct proxy_stats {
     uint64_t tot_assign_recursion;
     uint64_t tot_reset_upstream_avail;
     uint64_t tot_retry;
+    uint64_t tot_retry_time;
     uint64_t tot_retry_vbucket;
     uint64_t tot_upstream_paused;
     uint64_t tot_upstream_unpaused;
@@ -386,6 +390,9 @@ struct downstream {
     int    downstream_used;   // Number of in-use downstream conns, might
                               // be >1 during scatter-gather commands.
     int    downstream_used_start;
+
+    uint64_t usec_start; // Snapshot of usec_now().
+
     conn  *upstream_conn;     // Non-NULL when downstream is reserved.
     char  *upstream_suffix;   // Last bit to write when downstreams are done.
     int    upstream_suffix_len; // When >0, overrides strlen(upstream_suffix) for binary.

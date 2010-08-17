@@ -945,6 +945,11 @@ bool cproxy_forward_a2b_downstream(downstream *d) {
     if (cproxy_connect_downstream(d, uc->thread) > 0) {
         assert(d->downstream_conns != NULL);
 
+        if (d->usec_start == 0 &&
+            d->ptd->behavior_pool.base.cycle > 0) {
+            d->usec_start = usec_now();
+        }
+
         if (uc->cmd == -1) {
             return cproxy_forward_a2b_simple_downstream(d, uc->cmd_start, uc);
         } else {
