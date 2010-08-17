@@ -542,6 +542,8 @@ static void proxy_stats_dump_pstd_stats(ADD_STAT add_stats,
               "%llu", (long long unsigned int) pstats->tot_downstream_reserved);
     APPEND_PREFIX_STAT("tot_downstream_reserved_time",
               "%llu", (long long unsigned int) pstats->tot_downstream_reserved_time);
+    APPEND_PREFIX_STAT("max_downstream_reserved_time",
+              "%llu", (long long unsigned int) pstats->max_downstream_reserved_time);
     APPEND_PREFIX_STAT("tot_downstream_freed",
               "%llu", (long long unsigned int) pstats->tot_downstream_freed);
     APPEND_PREFIX_STAT("tot_downstream_quit_server",
@@ -1151,6 +1153,11 @@ static void add_proxy_stats(proxy_stats *agg, proxy_stats *x) {
     agg->tot_downstream_released += x->tot_downstream_released;
     agg->tot_downstream_reserved += x->tot_downstream_reserved;
     agg->tot_downstream_reserved_time  += x->tot_downstream_reserved_time;
+
+    if (agg->max_downstream_reserved_time < x->max_downstream_reserved_time) {
+        agg->max_downstream_reserved_time = x->max_downstream_reserved_time;
+    }
+
     agg->tot_downstream_freed          += x->tot_downstream_freed;
     agg->tot_downstream_quit_server    += x->tot_downstream_quit_server;
     agg->tot_downstream_max_reached    += x->tot_downstream_max_reached;
@@ -1372,6 +1379,8 @@ void map_pstd_foreach_emit(const void *k,
               pstd->stats.tot_downstream_reserved);
     more_stat("tot_downstream_reserved_time",
               pstd->stats.tot_downstream_reserved_time);
+    more_stat("max_downstream_reserved_time",
+              pstd->stats.max_downstream_reserved_time);
     more_stat("tot_downstream_freed",
               pstd->stats.tot_downstream_freed);
     more_stat("tot_downstream_quit_server",

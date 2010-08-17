@@ -243,6 +243,7 @@ struct proxy_stats {
     uint64_t tot_downstream_released;
     uint64_t tot_downstream_reserved;
     uint64_t tot_downstream_reserved_time;
+    uint64_t max_downstream_reserved_time;
     uint64_t tot_downstream_freed;
     uint64_t tot_downstream_quit_server;
     uint64_t tot_downstream_max_reached;

@@ -395,6 +395,7 @@ void cproxy_reset_stats(proxy_stats *ps) {
     ps->tot_downstream_released = 0;
     ps->tot_downstream_reserved = 0;
     ps->tot_downstream_reserved_time = 0;
+    ps->max_downstream_reserved_time = 0;
     ps->tot_downstream_freed = 0;
     ps->tot_downstream_quit_server = 0;
     ps->tot_downstream_max_reached = 0;
