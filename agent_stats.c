@@ -458,7 +458,8 @@ static void proxy_stats_dump_behavior(ADD_STAT add_stats,
         APPEND_PREFIX_STAT("wait_queue_timeout", "%ld", // In millisecs.
               (b->wait_queue_timeout.tv_sec * 1000 +
                b->wait_queue_timeout.tv_usec / 1000));
-
+    if (level >= 1)
+        APPEND_PREFIX_STAT("time_stats", "%d", b->time_stats);
     if (level >= 1)
         APPEND_PREFIX_STAT("front_cache_max", "%u", b->front_cache_max);
     if (level >= 1)

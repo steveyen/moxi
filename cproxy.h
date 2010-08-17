@@ -100,6 +100,7 @@ struct proxy_behavior {
     enum protocol  downstream_protocol; // SL: Favored downstream protocol.
     struct timeval downstream_timeout;  // SL: Fields of 0 mean no timeout.
     struct timeval wait_queue_timeout;  // PL: Fields of 0 mean no timeout.
+    bool           time_stats;          // IL: Capture timing stats.
 
     uint32_t front_cache_max;         // PL: Max # of front cachable items.
     uint32_t front_cache_lifespan;    // PL: In millisecs.

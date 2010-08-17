@@ -59,7 +59,7 @@ bool cproxy_forward_b2b_downstream(downstream *d) {
         assert(d->downstream_conns != NULL);
 
         if (d->usec_start == 0 &&
-            d->ptd->behavior_pool.base.cycle > 0) {
+            d->ptd->behavior_pool.base.time_stats) {
             d->usec_start = usec_now();
         }
 

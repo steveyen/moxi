@@ -50,6 +50,7 @@ proxy_behavior behavior_default_g = {
         .tv_sec  = 0,
         .tv_usec = 0
     },
+    .time_stats = false,
     .front_cache_max = 200,
     .front_cache_lifespan = 0,
     .front_cache_spec = {0},
@@ -556,6 +557,8 @@ void cproxy_parse_behavior_key_val(char *key,
             int ms = strtol(val, NULL, 10);
             behavior->wait_queue_timeout.tv_sec  = floor(ms / 1000.0);
             behavior->wait_queue_timeout.tv_usec = (ms % 1000) * 1000;
+        } else if (wordeq(key, "time_stats")) {
+            behavior->time_stats = strtol(val, NULL, 10);
         } else if (wordeq(key, "front_cache_max")) {
             behavior->front_cache_max = strtol(val, NULL, 10);
         } else if (wordeq(key, "front_cache_lifespan")) {
@@ -712,6 +715,9 @@ void cproxy_dump_behavior_ex(proxy_behavior *b, char *prefix, int level,
         vdump("wait_queue_timeout", "%ld", // In millisecs.
               (b->wait_queue_timeout.tv_sec * 1000 +
                b->wait_queue_timeout.tv_usec / 1000));
+    }
+    if (level >= 1) {
+        vdump("time_stats", "%d", b->time_stats);
     }
     if (level >= 1) {
         vdump("front_cache_max", "%u", b->front_cache_max);
