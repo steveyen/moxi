@@ -21,7 +21,7 @@
 #include <string.h>
 #include <strings.h>
 
-#include <htgram.h>
+#include "htgram.h"
 
 struct htgram_bin_st {
     int64_t start;

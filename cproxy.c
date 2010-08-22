@@ -30,6 +30,9 @@ bool is_compatible_request(conn *existing, conn *candidate);
 
 void propagate_error(downstream *d);
 
+void downstream_reserved_time_sample(proxy_stats_td *ptds, uint64_t duration);
+void downstream_reserved_time_init(proxy_stats_td *ptds);
+
 int init_mcs_st(mcs_st *mst, char *config);
 
 // Function tables.
@@ -794,6 +797,8 @@ bool cproxy_release_downstream(downstream *d, bool force) {
                 d->ptd->stats.stats.max_retry_time = ux;
             }
         }
+
+        downstream_reserved_time_sample(&d->ptd->stats, ux);
     }
 
     d->ptd->stats.stats.tot_downstream_released++;
@@ -2406,3 +2411,28 @@ int cproxy_max_retries(downstream *d) {
     return mcs_server_count(&d->mst) * 2;
 }
 
+void downstream_reserved_time_sample(proxy_stats_td *ptds, uint64_t duration) {
+    downstream_reserved_time_init(ptds);
+
+    if (ptds->downstream_reserved_time_htgram != NULL) {
+        htgram_incr(ptds->downstream_reserved_time_htgram, duration, 1);
+    }
+}
+
+void downstream_reserved_time_init(proxy_stats_td *ptds) {
+    if (ptds->downstream_reserved_time_htgram == NULL) {
+        ptds->downstream_reserved_time_htgram =
+            cproxy_create_timing_histogram();
+    }
+}
+
+// A histogram for tracking timings, such as for usec request timings.
+//
+HTGRAM_HANDLE cproxy_create_timing_histogram() {
+    // TODO: Make histogram bins more configurable one day.
+    //
+    HTGRAM_HANDLE h1 = htgram_mk(2000, 10, 1.5, 36, NULL);
+    HTGRAM_HANDLE h0 = htgram_mk(0, 10, 1.0, 200, h1);
+
+    return h0;
+}
