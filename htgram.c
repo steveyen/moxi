@@ -114,12 +114,20 @@ void htgram_incr(HTGRAM_HANDLE h, int64_t data_point, uint64_t count) {
         return;
     }
 
-    for (size_t i = 0; i < h->num_bins; i++) {
+    size_t i = 0;
+
+    if (h->bin_width_growth == 1.0) {
+        i = data_point / h->bin_start_width;
+    }
+
+    while (i < h->num_bins) {
         if (data_point < (h->bins[i].start +
                           h->bins[i].width)) {
             h->bins[i].count += count;
             return;
         }
+
+        i++;
     }
 
     if (h->next != NULL) {
