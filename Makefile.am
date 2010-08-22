@@ -13,34 +13,35 @@ BUILT_SOURCES =
 testapp_SOURCES = testapp.c util.c util.h
 
 moxi_SOURCES = memcached.c memcached.h \
-               genhash.c genhash.h genhash_int.h \
-	       hash.c hash.h \
-	       slabs.c slabs.h \
-	       items.c items.h \
-	       assoc.c assoc.h \
-	       thread.c \
-	       stats.c stats.h \
-	       util.c util.h \
-	       trace.h cache.h \
-	       work.c work.h \
-	       redirects.h \
-	       cproxy.c cproxy.h \
-	       cproxy_config.c \
-	       cproxy_protocol_a.c \
-	       cproxy_protocol_a2a.c \
-	       cproxy_protocol_a2b.c \
-	       cproxy_protocol_b.c \
-	       cproxy_protocol_b2b.c \
-	       cproxy_multiget.c \
-	       cproxy_stats.c \
-	       cproxy_front.c \
-	       matcher.c matcher.h \
-	       murmur_hash.c \
-	       mcs.c mcs.h \
-	       stdin_check.c stdin_check.h \
-	       log.c log.h \
-	       cJSON.c cJSON.h \
-	       config_static.h
+           genhash.c genhash.h genhash_int.h \
+           hash.c hash.h \
+           slabs.c slabs.h \
+           items.c items.h \
+           assoc.c assoc.h \
+           thread.c \
+           stats.c stats.h \
+           util.c util.h \
+           trace.h cache.h \
+           work.c work.h \
+           redirects.h \
+           cproxy.c cproxy.h \
+           cproxy_config.c \
+           cproxy_protocol_a.c \
+           cproxy_protocol_a2a.c \
+           cproxy_protocol_a2b.c \
+           cproxy_protocol_b.c \
+           cproxy_protocol_b2b.c \
+           cproxy_multiget.c \
+           cproxy_stats.c \
+           cproxy_front.c \
+           matcher.c matcher.h \
+           murmur_hash.c \
+           mcs.c mcs.h \
+           stdin_check.c stdin_check.h \
+           log.c log.h \
+           cJSON.c cJSON.h \
+           config_static.h \
+           htgram.c htgram.h
 
 if BUILD_DAEMON
 moxi_SOURCES += daemon.c

@@ -7,6 +7,7 @@
 #include "work.h"
 #include "matcher.h"
 #include "mcs.h"
+#include "htgram.h"
 
 // From libmemcached.
 //
@@ -318,6 +319,8 @@ typedef enum {
 typedef struct {
     proxy_stats     stats;
     proxy_stats_cmd stats_cmd[STATS_CMD_TYPE_last][STATS_CMD_last];
+
+    HTGRAM_HANDLE downstream_reserved_time_htgram;
 } proxy_stats_td;
 
 struct key_stats {
@@ -699,6 +702,8 @@ void cproxy_del_front_cache_key_ascii(downstream *d,
 void cproxy_del_front_cache_key_ascii_response(downstream *d,
                                                char *response,
                                                char *command);
+
+HTGRAM_HANDLE cproxy_create_timing_histogram();
 
 typedef void (*mcache_traversal_func)(const void *it, void *userdata);
 
