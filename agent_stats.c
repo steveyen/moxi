@@ -159,8 +159,9 @@ void collect_memcached_stats_for_proxy(struct main_stats_collect_info *msci,
     memcached_return error;
     memcached_stat_st *st = memcached_stat(&mst, NULL, &error);
 
-    if (st == NULL)
+    if (st == NULL) {
         goto out_free;
+    }
 
     char bufk[500];
 
@@ -174,8 +175,9 @@ void collect_memcached_stats_for_proxy(struct main_stats_collect_info *msci,
     for (; *keys; keys++) {
         char *key = *keys;
         char *value = memcached_stat_get_value(&mst, st, key, &error);
-        if (value == NULL)
+        if (value == NULL) {
             continue;
+        }
 
         emit_s(key, value);
         free(value);
@@ -304,20 +306,24 @@ enum conflate_mgmt_cb_result on_conflate_get_stats(void *userdata,
         for (i = 1; i < m->nthreads; i++) {
             struct stats_gathering_pair *pair =
                 calloc(1, sizeof(struct stats_gathering_pair));
-            if (!pair)
+            if (!pair) {
                 break;
+            }
+
             // Each thread gets its own collection hashmap, which
             // is keyed by each proxy's "binding:name", and whose
             // values are proxy_stats_td.
             //
-            if (!(pair->map_pstd = genhash_init(128, strhash_ops)))
+            if (!(pair->map_pstd = genhash_init(128, strhash_ops))) {
                 break;
+            }
 
             // Key stats hashmap has same keys and
             // genhash<string, struct key_stats *> as values.
             //
-            if (!(pair->map_key_stats = genhash_init(128, strhash_ops)))
+            if (!(pair->map_key_stats = genhash_init(128, strhash_ops))) {
                 break;
+            }
             work_collect_init(&ca[i], -1, pair);
         }
 
@@ -375,8 +381,9 @@ enum conflate_mgmt_cb_result on_conflate_get_stats(void *userdata,
 
         for (i = 1; i < m->nthreads; i++) {
             struct stats_gathering_pair *pair = ca[i].data;
-            if (!pair)
+            if (!pair) {
                 continue;
+            }
             genhash_t *map_pstd = pair->map_pstd;
             if (map_pstd != NULL) {
                 genhash_iter(map_pstd, genhash_free_entry, NULL);
@@ -441,11 +448,13 @@ void map_key_stats_foreach_merge(const void *key,
 static void proxy_stats_dump_behavior(ADD_STAT add_stats,
                                       conn *c, const char *prefix,
                                       proxy_behavior *b, int level) {
-    if (level >= 2)
+    if (level >= 2) {
         APPEND_PREFIX_STAT("cycle", "%u", b->cycle);
+    }
 
-    if (level >= 1)
+    if (level >= 1) {
         APPEND_PREFIX_STAT("downstream_max", "%u", b->downstream_max);
+    }
 
     APPEND_PREFIX_STAT("downstream_weight",   "%u", b->downstream_weight);
     APPEND_PREFIX_STAT("downstream_retry",    "%u", b->downstream_retry);
@@ -454,48 +463,40 @@ static void proxy_stats_dump_behavior(ADD_STAT add_stats,
               (b->downstream_timeout.tv_sec * 1000 +
                b->downstream_timeout.tv_usec / 1000));
 
-    if (level >= 1)
+    if (level >= 1) {
         APPEND_PREFIX_STAT("wait_queue_timeout", "%ld", // In millisecs.
               (b->wait_queue_timeout.tv_sec * 1000 +
                b->wait_queue_timeout.tv_usec / 1000));
-    if (level >= 1)
         APPEND_PREFIX_STAT("time_stats", "%d", b->time_stats);
-    if (level >= 1)
         APPEND_PREFIX_STAT("front_cache_max", "%u", b->front_cache_max);
-    if (level >= 1)
         APPEND_PREFIX_STAT("front_cache_lifespan", "%u", b->front_cache_lifespan);
-    if (level >= 1)
         APPEND_PREFIX_STAT("front_cache_spec", "%s", b->front_cache_spec);
-    if (level >= 1)
         APPEND_PREFIX_STAT("front_cache_unspec", "%s", b->front_cache_unspec);
-    if (level >= 1)
         APPEND_PREFIX_STAT("key_stats_max", "%u", b->key_stats_max);
-    if (level >= 1)
         APPEND_PREFIX_STAT("key_stats_lifespan", "%u", b->key_stats_lifespan);
-    if (level >= 1)
         APPEND_PREFIX_STAT("key_stats_spec", "%s", b->key_stats_spec);
-    if (level >= 1)
         APPEND_PREFIX_STAT("key_stats_unspec", "%s", b->key_stats_unspec);
-    if (level >= 1)
         APPEND_PREFIX_STAT("optimize_set", "%s", b->optimize_set);
+    }
 
     APPEND_PREFIX_STAT("usr",    "%s", b->usr);
     APPEND_PREFIX_STAT("host",   "%s", b->host);
     APPEND_PREFIX_STAT("port",   "%d", b->port);
     APPEND_PREFIX_STAT("bucket", "%s", b->bucket);
 
-    if (level >= 1)
+    if (level >= 1) {
         APPEND_PREFIX_STAT("port_listen", "%d", b->port_listen);
-    if (level >= 1)
         APPEND_PREFIX_STAT("default_bucket_name", "%s", b->default_bucket_name);
+    }
 }
 
 static void proxy_stats_dump_frontcache(ADD_STAT add_stats, conn *c,
                                         const char *prefix, proxy *p) {
     pthread_mutex_lock(p->front_cache.lock);
 
-    if (p->front_cache.map != NULL)
+    if (p->front_cache.map != NULL) {
         APPEND_PREFIX_STAT("size", "%u", genhash_size(p->front_cache.map));
+    }
 
     APPEND_PREFIX_STAT("max", "%u", p->front_cache.max);
     APPEND_PREFIX_STAT("oldest_live", "%u", p->front_cache.oldest_live);
@@ -815,13 +816,14 @@ void proxy_stats_dump_proxies(ADD_STAT add_stats, conn *c,
         }
 
         if (pscip->do_stats) {
-            proxy_stats_td *pstd = calloc(1, sizeof(proxy_stats_td));;
+            proxy_stats_td *pstd = calloc(1, sizeof(proxy_stats_td));
             if (pstd != NULL) {
                 pthread_mutex_lock(&p->proxy_lock);
                 for (int i = 1; i < pm->nthreads; i++) {
                     proxy_td *thread_ptd = &p->thread_data[i];
-                    if (thread_ptd != NULL)
+                    if (thread_ptd != NULL) {
                         add_proxy_stats_td(pstd, &thread_ptd->stats);
+                    }
                 }
                 pthread_mutex_unlock(&p->proxy_lock);
 
@@ -946,8 +948,9 @@ static void main_stats_collect(void *data0, void *data1) {
         if (msci->do_stats) {
             pthread_mutex_lock(p->front_cache.lock);
 
-            if (p->front_cache.map != NULL)
+            if (p->front_cache.map != NULL) {
                 emit_f("front_cache_size", "%u", genhash_size(p->front_cache.map));
+            }
 
             emit_f("front_cache_max",
                    "%u", p->front_cache.max);
@@ -1025,8 +1028,9 @@ static void main_stats_collect(void *data0, void *data1) {
 
         proxy *p = m->proxy_head;
         for (int i = 0; i < nproxy; i++, p = p->next) {
-            if (p == NULL)
+            if (p == NULL) {
                 break;
+            }
 
             pthread_mutex_lock(&p->proxy_lock);
             infos[i].name = p->name != NULL ? strdup(p->name) : NULL;
@@ -1122,8 +1126,9 @@ static void work_stats_collect(void *data0, void *data1) {
         }
     }
 
-    if (locked)
+    if (locked) {
         pthread_mutex_unlock(&p->proxy_lock);
+    }
 
     work_collect_one(c);
 }
@@ -1239,8 +1244,9 @@ static void add_key_stats_inner(const void *data, void *userdata) {
 
     if (dest_stats == NULL) {
         dest_stats = calloc(1, sizeof(struct key_stats));
-        if (dest_stats != NULL)
+        if (dest_stats != NULL) {
             *dest_stats = *kstats;
+        }
         genhash_update(key_stats_map, strdup(kstats->key), dest_stats);
         return;
     }
@@ -1353,7 +1359,7 @@ void map_pstd_foreach_emit(const void *k,
     const char *name = (const char*)k;
     assert(name != NULL);
 
-    proxy_stats_td *pstd = (proxy_stats_td *)value;
+    proxy_stats_td *pstd = (proxy_stats_td *) value;
     assert(pstd != NULL);
 
     const struct main_stats_collect_info *emit = user_data;
