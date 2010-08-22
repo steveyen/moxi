@@ -3,8 +3,9 @@ ACLOCAL_AMFLAGS = -I m4 --force
 
 bin_PROGRAMS = moxi
 noinst_PROGRAMS =
+
 if BUILD_TESTAPPS
-noinst_PROGRAMS += sizes testapp timedrun
+noinst_PROGRAMS += sizes testapp timedrun htgram_test
 endif
 
 BUILT_SOURCES =
@@ -46,6 +47,8 @@ moxi_SOURCES += daemon.c
 endif
 
 timedrun_SOURCES = timedrun.c
+
+htgram_test_SOURCES = htgram_test.c htgram.c htgram.h
 
 TESTS = check_util check_moxi check_work
 if HAVE_LIBCONFLATE

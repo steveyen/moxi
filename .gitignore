@@ -47,6 +47,7 @@ cscope.out
 depcomp
 doc/protocol-binary-range.txt
 doc/protocol-binary.txt
+htgram_test
 install-sh
 libmemcached-*/libmemcached/*.la
 libmemcached-*/libmemcached/*.lo
