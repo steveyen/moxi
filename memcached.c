@@ -2961,6 +2961,7 @@ void process_command(conn *c, char *command) {
 
 void process_stats_proxy_command(conn *c, token_t *tokens, const size_t ntokens) {
     if (ntokens == 4 && strcmp(tokens[2].value, "reset") == 0) {
+        // TODO: Contrary to return code, this is todo and not actually OK yet.
         out_string(c, "OK");
     } else {
         bool do_all = (ntokens == 3 || strcmp(tokens[2].value, "all") == 0);
@@ -3001,7 +3002,6 @@ void process_stats_proxy_command(conn *c, token_t *tokens, const size_t ntokens)
             c->stats.buffer = NULL;
         }
     }
-    return;
 }
 
 /*
