@@ -703,7 +703,7 @@ void cproxy_del_front_cache_key_ascii_response(downstream *d,
                                                char *response,
                                                char *command);
 
-HTGRAM_HANDLE cproxy_create_timing_histogram();
+HTGRAM_HANDLE cproxy_create_timing_histogram(void);
 
 typedef void (*mcache_traversal_func)(const void *it, void *userdata);
 

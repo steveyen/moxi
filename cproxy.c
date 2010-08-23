@@ -2428,7 +2428,7 @@ void downstream_reserved_time_init(proxy_stats_td *ptds) {
 
 // A histogram for tracking timings, such as for usec request timings.
 //
-HTGRAM_HANDLE cproxy_create_timing_histogram() {
+HTGRAM_HANDLE cproxy_create_timing_histogram(void) {
     // TODO: Make histogram bins more configurable one day.
     //
     HTGRAM_HANDLE h1 = htgram_mk(2000, 10, 1.5, 36, NULL);
