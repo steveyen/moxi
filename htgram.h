@@ -133,8 +133,8 @@ extern "C" {
 
     /**
      * Retrieves collected data (out_bin_count) for a bin, given a
-     * bin_index.  The first width bin has bin_index of 0.
-     * Returns false if there's no bin at the given bin_index.
+     * bin_index.  The first bin has bin_index 0.  Returns false if
+     * there's no bin at the given bin_index.
      */
     HTGRAM_PUBLIC_API
     bool htgram_get_bin_data(HTGRAM_HANDLE h, int bin_index,
@@ -147,6 +147,12 @@ extern "C" {
      */
     HTGRAM_PUBLIC_API
     void htgram_reset(HTGRAM_HANDLE h);
+
+    /**
+     * Add the values from histogram x into histogram agg (aggregate).
+     */
+    HTGRAM_PUBLIC_API
+    void htgram_add(HTGRAM_HANDLE agg, HTGRAM_HANDLE x);
 
     /**
      * @}

@@ -178,3 +178,25 @@ void htgram_reset(HTGRAM_HANDLE h) {
         htgram_reset(h->next);
     }
 }
+
+void htgram_add(HTGRAM_HANDLE agg, HTGRAM_HANDLE x) {
+    int64_t  astart;
+    int64_t  awidth;
+    uint64_t acount;
+
+    int64_t  xstart;
+    int64_t  xwidth;
+    uint64_t xcount;
+
+    int i = 0;
+
+    while (htgram_get_bin_data(agg, i, &astart, &awidth, &acount) &&
+           htgram_get_bin_data(x,   i, &xstart, &xwidth, &xcount)) {
+        assert(astart == xstart);
+        assert(awidth == xwidth);
+
+        htgram_incr(agg, astart, xcount);
+
+        i++;
+    }
+}
