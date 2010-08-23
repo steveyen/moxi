@@ -2963,6 +2963,11 @@ void process_stats_proxy_command(conn *c, token_t *tokens, const size_t ntokens)
     if (ntokens == 4 && strcmp(tokens[2].value, "reset") == 0) {
         // TODO: Contrary to return code, this is todo and not actually OK yet.
         out_string(c, "OK");
+        return;
+    }
+
+    if (ntokens == 4 && strcmp(tokens[2].value, "timings") == 0) {
+        proxy_stats_dump_timings(&append_stats, c);
     } else {
         bool do_all = (ntokens == 3 || strcmp(tokens[2].value, "all") == 0);
         struct proxy_stats_cmd_info psci = {
@@ -2976,31 +2981,34 @@ void process_stats_proxy_command(conn *c, token_t *tokens, const size_t ntokens)
         };
 
 #ifdef HAVE_CONFLATE_H
-        if (psci.do_info)
+        if (psci.do_info) {
             proxy_stats_dump_basic(&append_stats, c, "basic:");
+        }
 #endif
 
-        if (psci.do_settings)
+        if (psci.do_settings) {
             process_stat_settings(&append_stats, c, "memcached:settings:");
+        }
 
-        if (psci.do_stats)
+        if (psci.do_stats) {
             server_stats(&append_stats, c, "memcached:stats:" );
+        }
 
 #ifdef HAVE_CONFLATE_H
         proxy_stats_dump_proxy_main(&append_stats, c, &psci);
 
         proxy_stats_dump_proxies(&append_stats, c, &psci);
 #endif
+    }
 
-        /* append terminator and start the transfer */
-        append_stats(NULL, 0, NULL, 0, c);
+    /* append terminator and start the transfer */
+    append_stats(NULL, 0, NULL, 0, c);
 
-        if (c->stats.buffer == NULL) {
-            out_string(c, "SERVER_ERROR out of memory writing stats");
-        } else {
-            write_and_free(c, c->stats.buffer, c->stats.offset);
-            c->stats.buffer = NULL;
-        }
+    if (c->stats.buffer == NULL) {
+        out_string(c, "SERVER_ERROR out of memory writing stats");
+    } else {
+        write_and_free(c, c->stats.buffer, c->stats.offset);
+        c->stats.buffer = NULL;
     }
 }
 

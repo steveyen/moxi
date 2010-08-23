@@ -2411,17 +2411,17 @@ int cproxy_max_retries(downstream *d) {
     return mcs_server_count(&d->mst) * 2;
 }
 
-void downstream_reserved_time_sample(proxy_stats_td *ptds, uint64_t duration) {
-    downstream_reserved_time_init(ptds);
+void downstream_reserved_time_sample(proxy_stats_td *pstd, uint64_t duration) {
+    downstream_reserved_time_init(pstd);
 
-    if (ptds->downstream_reserved_time_htgram != NULL) {
-        htgram_incr(ptds->downstream_reserved_time_htgram, duration, 1);
+    if (pstd->downstream_reserved_time_htgram != NULL) {
+        htgram_incr(pstd->downstream_reserved_time_htgram, duration, 1);
     }
 }
 
-void downstream_reserved_time_init(proxy_stats_td *ptds) {
-    if (ptds->downstream_reserved_time_htgram == NULL) {
-        ptds->downstream_reserved_time_htgram =
+void downstream_reserved_time_init(proxy_stats_td *pstd) {
+    if (pstd->downstream_reserved_time_htgram == NULL) {
+        pstd->downstream_reserved_time_htgram =
             cproxy_create_timing_histogram();
     }
 }
@@ -2431,8 +2431,8 @@ void downstream_reserved_time_init(proxy_stats_td *ptds) {
 HTGRAM_HANDLE cproxy_create_timing_histogram(void) {
     // TODO: Make histogram bins more configurable one day.
     //
-    HTGRAM_HANDLE h1 = htgram_mk(2000, 10, 1.5, 36, NULL);
-    HTGRAM_HANDLE h0 = htgram_mk(0, 10, 1.0, 200, h1);
+    HTGRAM_HANDLE h1 = htgram_mk(2000, 100, 2.0, 20, NULL);
+    HTGRAM_HANDLE h0 = htgram_mk(0, 100, 1.0, 20, h1);
 
     return h0;
 }
