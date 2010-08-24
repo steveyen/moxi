@@ -155,6 +155,19 @@ extern "C" {
     void htgram_add(HTGRAM_HANDLE agg, HTGRAM_HANDLE x);
 
     /**
+     * Call signature of callback from htgram_dump().
+     */
+    typedef void (*HTGRAM_DUMP_CALLBACK)(HTGRAM_HANDLE h, const char *dump_line, void *cbdata);
+
+    /**
+     * Invoke the HTGRAM_DUMP_CALLBACK function with pretty histogram lines.
+     */
+    HTGRAM_PUBLIC_API
+    void htgram_dump(HTGRAM_HANDLE h,
+                     HTGRAM_DUMP_CALLBACK dump_callback,
+                     void *dump_callback_data);
+
+    /**
      * @}
      */
 
