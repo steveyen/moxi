@@ -31,7 +31,7 @@ bool is_compatible_request(conn *existing, conn *candidate);
 void propagate_error(downstream *d);
 
 void downstream_reserved_time_sample(proxy_stats_td *ptds, uint64_t duration);
-void downstream_reserved_time_init(proxy_stats_td *ptds);
+void downstream_connect_time_sample(proxy_stats_td *ptds, uint64_t duration);
 
 int init_mcs_st(mcs_st *mst, char *config);
 
@@ -1144,6 +1144,12 @@ conn *cproxy_connect_downstream_conn(downstream *d,
                 mcs_server_st_port(msst));
     }
 
+    uint64_t start = 0;
+
+    if (d->ptd->behavior_pool.base.time_stats) {
+        start = usec_now();
+    }
+
     mcs_return rc;
 
     rc = mcs_server_st_connect(msst);
@@ -1151,6 +1157,11 @@ conn *cproxy_connect_downstream_conn(downstream *d,
         int fd = mcs_server_st_fd(msst);
         if (fd >= 0) {
             d->ptd->stats.stats.tot_downstream_connect++;
+
+            if (start != 0 &&
+                d->ptd->behavior_pool.base.time_stats) {
+                downstream_connect_time_sample(&d->ptd->stats, usec_now() - start);
+            }
 
             if (cproxy_auth_downstream(msst, behavior)) {
                 d->ptd->stats.stats.tot_downstream_auth++;
@@ -2412,19 +2423,27 @@ int cproxy_max_retries(downstream *d) {
 }
 
 void downstream_reserved_time_sample(proxy_stats_td *pstd, uint64_t duration) {
-    downstream_reserved_time_init(pstd);
+    if (pstd->downstream_reserved_time_htgram == NULL) {
+        pstd->downstream_reserved_time_htgram =
+            cproxy_create_timing_histogram();
+    }
 
     if (pstd->downstream_reserved_time_htgram != NULL) {
         htgram_incr(pstd->downstream_reserved_time_htgram, duration, 1);
     }
 }
 
-void downstream_reserved_time_init(proxy_stats_td *pstd) {
-    if (pstd->downstream_reserved_time_htgram == NULL) {
-        pstd->downstream_reserved_time_htgram =
+void downstream_connect_time_sample(proxy_stats_td *pstd, uint64_t duration) {
+    if (pstd->downstream_connect_time_htgram == NULL) {
+        pstd->downstream_connect_time_htgram =
             cproxy_create_timing_histogram();
     }
+
+    if (pstd->downstream_connect_time_htgram != NULL) {
+        htgram_incr(pstd->downstream_connect_time_htgram, duration, 1);
+    }
 }
+
 
 // A histogram for tracking timings, such as for usec request timings.
 //
