@@ -93,7 +93,8 @@ static void map_key_stats_foreach_dump(const void *key,
                                        const void *value,
                                        void *user_data);
 
-static void htgram_dump(ADD_STAT add_stats, const char *prefix, conn *c, HTGRAM_HANDLE h);
+static void htgram_dump(ADD_STAT add_stats, const char *prefix, const char *key,
+                        conn *c, HTGRAM_HANDLE h);
 
 static void emit_bar(int64_t start, int64_t width, uint64_t count, uint64_t max_count,
                      char *buf, int buf_len,
@@ -1712,30 +1713,41 @@ void proxy_stats_dump_timings(ADD_STAT add_stats, conn *c) {
     char prefix[200];
 
     for (proxy *p = pm->proxy_head; p != NULL; p = p->next) {
-        HTGRAM_HANDLE h = cproxy_create_timing_histogram();
-        if (h != NULL) {
+        HTGRAM_HANDLE hreserved = cproxy_create_timing_histogram();
+        HTGRAM_HANDLE hconnect = cproxy_create_timing_histogram();
+        if (hreserved != NULL &&
+            hconnect != NULL) {
             pthread_mutex_lock(&p->proxy_lock);
             for (int i = 1; i < pm->nthreads; i++) {
                 proxy_td *thread_ptd = &p->thread_data[i];
                 if (thread_ptd != NULL &&
                     thread_ptd->stats.downstream_reserved_time_htgram != NULL) {
-                    htgram_add(h, thread_ptd->stats.downstream_reserved_time_htgram);
+                    htgram_add(hreserved, thread_ptd->stats.downstream_reserved_time_htgram);
+                    htgram_add(hconnect, thread_ptd->stats.downstream_connect_time_htgram);
                 }
             }
             pthread_mutex_unlock(&p->proxy_lock);
 
             snprintf(prefix, sizeof(prefix), "%u:%s:", p->port, p->name);
 
-            htgram_dump(add_stats, prefix, c, h);
+            htgram_dump(add_stats, prefix, "reserved", c, hreserved);
+            htgram_dump(add_stats, prefix, "connect", c, hconnect);
+        }
 
-            htgram_destroy(h);
+        if (hreserved != NULL) {
+            htgram_destroy(hreserved);
+        }
+
+        if (hconnect != NULL) {
+            htgram_destroy(hconnect);
         }
     }
 
     pthread_mutex_unlock(&pm->proxy_main_lock);
 }
 
-static void htgram_dump(ADD_STAT add_stats, const char *prefix, conn *c, HTGRAM_HANDLE h) {
+static void htgram_dump(ADD_STAT add_stats, const char *prefix, const char *key,
+                        conn *c, HTGRAM_HANDLE h) {
     if (h == NULL) {
         return;
     }
@@ -1816,7 +1828,7 @@ static void htgram_dump(ADD_STAT add_stats, const char *prefix, conn *c, HTGRAM_
                      max_equal - (s1 - s0),
                      max_space - (s2 - s1));
 
-            APPEND_PREFIX_STAT("timing", "%s", buf);
+            APPEND_PREFIX_STAT(key, "%s", buf);
         }
     }
 }
@@ -1842,17 +1854,17 @@ static void emit_bar(int64_t start, int64_t width, uint64_t count, uint64_t max_
 
     int i;
 
-    for (i = 0; i < plus_spaces && i < sizeof(plus_buf) - 1; i++) {
+    for (i = 0; i < plus_spaces && i < (int) sizeof(plus_buf) - 1; i++) {
         plus_buf[i] = ' ';
     }
     plus_buf[i] = '\0';
 
-    for (i = 0; i < equal_spaces && i < sizeof(equal_buf) - 1; i++) {
+    for (i = 0; i < equal_spaces && i < (int) sizeof(equal_buf) - 1; i++) {
         equal_buf[i] = ' ';
     }
     equal_buf[i] = '\0';
 
-    for (i = 0; i < space_spaces && i < sizeof(space_buf) - 1; i++) {
+    for (i = 0; i < space_spaces && i < (int) sizeof(space_buf) - 1; i++) {
         space_buf[i] = ' ';
     }
     space_buf[i] = '\0';

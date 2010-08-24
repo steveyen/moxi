@@ -321,6 +321,7 @@ typedef struct {
     proxy_stats_cmd stats_cmd[STATS_CMD_TYPE_last][STATS_CMD_last];
 
     HTGRAM_HANDLE downstream_reserved_time_htgram;
+    HTGRAM_HANDLE downstream_connect_time_htgram;
 } proxy_stats_td;
 
 struct key_stats {
