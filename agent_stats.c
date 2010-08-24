@@ -93,14 +93,6 @@ static void map_key_stats_foreach_dump(const void *key,
                                        const void *value,
                                        void *user_data);
 
-static void htgram_dump(ADD_STAT add_stats, const char *prefix, const char *key,
-                        conn *c, HTGRAM_HANDLE h);
-
-static void emit_bar(int64_t start, int64_t width, uint64_t count,
-                     uint64_t max_count, uint64_t tot_count, uint64_t run_count,
-                     char *buf, int buf_len,
-                     int plus_spaces, int equal_spaces, int space_spaces);
-
 struct main_stats_proxy_info {
     char *name;
     int port;
@@ -1695,6 +1687,20 @@ static void add_stat_prefix_ase(const char *key, const uint16_t klen,
     add_stat_prefix(cookie, ase->prefix, key, val);
 }
 
+struct htgram_dump_callback_data {
+    ADD_STAT add_stats;
+    char *prefix;
+    conn *conn;
+};
+
+static void htgram_dump_callback(HTGRAM_HANDLE h, const char *dump_line, void *cbdata) {
+    ADD_STAT add_stats = ((struct htgram_dump_callback_data *) cbdata)->add_stats;
+    char *prefix       = ((struct htgram_dump_callback_data *) cbdata)->prefix;
+    conn *c            = ((struct htgram_dump_callback_data *) cbdata)->conn;
+
+    APPEND_STAT(prefix, "%s", dump_line);
+}
+
 void proxy_stats_dump_timings(ADD_STAT add_stats, conn *c) {
     assert(c != NULL);
 
@@ -1729,10 +1735,16 @@ void proxy_stats_dump_timings(ADD_STAT add_stats, conn *c) {
             }
             pthread_mutex_unlock(&p->proxy_lock);
 
-            snprintf(prefix, sizeof(prefix), "%u:%s:", p->port, p->name);
+            struct htgram_dump_callback_data cbdata;
+            cbdata.add_stats = add_stats;
+            cbdata.prefix    = prefix;
+            cbdata.conn      = c;
 
-            htgram_dump(add_stats, prefix, "connect", c, hconnect);
-            htgram_dump(add_stats, prefix, "reserved", c, hreserved);
+            snprintf(prefix, sizeof(prefix), "%u:%s:connect", p->port, p->name);
+            htgram_dump(hconnect, htgram_dump_callback, &cbdata);
+
+            snprintf(prefix, sizeof(prefix), "%u:%s:reserved", p->port, p->name);
+            htgram_dump(hreserved, htgram_dump_callback, &cbdata);
         }
 
         if (hreserved != NULL) {
@@ -1746,141 +1758,3 @@ void proxy_stats_dump_timings(ADD_STAT add_stats, conn *c) {
 
     pthread_mutex_unlock(&pm->proxy_main_lock);
 }
-
-static void htgram_dump(ADD_STAT add_stats, const char *prefix, const char *key,
-                        conn *c, HTGRAM_HANDLE h) {
-    if (h == NULL) {
-        return;
-    }
-
-    int64_t  max_start = 0;
-    int64_t  max_width = 0;
-    uint64_t max_count = 0;
-    int      end_num_bins = 0; // Max non-zero bin.
-    int      beg_bin = INT_MAX;
-    uint64_t tot_count = 0;
-    uint64_t run_count; // Cummulative count.
-
-    int64_t  start;
-    int64_t  width;
-    uint64_t count;
-    int      num_bins = 0;
-
-    while (htgram_get_bin_data(h, num_bins, &start, &width, &count)) {
-        num_bins++;
-
-        if (count > 0) {
-            if (max_start < start) {
-                max_start = start;
-            }
-            if (max_width < width) {
-                max_width = width;
-            }
-            if (max_count < count) {
-                max_count = count;
-            }
-            if (end_num_bins < num_bins) {
-                end_num_bins = num_bins;
-            }
-            if (beg_bin > num_bins - 1) {
-                beg_bin = num_bins - 1;
-            }
-            tot_count = tot_count + count;
-        }
-    }
-
-    // Columns in a row look like "START+WIDTH=COUNT PCT% BAR_GRAPH_LINE"
-    //
-    int  max_plus = 0;  // Width of the 'plus' column ('+').
-    int  max_equal = 0; // Width of the 'equal' column ('=').
-    int  max_space = 0; // Width of the 'space' column (' ').
-
-    char buf[2000];
-
-    run_count = 0;
-    for (int i = beg_bin; i < end_num_bins + 1 && i < num_bins; i++) {
-        if (htgram_get_bin_data(h, i, &start, &width, &count)) {
-            emit_bar(start, width, count, max_count, tot_count, run_count,
-                     buf, sizeof(buf) - 1, 0, 0, 0);
-
-            char *s0 = strchr(buf, '+');
-            assert(s0 != NULL);
-            if (max_plus < s0 - buf) {
-                max_plus = s0 - buf;
-            }
-            char *s1 = strchr(s0, '=');
-            assert(s1 != NULL);
-            if (max_equal < s1 - s0) {
-                max_equal = s1 - s0;
-            }
-            char *s2 = strchr(s1, '%');
-            assert(s2 != NULL);
-            if (max_space < s2 - s1) {
-                max_space = s2 - s1;
-            }
-
-            run_count += count;
-        }
-    }
-
-    run_count = 0;
-    for (int i = beg_bin; i < end_num_bins + 1 && i < num_bins; i++) {
-        if (htgram_get_bin_data(h, i, &start, &width, &count)) {
-            emit_bar(start, width, count, max_count, tot_count, run_count,
-                     buf, sizeof(buf) - 1, 0, 0, 0);
-
-            char *s0 = strchr(buf, '+');
-            char *s1 = strchr(s0, '=');
-            char *s2 = strchr(s1, '%');
-
-            emit_bar(start, width, count, max_count, tot_count, run_count,
-                     buf, sizeof(buf) - 1,
-                     max_plus - (s0 - buf),
-                     max_equal - (s1 - s0),
-                     max_space - (s2 - s1));
-
-            APPEND_PREFIX_STAT(key, "%s", buf);
-
-            run_count += count;
-        }
-    }
-}
-
-static void fill_spaces(char *buf, int buf_len, int num_spaces) {
-    int i;
-    for (i = 0; i < num_spaces && i < buf_len - 1; i++) {
-        buf[i] = ' ';
-    }
-    buf[i] = '\0';
-}
-
-static void emit_bar(int64_t start, int64_t width, uint64_t count,
-                     uint64_t max_count, uint64_t tot_count, uint64_t run_count,
-                     char *buf, int buf_len,
-                     int plus_spaces, int equal_spaces, int space_spaces) {
-    char bar_buf[25];
-    char plus_buf[40];
-    char equal_buf[40];
-    char space_buf[40];
-
-    size_t j = 0;
-
-    if (count > 0) {
-        uint64_t bar = (((sizeof(bar_buf) - 1) * count) / max_count);
-        while (j < bar && j < sizeof(bar_buf) - 1) {
-            bar_buf[j] = '*';
-            j++;
-        }
-    }
-    bar_buf[j] = '\0';
-
-    fill_spaces(plus_buf, sizeof(plus_buf), plus_spaces);
-    fill_spaces(equal_buf, sizeof(equal_buf), equal_spaces);
-    fill_spaces(space_buf, sizeof(space_buf), space_spaces);
-
-    snprintf(buf, buf_len - 1, "%s%lld+%lld%s=%llu %s%.2f%% %s",
-             plus_buf, start, width, equal_buf, count, space_buf,
-             100.0 * ((float) (count + run_count) / (float) tot_count), bar_buf);
-}
-
-
