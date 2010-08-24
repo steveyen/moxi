@@ -4759,26 +4759,23 @@ int main (int argc, char **argv) {
         free(cproxy_cfg);
     } else {
         int i = argc - 1;
-        while (i > 0) {
-            if (strncmp(argv[i], "apikey=", 7) == 0 ||
-                strncmp(argv[i], "http://", 7) == 0 ||
-                strchr(argv[i], '@') != NULL) {
-                cproxy_init(argv[i], cproxy_behavior,
-                            settings.num_threads,
-                            main_base);
-                break;
-            }
-            i--;
-        }
+        if (i > 0 &&
+            (strncmp(argv[i], "apikey=", 7) == 0 ||
+             strncmp(argv[i], "http://", 7) == 0 ||
+             strchr(argv[i], '@') != NULL)) {
+            cproxy_init(argv[i], cproxy_behavior,
+                        settings.num_threads,
+                        main_base);
+        } else {
 #ifndef MAIN_CHECK
-        if (i <= 0
-            && settings.port == UNSPECIFIED
-            && settings.udpport == UNSPECIFIED) {
-            moxi_log_write("ERROR: need proxy configuration. See usage (-h).\n");
-            if (ml->log_mode != ERRORLOG_STDERR) {
-                fprintf(stderr, "ERROR: need proxy configuration. See usage (-h).\n");
+            if (settings.port == UNSPECIFIED &&
+                settings.udpport == UNSPECIFIED) {
+                moxi_log_write("ERROR: need proxy configuration. See usage (-h).\n");
+                if (ml->log_mode != ERRORLOG_STDERR) {
+                    fprintf(stderr, "ERROR: need proxy configuration. See usage (-h).\n");
+                }
+                exit(EXIT_FAILURE);
             }
-            exit(EXIT_FAILURE);
         }
 #endif
     }
