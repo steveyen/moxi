@@ -7,6 +7,12 @@
 #include "config.h"
 #endif
 
+typedef enum {
+  MCS_SUCCESS,
+  MCS_FAILURE,
+  MCS_MAXIMUM_RETURN /* Always add new error code before */
+} mcs_return;
+
 #ifdef MOXI_USE_VBUCKET
 #include <libvbucket/vbucket.h>
 #endif // MOXI_USE_VBUCKET
@@ -15,12 +21,6 @@
 // API usage.
 //
 #ifdef MOXI_USE_VBUCKET
-
-typedef enum {
-  MEMCACHED_SUCCESS,
-  MEMCACHED_FAILURE,
-  MEMCACHED_MAXIMUM_RETURN /* Always add new error code before */
-} mcs_return;
 
 typedef struct {
     char hostname[200];

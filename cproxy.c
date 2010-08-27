@@ -1153,7 +1153,7 @@ conn *cproxy_connect_downstream_conn(downstream *d,
     mcs_return rc;
 
     rc = mcs_server_st_connect(msst);
-    if (rc == MEMCACHED_SUCCESS) {
+    if (rc == MCS_SUCCESS) {
         int fd = mcs_server_st_fd(msst);
         if (fd >= 0) {
             d->ptd->stats.stats.tot_downstream_connect++;
@@ -2212,7 +2212,7 @@ bool cproxy_auth_downstream(mcs_server_st *server,
     req.request.bodylen  = htonl(buf_len);
 
     if (mcs_server_st_do(server, (const char *) req.bytes,
-                         sizeof(req.bytes), 0) != MEMCACHED_SUCCESS ||
+                         sizeof(req.bytes), 0) != MCS_SUCCESS ||
         mcs_server_st_io_write(server, buf, buf_len, 1) == -1) {
         mcs_server_st_io_reset(server);
 
@@ -2227,7 +2227,7 @@ bool cproxy_auth_downstream(mcs_server_st *server,
     protocol_binary_response_header res = { .bytes = {0} };
 
     if (mcs_server_st_read(server, &res.bytes,
-                           sizeof(res.bytes)) == MEMCACHED_SUCCESS &&
+                           sizeof(res.bytes)) == MCS_SUCCESS &&
         res.response.magic == PROTOCOL_BINARY_RES) {
         res.response.status  = ntohs(res.response.status);
         res.response.keylen  = ntohs(res.response.keylen);
@@ -2240,7 +2240,7 @@ bool cproxy_auth_downstream(mcs_server_st *server,
             int amt = (len > (int)sizeof(buf) ? (int)sizeof(buf) : len);
             if (mcs_server_st_read(server,
                                    buf,
-                                   amt) != MEMCACHED_SUCCESS) {
+                                   amt) != MCS_SUCCESS) {
                 if (settings.verbose > 1) {
                     moxi_log_write("auth could not read response body (%d)\n",
                                    usr, amt);
@@ -2303,7 +2303,7 @@ bool cproxy_bucket_downstream(mcs_server_st *server,
     req.request.bodylen  = htonl(bucket_len);
 
     if (mcs_server_st_do(server, (const char *) req.bytes,
-                         sizeof(req.bytes), 0) != MEMCACHED_SUCCESS ||
+                         sizeof(req.bytes), 0) != MCS_SUCCESS ||
         mcs_server_st_io_write(server,
                                behavior->bucket,
                                bucket_len, 1) == -1) {
@@ -2319,7 +2319,7 @@ bool cproxy_bucket_downstream(mcs_server_st *server,
 
     protocol_binary_response_header res = { .bytes = {0} };
     if (mcs_server_st_read(server, &res.bytes,
-                           sizeof(res.bytes)) == MEMCACHED_SUCCESS &&
+                           sizeof(res.bytes)) == MCS_SUCCESS &&
         res.response.magic == PROTOCOL_BINARY_RES) {
         res.response.status  = ntohs(res.response.status);
         res.response.keylen  = ntohs(res.response.keylen);
@@ -2334,7 +2334,7 @@ bool cproxy_bucket_downstream(mcs_server_st *server,
             int amt = (len > (int)sizeof(buf) ? (int)sizeof(buf) : len);
             if (mcs_server_st_read(server,
                                    buf,
-                                   amt) != MEMCACHED_SUCCESS) {
+                                   amt) != MCS_SUCCESS) {
                 return false;
             }
             len -= amt;

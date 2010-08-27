@@ -164,10 +164,11 @@ void mcs_server_st_quit(mcs_server_st *ptr, uint8_t io_death) {
 }
 
 mcs_return mcs_server_st_connect(mcs_server_st *ptr) {
-    if (ptr->fd != -1)
-        return MEMCACHED_SUCCESS;
+    if (ptr->fd != -1) {
+        return MCS_SUCCESS;
+    }
 
-    int ret = MEMCACHED_FAILURE;
+    int ret = MCS_FAILURE;
 
     struct addrinfo *ai   = NULL;
     struct addrinfo *next = NULL;
@@ -189,7 +190,7 @@ mcs_return mcs_server_st_connect(mcs_server_st *ptr) {
             //                                 "getaddrinfo(): %s\n", strerror(error));
         }
 
-        return MEMCACHED_FAILURE;
+        return MCS_FAILURE;
     }
 
     for (next = ai; next; next = next->ai_next) {
@@ -225,7 +226,7 @@ mcs_return mcs_server_st_connect(mcs_server_st *ptr) {
                    &flags, (socklen_t) sizeof(flags));
 
         ptr->fd = sock;
-        ret = MEMCACHED_SUCCESS;
+        ret = MCS_SUCCESS;
         break;
     }
 
@@ -238,14 +239,14 @@ mcs_return mcs_server_st_do(mcs_server_st *ptr,
                             const void *command,
                             size_t command_length,
                             uint8_t with_flush) {
-    if (mcs_server_st_connect(ptr) == MEMCACHED_SUCCESS) {
+    if (mcs_server_st_connect(ptr) == MCS_SUCCESS) {
         ssize_t n = mcs_server_st_io_write(ptr, command, command_length, with_flush);
         if (n == (ssize_t) command_length) {
-            return MEMCACHED_SUCCESS;
+            return MCS_SUCCESS;
         }
     }
 
-    return MEMCACHED_FAILURE;
+    return MCS_FAILURE;
 }
 
 ssize_t mcs_server_st_io_write(mcs_server_st *ptr,
@@ -268,7 +269,7 @@ mcs_return mcs_server_st_read(mcs_server_st *ptr,
     int flags = fcntl(ptr->fd, F_GETFL, 0);
     if (flags < 0 ||
         fcntl(ptr->fd, F_SETFL, flags & (~O_NONBLOCK)) < 0) {
-        return MEMCACHED_FAILURE;
+        return MCS_FAILURE;
     }
 
     char *data = dta;
@@ -278,14 +279,14 @@ mcs_return mcs_server_st_read(mcs_server_st *ptr,
         ssize_t n = read(ptr->fd, data + done, size - done);
         if (n == -1) {
             fcntl(ptr->fd, F_SETFL, flags);
-            return MEMCACHED_FAILURE;
+            return MCS_FAILURE;
         }
 
         done += (size_t) n;
     }
 
     fcntl(ptr->fd, F_SETFL, flags);
-    return MEMCACHED_SUCCESS;
+    return MCS_SUCCESS;
 }
 
 void mcs_server_st_io_reset(mcs_server_st *ptr) {
@@ -395,14 +396,20 @@ void mcs_server_st_quit(mcs_server_st *ptr, uint8_t io_death) {
 }
 
 mcs_return mcs_server_st_connect(mcs_server_st *ptr) {
-    return memcached_connect(ptr);
+    if (memcached_connect(ptr) == MEMCACHED_SUCCESS) {
+        return MCS_SUCCESS;
+    }
+    return MCS_FAILURE;
 }
 
 mcs_return mcs_server_st_do(mcs_server_st *ptr,
                             const void *command,
                             size_t command_length,
                             uint8_t with_flush) {
-    return memcached_do(ptr, command, command_length, with_flush);
+    if (memcached_do(ptr, command, command_length, with_flush) == MEMCACHED_SUCCESS) {
+        return MCS_SUCCESS;
+    }
+    return MCS_FAILURE;
 }
 
 ssize_t mcs_server_st_io_write(mcs_server_st *ptr,
@@ -415,7 +422,10 @@ ssize_t mcs_server_st_io_write(mcs_server_st *ptr,
 mcs_return mcs_server_st_read(mcs_server_st *ptr,
                               void *dta,
                               size_t size) {
-    return memcached_safe_read(ptr, dta, size);
+    if (memcached_safe_read(ptr, dta, size) == MEMCACHED_SUCCESS) {
+        return MCS_SUCCESS;
+    }
+    return MCS_FAILURE;
 }
 
 void mcs_server_st_io_reset(mcs_server_st *ptr) {
