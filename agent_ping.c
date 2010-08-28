@@ -161,7 +161,7 @@ enum conflate_mgmt_cb_result on_conflate_ping_test(void *userdata,
     return RV_OK;
 }
 
-#ifndef MOXI_USE_VBUCKET
+#ifdef MOXI_USE_LIBMEMCACHED
 static void perform_ping_test(struct ping_test_recipe recipe,
                               memcached_st *mst,
                               struct moxi_stats *out, int *failures)
@@ -219,13 +219,13 @@ static void perform_ping_test(struct ping_test_recipe recipe,
     free(key);
     free(value);
 }
-#endif // !MOXI_USE_VBUCKET
+#endif // MOXI_USE_LIBMEMCACHED
 
 static void ping_server(char *server_name,
                         struct ping_test_recipe *recipes,
                         proxy_behavior *behavior,
                         conflate_form_result *r) {
-#ifndef MOXI_USE_VBUCKET
+#ifdef MOXI_USE_LIBMEMCACHED
     assert(server_name);
     assert(behavior);
     assert(r);
@@ -338,11 +338,11 @@ static void ping_server(char *server_name,
 
         memcached_free(&mst);
     }
-#else // !MOXI_USE_VBUCKET
+#else // MOXI_USE_LIBMEMCACHED
     (void) server_name;
     (void) recipes;
     (void) behavior;
     (void) r;
-#endif // !MOXI_USE_VBUCKET
+#endif // !MOXI_USE_LIBMEMCACHED
 }
 

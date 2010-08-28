@@ -38,35 +38,6 @@ typedef struct {
     mcs_server_st *servers;
 } mcs_st;
 
-// ----------------------------------------
-
-#ifdef MOXI_USE_VBUCKET
-
-#include <libvbucket/vbucket.h>
-
-typedef struct {
-    VBUCKET_CONFIG_HANDLE vch;
-    mcs_server_st *servers;    // Array, size == vbucket_config_get_num_servers(vch);
-} lvb_st;
-
-#define MOXI_DEFAULT_LISTEN_PORT      11211
-#define MEMCACHED_DEFAULT_LISTEN_PORT 0
-
-#else // !MOXI_USE_VBUCKET
-
-#define MOXI_DEFAULT_LISTEN_PORT      0
-#define MEMCACHED_DEFAULT_LISTEN_PORT 11210
-
-#include <libmemcached/memcached.h>
-
-#define mcs_return    memcached_return
-#define mcs_st        memcached_st
-#define mcs_server_st memcached_server_st
-
-#endif // !MOXI_USE_VBUCKET
-
-// ----------------------------------------
-
 mcs_st *mcs_create(mcs_st *ptr, const char *config);
 void    mcs_free(mcs_st *ptr);
 
@@ -100,5 +71,32 @@ int mcs_server_st_port(mcs_server_st *ptr);
 int mcs_server_st_fd(mcs_server_st *ptr);
 const char *mcs_server_st_usr(mcs_server_st *ptr);
 const char *mcs_server_st_pwd(mcs_server_st *ptr);
+
+// ----------------------------------------
+
+#define MOXI_DEFAULT_LISTEN_PORT      0
+#define MEMCACHED_DEFAULT_LISTEN_PORT 11210
+
+// ----------------------------------------
+
+#ifdef MOXI_USE_LIBMEMCACHED
+
+#include <libmemcached/memcached.h>
+
+#endif // MOXI_USE_LIBMEMCACHED
+
+// ----------------------------------------
+
+#ifdef MOXI_USE_LIBVBUCKET
+
+#include <libvbucket/vbucket.h>
+
+#undef  MOXI_DEFAULT_LISTEN_PORT
+#define MOXI_DEFAULT_LISTEN_PORT      11211
+
+#undef  MEMCACHED_DEFAULT_LISTEN_PORT
+#define MEMCACHED_DEFAULT_LISTEN_PORT 0
+
+#endif // MOXI_USE_LIBVBUCKET
 
 #endif // MCS_H

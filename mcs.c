@@ -3,6 +3,7 @@
 #include "config.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #include <string.h>
 #include <unistd.h>
 #include <fcntl.h>
@@ -27,19 +28,21 @@ uint32_t lmc_key_hash(mcs_st *ptr, const char *key, size_t key_length, int *vbuc
 // ----------------------------------------------------------------------
 
 mcs_st *mcs_create(mcs_st *ptr, const char *config) {
-#ifdef MOXI_USE_VBUCKET
+#ifdef MOXI_USE_LIBVBUCKET
     return lvb_create(ptr, config);
-#else
+#endif
+#ifdef MOXI_USE_LIBMEMCACHED
     return lmc_create(ptr, config);
 #endif
 }
 
 void mcs_free(mcs_st *ptr) {
-#ifdef MOXI_USE_VBUCKET
+#ifdef MOXI_USE_LIBVBUCKET
     if (ptr->kind == MCS_KIND_LIBVBUCKET) {
         lvb_free_data(ptr);
     }
-#else
+#endif
+#ifdef MOXI_USE_LIBMEMCACHED
     if (ptr->kind == MCS_KIND_LIBMEMCACHED) {
         lmc_free_data(ptr);
     }
@@ -62,9 +65,11 @@ void mcs_free(mcs_st *ptr) {
 }
 
 bool mcs_stable_update(mcs_st *curr_version, mcs_st *next_version) {
+#ifdef MOXI_USE_LIBVBUCKET
     if (curr_version->kind == MCS_KIND_LIBVBUCKET) {
         return lvb_stable_update(curr_version, next_version);
     }
+#endif
 
     // TODO: MCS_KIND_LIBMEMCACHED impl for stable update.
 
@@ -80,11 +85,12 @@ mcs_server_st *mcs_server_index(mcs_st *ptr, int i) {
 }
 
 uint32_t mcs_key_hash(mcs_st *ptr, const char *key, size_t key_length, int *vbucket) {
-#ifdef MOXI_USE_VBUCKET
+#ifdef MOXI_USE_LIBVBUCKET
     if (ptr->kind == MCS_KIND_LIBVBUCKET) {
         return lvb_key_hash(ptr, key, key_length, vbucket);
     }
-#else
+#endif
+#ifdef MOXI_USE_LIBMEMCACHED
     if (ptr->kind == MCS_KIND_LIBMEMCACHED) {
         return lmc_key_hash(ptr, key, key_length, vbucket);
     }
@@ -93,14 +99,16 @@ uint32_t mcs_key_hash(mcs_st *ptr, const char *key, size_t key_length, int *vbuc
 }
 
 void mcs_server_invalid_vbucket(mcs_st *ptr, int server_index, int vbucket) {
+#ifdef MOXI_USE_LIBVBUCKET
     if (ptr->kind == MCS_KIND_LIBVBUCKET) {
-        return lvb_server_invalid_vbucket(ptr, server_index, vbucket);
+        lvb_server_invalid_vbucket(ptr, server_index, vbucket);
     }
+#endif
 }
 
 // ----------------------------------------------------------------------
 
-#ifdef MOXI_USE_VBUCKET
+#ifdef MOXI_USE_LIBVBUCKET
 
 mcs_st *lvb_create(mcs_st *ptr, const char *config) {
     assert(ptr);
@@ -241,7 +249,11 @@ void lvb_server_invalid_vbucket(mcs_st *ptr, int server_index, int vbucket) {
     vbucket_found_incorrect_master(vch, vbucket, server_index);
 }
 
-#else // !MOXI_USE_VBUCKET
+#endif // MOXI_USE_LIBVBUCKET
+
+// ----------------------------------------------------------------------
+
+#ifdef MOXI_USE_LIBMEMCACHED
 
 mcs_st *lmc_create(mcs_st *ptr, const char *config) {
     assert(ptr);
@@ -271,9 +283,10 @@ mcs_st *lmc_create(mcs_st *ptr, const char *config) {
 
                     int j = 0;
                     for (; j < ptr->nservers; j++) {
-                        strncpy(ptr->servers[j].hostname, memcached_server_name(mservers[j]),
+                        strncpy(ptr->servers[j].hostname,
+                                memcached_server_name(mservers + j),
                                 sizeof(ptr->servers[j].hostname) - 1);
-                        ptr->servers[j].port = (int) memcached_server_port(mservers[j]);
+                        ptr->servers[j].port = (int) memcached_server_port(mservers + j);
                         if (ptr->servers[j].port <= 0) {
                             moxi_log_write("lmc_create failed, could not parse port: %s\n",
                                            config);
@@ -319,7 +332,7 @@ uint32_t lmc_key_hash(mcs_st *ptr, const char *key, size_t key_length, int *vbuc
     return memcached_generate_hash((memcached_st *) ptr->data, key, key_length);
 }
 
-#endif // !MOXI_USE_VBUCKET
+#endif // MOXI_USE_LIBMEMCACHED
 
 // ----------------------------------------------------------------------
 
