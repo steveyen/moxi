@@ -10,26 +10,117 @@
 #include "mcs.h"
 #include "log.h"
 
-#ifdef MOXI_USE_VBUCKET
+// The lvb stands for libvbucket.
+//
+mcs_st  *lvb_create(mcs_st *ptr, const char *config);
+void     lvb_free_data(mcs_st *ptr);
+bool     lvb_stable_update(mcs_st *curr_version, mcs_st *next_version);
+uint32_t lvb_key_hash(mcs_st *ptr, const char *key, size_t key_length, int *vbucket);
+void     lvb_server_invalid_vbucket(mcs_st *ptr, int server_index, int vbucket);
+
+// The lmc stands for libmemcached.
+//
+mcs_st  *lmc_create(mcs_st *ptr, const char *config);
+void     lmc_free_data(mcs_st *ptr);
+uint32_t lmc_key_hash(mcs_st *ptr, const char *key, size_t key_length, int *vbucket);
+
+// ----------------------------------------------------------------------
 
 mcs_st *mcs_create(mcs_st *ptr, const char *config) {
-    assert(ptr);
+#ifdef MOXI_USE_VBUCKET
+    return lvb_create(ptr, config);
+#else
+    return lmc_create(ptr, config);
+#endif
+}
+
+void mcs_free(mcs_st *ptr) {
+#ifdef MOXI_USE_VBUCKET
+    if (ptr->kind == MCS_KIND_LIBVBUCKET) {
+        lvb_free_data(ptr);
+    }
+#else
+    if (ptr->kind == MCS_KIND_LIBMEMCACHED) {
+        lmc_free_data(ptr);
+    }
+#endif
+    ptr->kind = MCS_KIND_UNKNOWN;
+
+    if (ptr->servers) {
+        for (int i = 0; i < ptr->nservers; i++) {
+            if (ptr->servers[i].usr != NULL) {
+                free(ptr->servers[i].usr);
+            }
+            if (ptr->servers[i].pwd != NULL) {
+                free(ptr->servers[i].pwd);
+            }
+        }
+        free(ptr->servers);
+    }
 
     memset(ptr, 0, sizeof(*ptr));
+}
 
-    ptr->vch = vbucket_config_parse_string(config);
-    if (ptr->vch != NULL) {
-        int n = vbucket_config_get_num_servers(ptr->vch);
-        if (n > 0) {
-            ptr->servers = calloc(sizeof(mcs_server_st), n);
+bool mcs_stable_update(mcs_st *curr_version, mcs_st *next_version) {
+    if (curr_version->kind == MCS_KIND_LIBVBUCKET) {
+        return lvb_stable_update(curr_version, next_version);
+    }
+
+    // TODO: MCS_KIND_LIBMEMCACHED impl for stable update.
+
+    return false;
+}
+
+uint32_t mcs_server_count(mcs_st *ptr) {
+    return (uint32_t) ptr->nservers;
+}
+
+mcs_server_st *mcs_server_index(mcs_st *ptr, int i) {
+    return &ptr->servers[i];
+}
+
+uint32_t mcs_key_hash(mcs_st *ptr, const char *key, size_t key_length, int *vbucket) {
+#ifdef MOXI_USE_VBUCKET
+    if (ptr->kind == MCS_KIND_LIBVBUCKET) {
+        return lvb_key_hash(ptr, key, key_length, vbucket);
+    }
+#else
+    if (ptr->kind == MCS_KIND_LIBMEMCACHED) {
+        return lmc_key_hash(ptr, key, key_length, vbucket);
+    }
+#endif
+    return 0;
+}
+
+void mcs_server_invalid_vbucket(mcs_st *ptr, int server_index, int vbucket) {
+    if (ptr->kind == MCS_KIND_LIBVBUCKET) {
+        return lvb_server_invalid_vbucket(ptr, server_index, vbucket);
+    }
+}
+
+// ----------------------------------------------------------------------
+
+#ifdef MOXI_USE_VBUCKET
+
+mcs_st *lvb_create(mcs_st *ptr, const char *config) {
+    assert(ptr);
+    memset(ptr, 0, sizeof(*ptr));
+    ptr->kind = MCS_KIND_LIBVBUCKET;
+
+    VBUCKET_CONFIG_HANDLE vch = vbucket_config_parse_string(config);
+    if (vch != NULL) {
+        ptr->data     = vch;
+        ptr->nservers = vbucket_config_get_num_servers(vch);
+        if (ptr->nservers > 0) {
+            ptr->servers = calloc(sizeof(mcs_server_st), ptr->nservers);
             if (ptr->servers != NULL) {
-                for (int i = 0; i < n; i++) {
+                for (int i = 0; i < ptr->nservers; i++) {
                     ptr->servers[i].fd = -1;
                 }
 
                 int j = 0;
-                for (; j < n; j++) {
-                    const char *hostport = vbucket_config_get_server(ptr->vch, j);
+                for (; j < ptr->nservers; j++) {
+                    const char *hostport = vbucket_config_get_server(vch, j);
                     if (hostport != NULL &&
                         strlen(hostport) > 0 &&
                         strlen(hostport) < sizeof(ptr->servers[j].hostname) - 1) {
@@ -56,25 +147,25 @@ mcs_st *mcs_create(mcs_st *ptr, const char *config) {
                         break;
                     }
 
-                    const char *user = vbucket_config_get_user(ptr->vch);
+                    const char *user = vbucket_config_get_user(vch);
                     if (user != NULL) {
                         ptr->servers[j].usr = strdup(user);
                     }
 
-                    const char *password = vbucket_config_get_password(ptr->vch);
+                    const char *password = vbucket_config_get_password(vch);
                     if (password != NULL) {
                         ptr->servers[j].pwd = strdup(password);
                     }
                 }
 
-                if (j >= n) {
+                if (j >= ptr->nservers) {
                     return ptr;
                 }
             }
         }
     } else {
         moxi_log_write("mcs_create failed, vbucket_config_parse_string: %s\n",
-                config);
+                       config);
     }
 
     mcs_free(ptr);
@@ -82,33 +173,14 @@ mcs_st *mcs_create(mcs_st *ptr, const char *config) {
     return NULL;
 }
 
-void mcs_free(mcs_st *ptr) {
-    if (ptr->servers) {
-        if (ptr->vch != NULL) {
-            int n = vbucket_config_get_num_servers(ptr->vch);
-            for (int i = 0; i < n; i++) {
-                if (ptr->servers[i].usr != NULL) {
-                    free(ptr->servers[i].usr);
-                }
-                if (ptr->servers[i].pwd != NULL) {
-                    free(ptr->servers[i].pwd);
-                }
-            }
-        }
-        free(ptr->servers);
-    }
-    if (ptr->vch) {
-        vbucket_config_destroy(ptr->vch);
-    }
-    memset(ptr, 0, sizeof(*ptr));
-}
+void lvb_free_data(mcs_st *ptr) {
+    assert(ptr->kind == MCS_KIND_LIBVBUCKET);
 
-uint32_t mcs_server_count(mcs_st *ptr) {
-    return (uint32_t) vbucket_config_get_num_servers(ptr->vch);
-}
+    if (ptr->data != NULL) {
+        vbucket_config_destroy((VBUCKET_CONFIG_HANDLE) ptr->data);
+    }
 
-mcs_server_st *mcs_server_index(mcs_st *ptr, int i) {
-    return &ptr->servers[i];
+    ptr->data = NULL;
 }
 
 /* Returns true if curr_version could be updated with next_version in
@@ -120,15 +192,22 @@ mcs_server_st *mcs_server_index(mcs_st *ptr, int i) {
  * The next_version may be destroyed in this call, and the caller
  * should afterwards only call mcs_free() on the next_version.
  */
-bool mcs_stable_update(mcs_st *curr_version, mcs_st *next_version) {
+bool lvb_stable_update(mcs_st *curr_version, mcs_st *next_version) {
+    assert(curr_version->kind == MCS_KIND_LIBVBUCKET);
+    assert(curr_version->data != NULL);
+    assert(next_version->kind == MCS_KIND_LIBVBUCKET);
+    assert(next_version->data != NULL);
+
     bool rv = false;
 
-    VBUCKET_CONFIG_DIFF *diff = vbucket_compare(curr_version->vch, next_version->vch);
+    VBUCKET_CONFIG_DIFF *diff =
+        vbucket_compare((VBUCKET_CONFIG_HANDLE) curr_version->data,
+                        (VBUCKET_CONFIG_HANDLE) next_version->data);
     if (diff != NULL) {
         if (!diff->sequence_changed) {
-            vbucket_config_destroy(curr_version->vch);
-            curr_version->vch = next_version->vch;
-            next_version->vch = 0;
+            vbucket_config_destroy((VBUCKET_CONFIG_HANDLE) curr_version->data);
+            curr_version->data = next_version->data;
+            next_version->data = 0;
 
             rv = true;
         }
@@ -139,18 +218,110 @@ bool mcs_stable_update(mcs_st *curr_version, mcs_st *next_version) {
     return rv;
 }
 
-uint32_t mcs_key_hash(mcs_st *ptr, const char *key, size_t key_length, int *vbucket) {
-    int v = vbucket_get_vbucket_by_key(ptr->vch, key, key_length);
+uint32_t lvb_key_hash(mcs_st *ptr, const char *key, size_t key_length, int *vbucket) {
+    assert(ptr->kind == MCS_KIND_LIBVBUCKET);
+    assert(ptr->data != NULL);
+
+    VBUCKET_CONFIG_HANDLE vch = (VBUCKET_CONFIG_HANDLE) ptr->data;
+
+    int v = vbucket_get_vbucket_by_key(vch, key, key_length);
     if (vbucket != NULL) {
         *vbucket = v;
     }
 
-    return (uint32_t) vbucket_get_master(ptr->vch, v);
+    return (uint32_t) vbucket_get_master(vch, v);
 }
 
-void mcs_server_invalid_vbucket(mcs_st *ptr, int server_index, int vbucket) {
-    vbucket_found_incorrect_master(ptr->vch, vbucket, server_index);
+void lvb_server_invalid_vbucket(mcs_st *ptr, int server_index, int vbucket) {
+    assert(ptr->kind == MCS_KIND_LIBVBUCKET);
+    assert(ptr->data != NULL);
+
+    VBUCKET_CONFIG_HANDLE vch = (VBUCKET_CONFIG_HANDLE) ptr->data;
+
+    vbucket_found_incorrect_master(vch, vbucket, server_index);
 }
+
+#else // !MOXI_USE_VBUCKET
+
+mcs_st *lmc_create(mcs_st *ptr, const char *config) {
+    assert(ptr);
+    memset(ptr, 0, sizeof(*ptr));
+    ptr->kind = MCS_KIND_LIBMEMCACHED;
+
+    memcached_st *mst = memcached_create(NULL);
+    if (mst != NULL) {
+        memcached_behavior_set(mst, MEMCACHED_BEHAVIOR_NO_BLOCK, 1);
+        memcached_behavior_set(mst, MEMCACHED_BEHAVIOR_KETAMA, 1);
+        memcached_behavior_set(mst, MEMCACHED_BEHAVIOR_TCP_NODELAY, 1);
+
+        memcached_server_st *mservers;
+
+        mservers = memcached_servers_parse(config);
+        if (mservers != NULL) {
+            memcached_server_push(mst, mservers);
+
+            ptr->data     = mst;
+            ptr->nservers = (int) memcached_server_list_count(mservers);
+            if (ptr->nservers > 0) {
+                ptr->servers = calloc(sizeof(mcs_server_st), ptr->nservers);
+                if (ptr->servers != NULL) {
+                    for (int i = 0; i < ptr->nservers; i++) {
+                        ptr->servers[i].fd = -1;
+                    }
+
+                    int j = 0;
+                    for (; j < ptr->nservers; j++) {
+                        strncpy(ptr->servers[j].hostname, memcached_server_name(mservers[j]),
+                                sizeof(ptr->servers[j].hostname) - 1);
+                        ptr->servers[j].port = (int) memcached_server_port(mservers[j]);
+                        if (ptr->servers[j].port <= 0) {
+                            moxi_log_write("lmc_create failed, could not parse port: %s\n",
+                                           config);
+                            break;
+                        }
+                    }
+
+                    if (j >= ptr->nservers) {
+                        memcached_server_list_free(mservers);
+
+                        return ptr;
+                    }
+                }
+            }
+
+            memcached_server_list_free(mservers);
+        }
+    }
+
+    mcs_free(ptr);
+
+    return NULL;
+}
+
+void lmc_free_data(mcs_st *ptr) {
+    assert(ptr->kind == MCS_KIND_LIBMEMCACHED);
+
+    if (ptr->data != NULL) {
+        memcached_free((memcached_st *) ptr->data);
+    }
+
+    ptr->data = NULL;
+}
+
+uint32_t lmc_key_hash(mcs_st *ptr, const char *key, size_t key_length, int *vbucket) {
+    assert(ptr->kind == MCS_KIND_LIBMEMCACHED);
+    assert(ptr->data != NULL);
+
+    if (vbucket != NULL) {
+        *vbucket = -1;
+    }
+
+    return memcached_generate_hash((memcached_st *) ptr->data, key, key_length);
+}
+
+#endif // !MOXI_USE_VBUCKET
+
+// ----------------------------------------------------------------------
 
 void mcs_server_st_quit(mcs_server_st *ptr, uint8_t io_death) {
     (void) io_death;
@@ -315,143 +486,3 @@ const char *mcs_server_st_pwd(mcs_server_st *ptr) {
     return ptr->pwd;
 }
 
-#else // !MOXI_USE_VBUCKET
-
-// The following is abuse of private internals from libmemcached!!!!
-// Using these symbols doesn't work if you try to link with a shared
-// version of libmemcached, so you need an archive
-// It should be fixed ASAP
-extern void* memcached_server_instance_fetch(memcached_st *ptr,
-                                             uint32_t server_key);
-/* extern void memcached_quit_server(memcached_server_st *ptr, bool io_death); */
-extern memcached_return_t memcached_connect(void* ptr);
-extern memcached_return_t memcached_do(void *ptr, const void *command,
-                                       size_t command_length,
-                                       bool with_flush);
-extern ssize_t memcached_io_write(void *ptr, const void *buffer,
-                                  size_t length, bool with_flush);
-extern memcached_return_t memcached_safe_read(void *ptr, void *dta,
-                                              size_t size);
-extern void memcached_io_reset(void *ptr);
-// END libmemcached hack
-
-mcs_st *mcs_create(mcs_st *ptr, const char *config) {
-    ptr = memcached_create(ptr);
-    if (ptr != NULL) {
-        memcached_behavior_set(ptr, MEMCACHED_BEHAVIOR_NO_BLOCK, 1);
-        memcached_behavior_set(ptr, MEMCACHED_BEHAVIOR_KETAMA, 1);
-        memcached_behavior_set(ptr, MEMCACHED_BEHAVIOR_TCP_NODELAY, 1);
-
-        memcached_server_st *mservers;
-
-        mservers = memcached_servers_parse(config);
-        if (mservers != NULL) {
-            memcached_server_push(ptr, mservers);
-            memcached_server_list_free(mservers);
-
-            return ptr;
-        }
-
-        mcs_free(ptr);
-    }
-
-    return NULL;
-}
-
-void mcs_free(mcs_st *ptr) {
-    memcached_free(ptr);
-}
-
-uint32_t mcs_server_count(mcs_st *ptr) {
-    return memcached_server_count(ptr);
-}
-
-mcs_server_st *mcs_server_index(mcs_st *ptr, int i) {
-    return memcached_server_instance_fetch(ptr, i);
-}
-
-bool mcs_stable_update(mcs_st *curr_version, mcs_st *next_version) {
-    (void)curr_version;
-    (void)next_version;
-    return false;
-}
-
-uint32_t mcs_key_hash(mcs_st *ptr, const char *key, size_t key_length, int *vbucket) {
-    if (vbucket != NULL) {
-        *vbucket = -1;
-    }
-
-    return memcached_generate_hash(ptr, key, key_length);
-}
-
-void mcs_server_invalid_vbucket(mcs_st *ptr, int server_index, int vbucket) {
-    (void)ptr;
-    (void)server_index;
-    (void)vbucket;
-    // NO-OP for libmemcached.
-}
-
-void mcs_server_st_quit(mcs_server_st *ptr, uint8_t io_death) {
-    memcached_quit_server(ptr, io_death);
-}
-
-mcs_return mcs_server_st_connect(mcs_server_st *ptr) {
-    if (memcached_connect(ptr) == MEMCACHED_SUCCESS) {
-        return MCS_SUCCESS;
-    }
-    return MCS_FAILURE;
-}
-
-mcs_return mcs_server_st_do(mcs_server_st *ptr,
-                            const void *command,
-                            size_t command_length,
-                            uint8_t with_flush) {
-    if (memcached_do(ptr, command, command_length, with_flush) == MEMCACHED_SUCCESS) {
-        return MCS_SUCCESS;
-    }
-    return MCS_FAILURE;
-}
-
-ssize_t mcs_server_st_io_write(mcs_server_st *ptr,
-                               const void *buffer,
-                               size_t length,
-                               char with_flush) {
-    return memcached_io_write(ptr, buffer, length, with_flush);
-}
-
-mcs_return mcs_server_st_read(mcs_server_st *ptr,
-                              void *dta,
-                              size_t size) {
-    if (memcached_safe_read(ptr, dta, size) == MEMCACHED_SUCCESS) {
-        return MCS_SUCCESS;
-    }
-    return MCS_FAILURE;
-}
-
-void mcs_server_st_io_reset(mcs_server_st *ptr) {
-    memcached_io_reset(ptr);
-}
-
-const char *mcs_server_st_hostname(mcs_server_st *ptr) {
-    return ptr->hostname;
-}
-
-int mcs_server_st_port(mcs_server_st *ptr) {
-    return ptr->port;
-}
-
-int mcs_server_st_fd(mcs_server_st *ptr) {
-    return ptr->fd;
-}
-
-const char *mcs_server_st_usr(mcs_server_st *ptr) {
-    (void)ptr;
-    return NULL;
-}
-
-const char *mcs_server_st_pwd(mcs_server_st *ptr) {
-    (void)ptr;
-    return NULL;
-}
-
-#endif // !MOXI_USE_VBUCKET
