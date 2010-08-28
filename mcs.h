@@ -7,20 +7,21 @@
 #include "config.h"
 #endif
 
+// The mcs API's are a level of indirection from direct libmemcached
+// and libvbucket API usage.
+//
 typedef enum {
-  MCS_SUCCESS,
-  MCS_FAILURE,
-  MCS_MAXIMUM_RETURN /* Always add new error code before */
+    MCS_SUCCESS = 0,
+    MCS_FAILURE,
+    MCS_MAXIMUM_RETURN /* Always add new error code before */
 } mcs_return;
 
-#ifdef MOXI_USE_VBUCKET
-#include <libvbucket/vbucket.h>
-#endif // MOXI_USE_VBUCKET
-
-// The mcs API's are a level of indirection from direct libmemcached
-// API usage.
-//
-#ifdef MOXI_USE_VBUCKET
+typedef enum {
+    MCS_KIND_UNKNOWN = 0,
+    MCS_KIND_LIBVBUCKET,
+    MCS_KIND_LIBMEMCACHED,
+    MCS_KIND_MAX
+} mcs_kind;
 
 typedef struct {
     char hostname[200];
@@ -31,9 +32,22 @@ typedef struct {
 } mcs_server_st;
 
 typedef struct {
+    mcs_kind       kind;
+    void          *data;     // Depends on kind.
+    int            nservers; // Size of servers array.
+    mcs_server_st *servers;
+} mcs_st;
+
+// ----------------------------------------
+
+#ifdef MOXI_USE_VBUCKET
+
+#include <libvbucket/vbucket.h>
+
+typedef struct {
     VBUCKET_CONFIG_HANDLE vch;
     mcs_server_st *servers;    // Array, size == vbucket_config_get_num_servers(vch);
-} mcs_st;
+} lvb_st;
 
 #define MOXI_DEFAULT_LISTEN_PORT      11211
 #define MEMCACHED_DEFAULT_LISTEN_PORT 0
@@ -51,13 +65,14 @@ typedef struct {
 
 #endif // !MOXI_USE_VBUCKET
 
+// ----------------------------------------
+
 mcs_st *mcs_create(mcs_st *ptr, const char *config);
 void    mcs_free(mcs_st *ptr);
 
 bool mcs_stable_update(mcs_st *curr_version, mcs_st *next_version);
 
 uint32_t       mcs_server_count(mcs_st *ptr);
-mcs_return     mcs_server_push(mcs_st *ptr, mcs_server_st *list);
 mcs_server_st *mcs_server_index(mcs_st *ptr, int i);
 
 uint32_t mcs_key_hash(mcs_st *ptr, const char *key, size_t key_length, int *vbucket);
