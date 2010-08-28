@@ -19,7 +19,7 @@ PANDORA_REQUIRE_LIBHASHKIT
 PANDORA_HAVE_LIBCONFLATE
 AS_IF([test "x${ac_cv_libconflate}" = "xyes"], [
       AC_DEFINE([HAVE_CONFLATE_H], 1,
-          [Defined if building with libconflate XMPP management])])
+          [Defined if building with libconflate management])])
 PANDORA_HAVE_LIBVBUCKET
 
 AC_SUBST(PROFILER_FLAGS)
@@ -48,14 +48,29 @@ AH_BOTTOM([
 #endif
 ])
 
-AC_ARG_ENABLE(moxi-vbucket,
-  [AS_HELP_STRING([--enable-moxi-vbucket], [use libvbucket instead of libmemcached @<:@default=off@:>@])],
-  [ac_cv_enable_moxi_vbucket="$enableval"],
-  [ac_cv_enable_moxi_vbucket="no"])
+dnl ----------------------------------------------------------------------------
 
-AS_IF(test "x$ac_cv_enable_moxi_vbucket" = "xyes",
-      AC_DEFINE([MOXI_USE_VBUCKET], 1, [Defined moxi to use libvbucket]))
-AM_CONDITIONAL(MOXI_USE_VBUCKET, test "x$ac_cv_enable_moxi_vbucket" = "xyes")
+AC_ARG_ENABLE(moxi-libvbucket,
+  [AS_HELP_STRING([--enable-moxi-libvbucket], [use libvbucket @<:@default=off@:>@])],
+  [ac_cv_enable_moxi_libvbucket="$enableval"],
+  [ac_cv_enable_moxi_libvbucket="no"])
+
+AS_IF(test "x$ac_cv_enable_moxi_libvbucket" = "xyes",
+      AC_DEFINE([MOXI_USE_LIBVBUCKET], 1, [Defined moxi to use libvbucket]))
+AM_CONDITIONAL(MOXI_USE_LIBVBUCKET, test "x$ac_cv_enable_moxi_libvbucket" = "xyes")
+
+dnl ----------------------------------------------------------------------------
+
+AC_ARG_ENABLE(moxi-libmemcached,
+  [AS_HELP_STRING([--enable-moxi-libmemcached], [use libmemcached @<:@default=off@:>@])],
+  [ac_cv_enable_moxi_libmemcached="$enableval"],
+  [ac_cv_enable_moxi_libmemcached="no"])
+
+AS_IF(test "x$ac_cv_enable_moxi_libmemcached" = "xyes",
+      AC_DEFINE([MOXI_USE_LIBMEMCACHED], 1, [Defined moxi to use libmemcached]))
+AM_CONDITIONAL(MOXI_USE_LIBMEMCACHED, test "x$ac_cv_enable_moxi_libmemcached" = "xyes")
+
+dnl ----------------------------------------------------------------------------
 
 AC_ARG_ENABLE(moxi-malloc,
   [AS_HELP_STRING([--enable-moxi-malloc], [use malloc for items instead of slabber])])
@@ -230,7 +245,6 @@ AC_PATH_PROG([XSLTPROC], [xsltproc], "no")
 
 AM_CONDITIONAL([BUILD_SPECIFICATIONS],
                [test "x$enable_docs" != "xno" -a "x$XML2RFC" != "xno" -a "x$XSLTPROC" != "xno"])
-
 
 AC_CHECK_HEADERS_ONCE(sys/socket.h netdb.h arpa/inet.h pwd.h sys/mman.h netinet/tcp.h sysexits.h sys/uio.h sys/resource.h sys/un.h netinet/in.h winsock2.h syslog.h)
 AS_IF(test "x$ac_cv_header_winsock2_h" = "xyes",

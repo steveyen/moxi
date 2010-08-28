@@ -382,7 +382,7 @@ void on_conflate_new_config(void *userdata, kvpair_t *config) {
     work_collect_wait(&completion);
 }
 
-#ifdef MOXI_USE_VBUCKET
+#ifdef MOXI_USE_LIBVBUCKET
 
 static bool cproxy_on_config_json_one(proxy_main *m, uint32_t new_config_ver,
                                       char *config, char *name);
@@ -592,7 +592,7 @@ bool cproxy_on_config_json_one(proxy_main *m, uint32_t new_config_ver,
     return rv;
 }
 
-#else // !MOXI_USE_VBUCKET
+#else // !MOXI_USE_LIBVBUCKET
 
 static
 bool cproxy_on_config_kvs(proxy_main *m, uint32_t new_config_ver, kvpair_t *kvs) {
@@ -773,7 +773,7 @@ bool cproxy_on_config_kvs(proxy_main *m, uint32_t new_config_ver, kvpair_t *kvs)
     return true;
 }
 
-#endif // !MOXI_USE_VBUCKET
+#endif // !MOXI_USE_LIBVBUCKET
 
 static
 void cproxy_on_config(void *data0, void *data1) {
@@ -807,7 +807,7 @@ void cproxy_on_config(void *data0, void *data1) {
         moxi_log_write("conc new_config_ver %u\n", new_config_ver);
     }
 
-#ifdef MOXI_USE_VBUCKET
+#ifdef MOXI_USE_LIBVBUCKET
     char **contents = get_key_values(kvs, "contents");
     if (contents != NULL &&
         contents[0] != NULL) {
@@ -820,11 +820,11 @@ void cproxy_on_config(void *data0, void *data1) {
             goto fail;
         }
     }
-#else // !MOXI_USE_VBUCKET
+#else // !MOXI_USE_LIBVBUCKET
     if (cproxy_on_config_kvs(m, new_config_ver, kvs) == false) {
         goto fail;
     }
-#endif // !MOXI_USE_VBUCKET
+#endif // !MOXI_USE_LIBVBUCKET
 
     // If there were any proxies that weren't updated in the
     // previous loop, we need to shut them down.  We mark the

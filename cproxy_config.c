@@ -281,7 +281,7 @@ int cproxy_init(char *cfg_str,
         behavior_str = "";
     }
 
-#ifdef MOXI_USE_VBUCKET
+#ifdef MOXI_USE_LIBVBUCKET
     // The vbucket feature only works in binary protocol.
     //
     behavior_default_g.downstream_protocol = proxy_downstream_binary_prot;

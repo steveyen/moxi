@@ -4001,7 +4001,7 @@ static void clock_handler(const int fd, const short which, void *arg) {
 static void usage(char **argv) {
     printf(PACKAGE " " VERSION "\n");
     printf("\n");
-#ifdef MOXI_USE_VBUCKET
+#ifdef MOXI_USE_LIBVBUCKET
     printf("Usage:\n");
     printf("  %s [FLAGS] URL1[,URL2[,URLn]]\n", argv[0]);
     printf("    or\n");
