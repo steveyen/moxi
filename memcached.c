@@ -4001,23 +4001,35 @@ static void clock_handler(const int fd, const short which, void *arg) {
 static void usage(char **argv) {
     printf(PACKAGE " " VERSION "\n");
     printf("\n");
-#ifdef MOXI_USE_LIBVBUCKET
     printf("Usage:\n");
+#ifdef MOXI_USE_LIBVBUCKET
     printf("  %s [FLAGS] URL1[,URL2[,URLn]]\n", argv[0]);
-    printf("    or\n");
-    printf("  %s [FLAGS] -z ./path/to/configFile\n", argv[0]);
-    printf("\nThe URL's provide REST/JSON vbucket-server-map(s)\nfor dynamic cluster configuration.\n");
-    printf("\nExample URL:\n");
-    printf("  %s http://127.0.0.1:8080/pools/default/bucketsStreaming/default\n", argv[0]);
-#else
-    printf("  %s [FLAGS] -z <port=<mc_host:mc_port(,*)>\n\n", argv[0]);
-    printf("              moxi listens on the given port and forwards to\n"
-           "              downstream memcached servers running at\n"
-           "              mc_host:mc_port.  More than one mc_host:mc_port\n"
-           "              can be listed, separated by commas.\n"
-           "              For example, -z 11211=server1:11211,server2:11211\n");
+    printf("  %s [FLAGS] -z url=URL1[,URL2[,URLn]]\n", argv[0]);
 #endif
-    printf("\nThe optional FLAGS are...\n\n");
+#ifdef MOXI_USE_LIBMEMCACHED
+    printf("  %s [FLAGS] -z LOCAL_PORT=MCHOST[:MCPORT][,MCHOST2[:MCPORT2][,*]]\n", argv[0]);
+#endif
+#ifdef MOXI_USE_LIBVBUCKET
+    printf("\n");
+    printf("The URL's provide REST/JSON vbucket-server-map(s) for dynamic\n"
+           "REST-based cluster (re-)configurability, using libvbucket hashing.\n"
+           "Example:\n"
+           "  %s http://127.0.0.1:8080/pools/default/bucketsStreaming/default\n", argv[0]);
+#endif
+#ifdef MOXI_USE_LIBMEMCACHED
+    printf("\n");
+    printf("The MCHOST:MCPORT variant uses libmemcached/ketama hashing, where\n"
+           "moxi listens on the given LOCAL_PORT and forwards to downstream memcached\n"
+           "servers running at MCHOST:MCPORT.  More than one MCHOST:MCPORT\n"
+           "can be listed, separated by commas.  Example:\n"
+           "  %s -z 11211=mc_server1:11211,mc_server2:11211\n", argv[0]);
+#endif
+    printf("\n");
+    printf("The -z information can be instead supplied in a config file:\n");
+    printf("  %s [FLAGS] -z /path/to/absolute/configFile\n", argv[0]);
+    printf("  %s [FLAGS] -z ./path/to/relative/configFile\n", argv[0]);
+    printf("\n");
+    printf("The optional FLAGS are...\n\n");
     printf("-Z <key=val*> optional comma-separated key=value proxy behaviors, including:\n");
     printf("              port_listen=11211,downstream_max=1,downstream_protocol=binary\n");
     printf("-l <ip_addr>  interface to listen on (default: INADDR_ANY, all addresses)\n"
