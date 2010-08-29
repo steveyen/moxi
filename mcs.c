@@ -29,11 +29,16 @@ uint32_t lmc_key_hash(mcs_st *ptr, const char *key, size_t key_length, int *vbuc
 
 mcs_st *mcs_create(mcs_st *ptr, const char *config) {
 #ifdef MOXI_USE_LIBVBUCKET
-    return lvb_create(ptr, config);
+    if (config[0] == '{') {
+        return lvb_create(ptr, config);
+    }
 #endif
 #ifdef MOXI_USE_LIBMEMCACHED
-    return lmc_create(ptr, config);
+    if (config[0] != '{') {
+        return lmc_create(ptr, config);
+    }
 #endif
+    return NULL;
 }
 
 void mcs_free(mcs_st *ptr) {
