@@ -16,11 +16,13 @@
 // Special STATS value merging rules, instead of the
 // default to just sum the values.  Note the trailing space.
 //
-char *protocol_stats_keys_first = "pid ";
+char *protocol_stats_keys_first =
+    "pid version libevent "
+    "ep_version ep_dbname ep_storage_type ep_flusher_state ep_warmup_thread ";
+
 char *protocol_stats_keys_smallest =
     "uptime "
     "time "
-    "version "
     "pointer_size "
     "limit_maxbytes "
     "accepting_conns "
