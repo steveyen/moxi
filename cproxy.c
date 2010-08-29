@@ -91,8 +91,6 @@ proxy *cproxy_create(proxy_main *main,
     assert(port > 0);
     assert(config != NULL);
     assert(behavior_pool);
-    assert(behavior_pool->num > 0);
-    assert(behavior_pool->arr != NULL);
     assert(nthreads > 1); // Main thread + at least one worker.
     assert(nthreads == settings.num_threads);
 
@@ -974,8 +972,6 @@ downstream *cproxy_create_downstream(char *config,
                                      proxy_behavior_pool *behavior_pool) {
     assert(config != NULL);
     assert(behavior_pool != NULL);
-    assert(behavior_pool->num > 0);
-    assert(behavior_pool->arr != NULL);
 
     downstream *d = (downstream *) calloc(1, sizeof(downstream));
     if (d != NULL &&
