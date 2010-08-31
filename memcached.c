@@ -990,8 +990,8 @@ void write_bin_error(conn *c, protocol_binary_response_status err, int swallow) 
         moxi_log_write(">%d UNHANDLED ERROR: %d\n", c->sfd, err);
     }
 
-    if (settings.verbose > 0) {
-        moxi_log_write(">%d Writing an error: %s\n", c->sfd, errstr);
+    if (settings.verbose > 1) {
+        moxi_log_write(">%d Writing an error: %d %s\n", c->sfd, (int) err, errstr);
     }
 
     len = strlen(errstr);
