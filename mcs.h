@@ -52,7 +52,9 @@ void mcs_server_invalid_vbucket(mcs_st *ptr, int server_index, int vbucket);
 
 void mcs_server_st_quit(mcs_server_st *ptr, uint8_t io_death);
 
-mcs_return mcs_server_st_connect(mcs_server_st *ptr);
+mcs_return mcs_server_st_connect(mcs_server_st *ptr,
+                                 int *errno_out,
+                                 bool blocking);
 mcs_return mcs_server_st_do(mcs_server_st *ptr,
                             const void *commmand,
                             size_t command_length,

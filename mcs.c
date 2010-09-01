@@ -362,16 +362,23 @@ void mcs_server_st_quit(mcs_server_st *ptr, uint8_t io_death) {
     ptr->fd = -1;
 }
 
-mcs_return mcs_server_st_connect(mcs_server_st *ptr) {
+mcs_return mcs_server_st_connect(mcs_server_st *ptr, int *errno_out, bool blocking) {
     if (ptr->fd != -1) {
+        if (errno_out != NULL) {
+            *errno_out = 0;
+        }
+
         return MCS_SUCCESS;
+    }
+
+    if (errno_out != NULL) {
+        *errno_out = -1;
     }
 
     int ret = MCS_FAILURE;
 
     struct addrinfo *ai   = NULL;
     struct addrinfo *next = NULL;
-
     struct addrinfo hints = { .ai_flags = AI_PASSIVE,
                               .ai_socktype = SOCK_STREAM,
                               .ai_family = AF_UNSPEC };
@@ -401,7 +408,26 @@ mcs_return mcs_server_st_connect(mcs_server_st *ptr) {
             continue;
         }
 
+        if (!blocking &&
+            (mcs_set_sock_opt(sock) != MCS_SUCCESS)) {
+            close(sock);
+            sock = -1;
+            continue;
+        }
+
         if (connect(sock, ai->ai_addr, ai->ai_addrlen) == -1) {
+            int errno_last = errno;
+            if (errno_out != NULL) {
+                *errno_out = errno_last;
+            }
+
+            if (!blocking &&
+                errno_last == EINPROGRESS) {
+                ptr->fd = sock;
+                ret = MCS_SUCCESS;
+                break;
+            }
+
             // settings.extensions.logger->log(EXTENSION_LOG_WARNING, NULL,
             //                                 "Failed to connect socket: %s\n",
             //                                 strerror(errno));
@@ -504,7 +530,7 @@ mcs_return mcs_server_st_do(mcs_server_st *ptr,
                             const void *command,
                             size_t command_length,
                             uint8_t with_flush) {
-    if (mcs_server_st_connect(ptr) == MCS_SUCCESS) {
+    if (mcs_server_st_connect(ptr, NULL, true) == MCS_SUCCESS) {
         ssize_t n = mcs_server_st_io_write(ptr, command, command_length, with_flush);
         if (n == (ssize_t) command_length) {
             return MCS_SUCCESS;

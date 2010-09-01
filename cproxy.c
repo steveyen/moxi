@@ -41,10 +41,6 @@ void downstream_connect_time_sample(proxy_stats_td *ptds, uint64_t duration);
 
 int init_mcs_st(mcs_st *mst, char *config);
 
-int network_connect(struct addrinfo *use,
-                    int *status_out,
-                    int *errno_out);
-
 void cproxy_on_connect_downstream_conn(conn *c);
 
 conn *zstored_acquire_downstream_conn(downstream *d,
@@ -1209,7 +1205,7 @@ conn *cproxy_connect_downstream_conn(downstream *d,
 
     mcs_return rc;
 
-    rc = mcs_server_st_connect(msst);
+    rc = mcs_server_st_connect(msst, NULL, true);
     if (rc == MCS_SUCCESS) {
         int fd = mcs_server_st_fd(msst);
         if (fd >= 0) {
@@ -2644,57 +2640,6 @@ static bool set_hostinfo(char *host, bool is_tcp, struct addrinfo **ai_out) {
 #endif
 
     return true;
-}
-
-int network_connect(struct addrinfo *use,
-                    int *status_out,
-                    int *errno_out) {
-    *status_out = -1;
-
-    int fd = -1;
-
-    /* Create the socket */
-    while (use != NULL) {
-        /* Memcache server does not support IPV6 in udp mode,
-           so skip if not ipv4 */
-        // if (ptr->type == MEMCACHED_CONNECTION_UDP && use->ai_family != AF_INET)
-        if (use->ai_family == AF_INET) {
-            fd = socket(use->ai_family,
-                        use->ai_socktype,
-                        use->ai_protocol);
-            if (fd == -1) {
-                return fd;
-            }
-
-            if (mcs_set_sock_opt(fd) != MCS_SUCCESS) {
-                close(fd);
-                return -1;
-            }
-
-            if (connect(fd, use->ai_addr, use->ai_addrlen) != -1) {
-                return fd;
-            }
-
-            if (errno_out != NULL) {
-                *errno_out = errno;
-            }
-            if (errno == EINPROGRESS) {
-                *status_out = 1;
-            } else if (errno == EISCONN) { /* we are connected */
-                *status_out = 0;
-            } else {
-                *status_out = -1;
-                (void) close(fd);
-                fd = -1;
-            }
-
-            return fd;
-        }
-
-        use = use->ai_next;
-    }
-
-    return fd;
 }
 
 conn *zstored_acquire_downstream_conn(downstream *d,
