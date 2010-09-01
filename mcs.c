@@ -8,6 +8,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <assert.h>
+#include "memcached.h"
 #include "mcs.h"
 #include "log.h"
 
@@ -30,14 +31,23 @@ uint32_t lmc_key_hash(mcs_st *ptr, const char *key, size_t key_length, int *vbuc
 mcs_st *mcs_create(mcs_st *ptr, const char *config) {
 #ifdef MOXI_USE_LIBVBUCKET
     if (config[0] == '{') {
+        if (settings.verbose > 2) {
+            moxi_log_write("mcs_create using libvbucket\n");
+        }
         return lvb_create(ptr, config);
     }
 #endif
 #ifdef MOXI_USE_LIBMEMCACHED
     if (config[0] != '{') {
+        if (settings.verbose > 2) {
+            moxi_log_write("mcs_create using libmemcached\n");
+        }
         return lmc_create(ptr, config);
     }
 #endif
+    moxi_log_write("ERROR: unconfigured hash library\n");
+    exit(1);
+
     return NULL;
 }
 
