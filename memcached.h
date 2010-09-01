@@ -480,7 +480,7 @@ struct conn {
     protocol_binary_command cmd_curr;
 
     char     *cmd_start;      // Pointer into rbuf, snapshot of rcurr.
-    uint32_t  cmd_start_time; // Snapshot of msec_current_time.
+    uint64_t  cmd_start_time; // Snapshot of usec_now or msec_current_time.
     int       cmd_retries;
 
     bin_cmd *corked;

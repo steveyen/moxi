@@ -1216,13 +1216,6 @@ conn *cproxy_connect_downstream_conn(downstream *d,
     int fd = mcs_connect(mcs_server_st_hostname(msst),
                          mcs_server_st_port(msst), &err, true);
     if (fd != -1) {
-        d->ptd->stats.stats.tot_downstream_connect++;
-
-        if (start != 0 &&
-            d->ptd->behavior_pool.base.time_stats) {
-            downstream_connect_time_sample(&d->ptd->stats, usec_now() - start);
-        }
-
         conn *c = conn_new(fd, conn_pause, 0,
                            DATA_BUFFER_SIZE,
                            tcp_transport,
@@ -1231,6 +1224,7 @@ conn *cproxy_connect_downstream_conn(downstream *d,
         if (c != NULL ) {
             c->protocol = behavior->downstream_protocol;
             c->thread = thread;
+            c->cmd_start_time = start;
 
             if (downstream_connect_init(d, msst, behavior, c)) {
                 return c;
@@ -1249,6 +1243,13 @@ conn *cproxy_connect_downstream_conn(downstream *d,
 
 bool downstream_connect_init(downstream *d, mcs_server_st *msst,
                              proxy_behavior *behavior, conn *c) {
+    d->ptd->stats.stats.tot_downstream_connect++;
+
+    if (c->cmd_start_time != 0 &&
+        d->ptd->behavior_pool.base.time_stats) {
+        downstream_connect_time_sample(&d->ptd->stats, usec_now() - c->cmd_start_time);
+    }
+
     if (cproxy_auth_downstream(msst, behavior, c->sfd)) {
         d->ptd->stats.stats.tot_downstream_auth++;
 
