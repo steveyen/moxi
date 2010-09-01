@@ -425,6 +425,67 @@ mcs_return mcs_server_st_connect(mcs_server_st *ptr) {
 }
 
 mcs_return mcs_set_sock_opt(int sock) {
+    /* jsh: todo
+       TODO: from zstored set_socket_options()...
+
+    if (fd type == MEMCACHED_CONNECTION_UDP)
+       return true;
+
+#ifdef HAVE_SNDTIMEO
+    if (ptr->root->snd_timeout) {
+        int error;
+        struct timeval waittime;
+
+        waittime.tv_sec = 0;
+        waittime.tv_usec = ptr->root->snd_timeout;
+
+        error = setsockopt(ptr->fd, SOL_SOCKET, SO_SNDTIMEO,
+                           &waittime, (socklen_t)sizeof(struct timeval));
+        WATCHPOINT_ASSERT(error == 0);
+    }
+#endif
+
+#ifdef HAVE_RCVTIMEO
+    if (ptr->root->rcv_timeout) {
+        int error;
+        struct timeval waittime;
+
+        waittime.tv_sec = 0;
+        waittime.tv_usec = ptr->root->rcv_timeout;
+
+        error= setsockopt(ptr->fd, SOL_SOCKET, SO_RCVTIMEO,
+                          &waittime, (socklen_t)sizeof(struct timeval));
+        WATCHPOINT_ASSERT(error == 0);
+    }
+#endif
+
+  {
+    int error;
+    struct linger linger;
+
+    linger.l_onoff = 1;
+    linger.l_linger = DOWNSTREAM_DEFAULT_TIMEOUT;
+    error = setsockopt(fd, SOL_SOCKET, SO_LINGER,
+                       &linger, (socklen_t)sizeof(struct linger));
+  }
+
+  if (ptr->root->send_size) {
+    int error;
+
+    error= setsockopt(ptr->fd, SOL_SOCKET, SO_SNDBUF,
+                      &ptr->root->send_size, (socklen_t)sizeof(int));
+    WATCHPOINT_ASSERT(error == 0);
+  }
+
+  if (ptr->root->recv_size) {
+    int error;
+
+    error= setsockopt(ptr->fd, SOL_SOCKET, SO_RCVBUF,
+                      &ptr->root->recv_size, (socklen_t)sizeof(int));
+    WATCHPOINT_ASSERT(error == 0);
+  }
+  */
+
     int flags = fcntl(sock, F_GETFL, 0);
     if (flags < 0 ||
         fcntl(sock, F_SETFL, flags | O_NONBLOCK) < 0) {
