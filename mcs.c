@@ -410,28 +410,33 @@ mcs_return mcs_server_st_connect(mcs_server_st *ptr) {
             continue;
         }
 
-        int flags = fcntl(sock, F_GETFL, 0);
-        if (flags < 0 ||
-            fcntl(sock, F_SETFL, flags | O_NONBLOCK) < 0) {
-            perror("setting O_NONBLOCK");
-            close(sock);
-            sock = -1;
-            continue;
+        if (mcs_set_sock_opt(sock) == MCS_SUCCESS) {
+            ptr->fd = sock;
+            ret = MCS_SUCCESS;
+            break;
         }
 
-        flags = 1;
-
-        setsockopt(sock, IPPROTO_TCP, TCP_NODELAY,
-                   &flags, (socklen_t) sizeof(flags));
-
-        ptr->fd = sock;
-        ret = MCS_SUCCESS;
-        break;
+        close(sock);
     }
 
     freeaddrinfo(ai);
 
     return ret;
+}
+
+mcs_return mcs_set_sock_opt(int sock) {
+    int flags = fcntl(sock, F_GETFL, 0);
+    if (flags < 0 ||
+        fcntl(sock, F_SETFL, flags | O_NONBLOCK) < 0) {
+        return MCS_FAILURE;
+    }
+
+    flags = 1;
+
+    setsockopt(sock, IPPROTO_TCP, TCP_NODELAY,
+               &flags, (socklen_t) sizeof(flags));
+
+    return MCS_SUCCESS;
 }
 
 mcs_return mcs_server_st_do(mcs_server_st *ptr,

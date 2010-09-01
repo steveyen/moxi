@@ -72,6 +72,8 @@ int mcs_server_st_fd(mcs_server_st *ptr);
 const char *mcs_server_st_usr(mcs_server_st *ptr);
 const char *mcs_server_st_pwd(mcs_server_st *ptr);
 
+mcs_return mcs_set_sock_opt(int sock);
+
 // ----------------------------------------
 
 #define MOXI_DEFAULT_LISTEN_PORT      0
