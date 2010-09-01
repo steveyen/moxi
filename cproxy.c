@@ -521,8 +521,14 @@ void cproxy_on_close_downstream_conn(conn *c) {
     downstream *d = c->extra;
 
     // Might have been set to NULL during cproxy_free_downstream().
+    // Or, when a downstream conn is in the thread-based free pool, it
+    // is not associated with any particular downstream.
     //
     if (d == NULL) {
+        // TODO: See if we need to remove the downstream conn from the
+        // thread-based free pool.  This shouldn't happen, but we
+        // should then figure out an assert() here.
+        //
         return;
     }
 
