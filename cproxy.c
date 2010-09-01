@@ -926,6 +926,17 @@ bool cproxy_release_downstream(downstream *d, bool force) {
     d->multiget = NULL;
     d->merger = NULL;
 
+    int n = mcs_server_count(&d->mst);
+
+    for (int i = 0; i < n; i++) {
+        conn *dc = d->downstream_conns[i];
+        if (dc != NULL) {
+            d->downstream_conns[i] = NULL;
+
+            zstored_release_downstream_conn(dc, false);
+        }
+    }
+
     // If this downstream still has the same configuration as our top-level
     // proxy config, go back onto the available, released downstream list.
     //
@@ -1161,7 +1172,7 @@ int cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread) {
         // Connect to downstream servers, if not already.
         //
         // TODO: Should call zstored_acquire_connection() here,
-        // and return -1 if the downstream conns aren't ready,
+        // and return -1 if a required downstream conn isn't ready,
         // and the downstream struct d is enqueued.
         //
         // TODO: Need to hash by key on single-key requests to
@@ -1170,9 +1181,13 @@ int cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread) {
         //
         if (d->downstream_conns[i] == NULL) {
             d->downstream_conns[i] =
-                cproxy_connect_downstream_conn(d, thread,
-                                               mcs_server_index(&d->mst, i),
-                                               &d->behaviors_arr[i]);
+                zstored_acquire_downstream_conn(d, thread,
+                                                mcs_server_index(&d->mst, i),
+                                                &d->behaviors_arr[i]);
+            if (d->downstream_conns[i] != NULL &&
+                d->downstream_conns[i]->state == conn_connecting) {
+                return -1;
+            }
         }
 
         if (d->downstream_conns[i] != NULL) {
@@ -1226,8 +1241,21 @@ conn *cproxy_connect_downstream_conn(downstream *d,
             c->thread = thread;
             c->cmd_start_time = start;
 
-            if (downstream_connect_init(d, msst, behavior, c)) {
-                return c;
+            if (err == EINPROGRESS) {
+                // TODO: In zstored, the EV_WRITE registration is done
+                // with a timeout.
+                //
+                if (update_event(c, EV_WRITE | EV_PERSIST)) {
+                    conn_set_state(c, conn_connecting);
+
+                    return c;
+                } else {
+                    d->ptd->stats.stats.err_oom++;
+                }
+            } else {
+                if (downstream_connect_init(d, msst, behavior, c)) {
+                    return c;
+                }
             }
 
             cproxy_close_conn(c);
@@ -2673,6 +2701,8 @@ conn *zstored_acquire_downstream_conn(downstream *d,
     assert(mcs_server_st_port(msst) > 0);
     assert(mcs_server_st_fd(msst) == -1);
 
+    return cproxy_connect_downstream_conn(d, thread, msst, behavior);
+
 #ifdef TODO_FIGURE_OUT_WHERE_THESE_FIELDS_WILL_LIVE
     int status = -1;
 
@@ -2720,6 +2750,10 @@ conn *zstored_acquire_downstream_conn(downstream *d,
 
 // new fn by jsh
 void zstored_release_downstream_conn(conn *dc, bool closing) {
+    cproxy_close_conn(dc);
+
+    return;
+
     assert(dc != NULL);
     assert(dc->host_ident != NULL);
 
