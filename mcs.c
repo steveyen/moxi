@@ -375,7 +375,21 @@ mcs_return mcs_server_st_connect(mcs_server_st *ptr, int *errno_out, bool blocki
         *errno_out = -1;
     }
 
-    int ret = MCS_FAILURE;
+    ptr->fd = mcs_connect(ptr->hostname, ptr->port, errno_out, blocking);
+    if (ptr->fd != -1) {
+        return MCS_SUCCESS;
+    }
+
+    return MCS_FAILURE;
+}
+
+int mcs_connect(const char *hostname, int portnum,
+                int *errno_out, bool blocking) {
+    if (errno_out != NULL) {
+        *errno_out = -1;
+    }
+
+    int ret = -1;
 
     struct addrinfo *ai   = NULL;
     struct addrinfo *next = NULL;
@@ -384,9 +398,9 @@ mcs_return mcs_server_st_connect(mcs_server_st *ptr, int *errno_out, bool blocki
                               .ai_family = AF_UNSPEC };
 
     char port[50];
-    snprintf(port, sizeof(port), "%d", ptr->port);
+    snprintf(port, sizeof(port), "%d", portnum);
 
-    int error = getaddrinfo(ptr->hostname, port, &hints, &ai);
+    int error = getaddrinfo(hostname, port, &hints, &ai);
     if (error != 0) {
         if (error != EAI_SYSTEM) {
             // settings.extensions.logger->log(EXTENSION_LOG_WARNING, NULL,
@@ -396,7 +410,7 @@ mcs_return mcs_server_st_connect(mcs_server_st *ptr, int *errno_out, bool blocki
             //                                 "getaddrinfo(): %s\n", strerror(error));
         }
 
-        return MCS_FAILURE;
+        return -1;
     }
 
     for (next = ai; next; next = next->ai_next) {
@@ -408,10 +422,11 @@ mcs_return mcs_server_st_connect(mcs_server_st *ptr, int *errno_out, bool blocki
             continue;
         }
 
-        if (!blocking &&
-            (mcs_set_sock_opt(sock) != MCS_SUCCESS)) {
+        // If the caller wants non-blocking, set the sock options
+        // now so even the connect() becomes non-blocking.
+        //
+        if (!blocking && (mcs_set_sock_opt(sock) != MCS_SUCCESS)) {
             close(sock);
-            sock = -1;
             continue;
         }
 
@@ -421,10 +436,8 @@ mcs_return mcs_server_st_connect(mcs_server_st *ptr, int *errno_out, bool blocki
                 *errno_out = errno_last;
             }
 
-            if (!blocking &&
-                errno_last == EINPROGRESS) {
-                ptr->fd = sock;
-                ret = MCS_SUCCESS;
+            if (!blocking && (errno_last == EINPROGRESS)) {
+                ret = sock;
                 break;
             }
 
@@ -432,13 +445,11 @@ mcs_return mcs_server_st_connect(mcs_server_st *ptr, int *errno_out, bool blocki
             //                                 "Failed to connect socket: %s\n",
             //                                 strerror(errno));
             close(sock);
-            sock = -1;
             continue;
         }
 
         if (mcs_set_sock_opt(sock) == MCS_SUCCESS) {
-            ptr->fd = sock;
-            ret = MCS_SUCCESS;
+            ret = sock;
             break;
         }
 

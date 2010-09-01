@@ -76,6 +76,9 @@ const char *mcs_server_st_pwd(mcs_server_st *ptr);
 
 mcs_return mcs_set_sock_opt(int sock);
 
+int mcs_connect(const char *hostname, int portnum,
+                int *errno_out, bool blocking);
+
 // ----------------------------------------
 
 #define MOXI_DEFAULT_LISTEN_PORT      0
