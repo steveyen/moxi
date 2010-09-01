@@ -13,7 +13,7 @@
 #include "work.h"
 #include "log.h"
 
-#define MEMCACHED_DEFAULT_TIMEOUT 1000
+#define DOWNSTREAM_DEFAULT_TIMEOUT 1000
 #define DOWNSTREAM_RETRY_INTERVAL 30000
 #define MAX_DOWNSTREAM_CONNECTION_ERRORS 10
 
@@ -2631,7 +2631,7 @@ static bool set_socket_options(int fd) {
     struct linger linger;
 
     linger.l_onoff = 1;
-    linger.l_linger = MEMCACHED_DEFAULT_TIMEOUT;
+    linger.l_linger = DOWNSTREAM_DEFAULT_TIMEOUT;
     error = setsockopt(fd, SOL_SOCKET, SO_LINGER,
                        &linger, (socklen_t)sizeof(struct linger));
   }
