@@ -2896,12 +2896,12 @@ void zstored_release_downstream_conn(conn *dc, bool closing) {
             // We should not end up here
             // best thing to do is close the connection
             if (settings.verbose) {
-				char tmp_buf[256] = {0};
+                char tmp_buf[256] = {0};
                 snprintf(tmp_buf, 256, "<< ERROR >> next: %lx, downstream_conns: %lx, dc: %lx\n",
                 (unsigned long int)dc->next,
                 (unsigned long int)d->downstream_conns, (unsigned long int)dc);
-				log_error_write(zl, __FILE__, __LINE__, "s", tmp_buf);
-			}
+                log_error_write(zl, __FILE__, __LINE__, "s", tmp_buf);
+            }
             cproxy_close_conn(dc);
         }
     } else {
