@@ -485,7 +485,8 @@ struct conn {
 
     bin_cmd *corked;
 
-    char *host_ident;
+    char *host_ident; // Uniquely identifies a memcached server, including
+                      // address:port and possibly optional bucket/usr/pwd info.
 };
 
 extern conn *listen_conn;

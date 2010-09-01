@@ -54,6 +54,10 @@ conn *zstored_acquire_downstream_conn(downstream *d,
 
 void zstored_release_downstream_conn(conn *dc, bool closing);
 
+void format_host_ident(char *buf, int buf_len,
+                       mcs_server_st *msst,
+                       enum protocol host_protocol);
+
 conn *cproxy_downstream_conn_for_host_ident(char *host_ident, LIBEVENT_THREAD *thread,
                                             enum protocol host_protocol);
 
@@ -1124,8 +1128,8 @@ bool cproxy_check_downstream_config(downstream *d) {
 // Also, in the -1 result case, the d->upstream_conn should remain in
 // conn_pause state.
 //
-// TODO: There are two cases: single-key versus broadcast commands.
-// This function needs info on the single-key?
+// TODO: There are two cases: single-key versus broadcast commands,
+// so this function needs info on the single-key?
 //
 int cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread) {
     assert(d != NULL);
@@ -1149,7 +1153,7 @@ int cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread) {
     for (int i = 0; i < n; i++) {
         assert(IS_PROXY(d->behaviors_arr[i].downstream_protocol));
 
-        // Connect to a main downstream server, if not already.
+        // Connect to downstream servers, if not already.
         //
         // TODO: Should call zstored_acquire_connection() here,
         // and return -1 if the downstream conns aren't ready,
@@ -2809,7 +2813,7 @@ conn *zstored_acquire_downstream_conn(downstream *d,
             d->error_count = 0;
         }
         conn *c = conn_new(fd, status == 0? conn_pause: conn_connecting,
-                           status == 0? 0: EV_WRITE,
+                           status == 0 ? 0: EV_WRITE,
                            DATA_BUFFER_SIZE,
                            tcp_transport,
                            d->thread->base,
@@ -2934,11 +2938,30 @@ void zstored_release_downstream_conn(conn *dc, bool closing) {
 #endif
 }
 
-conn *cproxy_downstream_conn_for_host_ident(char *host_ident, LIBEVENT_THREAD *thread,
-                                            enum protocol host_protocol) {
+conn *cproxy_downstream_conn_for_msst(proxy_td *ptd,
+                                      LIBEVENT_THREAD *thread,
+                                      mcs_server_st *msst,
+                                      enum protocol host_protocol) {
     genhash_t *conn_hash = thread->conn_hash;
+    assert(conn_hash != NULL);
 
-    conn *dc = (conn *) genhash_find(conn_hash, host_ident);
+    char host_ident_buf[300];
+    format_host_ident(msst, host_ident_buf, sizeof(host_ident_buf), host_protocol);
+
+    conn *dc = (conn *) genhash_find(conn_hash, host_ident_buf);
+    if (dc != NULL) {
+        assert(strcmp(host_ident_buf, dc->host_ident) == 0);
+
+        if (dc->next != NULL) {
+            genhash_update(conn_hash, host_ident_buf, dc->next);
+            dc->next = NULL;
+        } else {
+            genhash_delete(conn_hash, host_ident_buf);
+        }
+
+        return dc;
+    }
+
     if (dc == NULL) {
 #ifdef TODO_NEED_TO_ADD_DC_TO_POOL_MAYBE
         dc = cproxy_create_downstream_conn(host_ident, thread, host_protocol);
@@ -2966,3 +2989,15 @@ conn *cproxy_downstream_conn_for_host_ident(char *host_ident, LIBEVENT_THREAD *t
     return dc;
 }
 
+void format_host_ident(char *buf, int buf_len,
+                       mcs_server_st *msst,
+                       enum protocol host_protocol) {
+    assert(msst != NULL);
+
+    snprintf(buf, buf_len - 1, "%s:%d:%s:%s:%d",
+             mcs_server_st_hostname(msst),
+             mcs_server_st_port(msst),
+             mcs_server_st_usr(msst),
+             mcs_server_st_pwd(msst),
+             (int) host_protocol);
+}
