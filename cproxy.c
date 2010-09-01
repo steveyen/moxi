@@ -20,6 +20,7 @@
 // Internal forward declarations.
 //
 downstream *downstream_list_remove(downstream *head, downstream *d);
+downstream *downstream_list_waiting_remove(downstream *head, downstream *d);
 
 void downstream_timeout(const int fd,
                         const short which,
@@ -200,6 +201,7 @@ proxy *cproxy_create(proxy_main *main,
                 ptd->waiting_any_downstream_tail = NULL;
                 ptd->downstream_reserved = NULL;
                 ptd->downstream_released = NULL;
+                ptd->downstream_waiting  = NULL;
                 ptd->downstream_tot = 0;
                 ptd->downstream_num = 0;
                 ptd->downstream_max = behavior_pool->base.downstream_max;
@@ -717,6 +719,7 @@ downstream *cproxy_reserve_downstream(proxy_td *ptd) {
         assert(d->merger == NULL);
         assert(d->timeout_tv.tv_sec == 0);
         assert(d->timeout_tv.tv_usec == 0);
+        assert(d->next_waiting == NULL);
 
         d->upstream_conn = NULL;
         d->upstream_suffix = NULL;
@@ -729,12 +732,15 @@ downstream *cproxy_reserve_downstream(proxy_td *ptd) {
         d->merger = NULL;
         d->timeout_tv.tv_sec = 0;
         d->timeout_tv.tv_usec = 0;
+        d->next_waiting = NULL;
 
         if (cproxy_check_downstream_config(d)) {
             ptd->downstream_reserved =
                 downstream_list_remove(ptd->downstream_reserved, d);
             ptd->downstream_released =
                 downstream_list_remove(ptd->downstream_released, d);
+            ptd->downstream_waiting =
+                downstream_list_waiting_remove(ptd->downstream_waiting, d);
 
             d->next = ptd->downstream_reserved;
             ptd->downstream_reserved = d;
@@ -805,6 +811,8 @@ bool cproxy_release_downstream(downstream *d, bool force) {
         }
     }
 
+    // Record reserved_time histogram timings.
+    //
     if (d->usec_start > 0) {
         uint64_t ux = usec_now() - d->usec_start;
 
@@ -920,6 +928,8 @@ bool cproxy_release_downstream(downstream *d, bool force) {
             downstream_list_remove(d->ptd->downstream_reserved, d);
         d->ptd->downstream_released =
             downstream_list_remove(d->ptd->downstream_released, d);
+        d->ptd->downstream_waiting =
+            downstream_list_waiting_remove(d->ptd->downstream_waiting, d);
 
         d->next = d->ptd->downstream_released;
         d->ptd->downstream_released = d;
@@ -951,6 +961,8 @@ void cproxy_free_downstream(downstream *d) {
         downstream_list_remove(d->ptd->downstream_reserved, d);
     d->ptd->downstream_released =
         downstream_list_remove(d->ptd->downstream_released, d);
+    d->ptd->downstream_waiting =
+        downstream_list_waiting_remove(d->ptd->downstream_waiting, d);
 
     d->ptd->downstream_num--;
     assert(d->ptd->downstream_num >= 0);
@@ -1106,11 +1118,14 @@ bool cproxy_check_downstream_config(downstream *d) {
 
 // Returns -1 if the connections aren't fully assigned and ready.
 // In that case, the downstream was enqueued by this function to wait
-// for downstream connections to be assigned (and to not be in
+// for relevant downstream connections to be assigned (and to not be in
 // the conn_connecting state).
 //
 // Also, in the -1 result case, the d->upstream_conn should remain in
 // conn_pause state.
+//
+// TODO: There are two cases: single-key versus broadcast commands.
+// This function needs info on the single-key?
 //
 int cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread) {
     assert(d != NULL);
@@ -2063,6 +2078,31 @@ downstream *downstream_list_remove(downstream *head, downstream *d) {
 
         prev = curr;
         curr = curr ->next;
+    }
+
+    return head;
+}
+
+/* Returns the new head of the list.
+ */
+downstream *downstream_list_waiting_remove(downstream *head, downstream *d) {
+    downstream *prev = NULL;
+    downstream *curr = head;
+
+    while (curr != NULL) {
+        if (curr == d) {
+            if (prev != NULL) {
+                assert(curr != head);
+                prev->next_waiting = curr->next_waiting;
+                return head;
+            }
+
+            assert(curr == head);
+            return curr->next_waiting;
+        }
+
+        prev = curr;
+        curr = curr ->next_waiting;
     }
 
     return head;

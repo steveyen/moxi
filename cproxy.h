@@ -354,8 +354,11 @@ struct proxy_td { // Per proxy, per worker-thread data struct.
     conn *waiting_any_downstream_head;
     conn *waiting_any_downstream_tail;
 
-    downstream *downstream_reserved; // Downstreams assigned to upstreams.
-    downstream *downstream_released; // Downstreams unassigned to upstreams.
+    downstream *downstream_reserved; // Downstreams assigned to upstream conns.
+    downstream *downstream_released; // Downstreams unassigned to upstreams conn.
+    downstream *downstream_waiting;  // Downstreams assigned to upstreams conn,
+                                     // but waiting for downstream conn(s)
+                                     // to fully connect.
     uint64_t    downstream_tot;      // Total lifetime downstreams created.
     int         downstream_num;      // Number downstreams existing.
     int         downstream_max;      // Max downstream concurrency number.
@@ -377,7 +380,10 @@ struct proxy_td { // Per proxy, per worker-thread data struct.
     proxy_stats_td stats;
 };
 
-/* Owned by worker thread.
+/* A 'downstream' struct represents a set of downstream connections.
+ * A possibly better name for it should have been "downstream_conn_set".
+ *
+ * Owned by worker thread.
  */
 struct downstream {
     // The following group of fields are immutable or read-only (RO),
@@ -389,9 +395,14 @@ struct downstream {
     uint32_t        config_ver;    // RW: Mutable, copy of proxy->config_ver.
     int             behaviors_num; // RO: Snapshot of ptd->behavior_pool.num.
     proxy_behavior *behaviors_arr; // RO: Snapshot of ptd->behavior_pool.arr.
-    mcs_st          mst;           // RW: From libmemcached.
+    mcs_st          mst;           // RW: From mcs.
 
-    downstream *next; // To track reserved/free lists.
+    downstream *next; // To track reserved/released lists.
+                      // See ptd->downstream_reserved/downstream_released.
+
+    downstream *next_waiting; // To track lists when a downstream is reserved,
+                              // but is waiting for a downstream connection,
+                              // per zstored_perf enhancement.
 
     conn **downstream_conns;  // Wraps the fd's of mst with conns.
     int    downstream_used;   // Number of in-use downstream conns, might
