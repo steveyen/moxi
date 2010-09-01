@@ -55,18 +55,10 @@ void mcs_server_st_quit(mcs_server_st *ptr, uint8_t io_death);
 mcs_return mcs_server_st_connect(mcs_server_st *ptr,
                                  int *errno_out,
                                  bool blocking);
-mcs_return mcs_server_st_do(mcs_server_st *ptr,
-                            const void *commmand,
-                            size_t command_length,
-                            uint8_t with_flush);
-ssize_t mcs_server_st_io_write(mcs_server_st *ptr,
-                               const void *buffer,
-                               size_t length,
-                               char with_flush);
-mcs_return mcs_server_st_read(mcs_server_st *ptr,
-                              void *dta,
-                              size_t size);
-void mcs_server_st_io_reset(mcs_server_st *ptr);
+
+ssize_t mcs_io_write(int fd, const void *buffer, size_t length);
+mcs_return mcs_io_read(int fd, void *dta, size_t size);
+void mcs_io_reset(int fd);
 
 const char *mcs_server_st_hostname(mcs_server_st *ptr);
 int mcs_server_st_port(mcs_server_st *ptr);

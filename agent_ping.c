@@ -292,10 +292,10 @@ static void ping_server(char *server_name,
                     gettimeofday(&tv_conn, NULL);
                     tv_report("conn", start, tv_conn);
 
-                    if (cproxy_auth_downstream(&mst.servers[i],
-                                               behavior) &&
-                        cproxy_bucket_downstream(&mst.servers[i],
-                                                 behavior)) {
+                    if (cproxy_auth_downstream(st, behavior,
+                                               mcs_server_st_fd(st)) &&
+                        cproxy_bucket_downstream(st, behavior,
+                                                 mcs_server_st_fd(st))) {
                         struct timeval tv_auth;
                         gettimeofday(&tv_auth, NULL);
                         tv_report("auth", tv_conn, tv_auth);

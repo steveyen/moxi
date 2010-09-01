@@ -537,40 +537,19 @@ mcs_return mcs_set_sock_opt(int sock) {
     return MCS_SUCCESS;
 }
 
-mcs_return mcs_server_st_do(mcs_server_st *ptr,
-                            const void *command,
-                            size_t command_length,
-                            uint8_t with_flush) {
-    if (mcs_server_st_connect(ptr, NULL, true) == MCS_SUCCESS) {
-        ssize_t n = mcs_server_st_io_write(ptr, command, command_length, with_flush);
-        if (n == (ssize_t) command_length) {
-            return MCS_SUCCESS;
-        }
-    }
+ssize_t mcs_io_write(int fd, const void *buffer, size_t length) {
+    assert(fd != -1);
 
-    return MCS_FAILURE;
+    return write(fd, buffer, length);
 }
 
-ssize_t mcs_server_st_io_write(mcs_server_st *ptr,
-                               const void *buffer,
-                               size_t length,
-                               char with_flush) {
-    (void) with_flush;
-
-    assert(ptr->fd != -1);
-
-    return write(ptr->fd, buffer, length);
-}
-
-mcs_return mcs_server_st_read(mcs_server_st *ptr,
-                              void *dta,
-                              size_t size) {
+mcs_return mcs_io_read(int fd, void *dta, size_t size) {
     // We use a blocking read, but reset back to non-blocking
     // or the original state when we're done.
     //
-    int flags = fcntl(ptr->fd, F_GETFL, 0);
+    int flags = fcntl(fd, F_GETFL, 0);
     if (flags < 0 ||
-        fcntl(ptr->fd, F_SETFL, flags & (~O_NONBLOCK)) < 0) {
+        fcntl(fd, F_SETFL, flags & (~O_NONBLOCK)) < 0) {
         return MCS_FAILURE;
     }
 
@@ -578,21 +557,23 @@ mcs_return mcs_server_st_read(mcs_server_st *ptr,
     size_t done = 0;
 
     while (done < size) {
-        ssize_t n = read(ptr->fd, data + done, size - done);
+        ssize_t n = read(fd, data + done, size - done);
         if (n == -1) {
-            fcntl(ptr->fd, F_SETFL, flags);
+            fcntl(fd, F_SETFL, flags);
+
             return MCS_FAILURE;
         }
 
         done += (size_t) n;
     }
 
-    fcntl(ptr->fd, F_SETFL, flags);
+    fcntl(fd, F_SETFL, flags);
+
     return MCS_SUCCESS;
 }
 
-void mcs_server_st_io_reset(mcs_server_st *ptr) {
-    (void) ptr;
+void mcs_io_reset(int fd) {
+    (void) fd;
 
     // TODO: memcached_io_reset(ptr);
 }

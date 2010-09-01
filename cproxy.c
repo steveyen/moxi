@@ -39,6 +39,9 @@ void propagate_error(downstream *d);
 void downstream_reserved_time_sample(proxy_stats_td *ptds, uint64_t duration);
 void downstream_connect_time_sample(proxy_stats_td *ptds, uint64_t duration);
 
+bool downstream_connect_init(downstream *d, mcs_server_st *msst,
+                             proxy_behavior *behavior, conn *c);
+
 int init_mcs_st(mcs_st *mst, char *config);
 
 void cproxy_on_connect_downstream_conn(conn *c);
@@ -549,8 +552,8 @@ void cproxy_on_close_downstream_conn(conn *c) {
 
             d->ptd->stats.stats.tot_downstream_quit_server++;
 
-            assert(mcs_server_st_fd(mcs_server_index(&d->mst, i)) == c->sfd);
             mcs_server_st_quit(mcs_server_index(&d->mst, i), 1);
+
             assert(mcs_server_st_fd(mcs_server_index(&d->mst, i)) == -1);
 
             k = i;
@@ -1209,50 +1212,58 @@ conn *cproxy_connect_downstream_conn(downstream *d,
         start = usec_now();
     }
 
-    mcs_return rc;
+    int err = -1;
+    int fd = mcs_connect(mcs_server_st_hostname(msst),
+                         mcs_server_st_port(msst), &err, true);
+    if (fd != -1) {
+        d->ptd->stats.stats.tot_downstream_connect++;
 
-    rc = mcs_server_st_connect(msst, NULL, true);
-    if (rc == MCS_SUCCESS) {
-        int fd = mcs_server_st_fd(msst);
-        if (fd >= 0) {
-            d->ptd->stats.stats.tot_downstream_connect++;
+        if (start != 0 &&
+            d->ptd->behavior_pool.base.time_stats) {
+            downstream_connect_time_sample(&d->ptd->stats, usec_now() - start);
+        }
 
-            if (start != 0 &&
-                d->ptd->behavior_pool.base.time_stats) {
-                downstream_connect_time_sample(&d->ptd->stats, usec_now() - start);
+        conn *c = conn_new(fd, conn_pause, 0,
+                           DATA_BUFFER_SIZE,
+                           tcp_transport,
+                           thread->base,
+                           &cproxy_downstream_funcs, d);
+        if (c != NULL ) {
+            c->protocol = behavior->downstream_protocol;
+            c->thread = thread;
+
+            if (downstream_connect_init(d, msst, behavior, c)) {
+                return c;
             }
 
-            if (cproxy_auth_downstream(msst, behavior)) {
-                d->ptd->stats.stats.tot_downstream_auth++;
-
-                if (cproxy_bucket_downstream(msst, behavior)) {
-                    d->ptd->stats.stats.tot_downstream_bucket++;
-
-                    conn *c = conn_new(fd, conn_pause, 0,
-                                       DATA_BUFFER_SIZE,
-                                       tcp_transport,
-                                       thread->base,
-                                       &cproxy_downstream_funcs, d);
-                    if (c != NULL) {
-                        c->protocol = behavior->downstream_protocol;
-                        c->thread = thread;
-
-                        return c;
-                    }
-                } else {
-                    d->ptd->stats.stats.tot_downstream_bucket_failed++;
-                }
-            } else {
-                d->ptd->stats.stats.tot_downstream_auth_failed++;
-            }
+            cproxy_close_conn(c);
         } else {
-            d->ptd->stats.stats.tot_downstream_connect_failed++;
+            d->ptd->stats.stats.err_oom++;
         }
     } else {
         d->ptd->stats.stats.tot_downstream_connect_failed++;
     }
 
     return NULL;
+}
+
+bool downstream_connect_init(downstream *d, mcs_server_st *msst,
+                             proxy_behavior *behavior, conn *c) {
+    if (cproxy_auth_downstream(msst, behavior, c->sfd)) {
+        d->ptd->stats.stats.tot_downstream_auth++;
+
+        if (cproxy_bucket_downstream(msst, behavior, c->sfd)) {
+            d->ptd->stats.stats.tot_downstream_bucket++;
+
+            return true;
+        } else {
+            d->ptd->stats.stats.tot_downstream_bucket_failed++;
+        }
+    } else {
+        d->ptd->stats.stats.tot_downstream_auth_failed++;
+    }
+
+    return false;
 }
 
 conn *cproxy_find_downstream_conn(downstream *d,
@@ -2239,9 +2250,11 @@ bool cproxy_start_downstream_timeout(downstream *d, conn *c) {
 }
 
 bool cproxy_auth_downstream(mcs_server_st *server,
-                            proxy_behavior *behavior) {
+                            proxy_behavior *behavior,
+                            int fd) {
     assert(server);
     assert(behavior);
+    assert(fd != -1);
 
     char buf[3000];
 
@@ -2268,7 +2281,7 @@ bool cproxy_auth_downstream(mcs_server_st *server,
 
     if (usr_len <= 0 ||
         !IS_PROXY(behavior->downstream_protocol) ||
-        (usr_len + pwd_len + 50 > (int)sizeof(buf))) {
+        (usr_len + pwd_len + 50 > (int) sizeof(buf))) {
         if (settings.verbose > 1) {
             moxi_log_write("auth failure args\n");
         }
@@ -2295,10 +2308,10 @@ bool cproxy_auth_downstream(mcs_server_st *server,
     req.request.datatype = PROTOCOL_BINARY_RAW_BYTES;
     req.request.bodylen  = htonl(buf_len);
 
-    if (mcs_server_st_do(server, (const char *) req.bytes,
-                         sizeof(req.bytes), 0) != MCS_SUCCESS ||
-        mcs_server_st_io_write(server, buf, buf_len, 1) == -1) {
-        mcs_server_st_io_reset(server);
+    if (mcs_io_write(fd, (const char *) req.bytes,
+                     sizeof(req.bytes)) != sizeof(req.bytes) ||
+        mcs_io_write(fd, buf, buf_len) == -1) {
+        mcs_io_reset(fd);
 
         if (settings.verbose > 1) {
             moxi_log_write("auth failure during write for %s (%d)\n",
@@ -2310,8 +2323,8 @@ bool cproxy_auth_downstream(mcs_server_st *server,
 
     protocol_binary_response_header res = { .bytes = {0} };
 
-    if (mcs_server_st_read(server, &res.bytes,
-                           sizeof(res.bytes)) == MCS_SUCCESS &&
+    if (mcs_io_read(fd, &res.bytes,
+                    sizeof(res.bytes)) == MCS_SUCCESS &&
         res.response.magic == PROTOCOL_BINARY_RES) {
         res.response.status  = ntohs(res.response.status);
         res.response.keylen  = ntohs(res.response.keylen);
@@ -2321,10 +2334,8 @@ bool cproxy_auth_downstream(mcs_server_st *server,
         //
         int len = res.response.bodylen;
         while (len > 0) {
-            int amt = (len > (int)sizeof(buf) ? (int)sizeof(buf) : len);
-            if (mcs_server_st_read(server,
-                                   buf,
-                                   amt) != MCS_SUCCESS) {
+            int amt = (len > (int) sizeof(buf) ? (int) sizeof(buf) : len);
+            if (mcs_io_read(fd, buf, amt) != MCS_SUCCESS) {
                 if (settings.verbose > 1) {
                     moxi_log_write("auth could not read response body (%d)\n",
                                    usr, amt);
@@ -2364,10 +2375,12 @@ bool cproxy_auth_downstream(mcs_server_st *server,
 }
 
 bool cproxy_bucket_downstream(mcs_server_st *server,
-                              proxy_behavior *behavior) {
+                              proxy_behavior *behavior,
+                              int fd) {
     assert(server);
     assert(behavior);
     assert(IS_PROXY(behavior->downstream_protocol));
+    assert(fd != -1);
 
     if (!IS_BINARY(behavior->downstream_protocol)) {
         return true;
@@ -2386,12 +2399,10 @@ bool cproxy_bucket_downstream(mcs_server_st *server,
     req.request.datatype = PROTOCOL_BINARY_RAW_BYTES;
     req.request.bodylen  = htonl(bucket_len);
 
-    if (mcs_server_st_do(server, (const char *) req.bytes,
-                         sizeof(req.bytes), 0) != MCS_SUCCESS ||
-        mcs_server_st_io_write(server,
-                               behavior->bucket,
-                               bucket_len, 1) == -1) {
-        mcs_server_st_io_reset(server);
+    if (mcs_io_write(fd, (const char *) req.bytes,
+                     sizeof(req.bytes)) != sizeof(req.bytes) ||
+        mcs_io_write(fd, behavior->bucket, bucket_len) == -1) {
+        mcs_io_reset(fd);
 
         if (settings.verbose > 1) {
             moxi_log_write("bucket failure during write (%d)\n",
@@ -2402,8 +2413,8 @@ bool cproxy_bucket_downstream(mcs_server_st *server,
     }
 
     protocol_binary_response_header res = { .bytes = {0} };
-    if (mcs_server_st_read(server, &res.bytes,
-                           sizeof(res.bytes)) == MCS_SUCCESS &&
+    if (mcs_io_read(fd, &res.bytes,
+                    sizeof(res.bytes)) == MCS_SUCCESS &&
         res.response.magic == PROTOCOL_BINARY_RES) {
         res.response.status  = ntohs(res.response.status);
         res.response.keylen  = ntohs(res.response.keylen);
@@ -2415,10 +2426,8 @@ bool cproxy_bucket_downstream(mcs_server_st *server,
 
         int len = res.response.bodylen;
         while (len > 0) {
-            int amt = (len > (int)sizeof(buf) ? (int)sizeof(buf) : len);
-            if (mcs_server_st_read(server,
-                                   buf,
-                                   amt) != MCS_SUCCESS) {
+            int amt = (len > (int) sizeof(buf) ? (int) sizeof(buf) : len);
+            if (mcs_io_read(fd, buf, amt) != MCS_SUCCESS) {
                 return false;
             }
             len -= amt;
@@ -2816,7 +2825,7 @@ conn *cproxy_downstream_conn_for_msst(proxy_td *ptd,
     assert(conn_hash != NULL);
 
     char host_ident_buf[300];
-    format_host_ident(msst, host_ident_buf, sizeof(host_ident_buf), host_protocol);
+    format_host_ident(host_ident_buf, sizeof(host_ident_buf), msst, host_protocol);
 
     conn *dc = (conn *) genhash_find(conn_hash, host_ident_buf);
     if (dc != NULL) {
