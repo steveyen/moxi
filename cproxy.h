@@ -504,6 +504,8 @@ void cproxy_reset_upstream(conn *uc);
 
 bool cproxy_update_event_write(downstream *d, conn *c);
 
+bool cproxy_forward(downstream *d);
+
 void upstream_error(conn *uc);
 void upstream_retry(void *data0, void *data1);
 
