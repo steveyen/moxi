@@ -1279,7 +1279,8 @@ bool downstream_connect_init(downstream *d, mcs_server_st *msst,
 
     if (c->cmd_start_time != 0 &&
         d->ptd->behavior_pool.base.time_stats) {
-        downstream_connect_time_sample(&d->ptd->stats, usec_now() - c->cmd_start_time);
+        downstream_connect_time_sample(&d->ptd->stats,
+                                       usec_now() - c->cmd_start_time);
     }
 
     if (cproxy_auth_downstream(msst, behavior, c->sfd)) {
@@ -1321,16 +1322,16 @@ conn *cproxy_find_downstream_conn_ex(downstream *d,
     int v = -1;
     int s = cproxy_server_index(d, key, key_length, &v);
     if (s >= 0 &&
-        s < (int)mcs_server_count(&d->mst)) {
+        s < (int) mcs_server_count(&d->mst)) {
         if (settings.verbose > 2) {
-            moxi_log_write("cproxy_find_downstream_conn_ex server_index %d, vbucket %d\n",
-                    s, v);
+            moxi_log_write("server_index %d, vbucket %d\n", s, v);
         }
 
         if (self != NULL &&
             settings.port > 0 &&
             settings.port == mcs_server_st_port(mcs_server_index(&d->mst, s)) &&
-            strcmp(mcs_server_st_hostname(mcs_server_index(&d->mst, s)), cproxy_hostname) == 0) {
+            strcmp(mcs_server_st_hostname(mcs_server_index(&d->mst, s)),
+                   cproxy_hostname) == 0) {
             *self = true;
         }
 
@@ -1340,6 +1341,7 @@ conn *cproxy_find_downstream_conn_ex(downstream *d,
 
         return d->downstream_conns[s];
     }
+
     return NULL;
 }
 
@@ -1366,8 +1368,8 @@ bool cproxy_prep_conn_for_write(conn *c) {
         }
 
         if (settings.verbose > 1) {
-            moxi_log_write(
-                    "%d: cproxy_prep_conn_for_write failed\n", c->sfd);
+            moxi_log_write("%d: cproxy_prep_conn_for_write failed\n",
+                           c->sfd);
         }
     }
 
@@ -1393,7 +1395,8 @@ bool cproxy_update_event_write(downstream *d, conn *c) {
  * Do a hash through libmemcached to see which server (by index)
  * should hold a given key.
  */
-int cproxy_server_index(downstream *d, char *key, size_t key_length, int *vbucket) {
+int cproxy_server_index(downstream *d, char *key, size_t key_length,
+                        int *vbucket) {
     assert(d != NULL);
     assert(key != NULL);
     assert(key_length > 0);
@@ -1582,7 +1585,7 @@ static bool cproxy_forward(downstream *d) {
         if (IS_BINARY(d->ptd->behavior_pool.base.downstream_protocol)) {
             return cproxy_forward_b2b_downstream(d);
         } else {
-            // TODO: Translation from binary upstream to ascii downstream unsupported.
+            // TODO: No binary upstream to ascii downstream support.
             //
             assert(0);
             return false;
