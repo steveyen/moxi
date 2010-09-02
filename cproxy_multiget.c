@@ -96,6 +96,7 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
 
     for (int i = 0; i < nconns; i++) {
         if (d->downstream_conns[i] != NULL &&
+            d->downstream_conns[i] != NULL_CONN &&
             cproxy_prep_conn_for_write(d->downstream_conns[i]) == false) {
             d->ptd->stats.stats.err_downstream_write_prep++;
             cproxy_close_conn(d->downstream_conns[i]);
@@ -364,6 +365,7 @@ bool multiget_ascii_downstream(downstream *d, conn *uc,
     for (int i = 0; i < nconns; i++) {
         conn *c = d->downstream_conns[i];
         if (c != NULL &&
+            c != NULL_CONN &&
             (c->msgused > 1 ||
              c->msgbytes > 0)) {
             emit_end(c);

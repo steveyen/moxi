@@ -488,6 +488,7 @@ void cproxy_on_close_upstream_conn(conn *c) {
             for (int i = 0; i < n; i++) {
                 conn *downstream_conn = d->downstream_conns[i];
                 if (downstream_conn != NULL &&
+                    downstream_conn != NULL_CONN &&
                     downstream_conn->state == conn_mwrite) {
                     downstream_conn->msgcurr = 0;
                     downstream_conn->msgused = 0;
@@ -925,9 +926,8 @@ bool cproxy_release_downstream(downstream *d, bool force) {
 
     for (int i = 0; i < n; i++) {
         conn *dc = d->downstream_conns[i];
+        d->downstream_conns[i] = NULL;
         if (dc != NULL) {
-            d->downstream_conns[i] = NULL;
-
             zstored_release_downstream_conn(dc, false);
         }
     }
@@ -986,7 +986,8 @@ void cproxy_free_downstream(downstream *d) {
 
     if (d->downstream_conns != NULL) {
         for (int i = 0; i < n; i++) {
-            if (d->downstream_conns[i] != NULL) {
+            if (d->downstream_conns[i] != NULL &&
+                d->downstream_conns[i] != NULL_CONN) {
                 d->downstream_conns[i]->extra = NULL;
             }
         }
@@ -1179,9 +1180,9 @@ int cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread,
 
         // Connect to downstream servers, if not already.
         //
-        // TODO: Need to hash by key on single-key requests to
-        // figure out what server we want, and handle broadcast
-        // downstream conn assignment correctly.
+        // A NULL_CONN means that we tried to connect, but failed,
+        // which is different than NULL (which means that we haven't
+        // tried to connect yet).
         //
         if (d->downstream_conns[i] == NULL) {
             d->downstream_conns[i] =
@@ -1189,15 +1190,19 @@ int cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread,
                                                 mcs_server_index(&d->mst, i),
                                                 &d->behaviors_arr[i]);
             if (d->downstream_conns[i] != NULL &&
+                d->downstream_conns[i] != NULL_CONN &&
                 d->downstream_conns[i]->state == conn_connecting) {
                 return -1;
             }
         }
 
-        if (d->downstream_conns[i] != NULL) {
+        if (d->downstream_conns[i] != NULL &&
+            d->downstream_conns[i] != NULL_CONN) {
             s++;
         } else {
             mcs_server_st_quit(mcs_server_index(&d->mst, i), 1);
+
+            d->downstream_conns[i] = NULL_CONN;
         }
     }
 
@@ -1321,12 +1326,20 @@ conn *cproxy_find_downstream_conn_ex(downstream *d,
 
     int v = -1;
     int s = cproxy_server_index(d, key, key_length, &v);
-    if (s >= 0 &&
-        s < (int) mcs_server_count(&d->mst)) {
-        if (settings.verbose > 2) {
-            moxi_log_write("server_index %d, vbucket %d\n", s, v);
-        }
 
+    if (settings.verbose > 2) {
+        moxi_log_write("server_index %d, vbucket %d, conn %s\n", s, v,
+                       (d->downstream_conns[s] == NULL ?
+                        "null" :
+                        (d->downstream_conns[s] == NULL_CONN ?
+                         "null_conn" :
+                         "ok")));
+    }
+
+    if (s >= 0 &&
+        s < (int) mcs_server_count(&d->mst) &&
+        d->downstream_conns[s] != NULL &&
+        d->downstream_conns[s] != NULL_CONN) {
         if (self != NULL &&
             settings.port > 0 &&
             settings.port == mcs_server_st_port(mcs_server_index(&d->mst, s)) &&
@@ -1921,6 +1934,10 @@ rel_time_t cproxy_realtime(const time_t exptime) {
 void cproxy_close_conn(conn *c) {
     assert(c != NULL);
 
+    if (c == NULL_CONN) {
+        return;
+    }
+
     conn_set_state(c, conn_closing);
 
     update_event(c, 0);
@@ -2243,9 +2260,11 @@ void downstream_timeout(const int fd,
         int n = mcs_server_count(&d->mst);
 
         for (int i = 0; i < n; i++) {
-            if (d->downstream_conns[i] != NULL) {
+            if (d->downstream_conns[i] != NULL &&
+                d->downstream_conns[i] != NULL_CONN) {
                 cproxy_close_conn(d->downstream_conns[i]);
             }
+            d->downstream_conns[i] = NULL;
         }
     }
 }
@@ -2759,6 +2778,11 @@ conn *zstored_acquire_downstream_conn(downstream *d,
 // new fn by jsh
 void zstored_release_downstream_conn(conn *dc, bool closing) {
     assert(dc != NULL);
+
+    if (dc == NULL_CONN) {
+        return;
+    }
+
     assert(dc->next == NULL);
     assert(dc->thread != NULL);
     assert(dc->host_ident != NULL);

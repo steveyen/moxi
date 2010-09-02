@@ -90,7 +90,8 @@ bool cproxy_forward_b2b_downstream(downstream *d) {
 
         for (int i = 0; i < nconns; i++) {
             conn *c = d->downstream_conns[i];
-            if (c != NULL) {
+            if (c != NULL &&
+                c != NULL_CONN) {
                 assert(c->state == conn_pause);
                 assert(c->item == NULL);
 
@@ -249,6 +250,7 @@ bool cproxy_broadcast_b2b_downstream(downstream *d, conn *uc) {
     for (int i = 0; i < nconns; i++) {
         conn *c = d->downstream_conns[i];
         if (c != NULL &&
+            c != NULL_CONN &&
             b2b_forward_item_vbucket(uc, d, uc->item, c,
                                      false, -1) == true) {
             nwrite++;

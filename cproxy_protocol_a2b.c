@@ -1330,7 +1330,8 @@ bool cproxy_broadcast_a2b_downstream(downstream *d,
 
     for (int i = 0; i < nconns; i++) {
         conn *c = d->downstream_conns[i];
-        if (c != NULL) {
+        if (c != NULL &&
+            c != NULL_CONN) {
             if (cproxy_prep_conn_for_write(c)) {
                 assert(c->state == conn_pause);
                 assert(c->wbuf);

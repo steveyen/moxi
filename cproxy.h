@@ -431,6 +431,12 @@ struct downstream {
     struct event   timeout_event;
 };
 
+// Sentinel value for downstream->downstream_conns[] array entries,
+// which usually signals that moxi wasn't able to create a connection
+// to a downstream server.
+//
+#define NULL_CONN ((conn *) -1)
+
 // Functions.
 //
 proxy *cproxy_create(proxy_main *main,
