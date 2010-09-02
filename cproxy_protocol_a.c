@@ -435,3 +435,10 @@ void cproxy_process_downstream_ascii_nread(conn *c) {
     }
 }
 
+bool cproxy_is_broadcast_cmd(int cmd) {
+    return (cmd == PROTOCOL_BINARY_CMD_FLUSH ||
+            cmd == PROTOCOL_BINARY_CMD_STAT || // In a2x translation.
+            cmd == PROTOCOL_BINARY_CMD_NOOP ||
+            cmd == PROTOCOL_BINARY_CMD_GETKQ);
+}
+

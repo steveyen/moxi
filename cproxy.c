@@ -1142,10 +1142,11 @@ bool cproxy_check_downstream_config(downstream *d) {
 // Also, in the -1 result case, the d->upstream_conn should remain in
 // conn_pause state.
 //
-// TODO: There are two cases: single-key versus broadcast commands,
-// so this function needs info on the single-key?
+// A server_index of -1 means to connect all downstreams, as the
+// caller probably needs to proxy a broadcast command.
 //
-int cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread) {
+int cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread,
+                              int server_index) {
     assert(d != NULL);
     assert(d->ptd != NULL);
     assert(d->ptd->downstream_released != d); // Should not be in free list.
@@ -1161,10 +1162,19 @@ int cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread) {
     assert(d->behaviors_arr != NULL);
 
     if (settings.verbose > 2) {
-        moxi_log_write("cproxy_connect_downstream %d\n", n);
+        moxi_log_write("cproxy_connect_downstream server_index %d in %d\n",
+                       server_index, n);
     }
 
-    for (int i = 0; i < n; i++) {
+    int i = 0;
+
+    if (server_index >= 0) {
+        assert(server_index < n);
+        i = server_index;
+        n = server_index + 1;
+    }
+
+    for (; i < n; i++) {
         assert(IS_PROXY(d->behaviors_arr[i].downstream_protocol));
 
         // Connect to downstream servers, if not already.

@@ -55,7 +55,13 @@ bool cproxy_forward_b2b_downstream(downstream *d) {
     assert(IS_BINARY(uc->protocol));
     assert(IS_PROXY(uc->protocol));
 
-    int nc = cproxy_connect_downstream(d, uc->thread);
+    int server_index = -1;
+
+    if (cproxy_is_broadcast_cmd(uc->cmd_curr) == false &&
+        uc->corked == NULL) {
+    }
+
+    int nc = cproxy_connect_downstream(d, uc->thread, server_index);
     if (nc == -1) {
         return true;
     }

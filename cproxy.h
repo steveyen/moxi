@@ -470,7 +470,8 @@ void        cproxy_release_downstream_conn(downstream *d, conn *c);
 bool        cproxy_check_downstream_config(downstream *d);
 
 int   cproxy_connect_downstream(downstream *d,
-                                LIBEVENT_THREAD *thread);
+                                LIBEVENT_THREAD *thread,
+                                int server_index);
 conn *cproxy_connect_downstream_conn(downstream *d,
                                      LIBEVENT_THREAD *thread,
                                      mcs_server_st *msst,
@@ -623,6 +624,8 @@ void cproxy_dump_behavior_stderr(const void *dump_opaque,
                                  const char *val);
 
 // ---------------------------------------------------------------
+
+bool cproxy_is_broadcast_cmd(int cmd);
 
 void cproxy_upstream_ascii_item_response(item *it, conn *uc,
                                          int cas_emit);
