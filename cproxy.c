@@ -57,8 +57,6 @@ void format_host_ident(char *buf, int buf_len,
                        mcs_server_st *msst,
                        enum protocol host_protocol);
 
-static bool set_hostinfo(char *host, bool is_tcp, struct addrinfo **ai_out);
-
 // Function tables.
 //
 conn_funcs cproxy_listen_funcs = {
@@ -2631,57 +2629,6 @@ HTGRAM_HANDLE cproxy_create_timing_histogram(void) {
     HTGRAM_HANDLE h0 = htgram_mk(0, 100, 1.0, 20, h1);
 
     return h0;
-}
-
-static bool set_hostinfo(char *host, bool is_tcp, struct addrinfo **ai_out) {
-    struct addrinfo *ai;
-    struct addrinfo hints;
-
-    char str_host[NI_MAXHOST];
-    char *str_port;
-    char *tmp = host;
-
-    while (*tmp && *tmp != ':') {
-        tmp++;
-    }
-
-    str_port = *tmp ? tmp + 1: "11211";
-
-    int host_len = tmp - host;
-    if (host_len >= NI_MAXHOST) {
-        host_len = NI_MAXHOST - 1;
-    }
-
-    strncpy(str_host, host, host_len);
-    str_host[host_len] = '\0';
-
-    memset(&hints, 0, sizeof(hints));
-
-    // hints.ai_family= AF_INET;
-
-    if (is_tcp) {
-        hints.ai_socktype = SOCK_STREAM;
-        hints.ai_protocol = IPPROTO_TCP;
-    } else {
-        hints.ai_protocol = IPPROTO_UDP;
-        hints.ai_socktype = SOCK_DGRAM;
-    }
-
-    int e = getaddrinfo(str_host, str_port, &hints, &ai);
-    if (e != 0) {
-        return false;
-    }
-
-    *ai_out = ai;
-
-#ifdef TODO_FIGURE_OUT_WHERE_TO_FREEADDRINFO_LATER
-    if (ds->address_info) {
-        freeaddrinfo(ds->address_info);
-        ds->address_info = NULL;
-    }
-#endif
-
-    return true;
 }
 
 conn *zstored_acquire_downstream_conn(downstream *d,
