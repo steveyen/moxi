@@ -59,6 +59,18 @@ bool cproxy_forward_b2b_downstream(downstream *d) {
 
     if (cproxy_is_broadcast_cmd(uc->cmd_curr) == false &&
         uc->corked == NULL) {
+        item *it = uc->item;
+        assert(it != NULL);
+
+        protocol_binary_request_header *req =
+            (protocol_binary_request_header *) ITEM_data(it);
+
+        char *key     = ((char *) req) + sizeof(*req) + req->request.extlen;
+        int   key_len = ntohs(req->request.keylen);
+
+        if (key_len > 0) {
+            server_index = cproxy_server_index(d, key, key_len, NULL);
+        }
     }
 
     int nc = cproxy_connect_downstream(d, uc->thread, server_index);

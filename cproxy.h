@@ -646,6 +646,8 @@ void cproxy_reset_stats_cmd(proxy_stats_cmd *sc);
 bool cproxy_binary_cork_cmd(conn *uc);
 void cproxy_binary_uncork_cmds(downstream *d, conn *uc);
 
+bool ascii_scan_key(char *line, char **key, int *key_len);
+
 // Multiget key de-duplication.
 //
 typedef struct multiget_entry multiget_entry;

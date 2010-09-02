@@ -945,6 +945,14 @@ bool cproxy_forward_a2b_downstream(downstream *d) {
     int server_index = -1;
 
     if (cproxy_is_broadcast_cmd(uc->cmd_curr) == false) {
+        char *key = NULL;
+        int   key_len = 0;
+
+        if (ascii_scan_key(uc->cmd_start, &key, &key_len) &&
+            key != NULL &&
+            key_len > 0) {
+            server_index = cproxy_server_index(d, key, key_len, NULL);
+        }
     }
 
     int nc = cproxy_connect_downstream(d, uc->thread, server_index);

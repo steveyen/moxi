@@ -442,3 +442,28 @@ bool cproxy_is_broadcast_cmd(int cmd) {
             cmd == PROTOCOL_BINARY_CMD_GETKQ);
 }
 
+bool ascii_scan_key(char *line, char **key, int *key_len) {
+    char *curr = line;
+
+    while (*curr != '\0' &&
+           *curr != ' ') { // Scan to end of cmd.
+        curr++;
+    }
+
+    while (*curr != '\0' &&
+           *curr == ' ') { // Scan to start of key.
+        curr++;
+    }
+
+    *key = curr;
+
+    while (*curr != '\0' &&
+           *curr != ' ') { // Scan to end of key.
+        curr++;
+    }
+
+    *key_len = (int) (curr - *key);
+
+    return *key_len > 0;
+}
+
