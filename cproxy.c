@@ -57,6 +57,8 @@ void format_host_ident(char *buf, int buf_len,
                        mcs_server_st *msst,
                        enum protocol host_protocol);
 
+bool cproxy_forward_or_error(downstream *d);
+
 int delink_from_downstream_conns(conn *c);
 
 // Function tables.
@@ -1617,6 +1619,18 @@ bool cproxy_forward(downstream *d) {
     }
 }
 
+bool cproxy_forward_or_error(downstream *d) {
+    if (cproxy_forward(d) == false) {
+        d->ptd->stats.stats.tot_downstream_propagate_failed++;
+        propagate_error(d);
+        cproxy_release_downstream(d, false);
+
+        return false;
+    }
+
+    return true;
+}
+
 void upstream_error(conn *uc) {
     assert(uc);
     assert(uc->state == conn_pause);
@@ -2636,7 +2650,7 @@ void cproxy_on_connect_downstream_conn(conn *c) {
 
     conn_set_state(c, conn_pause);
 
-    cproxy_forward(d);
+    cproxy_forward_or_error(d);
 
     return;
 
@@ -2655,6 +2669,8 @@ cleanup:
     conn_set_state(c, conn_closing);
 
     update_event(c, 0);
+
+    cproxy_forward_or_error(d);
 }
 
 void downstream_reserved_time_sample(proxy_stats_td *pstd, uint64_t duration) {
