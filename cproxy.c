@@ -44,7 +44,7 @@ bool downstream_connect_init(downstream *d, mcs_server_st *msst,
 
 int init_mcs_st(mcs_st *mst, char *config);
 
-void cproxy_on_connect_downstream_conn(conn *c);
+bool cproxy_on_connect_downstream_conn(conn *c);
 
 conn *zstored_acquire_downstream_conn(downstream *d,
                                       LIBEVENT_THREAD *thread,
@@ -1237,12 +1237,6 @@ conn *cproxy_connect_downstream_conn(downstream *d,
     assert(mcs_server_st_port(msst) > 0);
     assert(mcs_server_st_fd(msst) == -1);
 
-    if (settings.verbose > 2) {
-        moxi_log_write("cproxy_connect_downstream_conn %s:%d\n",
-                       mcs_server_st_hostname(msst),
-                       mcs_server_st_port(msst));
-    }
-
     uint64_t start = 0;
 
     if (d->ptd->behavior_pool.base.time_stats) {
@@ -1253,6 +1247,12 @@ conn *cproxy_connect_downstream_conn(downstream *d,
     int fd = mcs_connect(mcs_server_st_hostname(msst),
                          mcs_server_st_port(msst), &err, false);
     if (fd != -1) {
+        if (settings.verbose > 2) {
+            moxi_log_write("%d: cproxy_connect_downstream_conn %s:%d\n", fd,
+                           mcs_server_st_hostname(msst),
+                           mcs_server_st_port(msst));
+        }
+
         conn *c = conn_new(fd, conn_pause, 0,
                            DATA_BUFFER_SIZE,
                            tcp_transport,
@@ -2597,7 +2597,7 @@ void cproxy_upstream_state_change(conn *c, enum conn_states next_state) {
 
 // -------------------------------------------------
 
-void cproxy_on_connect_downstream_conn(conn *c) {
+bool cproxy_on_connect_downstream_conn(conn *c) {
     int k;
 
     assert(c != NULL);
@@ -2653,10 +2653,10 @@ void cproxy_on_connect_downstream_conn(conn *c) {
             // TODO: d->error_count = 0;
 
             conn_set_state(c, conn_pause);
-
+            update_event(c, 0);
             cproxy_forward_or_error(d);
 
-            return;
+            return true;
         }
     }
 
@@ -2673,10 +2673,10 @@ cleanup:
     }
 
     conn_set_state(c, conn_closing);
-
     update_event(c, 0);
-
     cproxy_forward_or_error(d);
+
+    return false;
 }
 
 void downstream_reserved_time_sample(proxy_stats_td *pstd, uint64_t duration) {

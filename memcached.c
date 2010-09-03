@@ -3393,7 +3393,9 @@ void drive_machine(conn *c) {
 
         case conn_connecting:
             if (c->funcs->conn_connect != NULL) {
-                c->funcs->conn_connect(c);
+                if (c->funcs->conn_connect(c) == true) {
+                    stop = true;
+                }
             } else {
                 conn_set_state(c, conn_closing);
                 update_event(c, 0);

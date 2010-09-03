@@ -375,7 +375,7 @@ struct conn_funcs {
     /* Function pointers so that drive_machine loop is reusable. */
     void (*conn_init)(conn *c);
     void (*conn_close)(conn *c);
-    void (*conn_connect)(conn *c);
+    bool (*conn_connect)(conn *c);
     void (*conn_process_ascii_command)(conn *c, char *command);
     void (*conn_process_binary_command)(conn *c);
     void (*conn_complete_nread_ascii)(conn *c);
