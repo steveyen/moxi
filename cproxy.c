@@ -2613,7 +2613,7 @@ bool cproxy_on_connect_downstream_conn(conn *c) {
     assert(d != NULL);
 
     if (settings.verbose > 2) {
-        moxi_log_write("%d: cproxy_on_connect_downstream_conn for %s",
+        moxi_log_write("%d: cproxy_on_connect_downstream_conn for %s\n",
                        c->sfd, c->host_ident);
     }
 
@@ -2799,37 +2799,6 @@ conn *zstored_acquire_downstream_conn(downstream *d,
        d->thread->ptd.tot_downstream_connect_failed++;
        d->stats.conn_failures++;
     }
-
-    if (settings.verbose > 2) {
-        moxi_log_write("connection to %s, status: %s", d->host_ident,
-                       fd == -1 ? "FAILED" : (status == 0 ? "SUCCESS" : "CONNECTING"));
-    }
-#endif
-
-#ifdef TODO_NEED_TO_ADD_DC_TO_POOL_MAYBE
-    if (dc == NULL) {
-        dc = cproxy_create_downstream_conn(host_ident, thread, host_protocol);
-        if (dc != NULL) {
-            genhash_store(conn_hash, dc->host_ident, dc);
-
-            // Add this downstream conn to the thread local
-            // downstream list.
-            // take STATS_LOCK here since we traverse this from cproxy_stats
-            STATS_LOCK();
-            proxy_td *ptd = &thread->ptd;
-            d->next = NULL;
-            if (ptd->downstream_tail != NULL) {
-                ptd->downstream_tail->next = dc;
-            }
-            ptd->downstream_tail = dc;
-            if (ptd->downstream_head == NULL) {
-                ptd->downstream_head = dc;
-            }
-            STATS_UNLOCK();
-        }
-    }
-
-    return NULL;
 #endif
 }
 
@@ -2870,98 +2839,6 @@ void zstored_release_downstream_conn(conn *dc, bool closing) {
     }
 
     genhash_update(conn_hash, dc->host_ident, dc);
-
-    return;
-
-#ifdef TOOD_FIGURE_OUT_IF_WE_STILL_HAVE_DC_PEER
-    // Delink upstream conn.
-    //
-    conn *uc = dc->peer;
-    if (uc != NULL) {
-        if (dc->upstream_suffix != NULL) {
-            // Do a last write on the upstream.  For example,
-            // the upstream_suffix might be "END\r\n" or other
-            // way to mark the end of a scatter-gather or
-            // multiline response.
-            //
-            if (settings.verbose > 2)
-                log_error_write(zl, __FILE__, __LINE__, "s", ">> doing last write");
-            if (add_iov(uc,
-                        dc->upstream_suffix,
-                        strlen(dc->upstream_suffix)) == 0 &&
-                update_event(uc, EV_WRITE | EV_PERSIST)) {
-                conn_set_state(uc, conn_mwrite);
-            } else {
-                cproxy_close_conn(uc);
-            }
-        }
-        uc->peer = NULL;
-    }
-
-    dc->peer = NULL;
-    dc->upstream_suffix = NULL; // No free(), expecting a static string.
-
-    downstream *d = dc->extra;
-    if (d == NULL) {
-        return;
-    }
-
-    dc->extra = NULL;
-#endif
-
-#ifdef TODO_FIGURE_OUT_HOW_TO_WAKE_UP_WAITING_DOWNSTREAM
-    if (!closing) {
-        conn *waiting_uc = NULL; // TODO.
-        if (waiting_uc != NULL) {
-            // assign_downstream_conn_to_downstream(dc, waiting_uc);
-        }
-
-        if (dc->next == NULL && d->downstream_conns != dc) {
-            // Add this connection back to the list of ds connections
-            // log_error_write(zl, __FILE__, __LINE__,stderr, "<< **** >> assigning to ds\n");
-            dc->next = d->downstream_conns;
-            d->downstream_conns = dc;
-            cproxy_assign_downstream(d);
-        } else {
-            // We should not end up here
-            // best thing to do is close the connection
-            if (settings.verbose) {
-                char tmp_buf[256] = {0};
-                snprintf(tmp_buf, 256, "<< ERROR >> next: %lx, downstream_conns: %lx, dc: %lx\n",
-                (unsigned long int)dc->next,
-                (unsigned long int)d->downstream_conns, (unsigned long int)dc);
-                log_error_write(zl, __FILE__, __LINE__, "s", tmp_buf);
-            }
-            cproxy_close_conn(dc);
-        }
-    } else {
-        dc->extra = NULL;
-        d->stats.active_conns--;
-
-        // this connection may be part of the
-        // downstream connections linked list. remove it
-        conn *p = d->downstream_conns;
-        if (p == dc) {
-            d->downstream_conns = dc->next;
-        } else if (p != NULL) {
-            while (p->next != NULL) {
-                if (p->next == dc) {
-                    p->next = dc->next;
-                    break;
-                }
-                p = p->next;
-            }
-        }
-
-        // let us also clear the cached address info structure
-        if (d->address_info) {
-            freeaddrinfo(d->address_info);
-            d->address_info = NULL;
-        }
-
-        cproxy_assign_downstream(d);
-    }
-#endif
 }
 
 void format_host_ident(char *buf, int buf_len,
