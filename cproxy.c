@@ -2640,19 +2640,25 @@ void cproxy_on_connect_downstream_conn(conn *c) {
         goto cleanup;
     }
 
-    /* We are connected to the server now */
-    if (settings.verbose > 2) {
-        moxi_log_write("%d: connected to: %s\n", c->sfd, c->host_ident);
+    k = downstream_conn_index(d, c);
+    if (k >= 0) {
+        if (downstream_connect_init(d, mcs_server_index(&d->mst, k),
+                                    &d->behaviors_arr[k], c)) {
+            /* We are connected to the server now */
+            if (settings.verbose > 2) {
+                moxi_log_write("%d: connected to: %s\n", c->sfd, c->host_ident);
+            }
+
+            // TODO: d->connect_time = 0;
+            // TODO: d->error_count = 0;
+
+            conn_set_state(c, conn_pause);
+
+            cproxy_forward_or_error(d);
+
+            return;
+        }
     }
-
-    // TODO: d->connect_time = 0;
-    // TODO: d->error_count = 0;
-
-    conn_set_state(c, conn_pause);
-
-    cproxy_forward_or_error(d);
-
-    return;
 
 cleanup:
     // TODO: d->thread->ptd.tot_downstream_connect_failed++;
