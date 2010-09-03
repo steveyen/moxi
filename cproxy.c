@@ -1149,9 +1149,9 @@ bool cproxy_check_downstream_config(downstream *d) {
 // In that case, the downstream has to wait for a downstream connection
 // to get out of the conn_connecting state.
 //
-// TODO: The downstream connection might leave the conn_connecting state
-// with an error (unable to connect).  Need to handle that case.
-// Perhaps consider a sentinel conn object that's sfd of -1.
+// The downstream connection might leave the conn_connecting state
+// with an error (unable to connect).  That case is handled by
+// tracking a NULL_CONN sentinel value.
 //
 // Also, in the -1 result case, the d->upstream_conn should remain in
 // conn_pause state.
