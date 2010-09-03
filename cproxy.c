@@ -777,7 +777,9 @@ bool cproxy_release_downstream(downstream *d, bool force) {
     assert(d->ptd != NULL);
 
     if (settings.verbose > 2) {
-        moxi_log_write("release_downstream\n");
+        moxi_log_write("%d: release_downstream\n",
+                       d->upstream_conn != NULL ?
+                       d->upstream_conn->sfd : -1);
     }
 
     // Always release the timeout_event, even if we're going to retry,
@@ -1176,8 +1178,8 @@ int cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread,
     assert(d->behaviors_arr != NULL);
 
     if (settings.verbose > 2) {
-        moxi_log_write("cproxy_connect_downstream server_index %d in %d\n",
-                       server_index, n);
+        moxi_log_write("%d: cproxy_connect_downstream server_index %d in %d\n",
+                       d->upstream_conn->sfd, server_index, n);
     }
 
     int i = 0;
@@ -1341,12 +1343,14 @@ conn *cproxy_find_downstream_conn_ex(downstream *d,
     int s = cproxy_server_index(d, key, key_length, &v);
 
     if (settings.verbose > 2) {
-        moxi_log_write("server_index %d, vbucket %d, conn %s\n", s, v,
+        moxi_log_write("%d: server_index %d, vbucket %d, conn %d\n", s, v,
+                       (d->upstream_conn != NULL ?
+                        d->upstream_conn->sfd : 0),
                        (d->downstream_conns[s] == NULL ?
-                        "null" :
+                        0 :
                         (d->downstream_conns[s] == NULL_CONN ?
-                         "null_conn" :
-                         "ok")));
+                         -1 :
+                         d->downstream_conns[s]->sfd)));
     }
 
     if (s >= 0 &&
@@ -1751,9 +1755,11 @@ void cproxy_release_downstream_conn(downstream *d, conn *c) {
     assert(ptd != NULL);
 
     if (settings.verbose > 2) {
-        moxi_log_write(
-                "%d release_downstream_conn, downstream_used %d %d\n",
-                c->sfd, d->downstream_used, d->downstream_used_start);
+        moxi_log_write("%d: release_downstream_conn, downstream_used %d %d,"
+                       " upstream %d\n",
+                       c->sfd, d->downstream_used, d->downstream_used_start,
+                       (d->upstream_conn != NULL ?
+                        d->upstream_conn->sfd : 0));
     }
 
     d->downstream_used--;
@@ -2745,6 +2751,9 @@ conn *zstored_acquire_downstream_conn(downstream *d,
             genhash_delete(conn_hash, host_ident_buf);
         }
 
+        assert(dc->extra == NULL);
+        dc->extra = d;
+
         return dc;
     }
 
@@ -2832,13 +2841,23 @@ void zstored_release_downstream_conn(conn *dc, bool closing) {
         return;
     }
 
+    downstream *d = dc->extra;
+    assert(d != NULL);
+
+    if (settings.verbose > 2) {
+        moxi_log_write("%d: release_downstream_conn, %s, (%d)"
+                       " upstream %d\n",
+                       dc->sfd, state_text(dc->state), closing,
+                       (d->upstream_conn != NULL ?
+                        d->upstream_conn->sfd : -1));
+    }
+
     assert(dc->next == NULL);
+    assert(dc->state == conn_pause);
     assert(dc->thread != NULL);
     assert(dc->host_ident != NULL);
 
-    if (settings.verbose > 2) {
-        moxi_log_write("%d: release_downstream_conn (%d)", dc->sfd, closing);
-    }
+    dc->extra = NULL;
 
     genhash_t *conn_hash = dc->thread->conn_hash;
     assert(conn_hash != NULL);

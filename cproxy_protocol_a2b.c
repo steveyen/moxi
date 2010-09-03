@@ -1435,6 +1435,11 @@ bool cproxy_forward_a2b_item_downstream(downstream *d, short cmd,
         }
 
         if (cproxy_prep_conn_for_write(c)) {
+            if (settings.verbose > 2) {
+                moxi_log_write("%d: a2b_item_forward, state: %s\n",
+                               c->sfd, state_text(c->state));
+            }
+
             assert(c->state == conn_pause);
 
             uint8_t  extlen = (cmd == NREAD_APPEND ||
@@ -1578,7 +1583,8 @@ bool cproxy_forward_a2b_item_downstream(downstream *d, short cmd,
     return false;
 }
 
-void a2b_set_opaque(conn *c, protocol_binary_request_header *header, bool noreply) {
+void a2b_set_opaque(conn *c, protocol_binary_request_header *header,
+                    bool noreply) {
     if (noreply) {
         // Set a magic opaque value during quiet commands that tells us later
         // that we can ignore the downstream's error response messge,
@@ -1588,7 +1594,7 @@ void a2b_set_opaque(conn *c, protocol_binary_request_header *header, bool norepl
 
         if (settings.verbose > 2) {
             moxi_log_write("%d: a2b_set_opaque OPAQUE_IGNORE_REPLY, cmdq: %x\n",
-                    c->sfd, header->request.opcode);
+                           c->sfd, header->request.opcode);
         }
     }
 }
