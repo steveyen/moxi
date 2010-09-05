@@ -358,9 +358,6 @@ struct proxy_td { // Per proxy, per worker-thread data struct.
 
     downstream *downstream_reserved; // Downstreams assigned to upstream conns.
     downstream *downstream_released; // Downstreams unassigned to upstreams conn.
-    downstream *downstream_waiting;  // Downstreams assigned to upstreams conn,
-                                     // but waiting for downstream conn(s)
-                                     // to fully connect.
     uint64_t    downstream_tot;      // Total lifetime downstreams created.
     int         downstream_num;      // Number downstreams existing.
     int         downstream_max;      // Max downstream concurrency number.
@@ -401,10 +398,6 @@ struct downstream {
 
     downstream *next; // To track reserved/released lists.
                       // See ptd->downstream_reserved/downstream_released.
-
-    downstream *next_waiting; // To track lists when a downstream is reserved,
-                              // but is waiting for a downstream connection,
-                              // per zstored_perf enhancement.
 
     conn **downstream_conns;  // Wraps the fd's of mst with conns.
     int    downstream_used;   // Number of in-use downstream conns, might
