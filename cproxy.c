@@ -2719,6 +2719,7 @@ conn *zstored_acquire_downstream_conn(downstream *d,
 
     conn *dc = (conn *) genhash_find(conn_hash, host_ident_buf);
     if (dc != NULL) {
+        assert(dc->thread == thread);
         assert(strcmp(host_ident_buf, dc->host_ident) == 0);
 
         if (dc->next != NULL) {
