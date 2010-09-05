@@ -2642,8 +2642,8 @@ bool cproxy_on_connect_downstream_conn(conn *c) {
     }
 
 cleanup:
-    // TODO: d->thread->ptd.tot_downstream_connect_failed++;
-    // TODO: d->stats.conn_failures++;
+    d->ptd->stats.stats.tot_downstream_connect_failed++;
+
     // TODO: d->error_count++;
 
     k = delink_from_downstream_conns(c);
