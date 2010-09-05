@@ -241,6 +241,8 @@ struct proxy_stats {
 
     uint64_t num_downstream_conn;
     uint64_t tot_downstream_conn;
+    uint64_t tot_downstream_conn_acquired;
+    uint64_t tot_downstream_conn_released;
     uint64_t tot_downstream_released;
     uint64_t tot_downstream_reserved;
     uint64_t tot_downstream_reserved_time;

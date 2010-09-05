@@ -804,16 +804,19 @@ bool cproxy_release_downstream(downstream *d, bool force) {
 
         // But, we can stop retrying if we've tried each server twice.
         //
-        // TODO: Add a stat for retrying.
-        //
         int max_retries = cproxy_max_retries(d);
 
         if (d->upstream_retries <= max_retries) {
             if (settings.verbose > 2) {
-                moxi_log_write("%d: release_downstream, instead retrying %d, %d <= %d\n",
+                moxi_log_write("%d: release_downstream,"
+                               " instead retrying %d, %d <= %d, %d\n",
                                d->upstream_conn->sfd,
-                               d->upstream_retry, d->upstream_retries, max_retries);
+                               d->upstream_retry,
+                               d->upstream_retries, max_retries,
+                               d->ptd->stats.stats.tot_retry);
             }
+
+            d->ptd->stats.stats.tot_retry++;
 
             if (cproxy_forward(d) == true) {
                 return true;
@@ -824,9 +827,11 @@ bool cproxy_release_downstream(downstream *d, bool force) {
             }
         } else {
             if (settings.verbose > 2) {
-                moxi_log_write("%d: release_downstream, skipping retry %d, %d > %d\n",
+                moxi_log_write("%d: release_downstream,"
+                               " skipping retry %d, %d > %d\n",
                                d->upstream_conn->sfd,
-                               d->upstream_retry, d->upstream_retries, max_retries);
+                               d->upstream_retry,
+                               d->upstream_retries, max_retries);
             }
         }
     }
@@ -881,13 +886,18 @@ bool cproxy_release_downstream(downstream *d, bool force) {
             //
             if (settings.verbose > 2) {
                 if (d->upstream_suffix_len > 0) {
-                    moxi_log_write("%d: release_downstream writing suffix binary: %d\n",
-                                   d->upstream_conn->sfd, d->upstream_suffix_len);
+                    moxi_log_write("%d: release_downstream"
+                                   " writing suffix binary: %d\n",
+                                   d->upstream_conn->sfd,
+                                   d->upstream_suffix_len);
 
-                    cproxy_dump_header(d->upstream_conn->sfd, d->upstream_suffix);
+                    cproxy_dump_header(d->upstream_conn->sfd,
+                                       d->upstream_suffix);
                 } else {
-                    moxi_log_write("%d: release_downstream writing suffix ascii: %s\n",
-                                   d->upstream_conn->sfd, d->upstream_suffix);
+                    moxi_log_write("%d: release_downstream"
+                                   " writing suffix ascii: %s\n",
+                                   d->upstream_conn->sfd,
+                                   d->upstream_suffix);
                 }
             }
 
@@ -2733,6 +2743,8 @@ conn *zstored_acquire_downstream_conn(downstream *d,
     assert(mcs_server_st_port(msst) > 0);
     assert(mcs_server_st_fd(msst) == -1);
 
+    d->ptd->stats.stats.tot_downstream_conn_acquired++;
+
     genhash_t *conn_hash = thread->conn_hash;
     assert(conn_hash != NULL);
 
@@ -2812,6 +2824,8 @@ void zstored_release_downstream_conn(conn *dc, bool closing) {
 
     downstream *d = dc->extra;
     assert(d != NULL);
+
+    d->ptd->stats.stats.tot_downstream_conn_released++;
 
     if (settings.verbose > 2) {
         moxi_log_write("%d: release_downstream_conn, %s, (%d)"

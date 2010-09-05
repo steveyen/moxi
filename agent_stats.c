@@ -538,6 +538,10 @@ static void proxy_stats_dump_pstd_stats(ADD_STAT add_stats,
               "%llu", (long long unsigned int) pstats->num_downstream_conn);
     APPEND_PREFIX_STAT("tot_downstream_conn",
               "%llu", (long long unsigned int) pstats->tot_downstream_conn);
+    APPEND_PREFIX_STAT("tot_downstream_conn_acquired",
+              "%llu", (long long unsigned int) pstats->tot_downstream_conn_acquired);
+    APPEND_PREFIX_STAT("tot_downstream_conn_released",
+              "%llu", (long long unsigned int) pstats->tot_downstream_conn_released);
     APPEND_PREFIX_STAT("tot_downstream_released",
               "%llu", (long long unsigned int) pstats->tot_downstream_released);
     APPEND_PREFIX_STAT("tot_downstream_reserved",
@@ -1158,6 +1162,8 @@ static void add_proxy_stats(proxy_stats *agg, proxy_stats *x) {
 
     agg->num_downstream_conn += x->num_downstream_conn;
     agg->tot_downstream_conn += x->tot_downstream_conn;
+    agg->tot_downstream_conn_acquired += x->tot_downstream_conn_acquired;
+    agg->tot_downstream_conn_released += x->tot_downstream_conn_released;
     agg->tot_downstream_released += x->tot_downstream_released;
     agg->tot_downstream_reserved += x->tot_downstream_reserved;
     agg->tot_downstream_reserved_time  += x->tot_downstream_reserved_time;
@@ -1387,6 +1393,10 @@ void map_pstd_foreach_emit(const void *k,
               pstd->stats.num_downstream_conn);
     more_stat("tot_downstream_conn",
               pstd->stats.tot_downstream_conn);
+    more_stat("tot_downstream_conn_acquired",
+              pstd->stats.tot_downstream_conn_acquired);
+    more_stat("tot_downstream_conn_released",
+              pstd->stats.tot_downstream_conn_released);
     more_stat("tot_downstream_released",
               pstd->stats.tot_downstream_released);
     more_stat("tot_downstream_reserved",
