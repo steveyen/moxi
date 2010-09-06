@@ -2723,7 +2723,7 @@ conn *zstored_acquire_downstream_conn(downstream *d,
         assert(strcmp(host_ident_buf, dc->host_ident) == 0);
 
         if (dc->next != NULL) {
-            genhash_update(conn_hash, host_ident_buf, dc->next);
+            genhash_update(conn_hash, dc->next->host_ident, dc->next);
             dc->next = NULL;
         } else {
             genhash_delete(conn_hash, host_ident_buf);
