@@ -37,7 +37,7 @@ int cproxy_init_agent(char *cfg_str,
                       int nthreads);
 
 proxy_behavior behavior_default_g = {
-    .cycle = 0,
+    .cycle = 200,
     .downstream_max = 4,
     .downstream_weight = 0,
     .downstream_retry = 1,

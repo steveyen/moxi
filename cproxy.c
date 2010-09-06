@@ -52,6 +52,18 @@ conn *zstored_acquire_downstream_conn(downstream *d,
 
 void zstored_release_downstream_conn(conn *dc, bool closing);
 
+void zstored_error_count(LIBEVENT_THREAD *thread,
+                         mcs_server_st *msst,
+                         proxy_behavior *behavior,
+                         bool has_error);
+
+typedef struct {
+    conn      *dc; // Head of singly linked-list of available downstream conns.
+    char      *host_ident;
+    int        error_count;
+    rel_time_t error_time;
+} zstored_downstream_conns;
+
 void format_host_ident(char *buf, int buf_len,
                        mcs_server_st *msst,
                        enum protocol host_protocol);
@@ -1296,6 +1308,8 @@ conn *cproxy_connect_downstream_conn(downstream *d,
 bool downstream_connect_init(downstream *d, mcs_server_st *msst,
                              proxy_behavior *behavior, conn *c) {
     d->ptd->stats.stats.tot_downstream_connect++;
+
+    zstored_error_count(c->thread, msst, behavior, false);
 
     if (c->cmd_start_time != 0 &&
         d->ptd->behavior_pool.base.time_stats) {
@@ -2630,9 +2644,6 @@ bool cproxy_on_connect_downstream_conn(conn *c) {
                 moxi_log_write("%d: connected to: %s\n", c->sfd, c->host_ident);
             }
 
-            // TODO: d->connect_time = 0;
-            // TODO: d->error_count = 0;
-
             conn_set_state(c, conn_pause);
             update_event(c, 0);
             cproxy_forward_or_error(d);
@@ -2644,13 +2655,14 @@ bool cproxy_on_connect_downstream_conn(conn *c) {
 cleanup:
     d->ptd->stats.stats.tot_downstream_connect_failed++;
 
-    // TODO: d->error_count++;
-
     k = delink_from_downstream_conns(c);
     if (k >= 0) {
         assert(d->downstream_conns[k] == NULL);
 
         d->downstream_conns[k] = NULL_CONN;
+
+        zstored_error_count(c->thread, mcs_server_index(&d->mst, k),
+                            &d->behaviors_arr[k], true);
     }
 
     conn_set_state(c, conn_closing);
@@ -2693,6 +2705,37 @@ HTGRAM_HANDLE cproxy_create_timing_histogram(void) {
     return h0;
 }
 
+void zstored_error_count(LIBEVENT_THREAD *thread,
+                         mcs_server_st *msst,
+                         proxy_behavior *behavior,
+                         bool has_error) {
+    assert(thread);
+    assert(thread->base);
+    assert(msst);
+    assert(behavior);
+    assert(mcs_server_st_hostname(msst) != NULL);
+    assert(mcs_server_st_port(msst) > 0);
+    assert(mcs_server_st_fd(msst) == -1);
+
+    genhash_t *conn_hash = thread->conn_hash;
+    assert(conn_hash != NULL);
+
+    char host_ident_buf[300];
+    format_host_ident(host_ident_buf, sizeof(host_ident_buf), msst,
+                      behavior->downstream_protocol);
+
+    zstored_downstream_conns *conns = genhash_find(conn_hash, host_ident_buf);
+    if (conns != NULL) {
+        if (has_error) {
+            conns->error_count++;
+            conns->error_time = msec_current_time;
+        } else {
+            conns->error_count = 0;
+            conns->error_time = 0;
+        }
+    }
+}
+
 conn *zstored_acquire_downstream_conn(downstream *d,
                                       LIBEVENT_THREAD *thread,
                                       mcs_server_st *msst,
@@ -2717,67 +2760,52 @@ conn *zstored_acquire_downstream_conn(downstream *d,
     format_host_ident(host_ident_buf, sizeof(host_ident_buf), msst,
                       behavior->downstream_protocol);
 
-    conn *dc = (conn *) genhash_find(conn_hash, host_ident_buf);
-    if (dc != NULL) {
-        assert(dc->thread == thread);
-        assert(strcmp(host_ident_buf, dc->host_ident) == 0);
+    conn *dc;
 
-        if (dc->next != NULL) {
-            genhash_update(conn_hash, dc->next->host_ident, dc->next);
+    zstored_downstream_conns *conns = genhash_find(conn_hash, host_ident_buf);
+    if (conns != NULL) {
+        dc = conns->dc;
+        if (dc != NULL) {
+            assert(dc->thread == thread);
+            assert(strcmp(host_ident_buf, dc->host_ident) == 0);
+
+            conns->dc = dc->next;
             dc->next = NULL;
-        } else {
-            genhash_delete(conn_hash, host_ident_buf);
+
+            assert(dc->extra == NULL);
+            dc->extra = d;
+
+            return dc;
         }
 
-        assert(dc->extra == NULL);
-        dc->extra = d;
-
-        return dc;
+        if (conns->error_count > MAX_DOWNSTREAM_CONNECTION_ERRORS) {
+            if (msec_current_time - conns->error_time < DOWNSTREAM_RETRY_INTERVAL) {
+                // TODO: Should have a stat for this retry-interval case.
+                //
+                return NULL;
+            } else {
+                conns->error_count = 0;
+                conns->error_time = 0;
+            }
+        }
     }
 
     dc = cproxy_connect_downstream_conn(d, thread, msst, behavior);
     if (dc != NULL) {
+        assert(dc->host_ident == NULL);
         dc->host_ident = strdup(host_ident_buf);
+        if (conns != NULL) {
+            conns->error_count = 0;
+            conns->error_time = 0;
+        }
+    } else {
+        if (conns != NULL) {
+            conns->error_count++;
+            conns->error_time = msec_current_time;
+        }
     }
 
     return dc;
-
-#ifdef TODO_FIGURE_OUT_WHERE_THESE_FIELDS_WILL_LIVE
-    int status = -1;
-
-    if (d->error_count > MAX_DOWNSTREAM_CONNECTION_ERRORS) {
-        if (msec_current_time - d->connect_time < DOWNSTREAM_RETRY_INTERVAL) {
-            return NULL;
-        } else {
-            d->error_count = 0;
-        }
-    }
-
-    int fd = network_connect(d, &status);
-    if (fd >= 0 && status >= 0) {
-        if (status > 0) {
-            d->connect_time = msec_current_time;
-        } else {
-            d->connect_time = 0;
-            d->error_count = 0;
-        }
-        conn *c = conn_new(fd, status == 0? conn_pause: conn_connecting,
-                           status == 0 ? 0: EV_WRITE,
-                           DATA_BUFFER_SIZE,
-                           tcp_transport,
-                           d->thread->base,
-                           &cproxy_downstream_funcs, d,
-                           &settings.connect_timeout);
-        if (c != NULL) {
-            c->protocol = d->protocol;
-            c->thread = d->thread;
-            return c;
-        }
-    } else {
-       d->thread->ptd.tot_downstream_connect_failed++;
-       d->stats.conn_failures++;
-    }
-#endif
 }
 
 // new fn by jsh
@@ -2811,14 +2839,27 @@ void zstored_release_downstream_conn(conn *dc, bool closing) {
     genhash_t *conn_hash = dc->thread->conn_hash;
     assert(conn_hash != NULL);
 
-    conn *dc_head = (conn *) genhash_find(conn_hash, dc->host_ident);
-    if (dc_head != NULL) {
-        assert(strcmp(dc->host_ident, dc_head->host_ident) == 0);
-
-        dc->next = dc_head;
+    zstored_downstream_conns *conns = genhash_find(conn_hash, dc->host_ident);
+    if (conns == NULL) {
+        conns = calloc(1, sizeof(zstored_downstream_conns));
+        if (conns != NULL) {
+            conns->host_ident = strdup(dc->host_ident);
+            if (conns->host_ident != NULL) {
+                genhash_store(conn_hash, conns->host_ident, conns);
+            } else {
+                free(conns);
+                conns = NULL;
+            }
+        }
     }
 
-    genhash_update(conn_hash, dc->host_ident, dc);
+    if (conns != NULL) {
+        assert(dc->next == NULL);
+        dc->next = conns->dc;
+        conns->dc = dc;
+    } else {
+        cproxy_close_conn(dc);
+    }
 }
 
 void format_host_ident(char *buf, int buf_len,
