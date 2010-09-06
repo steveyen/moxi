@@ -37,7 +37,7 @@ int cproxy_init_agent(char *cfg_str,
                       int nthreads);
 
 proxy_behavior behavior_default_g = {
-    .cycle = 200,
+    .cycle = 0,
     .downstream_max = 4,
     .downstream_weight = 0,
     .downstream_retry = 1,
@@ -51,6 +51,8 @@ proxy_behavior behavior_default_g = {
         .tv_usec = 0
     },
     .time_stats = false,
+    .connect_max_errors = 0,     // In zstored, 10.
+    .connect_retry_interval = 0, // In zstored, 30000.
     .front_cache_max = 200,
     .front_cache_lifespan = 0,
     .front_cache_spec = {0},
@@ -559,6 +561,10 @@ void cproxy_parse_behavior_key_val(char *key,
             behavior->wait_queue_timeout.tv_usec = (ms % 1000) * 1000;
         } else if (wordeq(key, "time_stats")) {
             behavior->time_stats = strtol(val, NULL, 10);
+        } else if (wordeq(key, "connect_max_errors")) {
+            behavior->connect_max_errors = strtol(val, NULL, 10);
+        } else if (wordeq(key, "connect_retry_interval")) {
+            behavior->connect_retry_interval = strtol(val, NULL, 10);
         } else if (wordeq(key, "front_cache_max")) {
             behavior->front_cache_max = strtol(val, NULL, 10);
         } else if (wordeq(key, "front_cache_lifespan")) {
@@ -715,35 +721,17 @@ void cproxy_dump_behavior_ex(proxy_behavior *b, char *prefix, int level,
         vdump("wait_queue_timeout", "%ld", // In millisecs.
               (b->wait_queue_timeout.tv_sec * 1000 +
                b->wait_queue_timeout.tv_usec / 1000));
-    }
-    if (level >= 1) {
         vdump("time_stats", "%d", b->time_stats);
-    }
-    if (level >= 1) {
+        vdump("connect_max_errors", "%u", b->connect_max_errors);
+        vdump("connect_retry_interval", "%u", b->connect_retry_interval);
         vdump("front_cache_max", "%u", b->front_cache_max);
-    }
-    if (level >= 1) {
         vdump("front_cache_lifespan", "%u", b->front_cache_lifespan);
-    }
-    if (level >= 1) {
         vdump("front_cache_spec", "%s", b->front_cache_spec);
-    }
-    if (level >= 1) {
         vdump("front_cache_unspec", "%s", b->front_cache_unspec);
-    }
-    if (level >= 1) {
         vdump("key_stats_max", "%u", b->key_stats_max);
-    }
-    if (level >= 1) {
         vdump("key_stats_lifespan", "%u", b->key_stats_lifespan);
-    }
-    if (level >= 1) {
         vdump("key_stats_spec", "%s", b->key_stats_spec);
-    }
-    if (level >= 1) {
         vdump("key_stats_unspec", "%s", b->key_stats_unspec);
-    }
-    if (level >= 1) {
         vdump("optimize_set", "%s", b->optimize_set);
     }
 
@@ -754,9 +742,6 @@ void cproxy_dump_behavior_ex(proxy_behavior *b, char *prefix, int level,
 
     if (level >= 1) {
         vdump("port_listen", "%d", b->port_listen);
-    }
-
-    if (level >= 1) {
         vdump("default_bucket_name", "%s", b->default_bucket_name);
     }
 }

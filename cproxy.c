@@ -13,9 +13,9 @@
 #include "work.h"
 #include "log.h"
 
+// TODO: This timeout is inherited from zstored, but use it where?
+//
 #define DOWNSTREAM_DEFAULT_TIMEOUT 1000
-#define DOWNSTREAM_RETRY_INTERVAL 30000
-#define MAX_DOWNSTREAM_CONNECTION_ERRORS 10
 
 // Internal forward declarations.
 //
@@ -60,7 +60,7 @@ void zstored_error_count(LIBEVENT_THREAD *thread,
 typedef struct {
     conn      *dc; // Head of singly linked-list of available downstream conns.
     char      *host_ident;
-    int        error_count;
+    uint32_t   error_count;
     rel_time_t error_time;
 } zstored_downstream_conns;
 
@@ -2778,8 +2778,13 @@ conn *zstored_acquire_downstream_conn(downstream *d,
             return dc;
         }
 
-        if (conns->error_count > MAX_DOWNSTREAM_CONNECTION_ERRORS) {
-            if (msec_current_time - conns->error_time < DOWNSTREAM_RETRY_INTERVAL) {
+        if (behavior->connect_max_errors > 0 &&
+            behavior->connect_max_errors < conns->error_count) {
+            rel_time_t msecs_since_error =
+                msec_current_time - conns->error_time;
+
+            if ((behavior->cycle > 0) &&
+                (behavior->connect_retry_interval > msecs_since_error)) {
                 // TODO: Should have a stat for this retry-interval case.
                 //
                 return NULL;
