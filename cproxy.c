@@ -2328,7 +2328,8 @@ bool cproxy_start_downstream_timeout(downstream *d, conn *c) {
     assert(IS_PROXY(uc->protocol));
 
     if (settings.verbose > 2) {
-        moxi_log_write("%d: cproxy_start_downstream_timeout\n", c->sfd);
+        moxi_log_write("%d: cproxy_start_downstream_timeout\n",
+                       (c != NULL ? c->sfd : -1));
     }
 
     evtimer_set(&d->timeout_event, downstream_timeout, d);
