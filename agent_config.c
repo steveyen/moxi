@@ -250,7 +250,7 @@ int cproxy_init_agent(char *cfg_str,
         }
 
         if (settings.verbose > 1) {
-            moxi_log_write("cproxy_init jid: %s host: %s dbpath: %s\n", jid, host, dbpath);
+            moxi_log_write("cproxy_init jid: %s host: %s\n", jid, host);
         }
 
         if (cproxy_init_agent_start(jid, jpw, dbpath, host,
