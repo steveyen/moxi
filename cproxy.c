@@ -13,10 +13,6 @@
 #include "work.h"
 #include "log.h"
 
-// TODO: This timeout is inherited from zstored, but use it where?
-//
-#define DOWNSTREAM_DEFAULT_TIMEOUT 1000
-
 // Internal forward declarations.
 //
 downstream *downstream_list_remove(downstream *head, downstream *d);
@@ -1296,10 +1292,13 @@ conn *cproxy_connect_downstream_conn(downstream *d,
             c->cmd_start_time = start;
 
             if (err == EINPROGRESS) {
-                // TODO: In zstored, the EV_WRITE registration is done
-                // with a timeout.
-                //
-                if (update_event(c, EV_WRITE | EV_PERSIST)) {
+                struct timeval connect_timeout;
+
+                connect_timeout.tv_sec = 5;
+                connect_timeout.tv_usec = 0;
+
+                if (update_event_timed(c, EV_WRITE | EV_PERSIST,
+                                       &connect_timeout)) {
                     conn_set_state(c, conn_connecting);
 
                     return c;
@@ -2625,6 +2624,8 @@ bool cproxy_on_connect_downstream_conn(conn *c) {
     }
 
     if (c->which == EV_TIMEOUT) {
+        // TODO: Should have a stat for the connect timeout case.
+        //
         if (settings.verbose) {
             moxi_log_write("%d: connection timed out: %s",
                            c->sfd, c->host_ident);

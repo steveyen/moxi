@@ -3228,17 +3228,24 @@ static enum try_read_result try_read_network(conn *c) {
 }
 
 bool update_event(conn *c, const int new_flags) {
+    return update_event_timed(c, new_flags, NULL);
+}
+
+bool update_event_timed(conn *c, const int new_flags, struct timeval *timeout) {
     assert(c != NULL);
 
     struct event_base *base = c->event.ev_base;
-    if (c->ev_flags == new_flags)
+    if (c->ev_flags == new_flags && timeout == NULL)
         return true;
-    if (event_del(&c->event) == -1) return false;
+    if (event_del(&c->event) == -1)
+        return false;
     c->ev_flags = new_flags;
-    if (new_flags == 0) return true;
+    if (new_flags == 0 && timeout == NULL)
+        return true;
     event_set(&c->event, c->sfd, new_flags, event_handler, (void *)c);
     event_base_set(base, &c->event);
-    if (event_add(&c->event, 0) == -1) return false;
+    if (event_add(&c->event, timeout) == -1)
+        return false;
     return true;
 }
 

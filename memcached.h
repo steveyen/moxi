@@ -523,6 +523,7 @@ void conn_set_state(conn *c, enum conn_states state);
 void add_bytes_read(conn *c, int bytes_read);
 void out_string(conn *c, const char *str);
 bool update_event(conn *c, const int new_flags);
+bool update_event_timed(conn *c, const int new_flags, struct timeval *timeout);
 int try_read_command(conn *c);
 void process_command(conn *c, char *command);
 void process_update_command(conn *c, token_t *tokens, const size_t ntokens, int comm, bool handle_cas);

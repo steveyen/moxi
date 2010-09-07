@@ -12,6 +12,10 @@
 #include "mcs.h"
 #include "log.h"
 
+// TODO: This timeout is inherited from zstored, but use it where?
+//
+#define DOWNSTREAM_DEFAULT_LINGER 1000
+
 // The lvb stands for libvbucket.
 //
 mcs_st  *lvb_create(mcs_st *ptr, const char *config);
@@ -501,7 +505,7 @@ mcs_return mcs_set_sock_opt(int sock) {
     struct linger linger;
 
     linger.l_onoff = 1;
-    linger.l_linger = DOWNSTREAM_DEFAULT_TIMEOUT;
+    linger.l_linger = DOWNSTREAM_DEFAULT_LINGER;
     error = setsockopt(fd, SOL_SOCKET, SO_LINGER,
                        &linger, (socklen_t)sizeof(struct linger));
   }
