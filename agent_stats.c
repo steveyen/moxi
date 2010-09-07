@@ -1704,6 +1704,8 @@ struct htgram_dump_callback_data {
 };
 
 static void htgram_dump_callback(HTGRAM_HANDLE h, const char *dump_line, void *cbdata) {
+    (void) h;
+
     ADD_STAT add_stats = ((struct htgram_dump_callback_data *) cbdata)->add_stats;
     char *prefix       = ((struct htgram_dump_callback_data *) cbdata)->prefix;
     conn *c            = ((struct htgram_dump_callback_data *) cbdata)->conn;
