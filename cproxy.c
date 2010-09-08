@@ -544,7 +544,6 @@ int delink_from_downstream_conns(conn *c) {
             d->ptd->stats.stats.tot_downstream_quit_server++;
 
             mcs_server_st_quit(mcs_server_index(&d->mst, i), 1);
-
             assert(mcs_server_st_fd(mcs_server_index(&d->mst, i)) == -1);
 
             k = i;
@@ -1185,6 +1184,8 @@ int cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread,
 
     int s = 0; // Number connected.
     int n = mcs_server_count(&d->mst);
+    mcs_server_st msst;
+    bool use_local_msst = false;
 
     assert(d->behaviors_num >= n);
     assert(d->behaviors_arr != NULL);
@@ -1212,9 +1213,22 @@ int cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread,
         // tried to connect yet).
         //
         if (d->downstream_conns[i] == NULL) {
+            conn *c = d->upstream_conn;
+            /*
+             * mcmux compatiblity mode, one downstream struct will be associated
+             * with downstream connection
+             */
+            if (c && c->peer_host && c->peer_port) {
+                bzero(&msst, sizeof(mcs_server_st));
+                memcpy(msst.hostname, c->peer_host, strlen(c->peer_host));
+                msst.port = c->peer_port;
+                msst.fd = -1;
+                use_local_msst = true;
+            }
+
             d->downstream_conns[i] =
                 zstored_acquire_downstream_conn(d, thread,
-                                                mcs_server_index(&d->mst, i),
+                                                use_local_msst ? &msst : mcs_server_index(&d->mst, i),
                                                 &d->behaviors_arr[i]);
             if (d->downstream_conns[i] != NULL &&
                 d->downstream_conns[i] != NULL_CONN &&
@@ -1227,8 +1241,7 @@ int cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread,
             d->downstream_conns[i] != NULL_CONN) {
             s++;
         } else {
-            mcs_server_st_quit(mcs_server_index(&d->mst, i), 1);
-
+            mcs_server_st_quit(use_local_msst ? &msst : mcs_server_index(&d->mst, i), 1);
             d->downstream_conns[i] = NULL_CONN;
         }
     }

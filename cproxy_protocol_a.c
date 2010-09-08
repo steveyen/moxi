@@ -15,6 +15,9 @@
 #define COMMAND_TOKEN 0
 #define MAX_TOKENS    8
 
+#define MAX_HOSTNAME_LEN 200
+#define MAX_PORT_LEN     8
+
 void cproxy_process_upstream_ascii(conn *c, char *line) {
     assert(c != NULL);
     assert(c->next == NULL);
@@ -48,6 +51,52 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
         ptd->stats.stats.err_upstream_write_prep++;
         conn_set_state(c, conn_closing);
         return;
+    }
+
+    bool mcmux_command = false;
+    /* Check for proxy pattern - A:host:port or B:host:port */
+    if (true == settings.enable_mcmux_mode &&
+        ((*line == 'A' || *line == 'B') && *(line +1) == ':')) {
+        mcmux_command = true;
+    }
+
+    if (true == settings.enable_mcmux_mode && false == mcmux_command) {
+        out_string(c, "ERROR");
+        return;
+    }
+
+    if (mcmux_command) {
+        char *peer_port = NULL;
+        int i = 0;
+
+        c->peer_protocol = (*line == 'A')? proxy_downstream_ascii_prot
+            : proxy_downstream_binary_prot;
+        line += 2;
+        c->peer_host = line;
+
+        while (*line != ' ' && *line != '\0' &&
+            *line != ':' && ++i < MAX_HOSTNAME_LEN) line++;
+
+        if (*line == '\0' || line - c->peer_host <= 0) {
+            out_string(c, "ERROR");
+            return;
+        }
+        *line = '\0';
+        line++;
+        peer_port = line;
+        i = 0;
+
+        while(*line != ' ' && *line != '\0' && ++i <= MAX_PORT_LEN) line++;
+        if (*line == '\0' || line - peer_port <= 0) {
+            out_string(c, "ERROR");
+            return;
+        }
+
+        c->peer_port = atoi(peer_port);
+
+        *line++ = '\0';
+        c->cmd_start = line;
+
     }
 
     int     cmd_len = 0;

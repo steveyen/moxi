@@ -4100,7 +4100,9 @@ static void usage(char **argv) {
            "              \":\" (colon). If this option is specified, stats collection\n"
            "              is turned on automatically; if not, then it may be turned on\n"
            "              by sending the \"stats detail on\" command to the server.\n"
-           "-C            (deprecated) disable use of CAS\n");
+           "-C            (deprecated) disable use of CAS\n"
+           "-O <file path>  moxi log file name.\n"
+           "-X            enable mcmux compatbility mode, disables libvbucket & libmemcached support\n");
     return;
 }
 
@@ -4393,6 +4395,7 @@ int main (int argc, char **argv) {
           "B:"  /* Binding protocol */
           "Y:"  /* exit when stdin closes, for windows compatibility */
           "O:"  /* log file name */
+          "X"   /* run in mcmux compatiblity mode */
         ))) {
         switch (c) {
         case 'a':
@@ -4532,6 +4535,10 @@ int main (int argc, char **argv) {
             }
 #endif
             break;
+        case 'X' :
+            settings.enable_mcmux_mode = true;
+            break;
+
         default:
             fprintf(stderr, "Illegal argument \"%c\"\n", c);
             return 1;
@@ -4737,8 +4744,8 @@ int main (int argc, char **argv) {
         }
 
         errno = 0;
-        if (settings.port >= 0 && server_socket(settings.port, tcp_transport,
-                                                portnumber_file)) {
+        if ((settings.port >= 0) && (false == settings.enable_mcmux_mode) &&
+                (server_socket(settings.port, tcp_transport, portnumber_file))) {
             moxi_log_write("failed to listen on TCP port %d: %s",
                            settings.port, strerror(errno));
             if (ml->log_mode != ERRORLOG_STDERR) {
@@ -4785,6 +4792,8 @@ int main (int argc, char **argv) {
                     settings.num_threads,
                     main_base);
         free(cproxy_cfg);
+    } else if (settings.enable_mcmux_mode) {
+        cproxy_init(NULL, NULL, settings.num_threads, main_base);
     } else {
         int i = argc - 1;
         if (i > 0 &&

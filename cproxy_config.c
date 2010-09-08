@@ -36,6 +36,10 @@ int cproxy_init_agent(char *cfg_str,
                       proxy_behavior behavior,
                       int nthreads);
 
+int cproxy_init_mcmux_mode(int proxy_port,
+                           proxy_behavior behavior,
+                           int nthreads);
+
 proxy_behavior behavior_default_g = {
     .cycle = 0,
     .downstream_max = 4,
@@ -241,8 +245,8 @@ int cproxy_init(char *cfg_str,
         cproxy_init_b2b();
     }
 
-    if (cfg_str == NULL ||
-        strlen(cfg_str) <= 0) {
+    if ((cfg_str == NULL ||
+        strlen(cfg_str) <= 0) && (false == settings.enable_mcmux_mode)) {
         return 0;
     }
 
@@ -263,8 +267,8 @@ int cproxy_init(char *cfg_str,
         }
     }
 
-    if (cfg_str[0] == '.' ||
-        cfg_str[0] == '/') {
+    if ((false == settings.enable_mcmux_mode) && (cfg_str[0] == '.' ||
+        cfg_str[0] == '/')) {
         char *buf = readfile(cfg_str);
         if (buf != NULL) {
             int rv = cproxy_init(buf, behavior_str, nthreads, main_base);
@@ -318,6 +322,12 @@ int cproxy_init(char *cfg_str,
     msec_clockevent_base = main_base;
     msec_clock_handler(0, 0, NULL);
 
+    if (true == settings.enable_mcmux_mode) {
+        return cproxy_init_mcmux_mode(settings.port,
+                                      behavior,
+                                      nthreads);
+    }
+
     // Not jid format and not a URL, so it must be a simple cmd-line
     // or file-based config.
     //
@@ -337,6 +347,75 @@ int cproxy_init(char *cfg_str,
     exit(EXIT_FAILURE);
     return 1;
 #endif
+}
+
+int cproxy_init_mcmux_mode(int proxy_port,
+                           proxy_behavior behavior,
+                           int nthreads) {
+
+    char *proxy_name = "default";
+
+    if (settings.verbose > 1) {
+        cproxy_dump_behavior(&behavior, "init_string", 2);
+    }
+
+    int behaviors_num = 1; // Number of servers.
+    proxy_behavior_pool behavior_pool;
+    memset(&behavior_pool, 0, sizeof(proxy_behavior_pool));
+
+    behavior_pool.base = behavior;
+    behavior_pool.num  = behaviors_num;
+    behavior_pool.arr  = calloc(behaviors_num,
+            sizeof(proxy_behavior));
+
+    if (behavior_pool.arr != NULL) {
+        for (int i = 0; i < behaviors_num; i++) {
+            behavior_pool.arr[i] = behavior;
+        }
+
+        proxy_main *m = cproxy_gen_proxy_main(behavior, nthreads,
+                PROXY_CONF_TYPE_STATIC);
+        if (m == NULL) {
+            moxi_log_write("could not alloc proxy_main\n");
+            exit(EXIT_FAILURE);
+        }
+
+        proxy *p = cproxy_create(m,
+                proxy_name,
+                proxy_port,
+                "mcmux_config",
+                0, // config_ver.
+                &behavior_pool,
+                nthreads);
+        if (p != NULL) {
+            pthread_mutex_lock(&m->proxy_main_lock);
+            p->next = m->proxy_head;
+            m->proxy_head = p;
+            pthread_mutex_unlock(&m->proxy_main_lock);
+
+            int n = cproxy_listen(p);
+            if (n > 0) {
+                if (settings.verbose > 1) {
+                    moxi_log_write("moxi listening on %d with %d conns\n",
+                            proxy_port, n);
+                }
+            } else {
+                moxi_log_write("moxi error -- port %d unavailable?\n",
+                        proxy_port);
+                exit(EXIT_FAILURE);
+            }
+        } else {
+            moxi_log_write("could not alloc proxy\n");
+            exit(EXIT_FAILURE);
+        }
+
+        free(behavior_pool.arr);
+    } else {
+        moxi_log_write("could not alloc behaviors\n");
+        exit(EXIT_FAILURE);
+    }
+
+    return 0;
 }
 
 int cproxy_init_string(char *cfg_str,
