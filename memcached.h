@@ -553,6 +553,10 @@ int server_socket(const int port,
                   enum network_transport transport,
                   FILE *portnum_file);
 
+#ifdef HAVE_SYS_UN_H
+int server_socket_unix(const char *path, int access_mask);
+#endif
+
 void drive_machine(conn *c);
 
 void write_bin_response(conn *c, void *d, int hlen, int keylen, int dlen);

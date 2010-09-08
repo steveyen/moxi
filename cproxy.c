@@ -126,7 +126,7 @@ proxy *cproxy_create(proxy_main *main,
                      proxy_behavior_pool *behavior_pool,
                      int nthreads) {
     assert(name != NULL);
-    assert(port > 0);
+    assert(port > 0 || settings.socketpath != NULL);
     assert(config != NULL);
     assert(behavior_pool);
     assert(nthreads > 1); // Main thread + at least one worker.
@@ -310,7 +310,7 @@ int cproxy_listen_port(int port,
                        enum network_transport transport,
                        void       *conn_extra,
                        conn_funcs *funcs) {
-    assert(port > 0);
+    assert(port > 0 || settings.socketpath != NULL);
     assert(conn_extra);
     assert(funcs);
     assert(is_listen_thread());
@@ -357,8 +357,13 @@ int cproxy_listen_port(int port,
         //
         return listening;
     }
-
+#ifdef HAVE_SYS_UN_H
+    if (settings.socketpath ?
+        (server_socket_unix(settings.socketpath, settings.access) == 0) :
+        (server_socket(port, transport, NULL) == 0)) {
+#else
     if (server_socket(port, transport, NULL) == 0) {
+#endif
         assert(listen_conn != NULL);
 
         // The listen_conn global list is changed by server_socket(),

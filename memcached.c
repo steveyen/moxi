@@ -3911,7 +3911,7 @@ static int new_socket_unix(void) {
 }
 
 #ifdef HAVE_SYS_UN_H
-static int server_socket_unix(const char *path, int access_mask) {
+int server_socket_unix(const char *path, int access_mask) {
     int sfd;
     struct linger ling = {0, 0};
     struct sockaddr_un addr;
@@ -4713,7 +4713,7 @@ int main (int argc, char **argv) {
 
 #ifdef HAVE_SYS_UN_H
     /* create unix mode sockets after dropping privileges */
-    if (settings.socketpath != NULL) {
+    if ((settings.socketpath != NULL) && (false == settings.enable_mcmux_mode)) {
         errno = 0;
         if (server_socket_unix(settings.socketpath,settings.access)) {
             moxi_log_write("failed to listen on UNIX socket: %s: %s",
