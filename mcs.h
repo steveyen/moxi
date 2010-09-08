@@ -7,6 +7,14 @@
 #include "config.h"
 #endif
 
+#ifndef EINPROGRESS
+#define EINPROGRESS 36
+#endif
+
+#ifndef EISCONN
+#define EISCONN 56
+#endif
+
 // The mcs API's are a level of indirection from direct libmemcached
 // and libvbucket API usage.
 //
