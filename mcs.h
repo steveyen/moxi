@@ -7,6 +7,15 @@
 #include "config.h"
 #endif
 
+#ifdef WIN32
+#ifndef EINPROGRESS
+#define EINPROGRESS WSAEINPROGRESS
+#endif
+#ifndef EISCONN
+#define EISCONN WSAEISCONN
+#endif
+#endif
+
 // The mcs API's are a level of indirection from direct libmemcached
 // and libvbucket API usage.
 //
