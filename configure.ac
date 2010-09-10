@@ -7,6 +7,10 @@ AM_CONFIG_HEADER([config.h])
 AC_CONFIG_MACRO_DIR([m4])
 AC_DISABLE_STATIC
 
+# the malloc tests seems to be broken for cross compilation.. ignore them
+ac_cv_func_malloc_0_nonnull=yes
+ac_cv_func_realloc_0_nonnull=yes
+
 PANDORA_CANONICAL_TARGET(less-warnings, warnings-always-on, force-gcc42)
 
 AC_PROG_CC_C99
