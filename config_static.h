@@ -93,4 +93,10 @@ struct iovec {
 #define DEFAULT_ERRORLOG ERRORLOG_STDERR
 #endif
 
+#if defined(WORDS_BIGENDIAN) && WORDS_BIGENDIAN > 1
+#define ENDIAN_BIG 1
+#else
+#define ENDIAN_LITTLE 1
+#endif
+
 #endif

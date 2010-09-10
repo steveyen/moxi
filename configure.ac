@@ -145,41 +145,7 @@ AS_IF(test $ac_cv_c_sigpipe = yes,
   AC_DEFINE(HAVE_SIGPIPE, int, [define to 1 if you have SIGPIPE]))
 ])
 AC_C_SIGPIPE
-
-dnl Check if we're a little-endian or a big-endian system, needed by hash code
-AC_DEFUN([AC_C_ENDIAN],
-[AC_CACHE_CHECK(for endianness, ac_cv_c_endian,
-[
-  AC_RUN_IFELSE(
-    [AC_LANG_PROGRAM([], [dnl
-        long val = 1;
-        char *c = (char *) &val;
-        exit(*c == 1);
-    ])
-  ],[
-    ac_cv_c_endian=big
-  ],[
-    ac_cv_c_endian=little
-  ])
-])
-if test $ac_cv_c_endian = big; then
-  AC_DEFINE(ENDIAN_BIG, 1, [machine is bigendian])
-fi
-if test $ac_cv_c_endian = little; then
-  AC_DEFINE(ENDIAN_LITTLE, 1, [machine is littleendian])
-fi
-])
-
-if test $host == $build; then
-  AC_C_ENDIAN
-else
-  AS_CASE([$host_cpu],
-    [i?86], [AC_MSG_RESULT([guessed machine as little endian])
-             AC_DEFINE(ENDIAN_LITTLE, 1, [machine is littleendian])],
-    [amd64], [AC_MSG_RESULT([guessed machine as little endian])
-              AC_DEFINE(ENDIAN_LITTLE, 1, [machine is littleendian])],
-    [AC_ERROR([don't know endian of this machine])])
-fi
+AC_C_BIGENDIAN
 
 AC_CHECK_FUNCS(mlockall)
 AC_CHECK_FUNCS(getpagesizes)
