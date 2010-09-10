@@ -7,6 +7,7 @@
 *~
 .buildbot/*
 .deps
+.libs
 /GPATH
 /GRTAGS
 /GSYMS
