@@ -16,6 +16,9 @@
 // Internal forward declarations.
 //
 downstream *downstream_list_remove(downstream *head, downstream *d);
+downstream *downstream_list_waiting_remove(downstream *head,
+                                           downstream **tail,
+                                           downstream *d);
 
 void downstream_timeout(const int fd,
                         const short which,
@@ -52,11 +55,20 @@ void zstored_error_count(LIBEVENT_THREAD *thread,
                          const char *host_ident,
                          bool has_error);
 
+void zstored_downstream_waiting_remove(downstream *d);
+
 typedef struct {
     conn      *dc; // Head of singly linked-list of available downstream conns.
     char      *host_ident;
     uint32_t   error_count;
     rel_time_t error_time;
+
+    // Head & tail of singly linked-list/queue, using
+    // downstream->next_waiting pointers, where we've reached
+    // downstream_conn_max, so there are waiting downstreams.
+    //
+    downstream *downstream_waiting_head;
+    downstream *downstream_waiting_tail;
 } zstored_downstream_conns;
 
 zstored_downstream_conns *zstored_get_downstream_conns(LIBEVENT_THREAD *thread,
@@ -749,6 +761,7 @@ downstream *cproxy_reserve_downstream(proxy_td *ptd) {
         assert(d->merger == NULL);
         assert(d->timeout_tv.tv_sec == 0);
         assert(d->timeout_tv.tv_usec == 0);
+        assert(d->next_waiting == NULL);
 
         d->upstream_conn = NULL;
         d->upstream_suffix = NULL;
@@ -761,12 +774,15 @@ downstream *cproxy_reserve_downstream(proxy_td *ptd) {
         d->merger = NULL;
         d->timeout_tv.tv_sec = 0;
         d->timeout_tv.tv_usec = 0;
+        d->next_waiting = NULL;
 
         if (cproxy_check_downstream_config(d)) {
             ptd->downstream_reserved =
                 downstream_list_remove(ptd->downstream_reserved, d);
             ptd->downstream_released =
                 downstream_list_remove(ptd->downstream_released, d);
+
+            zstored_downstream_waiting_remove(d);
 
             d->next = ptd->downstream_reserved;
             ptd->downstream_reserved = d;
@@ -977,6 +993,8 @@ bool cproxy_release_downstream(downstream *d, bool force) {
         d->ptd->downstream_released =
             downstream_list_remove(d->ptd->downstream_released, d);
 
+        zstored_downstream_waiting_remove(d);
+
         d->next = d->ptd->downstream_released;
         d->ptd->downstream_released = d;
 
@@ -1007,6 +1025,8 @@ void cproxy_free_downstream(downstream *d) {
         downstream_list_remove(d->ptd->downstream_reserved, d);
     d->ptd->downstream_released =
         downstream_list_remove(d->ptd->downstream_released, d);
+
+    zstored_downstream_waiting_remove(d);
 
     d->ptd->downstream_num--;
     assert(d->ptd->downstream_num >= 0);
@@ -2206,15 +2226,53 @@ downstream *downstream_list_remove(downstream *head, downstream *d) {
             if (prev != NULL) {
                 assert(curr != head);
                 prev->next = curr->next;
+                curr->next = NULL;
                 return head;
             }
 
             assert(curr == head);
-            return curr->next;
+            downstream *r = curr->next;
+            curr->next = NULL;
+            return r;
         }
 
         prev = curr;
         curr = curr ->next;
+    }
+
+    return head;
+}
+
+/* Returns the new head of the list.
+ */
+downstream *downstream_list_waiting_remove(downstream *head,
+                                           downstream **tail,
+                                           downstream *d) {
+    downstream *prev = NULL;
+    downstream *curr = head;
+
+    while (curr != NULL) {
+        if (curr == d) {
+            if (tail != NULL &&
+                *tail == curr) {
+                *tail = prev;
+            }
+
+            if (prev != NULL) {
+                assert(curr != head);
+                prev->next_waiting = curr->next_waiting;
+                curr->next_waiting = NULL;
+                return head;
+            }
+
+            assert(curr == head);
+            downstream *r = curr->next_waiting;
+            curr->next_waiting = NULL;
+            return r;
+        }
+
+        prev = curr;
+        curr = curr ->next_waiting;
     }
 
     return head;
@@ -2901,6 +2959,17 @@ void zstored_release_downstream_conn(conn *dc, bool closing) {
     } else {
         cproxy_close_conn(dc);
     }
+}
+
+void zstored_downstream_waiting_remove(downstream *d) {
+    (void) d;
+
+    // zstored_downstream_conns *conns =
+    //     zstored_get_downstream_conns(dc->thread, dc->host_ident);
+    // if (conns != NULL) {
+    //     conns->downstream_waiting =
+    //         downstream_list_waiting_remove(conns->downstream_waiting, d);
+    // }
 }
 
 void format_host_ident(char *buf, int buf_len,

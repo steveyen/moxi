@@ -406,6 +406,10 @@ struct downstream {
     downstream *next; // To track reserved/released lists.
                       // See ptd->downstream_reserved/downstream_released.
 
+    downstream *next_waiting; // To track lists when a downstream is reserved,
+                              // but is waiting for a downstream connection,
+                              // per zstored perf enhancement.
+
     conn **downstream_conns;  // Wraps the fd's of mst with conns.
     int    downstream_used;   // Number of in-use downstream conns, might
                               // be >1 during scatter-gather commands.
