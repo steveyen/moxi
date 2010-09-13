@@ -49,8 +49,7 @@ conn *zstored_acquire_downstream_conn(downstream *d,
 void zstored_release_downstream_conn(conn *dc, bool closing);
 
 void zstored_error_count(LIBEVENT_THREAD *thread,
-                         mcs_server_st *msst,
-                         proxy_behavior *behavior,
+                         const char *host_ident,
                          bool has_error);
 
 typedef struct {
@@ -59,6 +58,9 @@ typedef struct {
     uint32_t   error_count;
     rel_time_t error_time;
 } zstored_downstream_conns;
+
+zstored_downstream_conns *zstored_get_downstream_conns(LIBEVENT_THREAD *thread,
+                                                       const char *host_ident);
 
 void format_host_ident(char *buf, int buf_len,
                        mcs_server_st *msst,
@@ -1324,9 +1326,12 @@ conn *cproxy_connect_downstream_conn(downstream *d,
 
 bool downstream_connect_init(downstream *d, mcs_server_st *msst,
                              proxy_behavior *behavior, conn *c) {
+    assert(c->thread != NULL);
+    assert(c->host_ident != NULL);
+
     d->ptd->stats.stats.tot_downstream_connect++;
 
-    zstored_error_count(c->thread, msst, behavior, false);
+    zstored_error_count(c->thread, c->host_ident, false);
 
     if (c->cmd_start_time != 0 &&
         d->ptd->behavior_pool.base.time_stats) {
@@ -2680,10 +2685,9 @@ cleanup:
         assert(d->downstream_conns[k] == NULL);
 
         d->downstream_conns[k] = NULL_CONN;
-
-        zstored_error_count(c->thread, mcs_server_index(&d->mst, k),
-                            &d->behaviors_arr[k], true);
     }
+
+    zstored_error_count(c->thread, c->host_ident, true);
 
     conn_set_state(c, conn_closing);
     update_event(c, 0);
@@ -2725,26 +2729,36 @@ HTGRAM_HANDLE cproxy_create_timing_histogram(void) {
     return h0;
 }
 
-void zstored_error_count(LIBEVENT_THREAD *thread,
-                         mcs_server_st *msst,
-                         proxy_behavior *behavior,
-                         bool has_error) {
+zstored_downstream_conns *zstored_get_downstream_conns(LIBEVENT_THREAD *thread,
+                                                       const char *host_ident) {
     assert(thread);
     assert(thread->base);
-    assert(msst);
-    assert(behavior);
-    assert(mcs_server_st_hostname(msst) != NULL);
-    assert(mcs_server_st_port(msst) > 0);
-    assert(mcs_server_st_fd(msst) == -1);
 
     genhash_t *conn_hash = thread->conn_hash;
     assert(conn_hash != NULL);
 
-    char host_ident_buf[300];
-    format_host_ident(host_ident_buf, sizeof(host_ident_buf), msst,
-                      behavior->downstream_protocol);
+    zstored_downstream_conns *conns = genhash_find(conn_hash, host_ident);
+    if (conns == NULL) {
+        conns = calloc(1, sizeof(zstored_downstream_conns));
+        if (conns != NULL) {
+            conns->host_ident = strdup(host_ident);
+            if (conns->host_ident != NULL) {
+                genhash_store(conn_hash, conns->host_ident, conns);
+            } else {
+                free(conns);
+                conns = NULL;
+            }
+        }
+    }
 
-    zstored_downstream_conns *conns = genhash_find(conn_hash, host_ident_buf);
+    return conns;
+}
+
+void zstored_error_count(LIBEVENT_THREAD *thread,
+                         const char *host_ident,
+                         bool has_error) {
+    zstored_downstream_conns *conns =
+        zstored_get_downstream_conns(thread, host_ident);
     if (conns != NULL) {
         if (has_error) {
             conns->error_count++;
@@ -2752,6 +2766,14 @@ void zstored_error_count(LIBEVENT_THREAD *thread,
         } else {
             conns->error_count = 0;
             conns->error_time = 0;
+        }
+
+        if (settings.verbose > 2) {
+            moxi_log_write("z_error, %s, %d, %d, %d\n",
+                           host_ident,
+                           has_error,
+                           conns->error_count,
+                           conns->error_time);
         }
     }
 }
@@ -2803,6 +2825,14 @@ conn *zstored_acquire_downstream_conn(downstream *d,
             rel_time_t msecs_since_error =
                 msec_current_time - conns->error_time;
 
+            if (settings.verbose > 2) {
+                moxi_log_write("zacquire_dc, %s, %d, %d, (%d)\n",
+                               host_ident_buf,
+                               conns->error_count,
+                               conns->error_time,
+                               msecs_since_error);
+            }
+
             if ((behavior->cycle > 0) &&
                 (behavior->connect_retry_interval > msecs_since_error)) {
                 // TODO: Should have a stat for this retry-interval case.
@@ -2819,7 +2849,8 @@ conn *zstored_acquire_downstream_conn(downstream *d,
     if (dc != NULL) {
         assert(dc->host_ident == NULL);
         dc->host_ident = strdup(host_ident_buf);
-        if (conns != NULL) {
+        if (conns != NULL &&
+            dc->state != conn_connecting) {
             conns->error_count = 0;
             conns->error_time = 0;
         }
@@ -2861,23 +2892,8 @@ void zstored_release_downstream_conn(conn *dc, bool closing) {
 
     dc->extra = NULL;
 
-    genhash_t *conn_hash = dc->thread->conn_hash;
-    assert(conn_hash != NULL);
-
-    zstored_downstream_conns *conns = genhash_find(conn_hash, dc->host_ident);
-    if (conns == NULL) {
-        conns = calloc(1, sizeof(zstored_downstream_conns));
-        if (conns != NULL) {
-            conns->host_ident = strdup(dc->host_ident);
-            if (conns->host_ident != NULL) {
-                genhash_store(conn_hash, conns->host_ident, conns);
-            } else {
-                free(conns);
-                conns = NULL;
-            }
-        }
-    }
-
+    zstored_downstream_conns *conns =
+        zstored_get_downstream_conns(dc->thread, dc->host_ident);
     if (conns != NULL) {
         assert(dc->next == NULL);
         dc->next = conns->dc;
