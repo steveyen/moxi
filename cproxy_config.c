@@ -43,7 +43,7 @@ int cproxy_init_mcmux_mode(int proxy_port,
 proxy_behavior behavior_default_g = {
     .cycle = 0,
     .downstream_max = 4,
-    .downstream_conn_max = 4,
+    .downstream_conn_max = 0, // Use 0 for unlimited.
     .downstream_weight = 0,
     .downstream_retry = 1,
     .downstream_protocol = proxy_downstream_ascii_prot,

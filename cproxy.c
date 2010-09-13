@@ -47,7 +47,8 @@ bool cproxy_on_connect_downstream_conn(conn *c);
 conn *zstored_acquire_downstream_conn(downstream *d,
                                       LIBEVENT_THREAD *thread,
                                       mcs_server_st *msst,
-                                      proxy_behavior *behavior);
+                                      proxy_behavior *behavior,
+                                      bool *downstream_conn_max_reached);
 
 void zstored_release_downstream_conn(conn *dc, bool closing);
 
@@ -55,10 +56,15 @@ void zstored_error_count(LIBEVENT_THREAD *thread,
                          const char *host_ident,
                          bool has_error);
 
+bool zstored_downstream_waiting_add(downstream *d, LIBEVENT_THREAD *thread,
+                                    mcs_server_st *msst,
+                                    proxy_behavior *behavior);
+
 void zstored_downstream_waiting_remove(downstream *d);
 
 typedef struct {
-    conn      *dc; // Head of singly linked-list of available downstream conns.
+    conn      *dc;          // Linked-list of available downstream conns.
+    uint32_t   dc_acquired; // Count of acquired (in-use) downstream conns.
     char      *host_ident;
     uint32_t   error_count;
     rel_time_t error_time;
@@ -1208,7 +1214,7 @@ int cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread,
     int s = 0; // Number connected.
     int n = mcs_server_count(&d->mst);
     mcs_server_st msst;
-    bool use_local_msst = false;
+    mcs_server_st *msst_actual;
 
     assert(d->behaviors_num >= n);
     assert(d->behaviors_arr != NULL);
@@ -1229,6 +1235,8 @@ int cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread,
     for (; i < n; i++) {
         assert(IS_PROXY(d->behaviors_arr[i].downstream_protocol));
 
+        msst_actual = mcs_server_index(&d->mst, i);
+
         // Connect to downstream servers, if not already.
         //
         // A NULL_CONN means that we tried to connect, but failed,
@@ -1246,16 +1254,27 @@ int cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread,
                 memcpy(msst.hostname, c->peer_host, strlen(c->peer_host));
                 msst.port = c->peer_port;
                 msst.fd = -1;
-                use_local_msst = true;
+                msst_actual = &msst;
             }
+
+            bool downstream_conn_max_reached = false;
 
             d->downstream_conns[i] =
                 zstored_acquire_downstream_conn(d, thread,
-                                                use_local_msst ? &msst : mcs_server_index(&d->mst, i),
-                                                &d->behaviors_arr[i]);
+                                                msst_actual,
+                                                &d->behaviors_arr[i],
+                                                &downstream_conn_max_reached);
             if (d->downstream_conns[i] != NULL &&
                 d->downstream_conns[i] != NULL_CONN &&
                 d->downstream_conns[i]->state == conn_connecting) {
+                return -1;
+            }
+
+            if (d->downstream_conns[i] == NULL &&
+                downstream_conn_max_reached == true &&
+                zstored_downstream_waiting_add(d, thread,
+                                               msst_actual,
+                                               &d->behaviors_arr[i]) == true) {
                 return -1;
             }
         }
@@ -1264,7 +1283,7 @@ int cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread,
             d->downstream_conns[i] != NULL_CONN) {
             s++;
         } else {
-            mcs_server_st_quit(use_local_msst ? &msst : mcs_server_index(&d->mst, i), 1);
+            mcs_server_st_quit(msst_actual, 1);
             d->downstream_conns[i] = NULL_CONN;
         }
     }
@@ -2827,11 +2846,47 @@ void zstored_error_count(LIBEVENT_THREAD *thread,
         }
 
         if (settings.verbose > 2) {
-            moxi_log_write("z_error, %s, %d, %d, %d\n",
+            moxi_log_write("z_error, %s, %d, %d, %d, %d\n",
                            host_ident,
                            has_error,
+                           conns->dc_acquired,
                            conns->error_count,
                            conns->error_time);
+        }
+
+        if (has_error) {
+            // We reach here when a non-blocking connect() has failed.
+            // The downstream conn is just going to be closed
+            // rather than be released back to the thread->conn_hash,
+            // so update the dc_acquired here.
+            //
+            assert(conns->dc_acquired > 0);
+            conns->dc_acquired--;
+
+            // When zero downstream conns are available, wake up all
+            // waiting downstreams so they can proceed (possibly by
+            // just returning ERROR's to upstream clients).
+            //
+            // TODO: Should have a stat for this case.
+            //
+            if (conns->dc_acquired <= 0 &&
+                conns->dc == NULL) {
+                while (conns->downstream_waiting_head != NULL) {
+                    assert(conns->downstream_waiting_tail != NULL);
+
+                    downstream *d_head = conns->downstream_waiting_head;
+
+                    conns->downstream_waiting_head =
+                        conns->downstream_waiting_head->next_waiting;
+                    if (conns->downstream_waiting_head == NULL) {
+                        conns->downstream_waiting_tail = NULL;
+                    }
+
+                    d_head->next_waiting = NULL;
+
+                    cproxy_forward_or_error(d_head);
+                }
+            }
         }
     }
 }
@@ -2839,22 +2894,21 @@ void zstored_error_count(LIBEVENT_THREAD *thread,
 conn *zstored_acquire_downstream_conn(downstream *d,
                                       LIBEVENT_THREAD *thread,
                                       mcs_server_st *msst,
-                                      proxy_behavior *behavior) {
+                                      proxy_behavior *behavior,
+                                      bool *downstream_conn_max_reached) {
     assert(d);
     assert(d->ptd);
     assert(d->ptd->downstream_released != d); // Should not be in free list.
     assert(thread);
-    assert(thread->base);
     assert(msst);
     assert(behavior);
     assert(mcs_server_st_hostname(msst) != NULL);
     assert(mcs_server_st_port(msst) > 0);
     assert(mcs_server_st_fd(msst) == -1);
 
-    d->ptd->stats.stats.tot_downstream_conn_acquired++;
+    *downstream_conn_max_reached = false;
 
-    genhash_t *conn_hash = thread->conn_hash;
-    assert(conn_hash != NULL);
+    d->ptd->stats.stats.tot_downstream_conn_acquired++;
 
     char host_ident_buf[300];
     format_host_ident(host_ident_buf, sizeof(host_ident_buf), msst,
@@ -2862,13 +2916,15 @@ conn *zstored_acquire_downstream_conn(downstream *d,
 
     conn *dc;
 
-    zstored_downstream_conns *conns = genhash_find(conn_hash, host_ident_buf);
+    zstored_downstream_conns *conns =
+        zstored_get_downstream_conns(thread, host_ident_buf);
     if (conns != NULL) {
         dc = conns->dc;
         if (dc != NULL) {
             assert(dc->thread == thread);
             assert(strcmp(host_ident_buf, dc->host_ident) == 0);
 
+            conns->dc_acquired++;
             conns->dc = dc->next;
             dc->next = NULL;
 
@@ -2901,16 +2957,28 @@ conn *zstored_acquire_downstream_conn(downstream *d,
                 conns->error_time = 0;
             }
         }
+
+        if (behavior->downstream_conn_max > 0 &&
+            behavior->downstream_conn_max <= conns->dc_acquired) {
+            // TODO: Should have a stat when downstream_conn_max reached.
+            //
+            *downstream_conn_max_reached = true;
+
+            return NULL;
+        }
     }
 
     dc = cproxy_connect_downstream_conn(d, thread, msst, behavior);
     if (dc != NULL) {
         assert(dc->host_ident == NULL);
         dc->host_ident = strdup(host_ident_buf);
-        if (conns != NULL &&
-            dc->state != conn_connecting) {
-            conns->error_count = 0;
-            conns->error_time = 0;
+        if (conns != NULL) {
+            conns->dc_acquired++;
+
+            if (dc->state != conn_connecting) {
+                conns->error_count = 0;
+                conns->error_time = 0;
+            }
         }
     } else {
         if (conns != NULL) {
@@ -2956,20 +3024,71 @@ void zstored_release_downstream_conn(conn *dc, bool closing) {
         assert(dc->next == NULL);
         dc->next = conns->dc;
         conns->dc = dc;
+        assert(conns->dc_acquired > 0);
+        conns->dc_acquired--;
+
+        // Since one downstream conn was released, process a single
+        // waiting downstream, if any.
+        //
+        downstream *d_head = conns->downstream_waiting_head;
+        if (d_head != NULL) {
+            assert(conns->downstream_waiting_tail != NULL);
+
+            conns->downstream_waiting_head =
+                conns->downstream_waiting_head->next_waiting;
+            if (conns->downstream_waiting_head == NULL) {
+                conns->downstream_waiting_tail = NULL;
+            }
+            d_head->next_waiting = NULL;
+
+            cproxy_forward_or_error(d_head);
+        }
     } else {
         cproxy_close_conn(dc);
     }
 }
 
 void zstored_downstream_waiting_remove(downstream *d) {
-    (void) d;
+    // TODO: Need to remove the downstream if it is on
+    // any conns->downstream_waiting_head/tail queues.
+    //
+    // Actually, the downstream should _not_ be on any queues in any
+    // of this function's (current) callers, so we should check that
+    // here with a stronger assert() than the following.
+    //
+    assert(d->next_waiting == NULL);
+}
 
-    // zstored_downstream_conns *conns =
-    //     zstored_get_downstream_conns(dc->thread, dc->host_ident);
-    // if (conns != NULL) {
-    //     conns->downstream_waiting =
-    //         downstream_list_waiting_remove(conns->downstream_waiting, d);
-    // }
+bool zstored_downstream_waiting_add(downstream *d, LIBEVENT_THREAD *thread,
+                                    mcs_server_st *msst,
+                                    proxy_behavior *behavior) {
+    assert(thread != NULL);
+    assert(d != NULL);
+    assert(d->next_waiting == NULL);
+
+    char host_ident_buf[300];
+    format_host_ident(host_ident_buf, sizeof(host_ident_buf), msst,
+                      behavior->downstream_protocol);
+
+    zstored_downstream_conns *conns =
+        zstored_get_downstream_conns(thread, host_ident_buf);
+    if (conns != NULL) {
+        assert(conns->dc == NULL);
+
+        if (conns->downstream_waiting_head == NULL) {
+            assert(conns->downstream_waiting_tail == NULL);
+            conns->downstream_waiting_head = d;
+        }
+        if (conns->downstream_waiting_tail != NULL) {
+            assert(conns->downstream_waiting_tail->next_waiting == NULL);
+            conns->downstream_waiting_tail->next_waiting = d;
+        }
+        conns->downstream_waiting_tail = d;
+
+        return true;
+    }
+
+    return false;
 }
 
 void format_host_ident(char *buf, int buf_len,
@@ -2984,3 +3103,4 @@ void format_host_ident(char *buf, int buf_len,
              mcs_server_st_pwd(msst),
              (int) host_protocol);
 }
+
