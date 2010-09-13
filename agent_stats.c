@@ -455,6 +455,7 @@ static void proxy_stats_dump_behavior(ADD_STAT add_stats,
 
     if (level >= 1) {
         APPEND_PREFIX_STAT("downstream_max", "%u", b->downstream_max);
+        APPEND_PREFIX_STAT("downstream_conn_max", "%u", b->downstream_conn_max);
     }
 
     APPEND_PREFIX_STAT("downstream_weight",   "%u", b->downstream_weight);

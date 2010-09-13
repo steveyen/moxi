@@ -43,6 +43,7 @@ int cproxy_init_mcmux_mode(int proxy_port,
 proxy_behavior behavior_default_g = {
     .cycle = 0,
     .downstream_max = 4,
+    .downstream_conn_max = 4,
     .downstream_weight = 0,
     .downstream_retry = 1,
     .downstream_protocol = proxy_downstream_ascii_prot,
@@ -606,6 +607,8 @@ void cproxy_parse_behavior_key_val(char *key,
             behavior->cycle = strtol(val, NULL, 10);
         } else if (wordeq(key, "downstream_max")) {
             behavior->downstream_max = strtol(val, NULL, 10);
+        } else if (wordeq(key, "downstream_conn_max")) {
+            behavior->downstream_conn_max = strtol(val, NULL, 10);
         } else if (wordeq(key, "weight") ||
                    wordeq(key, "downstream_weight")) {
             behavior->downstream_weight = strtol(val, NULL, 10);
@@ -787,6 +790,7 @@ void cproxy_dump_behavior_ex(proxy_behavior *b, char *prefix, int level,
     }
     if (level >= 1) {
         vdump("downstream_max", "%u", b->downstream_max);
+        vdump("downstream_conn_max", "%u", b->downstream_conn_max);
     }
 
     vdump("downstream_weight",   "%u", b->downstream_weight);

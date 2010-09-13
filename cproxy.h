@@ -96,6 +96,8 @@ struct proxy_behavior {
     //
     uint32_t       cycle;               // IL: Clock resolution in millisecs.
     uint32_t       downstream_max;      // PL: Downstream concurrency.
+    uint32_t       downstream_conn_max; // PL: Max # of conns per thread
+                                        // and per host_ident.
     uint32_t       downstream_weight;   // SL: Server weight.
     uint32_t       downstream_retry;    // SL: How many times to retry a cmd.
     enum protocol  downstream_protocol; // SL: Favored downstream protocol.
