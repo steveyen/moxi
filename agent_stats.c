@@ -469,6 +469,8 @@ static void proxy_stats_dump_behavior(ADD_STAT add_stats,
               (b->wait_queue_timeout.tv_sec * 1000 +
                b->wait_queue_timeout.tv_usec / 1000));
         APPEND_PREFIX_STAT("time_stats", "%d", b->time_stats);
+        APPEND_PREFIX_STAT("connect_max_errors", "%d", b->connect_max_errors);
+        APPEND_PREFIX_STAT("connect_retry_interval", "%d", b->connect_retry_interval);
         APPEND_PREFIX_STAT("front_cache_max", "%u", b->front_cache_max);
         APPEND_PREFIX_STAT("front_cache_lifespan", "%u", b->front_cache_lifespan);
         APPEND_PREFIX_STAT("front_cache_spec", "%s", b->front_cache_spec);
