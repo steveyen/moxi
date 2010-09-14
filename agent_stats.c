@@ -565,6 +565,14 @@ static void proxy_stats_dump_pstd_stats(ADD_STAT add_stats,
               "%llu", (long long unsigned int) pstats->tot_downstream_connect);
     APPEND_PREFIX_STAT("tot_downstream_connect_failed",
               "%llu", (long long unsigned int) pstats->tot_downstream_connect_failed);
+    APPEND_PREFIX_STAT("tot_downstream_connect_timeout",
+              "%llu", (long long unsigned int) pstats->tot_downstream_connect_timeout);
+    APPEND_PREFIX_STAT("tot_downstream_connect_interval",
+              "%llu", (long long unsigned int) pstats->tot_downstream_connect_interval);
+    APPEND_PREFIX_STAT("tot_downstream_connect_max_reached",
+              "%llu", (long long unsigned int) pstats->tot_downstream_connect_max_reached);
+    APPEND_PREFIX_STAT("tot_downstream_waiting_errors",
+              "%llu", (long long unsigned int) pstats->tot_downstream_waiting_errors);
     APPEND_PREFIX_STAT("tot_downstream_auth",
               "%llu", (long long unsigned int) pstats->tot_downstream_auth);
     APPEND_PREFIX_STAT("tot_downstream_auth_failed",
@@ -1181,6 +1189,10 @@ static void add_proxy_stats(proxy_stats *agg, proxy_stats *x) {
     agg->tot_downstream_create_failed  += x->tot_downstream_create_failed;
     agg->tot_downstream_connect        += x->tot_downstream_connect;
     agg->tot_downstream_connect_failed += x->tot_downstream_connect_failed;
+    agg->tot_downstream_connect_timeout += x->tot_downstream_connect_timeout;
+    agg->tot_downstream_connect_interval += x->tot_downstream_connect_interval;
+    agg->tot_downstream_connect_max_reached += x->tot_downstream_connect_max_reached;
+    agg->tot_downstream_waiting_errors += x->tot_downstream_waiting_errors;
     agg->tot_downstream_auth           += x->tot_downstream_auth;
     agg->tot_downstream_auth_failed    += x->tot_downstream_auth_failed;
     agg->tot_downstream_bucket         += x->tot_downstream_bucket;
@@ -1420,6 +1432,14 @@ void map_pstd_foreach_emit(const void *k,
               pstd->stats.tot_downstream_connect);
     more_stat("tot_downstream_connect_failed",
               pstd->stats.tot_downstream_connect_failed);
+    more_stat("tot_downstream_connect_timeout",
+              pstd->stats.tot_downstream_connect_timeout);
+    more_stat("tot_downstream_connect_interval",
+              pstd->stats.tot_downstream_connect_interval);
+    more_stat("tot_downstream_connect_max_reached",
+              pstd->stats.tot_downstream_connect_max_reached);
+    more_stat("tot_downstream_waiting_errors",
+              pstd->stats.tot_downstream_waiting_errors);
     more_stat("tot_downstream_auth",
               pstd->stats.tot_downstream_auth);
     more_stat("tot_downstream_auth_failed",

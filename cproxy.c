@@ -2707,8 +2707,8 @@ bool cproxy_on_connect_downstream_conn(conn *c) {
     }
 
     if (c->which == EV_TIMEOUT) {
-        // TODO: Should have a stat for the connect timeout case.
-        //
+        d->ptd->stats.stats.tot_downstream_connect_timeout++;
+
         if (settings.verbose) {
             moxi_log_write("%d: connection timed out: %s",
                            c->sfd, c->host_ident);
@@ -2867,8 +2867,6 @@ void zstored_error_count(LIBEVENT_THREAD *thread,
             // waiting downstreams so they can proceed (possibly by
             // just returning ERROR's to upstream clients).
             //
-            // TODO: Should have a stat for this case.
-            //
             if (conns->dc_acquired <= 0 &&
                 conns->dc == NULL) {
                 while (conns->downstream_waiting_head != NULL) {
@@ -2883,6 +2881,8 @@ void zstored_error_count(LIBEVENT_THREAD *thread,
                     }
 
                     d_head->next_waiting = NULL;
+
+                    d_head->ptd->stats.stats.tot_downstream_waiting_errors++;
 
                     cproxy_forward_or_error(d_head);
                 }
@@ -2949,8 +2949,8 @@ conn *zstored_acquire_downstream_conn(downstream *d,
 
             if ((behavior->cycle > 0) &&
                 (behavior->connect_retry_interval > msecs_since_error)) {
-                // TODO: Should have a stat for this retry-interval case.
-                //
+                d->ptd->stats.stats.tot_downstream_connect_interval++;
+
                 return NULL;
             } else {
                 conns->error_count = 0;
@@ -2960,8 +2960,8 @@ conn *zstored_acquire_downstream_conn(downstream *d,
 
         if (behavior->downstream_conn_max > 0 &&
             behavior->downstream_conn_max <= conns->dc_acquired) {
-            // TODO: Should have a stat when downstream_conn_max reached.
-            //
+            d->ptd->stats.stats.tot_downstream_connect_max_reached++;
+
             *downstream_conn_max_reached = true;
 
             return NULL;
