@@ -54,15 +54,14 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
     }
 
     bool mcmux_command = false;
+    bool self_command = false;
+
     /* Check for proxy pattern - A:host:port or B:host:port */
     if (true == settings.enable_mcmux_mode &&
         ((*line == 'A' || *line == 'B') && *(line +1) == ':')) {
         mcmux_command = true;
-    }
-
-    if (true == settings.enable_mcmux_mode && false == mcmux_command) {
-        out_string(c, "ERROR");
-        return;
+    } else if (true == settings.enable_mcmux_mode) {
+        self_command = true;
     }
 
     if (mcmux_command) {
@@ -79,6 +78,7 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
 
         if (*line == '\0' || line - c->peer_host <= 0) {
             out_string(c, "ERROR");
+            moxi_log_write("Malformed request line");
             return;
         }
         *line = '\0';
@@ -89,6 +89,7 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
         while(*line != ' ' && *line != '\0' && ++i <= MAX_PORT_LEN) line++;
         if (*line == '\0' || line - peer_port <= 0) {
             out_string(c, "ERROR");
+            moxi_log_write("Malformed request line");
             return;
         }
 
@@ -117,6 +118,7 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
     }
 
     if (ntokens >= 3 &&
+        (false == self_command) &&
         (strncmp(cmd, "get", 3) == 0)) {
         if (ntokens == 3) {
             // Single-key get/gets optimization.
@@ -137,6 +139,7 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
         SEEN(STATS_CMD_GET, cmd[3] == 's', 0);
 
     } else if ((ntokens == 6 || ntokens == 7) &&
+                (false == self_command) &&
                ((strncmp(cmd, "add", 3) == 0 &&
                  (comm = NREAD_ADD) &&
                  (cmdx = STATS_CMD_ADD) &&
@@ -173,6 +176,7 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
         }
 
     } else if ((ntokens == 7 || ntokens == 8) &&
+               (false == self_command) &&
                (strncmp(cmd, "cas", 3) == 0 &&
                 (comm = NREAD_CAS) &&
                 (c->cmd_curr = PROTOCOL_BINARY_CMD_SET))) {
@@ -190,6 +194,7 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
         }
 
     } else if ((ntokens == 4 || ntokens == 5) &&
+               (false == self_command) &&
                (strncmp(cmd, "incr", 4) == 0) &&
                (c->cmd_curr = PROTOCOL_BINARY_CMD_INCREMENT)) {
         set_noreply_maybe(c, tokens, ntokens);
@@ -198,6 +203,7 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
         SEEN(STATS_CMD_INCR, false, cmd_len);
 
     } else if ((ntokens == 4 || ntokens == 5) &&
+               (false == self_command) &&
                (strncmp(cmd, "decr", 4) == 0) &&
                (c->cmd_curr = PROTOCOL_BINARY_CMD_DECREMENT)) {
         set_noreply_maybe(c, tokens, ntokens);
@@ -206,6 +212,7 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
         SEEN(STATS_CMD_DECR, false, cmd_len);
 
     } else if (ntokens >= 3 && ntokens <= 4 &&
+               (false == self_command) &&
                (strncmp(cmd, "delete", 6) == 0) &&
                (c->cmd_curr = PROTOCOL_BINARY_CMD_DELETE)) {
         set_noreply_maybe(c, tokens, ntokens);
@@ -214,6 +221,7 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
         SEEN(STATS_CMD_DELETE, false, cmd_len);
 
     } else if (ntokens >= 2 && ntokens <= 4 &&
+               (false == self_command) &&
                (strncmp(cmd, "flush_all", 9) == 0) &&
                (c->cmd_curr = PROTOCOL_BINARY_CMD_FLUSH)) {
         set_noreply_maybe(c, tokens, ntokens);
@@ -229,6 +237,7 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
         SEEN(STATS_CMD_STATS, false, cmd_len);
 
     } else if (ntokens == 3 &&
+               (false == self_command) &&
                (strcmp(cmd, "stats reset") == 0) &&
                (c->cmd_curr = PROTOCOL_BINARY_CMD_STAT)) {
         cproxy_pause_upstream_for_downstream(ptd, c);
@@ -236,6 +245,7 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
         SEEN(STATS_CMD_STATS_RESET, false, cmd_len);
 
     } else if (ntokens == 2 &&
+               (false == self_command) &&
                (strcmp(cmd, "stats") == 0) &&
                (c->cmd_curr = PROTOCOL_BINARY_CMD_STAT)) {
         // Even though we've coded to handle advanced stats

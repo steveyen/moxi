@@ -1732,7 +1732,8 @@ void upstream_error(conn *uc) {
         //
         if (uc->cmd == -1 &&
             uc->cmd_start != NULL &&
-            strncmp(uc->cmd_start, "get", 3) == 0) {
+            strncmp(uc->cmd_start, "get", 3) == 0 &&
+            (false == settings.enable_mcmux_mode)) {
             msg = "END\r\n";
         }
 
