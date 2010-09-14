@@ -13,6 +13,14 @@
 #include "work.h"
 #include "log.h"
 
+#ifndef MOXI_BLOCKING_CONNECT
+#ifdef WIN32
+#define MOXI_BLOCKING_CONNECT true
+#else
+#define MOXI_BLOCKING_CONNECT false
+#endif
+#endif
+
 // Internal forward declarations.
 //
 downstream *downstream_list_remove(downstream *head, downstream *d);
