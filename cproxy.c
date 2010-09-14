@@ -1314,7 +1314,8 @@ conn *cproxy_connect_downstream_conn(downstream *d,
 
     int err = -1;
     int fd = mcs_connect(mcs_server_st_hostname(msst),
-                         mcs_server_st_port(msst), &err, false);
+                         mcs_server_st_port(msst), &err,
+                         MOXI_BLOCKING_CONNECT);
     if (fd != -1) {
         if (settings.verbose > 2) {
             moxi_log_write("%d: cproxy_connect_downstream_conn %s:%d\n", fd,
@@ -1366,11 +1367,18 @@ conn *cproxy_connect_downstream_conn(downstream *d,
 bool downstream_connect_init(downstream *d, mcs_server_st *msst,
                              proxy_behavior *behavior, conn *c) {
     assert(c->thread != NULL);
-    assert(c->host_ident != NULL);
 
     d->ptd->stats.stats.tot_downstream_connect++;
 
-    zstored_error_count(c->thread, c->host_ident, false);
+    char host_ident_buf[300];
+    char *host_ident = c->host_ident;
+    if (host_ident == NULL) {
+        host_ident = host_ident_buf;
+        format_host_ident(host_ident_buf, sizeof(host_ident_buf), msst,
+                          behavior->downstream_protocol);
+    }
+
+    zstored_error_count(c->thread, host_ident, false);
 
     if (c->cmd_start_time != 0 &&
         d->ptd->behavior_pool.base.time_stats) {

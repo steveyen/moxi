@@ -93,4 +93,12 @@ struct iovec {
 #define DEFAULT_ERRORLOG ERRORLOG_STDERR
 #endif
 
+#ifndef MOXI_BLOCKING_CONNECT
+#ifdef WIN32
+#define MOXI_BLOCKING_CONNECT true
+#else
+#define MOXI_BLOCKING_CONNECT false
+#endif
+#endif
+
 #endif
