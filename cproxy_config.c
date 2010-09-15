@@ -246,8 +246,8 @@ int cproxy_init(char *cfg_str,
         cproxy_init_b2b();
     }
 
-    if ((cfg_str == NULL ||
-        strlen(cfg_str) <= 0) && (false == settings.enable_mcmux_mode)) {
+    if ((cfg_str == NULL || strlen(cfg_str) <= 0) &&
+        (false == settings.enable_mcmux_mode)) {
         return 0;
     }
 
@@ -268,8 +268,8 @@ int cproxy_init(char *cfg_str,
         }
     }
 
-    if ((false == settings.enable_mcmux_mode) && (cfg_str[0] == '.' ||
-        cfg_str[0] == '/')) {
+    if ((false == settings.enable_mcmux_mode) &&
+        (cfg_str[0] == '.' || cfg_str[0] == '/')) {
         char *buf = readfile(cfg_str);
         if (buf != NULL) {
             int rv = cproxy_init(buf, behavior_str, nthreads, main_base);

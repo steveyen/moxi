@@ -4800,7 +4800,7 @@ int main (int argc, char **argv) {
                     main_base);
         free(cproxy_cfg);
     } else if (settings.enable_mcmux_mode) {
-        cproxy_init(NULL, NULL, settings.num_threads, main_base);
+        cproxy_init(NULL, cproxy_behavior, settings.num_threads, main_base);
     } else {
         int i = argc - 1;
         if (i > 0 &&
