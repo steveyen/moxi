@@ -257,6 +257,15 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
         SEEN(STATS_CMD_STATS, false, cmd_len);
 
     } else if (ntokens == 2 &&
+               (true == mcmux_command) &&
+               (strncmp(cmd, "version", 7) == 0) &&
+               (c->cmd_curr = PROTOCOL_BINARY_CMD_VERSION)) {
+        /* downstream version command */
+        cproxy_pause_upstream_for_downstream(ptd, c);
+
+        SEEN(STATS_CMD_VERSION, false, cmd_len);
+
+    } else if (ntokens == 2 &&
                (strncmp(cmd, "version", 7) == 0)) {
         out_string(c, "VERSION " VERSION);
 

@@ -131,6 +131,11 @@ struct A2BSpec a2b_specs[] = {
       .size = sizeof(protocol_binary_request_stats),
       .broadcast = true
     },
+    { .line = "version",
+      .cmd  = PROTOCOL_BINARY_CMD_VERSION,
+      .cmdq = -1,
+      .size = sizeof(protocol_binary_request_version)
+    },
     { .line = 0 } // NULL sentinel.
 };
 
@@ -187,7 +192,7 @@ void cproxy_init_a2b() {
         spec->ntokens = scan_tokens(spec->line,
                                     spec->tokens,
                                     MAX_TOKENS, NULL);
-        assert(spec->ntokens > 2);
+        assert(spec->ntokens > 1);
 
         int noreply_index = spec->ntokens - 2;
         if (spec->tokens[noreply_index].value &&
@@ -887,6 +892,37 @@ void a2b_process_downstream_response(conn *c) {
         }
         break;
 
+    case PROTOCOL_BINARY_CMD_VERSION:
+        conn_set_state(c, conn_pause);
+
+        if (uc != NULL) {
+            assert(uc->next == NULL);
+
+            if (header->response.status == 0 &&
+                header->response.keylen == 0 &&
+                header->response.extlen == 0 &&
+                header->response.bodylen > 0) {
+                char *s = add_conn_suffix(uc);
+                if (s != NULL) {
+                    // TODO: Assuming bodylen is not that long.
+                    memcpy(s, "VERSION ", 8);
+                    memcpy(s + 8,
+                           c->cmd_start + sizeof(protocol_binary_response_version),
+                           header->response.bodylen);
+                    s[8 + header->response.bodylen] = '\0';
+                    out_string(uc, s);
+                } else {
+                    d->ptd->stats.stats.err_oom++;
+                    cproxy_close_conn(uc);
+                }
+            } else {
+                out_string(uc, "SERVER_ERROR");
+            }
+
+            cproxy_update_event_write(d, uc);
+        }
+        break;
+
     case PROTOCOL_BINARY_CMD_STAT:
         assert(c->noreply == false);
 
@@ -918,7 +954,6 @@ void a2b_process_downstream_response(conn *c) {
         }
         break;
 
-    case PROTOCOL_BINARY_CMD_VERSION:
     case PROTOCOL_BINARY_CMD_QUIT:
     default:
         assert(false); // TODO: Handled unexpected responses.
@@ -1115,6 +1150,13 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
         return false;
     }
 
+    if (uc->cmd_curr == PROTOCOL_BINARY_CMD_VERSION) {
+        // Fake key so that we hash to some server.
+        //
+        key     = "v";
+        key_len = 1;
+    }
+
     // Assuming we're already connected to downstream.
     // Handle all other simple commands.
     //
@@ -1123,6 +1165,12 @@ bool cproxy_forward_a2b_simple_downstream(downstream *d,
 
     conn *c = cproxy_find_downstream_conn_ex(d, key, key_len,
                                              &self, &vbucket);
+
+    if (uc->cmd_curr == PROTOCOL_BINARY_CMD_VERSION) {
+        key     = NULL;
+        key_len = 0;
+    }
+
     if (c != NULL) {
         if (self) {
             // TODO: This optimization could be done much earlier,

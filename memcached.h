@@ -44,7 +44,7 @@
 
 /* I'm told the max length of a 64-bit num converted to string is 20 bytes.
  * Plus a few for spaces, \r\n, \0 */
-#define SUFFIX_SIZE 24
+#define SUFFIX_SIZE 200
 
 /** Initial size of list of items being returned by "get". */
 #define ITEM_LIST_INITIAL 200
