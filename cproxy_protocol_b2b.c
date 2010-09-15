@@ -154,8 +154,10 @@ bool b2b_forward_item(conn *uc, downstream *d, item *it) {
         cproxy_dump_header(uc->sfd, (char *) req);
     }
 
-    assert(key != NULL);
-    assert(keylen > 0);
+    if (key == NULL ||
+        keylen <= 0) {
+        return false; // We don't know how to hash an empty key.
+    }
 
     bool self = false;
     int  vbucket = -1;
