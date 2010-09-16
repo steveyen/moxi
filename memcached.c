@@ -4108,8 +4108,8 @@ static void usage(char **argv) {
            "              is turned on automatically; if not, then it may be turned on\n"
            "              by sending the \"stats detail on\" command to the server.\n"
            "-C            (deprecated) disable use of CAS\n"
-           "-O <file path>  moxi log file name.\n"
-           "-X            enable mcmux compatbility mode, disables libvbucket & libmemcached support\n");
+           "-O <log path> moxi log file name.\n"
+           "-X            enable mcmux compatibility; disables libvbucket & libmemcached\n");
     return;
 }
 
