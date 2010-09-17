@@ -491,7 +491,8 @@ int   cproxy_connect_downstream(downstream *d,
 conn *cproxy_connect_downstream_conn(downstream *d,
                                      LIBEVENT_THREAD *thread,
                                      mcs_server_st *msst,
-                                     proxy_behavior *behavior);
+                                     proxy_behavior *behavior,
+                                     int downstream_protocol);
 
 void  cproxy_wait_any_downstream(proxy_td *ptd, conn *c);
 void  cproxy_assign_downstream(proxy_td *ptd);

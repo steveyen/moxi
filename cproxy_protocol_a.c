@@ -64,29 +64,40 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
         self_command = true;
     }
 
+    c->peer_host = NULL;
+    c->peer_port = 0;
+    c->peer_protocol = 0;
+
     if (mcmux_command) {
         char *peer_port = NULL;
         int i = 0;
 
-        c->peer_protocol = (*line == 'A')? proxy_downstream_ascii_prot
-            : proxy_downstream_binary_prot;
+        c->peer_protocol = (*line == 'A') ?
+            proxy_downstream_ascii_prot :
+            proxy_downstream_binary_prot;
         line += 2;
         c->peer_host = line;
 
         while (*line != ' ' && *line != '\0' &&
-            *line != ':' && ++i < MAX_HOSTNAME_LEN) line++;
+               *line != ':' && ++i < MAX_HOSTNAME_LEN) {
+            line++;
+        }
 
         if (*line == '\0' || line - c->peer_host <= 0) {
             out_string(c, "ERROR");
             moxi_log_write("Malformed request line");
             return;
         }
+
         *line = '\0';
         line++;
         peer_port = line;
         i = 0;
 
-        while(*line != ' ' && *line != '\0' && ++i <= MAX_PORT_LEN) line++;
+        while (*line != ' ' && *line != '\0' && ++i <= MAX_PORT_LEN) {
+            line++;
+        }
+
         if (*line == '\0' || line - peer_port <= 0) {
             out_string(c, "ERROR");
             moxi_log_write("Malformed request line");
@@ -97,7 +108,6 @@ void cproxy_process_upstream_ascii(conn *c, char *line) {
 
         *line++ = '\0';
         c->cmd_start = line;
-
     }
 
     int     cmd_len = 0;

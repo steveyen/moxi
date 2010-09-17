@@ -56,6 +56,7 @@ conn *zstored_acquire_downstream_conn(downstream *d,
                                       LIBEVENT_THREAD *thread,
                                       mcs_server_st *msst,
                                       proxy_behavior *behavior,
+                                      int downstream_protocol,
                                       bool *downstream_conn_max_reached);
 
 void zstored_release_downstream_conn(conn *dc, bool closing);
@@ -1241,9 +1242,10 @@ int cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread,
     }
 
     for (; i < n; i++) {
-        assert(IS_PROXY(d->behaviors_arr[i].downstream_protocol));
-
         msst_actual = mcs_server_index(&d->mst, i);
+
+        int downstream_protocol =
+            d->behaviors_arr[i].downstream_protocol;
 
         // Connect to downstream servers, if not already.
         //
@@ -1263,7 +1265,13 @@ int cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread,
                 msst.port = c->peer_port;
                 msst.fd = -1;
                 msst_actual = &msst;
+
+                if (c->peer_protocol != 0) {
+                    downstream_protocol = c->peer_protocol;
+                }
             }
+
+            assert(IS_PROXY(d->behaviors_arr[i].downstream_protocol));
 
             bool downstream_conn_max_reached = false;
 
@@ -1271,6 +1279,7 @@ int cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread,
                 zstored_acquire_downstream_conn(d, thread,
                                                 msst_actual,
                                                 &d->behaviors_arr[i],
+                                                downstream_protocol,
                                                 &downstream_conn_max_reached);
             if (d->downstream_conns[i] != NULL &&
                 d->downstream_conns[i] != NULL_CONN &&
@@ -1302,7 +1311,8 @@ int cproxy_connect_downstream(downstream *d, LIBEVENT_THREAD *thread,
 conn *cproxy_connect_downstream_conn(downstream *d,
                                      LIBEVENT_THREAD *thread,
                                      mcs_server_st *msst,
-                                     proxy_behavior *behavior) {
+                                     proxy_behavior *behavior,
+                                     int downstream_protocol) {
     assert(d);
     assert(d->ptd);
     assert(d->ptd->downstream_released != d); // Should not be in free list.
@@ -1310,6 +1320,7 @@ conn *cproxy_connect_downstream_conn(downstream *d,
     assert(thread->base);
     assert(msst);
     assert(behavior);
+    assert(downstream_protocol != 0);
     assert(mcs_server_st_hostname(msst) != NULL);
     assert(mcs_server_st_port(msst) > 0);
     assert(mcs_server_st_fd(msst) == -1);
@@ -1337,7 +1348,7 @@ conn *cproxy_connect_downstream_conn(downstream *d,
                            thread->base,
                            &cproxy_downstream_funcs, d);
         if (c != NULL ) {
-            c->protocol = behavior->downstream_protocol;
+            c->protocol = downstream_protocol;
             c->thread = thread;
             c->cmd_start_time = start;
 
@@ -1684,18 +1695,26 @@ bool cproxy_forward(downstream *d) {
     assert(d->ptd != NULL);
     assert(d->upstream_conn != NULL);
 
+    int downstream_protocol =
+        d->ptd->behavior_pool.base.downstream_protocol;
+
     if (settings.verbose > 2) {
         moxi_log_write(
                 "%d: cproxy_forward prot %d to prot %d\n",
                 d->upstream_conn->sfd,
                 d->upstream_conn->protocol,
-                d->ptd->behavior_pool.base.downstream_protocol);
+                downstream_protocol);
+    }
+
+    if (true == settings.enable_mcmux_mode &&
+        d->upstream_conn->peer_protocol != 0) {
+        downstream_protocol = d->upstream_conn->peer_protocol;
     }
 
     if (IS_ASCII(d->upstream_conn->protocol)) {
         // ASCII upstream.
         //
-        if (IS_ASCII(d->ptd->behavior_pool.base.downstream_protocol)) {
+        if (IS_ASCII(downstream_protocol)) {
             return cproxy_forward_a2a_downstream(d);
         } else {
             return cproxy_forward_a2b_downstream(d);
@@ -1703,7 +1722,7 @@ bool cproxy_forward(downstream *d) {
     } else {
         // BINARY upstream.
         //
-        if (IS_BINARY(d->ptd->behavior_pool.base.downstream_protocol)) {
+        if (IS_BINARY(downstream_protocol)) {
             return cproxy_forward_b2b_downstream(d);
         } else {
             // TODO: No binary upstream to ascii downstream support.
@@ -2912,13 +2931,15 @@ conn *zstored_acquire_downstream_conn(downstream *d,
                                       LIBEVENT_THREAD *thread,
                                       mcs_server_st *msst,
                                       proxy_behavior *behavior,
+                                      int downstream_protocol,
                                       bool *downstream_conn_max_reached) {
     assert(d);
     assert(d->ptd);
     assert(d->ptd->downstream_released != d); // Should not be in free list.
     assert(thread);
     assert(msst);
-    assert(behavior);
+    assert(behavior != NULL);
+    assert(downstream_protocol != 0);
     assert(mcs_server_st_hostname(msst) != NULL);
     assert(mcs_server_st_port(msst) > 0);
     assert(mcs_server_st_fd(msst) == -1);
@@ -2929,7 +2950,7 @@ conn *zstored_acquire_downstream_conn(downstream *d,
 
     char host_ident_buf[300];
     format_host_ident(host_ident_buf, sizeof(host_ident_buf), msst,
-                      behavior->downstream_protocol);
+                      downstream_protocol);
 
     conn *dc;
 
@@ -2985,7 +3006,8 @@ conn *zstored_acquire_downstream_conn(downstream *d,
         }
     }
 
-    dc = cproxy_connect_downstream_conn(d, thread, msst, behavior);
+    dc = cproxy_connect_downstream_conn(d, thread, msst, behavior,
+                                        downstream_protocol);
     if (dc != NULL) {
         assert(dc->host_ident == NULL);
         dc->host_ident = strdup(host_ident_buf);
