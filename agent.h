@@ -53,4 +53,6 @@ void proxy_stats_dump_proxies(ADD_STAT add_stats, conn *c,
                               struct proxy_stats_cmd_info *pscip);
 void proxy_stats_dump_timings(ADD_STAT add_stats, conn *c);
 
+void proxy_stats_reset(proxy_main *m);
+
 #endif /* AGENT_H */

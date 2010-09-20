@@ -1569,6 +1569,12 @@ enum conflate_mgmt_cb_result on_conflate_reset_stats(void *userdata,
     assert(m);
     assert(m->nthreads > 1);
 
+    proxy_stats_reset(m);
+
+    return RV_OK;
+}
+
+void proxy_stats_reset(proxy_main *m) {
     LIBEVENT_THREAD *mthread = thread_by_index(0);
     assert(mthread);
     assert(mthread->work_queue);
@@ -1596,8 +1602,6 @@ enum conflate_mgmt_cb_result on_conflate_reset_stats(void *userdata,
 
         free(ca);
     }
-
-    return RV_OK;
 }
 
 /* Must be invoked on the main listener thread.
@@ -1727,6 +1731,8 @@ struct htgram_dump_callback_data {
 };
 
 static void htgram_dump_callback(HTGRAM_HANDLE h, const char *dump_line, void *cbdata) {
+    (void) h;
+
     ADD_STAT add_stats = ((struct htgram_dump_callback_data *) cbdata)->add_stats;
     char *prefix       = ((struct htgram_dump_callback_data *) cbdata)->prefix;
     conn *c            = ((struct htgram_dump_callback_data *) cbdata)->conn;

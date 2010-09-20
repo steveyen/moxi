@@ -2966,7 +2966,11 @@ void process_command(conn *c, char *command) {
 
 void process_stats_proxy_command(conn *c, token_t *tokens, const size_t ntokens) {
     if (ntokens == 4 && strcmp(tokens[2].value, "reset") == 0) {
-        // TODO: Contrary to return code, this is todo and not actually OK yet.
+        proxy_td *ptd = c->extra;
+        if (ptd != NULL) {
+            proxy_stats_reset(ptd->proxy->main);
+        }
+
         out_string(c, "OK");
         return;
     }
